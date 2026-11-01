@@ -44,15 +44,15 @@ test('the approved plan step count sets the live execute limit; the plan bucket 
 test('four plan attempts leave the full execute budget', async () => {
   const { db, ticket } = await plannedRoot();
   await bare(db, ticket);
-  for (let i = 0; i < 37; i++) await reserve(db, ticket, `attempt-m-${i}-xx`, 'model', 'plan', { provider: 'vllm' });
-  for (let i = 0; i < 3; i++) await reserve(db, ticket, `attempt-s-${i}-xx`, 'semantic_repair', 'plan', { tokens: 0 });
+  for (let i = 0; i < LIMITS.root_work.model_calls - 3; i++) await reserve(db, ticket, `attempt-m-${i}-xx`, 'model', 'plan', { provider: 'vllm' });
+  for (let i = 0; i < LIMITS.root_work.semantic_repairs; i++) await reserve(db, ticket, `attempt-s-${i}-xx`, 'semantic_repair', 'plan', { tokens: 0 });
   const execute = await readRootAllowance(db.d, ticket.id);
   assert.equal(execute.used.model_calls, 0);
   assert.equal(execute.used.semantic_repairs, 0);
   assert.equal(hitRootGroup(execute), null);
-  assert.equal(execute.plan.used.model_calls, 37);
+  assert.equal(execute.plan.used.model_calls, LIMITS.root_work.model_calls - 3);
   const plan = await readRootAllowance(db.d, ticket.id, 'plan');
-  assert.equal(plan.used.model_calls, 37);
+  assert.equal(plan.used.model_calls, LIMITS.root_work.model_calls - 3);
   assert.equal(hitRootGroup(plan)?.group, 'semantic_repairs');
   for (let i = 0; i < execute.limits.model_calls; i++) await reserve(db, ticket, `attempt-e-${i}-xx`, 'model', 'execute', { provider: 'vllm' });
   assert.equal(hitRootGroup(await readRootAllowance(db.d, ticket.id))?.group, 'model_calls');

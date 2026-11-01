@@ -132,3 +132,8 @@ def run_wall_clock_s(n: int, *, local: bool) -> float:
     spec = _parsed()["limits"]["local_wall_clock_s"]
     count = min(max(int(n or 0), 0), _parsed()["limits"]["max_subtasks_per_run"])
     return float(min(spec["base"] + _parsed()["limits"]["budget"]["node_wall_clock_s"] * count, spec["max"]))
+
+
+def loop_guard() -> dict:
+    """Ngưỡng chống vòng lặp: lặp hash trạng thái, tương đồng sửa, cửa sổ topology, trần an toàn số vòng sửa."""
+    return dict(_parsed()["limits"]["loop_guard"])

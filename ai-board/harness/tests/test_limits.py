@@ -16,8 +16,8 @@ GOLDEN = json.loads((REPO / "test" / "fixtures" / "ai-board-scaled-limit.json").
 
 
 def test_defaults_equal_old_constants():
-    assert limits.budget(env={}) == {"model_calls": 40, "tool_calls": 200, "tokens": 200_000, "retries": 3, "units": 600,
-                                     "wall_clock_s": 900.0, "semantic_repairs": 3, "child_wall_clock_s": 300.0,
+    assert limits.budget(env={}) == {"model_calls": 400, "tool_calls": 2000, "tokens": 200_000, "retries": 3, "units": 600,
+                                     "wall_clock_s": 900.0, "semantic_repairs": 24, "child_wall_clock_s": 300.0,
                                      "node_wall_clock_s": 1200.0}
     assert limits.loop(env={}) == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000}
     assert limits.sandbox_client()["backoff_s"] == (1, 2, 4, 8)
@@ -34,7 +34,7 @@ def test_from_env_defaults_match_contract_without_env(monkeypatch):
         if key.startswith("BUDGET_MAX_") or key.startswith("AI_BOARD_LOOP_"):
             monkeypatch.delenv(key)
     b = Budget.from_env()
-    assert (b.max_model_calls, b.max_tool_calls, b.max_units, b.max_wall_clock_s) == (40, 200, 600, 900.0)
+    assert (b.max_model_calls, b.max_tool_calls, b.max_units, b.max_wall_clock_s) == (400, 2000, 600, 900.0)
 
 
 def test_env_override_applies_inside_loader(monkeypatch):

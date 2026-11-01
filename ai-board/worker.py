@@ -26,8 +26,8 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import coverage, objection_repeat  # noqa: E402
-from runtime.limits import config_sha256, contract, run_wall_clock_s, scaled_limit  # noqa: E402
+from runtime import coverage, loop_guard, objection_repeat  # noqa: E402
+from runtime.limits import config_sha256, contract, loop_guard as loop_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -128,7 +128,7 @@ REPAIR_REPLAN = CONTRACT.get("repair_replan") or {}
 
 
 def repair_cap() -> int:
-    """Trần lượt sửa của một lượt chạy: contract, nâng theo cờ repair_replan khi bật (LF/74)."""
+    """Trần an toàn lượt sửa của một run (không phải điều kiện dừng thường): max_repairs, nâng theo repair_replan khi bật."""
     if not REPAIR_REPLAN.get("enabled"):
         return MAX_REPAIRS
     return max(MAX_REPAIRS, int(REPAIR_REPLAN.get("max_repairs") or 0))
@@ -184,6 +184,8 @@ class _Execution:
         self.repair_files: list[str] = []
         self.round_metrics: list[dict] = []
         self.progress_rounds = self.no_progress = 0
+        self.diff_texts: list[str] = []
+        self.halt: dict = {}
         self.stop_note: str | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
@@ -212,10 +214,20 @@ class _Execution:
         saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
-                                       thread_id=saver.thread_id if saver else None)
+                                       thread_id=saver.thread_id if saver else None,
+                                       observe={"repair_check": self.observe_state}, report=self.halt)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
+
+    def observe_state(self) -> tuple | None:
+        """(code fingerprint, error, block signature) of the failed attempt, for the graph's state-hash router."""
+        if not self.gates or not self.gates[-1].get("blocked"):
+            return None
+        from runtime import repair_class
+        last = self.gates[-1]
+        code = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])["diff"]
+        return code, str(last.get("reason")), f"{last.get('gate')}:{self.kind}"
 
     def graph_persistence(self) -> bool:
         from runtime import exec_graph
@@ -353,8 +365,6 @@ class _Execution:
         last = self.gates[-1]
         if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
-        if any(repair.get("reason") == last["reason"] for repair in self.repairs):
-            return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
             return "done"
         if not self.budget.tick():
@@ -393,8 +403,14 @@ class _Execution:
             self.stop_note = (f"stuck: {self.no_progress} consecutive repair rounds without progress "
                               f"(gate {now['gate']}, failing tests {now['fails']}, diff {now['diff'][:12]})")
             return False
-        if len(self.repairs) >= repair_class.soft_limit(spec.get("soft") or {"soft_start": 2, "soft_step": 1}, self.progress_rounds, repair_cap()):
-            self.stop_note = f"soft repair budget spent after {len(self.repairs)} rounds ({self.progress_rounds} with progress)"
+        diff_text = chr(10).join(str(item.get("diff")) for item in (self.state or {}).get("diffs") or [])
+        self.diff_texts.append(diff_text)
+        guard = loop_limits()
+        low = loop_guard.stagnant(self.diff_texts, guard["similarity"], guard["similarity_window"], guard["similarity_max_chars"])
+        if low is not None:
+            self.halt.update(reason=loop_guard.REASON_STAGNATION, node="repair_check",
+                             detail=f"{guard['similarity_window']} consecutive repairs with similarity {low:.3f} > {guard['similarity']}")
+            self.stop_note = f"{loop_guard.REASON_STAGNATION}: {self.halt['detail']}"
             return False
         self.repair_files = cls["files"]
         return True
@@ -418,11 +434,14 @@ class _Execution:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
         reason = ("oracle functional fail trong khi acceptance, generated tests và smoke xanh: " + str(smoke["functional"].get("reason"))[:300]
                   if oracle_review else "risk triage requires human review" if needs_review else last["reason"])
-        if self.stop_note and not passed:
+        if self.halt.get("reason") and not passed:
+            reason = f"loop stop {self.halt['reason']}: {self.halt['detail']} | {reason}"
+        elif self.stop_note and not passed:
             reason = f"{reason} | repair stop: {self.stop_note}"
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
+            **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict

@@ -23,7 +23,7 @@ import file_context
 import path_policy
 from gates import gate3_guards
 from repositories.tool_steps import PgSteps
-from runtime import tool_loop
+from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
@@ -581,6 +581,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     feedback = ""
     routing = getattr(deps.models, 'routing', None)
     failed_candidates = set()
+    attempt_hashes: list[str] = []
     receipts: list = []
     if trace:
         _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
@@ -681,6 +682,11 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
                     trace.attach_last("edits", {"parsed": parsed, "applied": False})
         if trace:
             trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
+        digest = loop_guard.state_hash(raw, str(error), "gate3")
+        if loop_guard.repeated(attempt_hashes, digest, limits.loop_guard()["repeat_state_count"]):
+            return "blocked", {"gate": 3, "blocked": True, "failure_class": "ordinary", "loop_guard": loop_guard.REASON_STATE_REPEAT,
+                               "reason": f"subtask '{subtask.get('title')}': {loop_guard.REASON_STATE_REPEAT}: model repeated the same output and error: {error}"}
+        attempt_hashes.append(digest)
         spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
         room = getattr(budget, "max_units", None) is None or budget.units + spent / 1000 < budget.max_units
         if iteration == MAX_INNER_RETRIES or not budget.tick() or not room:

@@ -28,7 +28,7 @@
       { "from": "repair_check", "on": "repair", "to": "repair" }, { "from": "repair_check", "on": "done", "to": "verdict" },
       { "from": "repair", "on": "passed", "to": "attempt_open" }
     ],
-    "recursion_limit": 80
+    "recursion_limit": 200
   },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
   "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval", "partial"],
@@ -36,25 +36,25 @@
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,
   "repair_replan": {
-    "_why": "LF/74 (P07) + LF/82 failure-class repair/replan, default OFF. On: the soft repair budget starts at soft.soft_start and grows by soft_step per round that made progress (fewer failing tests, later gate, or changed diff), never above max_repairs (hard); no_progress_rounds rounds in a row without progress stop it; and a plan-class failure requeues one replan while the automatic round limit (2 plans) still allows it. Budget, lease, plan revision and ledger rules are unchanged; the same failure twice stops instead of looping.",
+    "_why": "Failure-class repair/replan. A repair round continues until a state hash repeats, repairs stagnate (limits.loop_guard) or no_progress_rounds rounds in a row show no progress (fewer failing tests, later gate, or changed diff); max_repairs is only the high safety cap; and a plan-class failure requeues one replan while the automatic round limit (2 plans) still allows it. Budget, lease, plan revision and ledger rules are unchanged; the same failure twice stops instead of looping.",
     "enabled": true,
-    "max_repairs": 4,
+    "max_repairs": 12,
     "no_progress_rounds": 2,
     "soft": { "soft_start": 2, "soft_step": 1 }
   },
   "default_budget_limit": 200,
   "limits": {
-    "root_work": { "model_calls": 40, "tool_calls": 200, "tokens": 200000, "semantic_repairs": 3, "quality_switches": 1 },
+    "root_work": { "model_calls": 400, "tool_calls": 2000, "tokens": 200000, "semantic_repairs": 24, "quality_switches": 1 },
     "root_work_scaling": {
       "_why": "Execute-phase root allowance grows with the approved plan's step count: base (root_work value) + per_step * steps, clamped to max. Plan-phase work has its own budget at the root_work base; hard caps never grow with progress. Read live from this file on every read/reserve: a redeploy raises the limits of existing roots (a stored limits_json can only raise, never lower).",
-      "model_calls": { "per_step": 16, "max": 300 },
-      "semantic_repairs": { "per_step": 1, "max": 8 }
+      "model_calls": { "per_step": 40, "max": 2000 },
+      "semantic_repairs": { "per_step": 2, "max": 60 }
     },
     "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
     "per_run": {
       "units": { "base": 120, "per_subtask": 150, "max": 2400, "_why": "GPU-s per run; a feature draft of 3-10 subtasks needs ~450-1600" },
       "wall_clock_s": { "base": 300, "per_subtask": 360, "max": 3600, "_why": "each subtask may retry up to 4 times at 14B speed" },
-      "model_calls": { "base": 10, "per_subtask": 12, "max": 150, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
+      "model_calls": { "base": 100, "per_subtask": 60, "max": 1000, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
     },
     "local_wall_clock_s": { "base": 300, "max": 14400, "_why": "Provider vllm/ollama: run time cap = base + node_wall_clock_s x subtasks, clamped to max; time (not tokens) bounds local runs, each node is already capped by node_wall_clock_s" },
     "max_subtasks_per_run": 10,
@@ -82,9 +82,27 @@
     },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
-      "model_calls": 40, "tool_calls": 200, "tokens": 200000, "retries": 3, "units": 600,
-      "wall_clock_s": 900, "semantic_repairs": 3, "child_wall_clock_s": 300,
+      "model_calls": 400, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
+      "wall_clock_s": 900, "semantic_repairs": 24, "child_wall_clock_s": 300,
       "node_wall_clock_s": 1200
+    },
+    "loop_guard": {
+      "_why": "Native loop control replaces fixed step caps: a repeated state hash, a node over its time budget, or consecutive near-identical repairs end the walk with a named reason. Counts of model calls/repairs/plan bucket are recorded and shown, and only act as the high safety caps in root_work/budget. repair_replan.max_repairs (12) bounds repair rounds well inside execution_graph.recursion_limit.",
+      "repeat_state_count": 2,
+      "similarity": 0.98,
+      "similarity_window": 2,
+      "similarity_max_chars": 20000,
+      "topology_window": 6
+    },
+    "behavior": {
+      "_why": "Thresholds of the behaviour metrics shown per ticket (services/behavior.js). context_limit_tokens is the vLLM max_model_len; compression_ratio is compressed/original bytes, so a low value means repetitive output.",
+      "context_limit_tokens": 32768,
+      "context_ratio_warn": 0.75,
+      "distinct_line_warn": 0.5,
+      "compression_ratio_warn": 0.15,
+      "compression_min_chars": 300,
+      "topology_window": 6,
+      "topology_entropy_warn": 0.4
     },
     "sandbox_client": {
       "_why": "Gate 5 runner client (verification/sandbox.py): per-call timeouts in seconds, retry attempts and backoff for transient errors.",
