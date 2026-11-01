@@ -994,8 +994,8 @@ class HttpWorker:
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
         if self.model_check and (blocked := self.model_check()):
             # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
-            print(f"[worker] model {blocked['model']} chưa load được, không claim: {blocked['error']}")
-            return blocked
+            print(f"[worker] model {blocked['model']} chưa load được, chờ GPU, không claim: {blocked['error']}")
+            return {**blocked, "status": "waiting_gpu"}
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
