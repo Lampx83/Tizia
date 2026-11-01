@@ -16,6 +16,15 @@ def test_merge_task_selects_only_the_merge_skill():
     assert names == ['default-merge']
 
 
+@pytest.mark.parametrize('role', ['gate1', 'gate3_light'])
+def test_merge_task_fits_its_node_budget(role):
+    budget = default_skills.stage_budget(role)
+    selected, _ = default_skills.select_report(role, {'task_type': 'merge'})
+    assert [s.name for s in selected] == ['default-merge']
+    assert len(selected) <= budget['max_per_prompt']
+    assert sum(s.token_bound for s in selected) <= budget['max_tokens_per_prompt']
+
+
 @pytest.mark.parametrize('task', ['backend', 'frontend', 'test', 'database'])
 def test_other_task_types_do_not_pick_the_merge_skill(task):
     selected, _ = default_skills.select_report('gate3_light', {'task_type': task})
