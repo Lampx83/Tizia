@@ -169,23 +169,26 @@ test('node detail lists sandbox runs and skills from evidence, digests only', ()
   assert.ok(html.includes('<h4>Skills</h4><p>tizia-ui, node-test</p>'));
 });
 
-test('budget cells: API shows tokens with bar, local shows GPU time; warn at 80%, bad when used up', () => {
+test('budget cells: API shows paid tokens with a bar; no model-call or GPU cell; behaviour cells follow trace.behavior', () => {
   const api = { root_work: { used: { model_calls: 3, tokens: 1060 }, limits: { model_calls: 40, tokens: 200000 } }, totals: { budget_unit: 'k_tokens' }, root: root(), runs: [] };
   const cells = budgetCells(api, EPOCH);
-  assert.equal(cells[0].big, '3 / 40');
-  assert.equal(cells[1].big, '1,060 / 200,000');
-  assert.equal(cells[1].bar, true);
-  assert.equal(cells[1].tone, 'ok');
+  assert.equal(cells[0].label, 'Tokens');
+  assert.equal(cells[0].big, '1,060 / 200,000');
+  assert.equal(cells[0].bar, true);
+  assert.equal(cells[0].tone, 'ok');
   const local = { ...api, totals: { budget_unit: 'gpu_s', gpu_s: 19.8 } };
-  const localCells = budgetCells(local, EPOCH);
-  assert.equal(localCells[1].label, 'GPU time');
-  assert.equal(localCells[1].big, '19.8 s');
-  assert.equal(localCells[1].bar, false);
-  const warn = { root_work: { used: { model_calls: 33, tokens: 0 }, limits: { model_calls: 40, tokens: 1 } }, totals: {}, root: root(), runs: [] };
-  assert.equal(budgetCells(warn, EPOCH)[0].tone, 'warn');
-  const spent = { root_work: { used: { model_calls: 40, tokens: 0 }, limits: { model_calls: 40, tokens: 1 } }, totals: {}, root: root(), runs: [] };
-  assert.equal(budgetCells(spent, EPOCH)[0].big, 'Used up');
-  assert.equal(budgetCells(spent, EPOCH)[0].tone, 'bad');
+  const labels = budgetCells(local, EPOCH).map(c => c.label);
+  assert.ok(!labels.includes('Model calls') && !labels.includes('GPU time') && !labels.includes('Tokens'));
+  assert.deepEqual(labels.filter(l => ['Context', 'Output', 'Topology', 'Run time'].includes(l)), ['Run time', 'Context', 'Output', 'Topology']);
+  const behavior = { context: { ratio: 0.8, limit: 32768, delta: 1200, warn: true }, output: { distinct_line_ratio: 0.1, compression_ratio: 0.05, warn: true },
+    topology: { entropy: 0, idle_runs: 2, warn: true } };
+  const by = Object.fromEntries(budgetCells({ ...local, behavior }, EPOCH).map(c => [c.label, c]));
+  assert.equal(by.Context.big, '80% of 32,768');
+  assert.equal(by.Context.sub, '+1,200 tokens vs previous step · over 75%');
+  assert.equal(by.Output.tone, 'warn');
+  assert.equal(by.Topology.sub, '2 steps changed nothing');
+  assert.equal(by.Topology.tone, 'warn');
+  assert.equal(budgetCells(local, EPOCH).find(c => c.label === 'Context').big, 'No data');
 });
 
 test('typical gate time is the median of earlier runs only, never the current run', () => {
@@ -274,15 +277,3 @@ test('reduced motion turns off edge flow and running spin', () => {
   assert.match(css, /\.g-edge\.flow \{[^}]*animation:g-flow/);
 });
 
-test('GPU time cell: running request adds time since last finished model call; idle shows finished total only', () => {
-  const lastCall = { ...planRun(EPOCH, []), calls: [call(1, 2, 'p', EPOCH + 1000)] };
-  const base = { totals: { budget_unit: 'gpu_s', gpu_s: 19.8 }, root_work: { used: {}, limits: {} }, runs: [lastCall], graph };
-  const live = budgetCells({ ...base, root: root({ live: true }) }, EPOCH + 4000)[1];
-  assert.equal(live.big, '22.8 s');
-  assert.equal(live.sub, 'running · estimate');
-  const idle = budgetCells({ ...base, root: root({ live: false }) }, EPOCH + 4000)[1];
-  assert.equal(idle.big, '19.8 s');
-  assert.equal(idle.sub, 'local model');
-  const none = budgetCells({ ...base, runs: [], root: root({ live: true }) }, EPOCH + 4000)[1];
-  assert.equal(none.big, '19.8 s');
-});

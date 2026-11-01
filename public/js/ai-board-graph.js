@@ -161,16 +161,24 @@ const clockText = (ms) => {
 const toneOf = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : 'ok');
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
-// GPU time chỉ có khi model call xong; lúc đang chạy cộng thời gian kể từ call xong gần nhất (ước tính, không phải số đo).
-function gpuCell(trace, now) {
-  const done = trace.totals?.gpu_s ?? 0;
-  const calls = (trace.runs || []).flatMap(r => r.calls || []).map(c => Number(c.created_at)).filter(Number.isFinite);
-  const since = calls.length ? Math.max(...calls) : Number(trace.runs?.at(-1)?.created_at);
-  if (!trace.root?.live || !(since > 0) || now < since) return { label: 'GPU time', big: `${done.toFixed(1)} s`, sub: 'local model', tone: 'idle', bar: false };
-  return { label: 'GPU time', big: `${(done + (now - since) / 1000).toFixed(1)} s`, sub: 'running · estimate', tone: 'idle', bar: false };
+const pct = (n) => `${Math.round(n * 100)}%`;
+const signed = (n) => `${n > 0 ? '+' : ''}${fmt(n)}`;
+
+// Behaviour cells from trace.behavior (services/behavior.js): context growth, output repetition, node topology.
+function behaviorCells(b) {
+  const tone = (warn, known) => (!known ? 'idle' : warn ? 'warn' : 'ok');
+  const ctx = b?.context, out = b?.output, topo = b?.topology;
+  return [
+    { label: 'Context', big: ctx?.ratio == null ? 'No data' : `${pct(ctx.ratio)} of ${fmt(ctx.limit)}`,
+      sub: ctx?.ratio == null ? '' : `${signed(ctx.delta ?? 0)} tokens vs previous step${ctx.warn ? ' · over 75%' : ''}`, tone: tone(ctx?.warn, ctx?.ratio != null), bar: false },
+    { label: 'Output', big: out?.distinct_line_ratio == null ? 'No data' : `${pct(out.distinct_line_ratio)} distinct lines`,
+      sub: out?.compression_ratio == null ? 'Compression: short output' : `Compression ${out.compression_ratio}${out.warn ? ' · repetitive' : ''}`, tone: tone(out?.warn, out?.distinct_line_ratio != null), bar: false },
+    { label: 'Topology', big: topo?.entropy == null ? 'Too few steps' : `Entropy ${topo.entropy}`,
+      sub: topo?.idle_runs ? `${topo.idle_runs} step${topo.idle_runs === 1 ? '' : 's'} changed nothing` : 'Every step changed output', tone: tone(topo?.warn, topo?.entropy != null || !!topo?.idle_runs), bar: false },
+  ];
 }
 
-// Budget cells: big number, optional thin bar. API budgets show tokens, local runtimes show GPU time.
+// Budget cells: big number, optional thin bar. API runs show paid tokens; every run shows time and the behaviour metrics.
 export function budgetCells(trace = {}, now = Date.now()) {
   const used = trace.root_work?.used || {};
   const limits = trace.root_work?.limits || {};
@@ -179,9 +187,8 @@ export function budgetCells(trace = {}, now = Date.now()) {
     const big = ratio >= 1 ? 'Used up' : `${fmt(usedN)} / ${fmt(limitN)}`;
     return { label, big, sub: ratio >= 1 ? '' : `${Math.round(ratio * 100)}% used`, ratio: Math.min(ratio, 1), tone: toneOf(ratio), bar: true };
   };
-  const cells = [cell('Model calls', used.model_calls ?? 0, limits.model_calls ?? 0)];
+  const cells = [];
   if (trace.totals?.budget_unit === 'k_tokens') cells.push(cell('Tokens', used.tokens ?? 0, limits.tokens ?? 0));
-  else cells.push(gpuCell(trace, now));
 
   const latest = projectPipeline(trace).latest;
   const elapsed = runElapsed(latest, trace.root?.live, now);
@@ -203,7 +210,7 @@ export function budgetCells(trace = {}, now = Date.now()) {
     const big = eta.eta_ms < 60000 ? 'under 1 min' : `about ${Math.round(eta.eta_ms / 60000)} min`;
     cells.push({ label: 'Time left', big, sub: SOURCE_TEXT[eta.source], tone: 'idle', bar: false });
   } else cells.push({ label: 'Time left', big: 'No estimate', sub: 'No earlier run timed the next steps', tone: 'idle', bar: false });
-  return cells;
+  return [...cells, ...behaviorCells(trace.behavior)];
 }
 
 const ICON = {
