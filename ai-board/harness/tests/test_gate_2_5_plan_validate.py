@@ -466,3 +466,11 @@ def test_gate_asks_while_under_the_round_limit_then_assumes(tmp_path):
     out = plan_validate.run(_clarify_request(2), deps_with(FakeModels(plan, validation=question)), Budget(), state)
     assert out["blocked"] is False
     assert state["assumption"] == "Bạn muốn trang có màu gì?"
+
+
+def test_validator_claiming_a_loaded_file_is_missing_is_a_retrieval_fault_not_an_objection():
+    validation = {'grounded': False, 'objection': None, 'reason': 'public/js/domains/it/modules.js không có trong REPO DATA'}
+    note = plan_validate.objection_advisory(validation, {'public/js/domains/it/modules.js': 'x'})
+    assert note.startswith('lỗi truy xuất') and 'modules.js' in note
+    other = plan_validate.objection_advisory(validation, {'public/other.js': 'x'})
+    assert other and not other.startswith('lỗi truy xuất')

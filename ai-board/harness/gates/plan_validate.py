@@ -545,10 +545,22 @@ def _uncertain(validation: dict) -> bool:
 _EXISTS_CLAIM = re.compile(r"đã (?:có|tồn tại)|tương tự|already exists?|similar", re.I)
 
 
+_NOT_IN_DATA = re.compile(r'không (?:có|thấy|tìm thấy)[^.]{0,40}REPO DATA|not (?:in|found in) REPO DATA', re.I)
+
+
+def retrieval_miss(validation: dict, files: dict) -> list[str]:
+    """Files the validator calls absent from REPO DATA although they were loaded: a retrieval fault, not an objection to the plan."""
+    reason = str(validation.get('reason') or '')
+    return [path for path in files if _NOT_IN_DATA.search(reason) and path in reason]
+
+
 def objection_advisory(validation: dict, files: dict) -> str | None:
     """Note when grounded=false has no verified citation (gate 2.5 does not block on it); None when it is verified."""
     if validation.get('grounded'):
         return None
+    missed = retrieval_miss(validation, files)
+    if missed:
+        return f"lỗi truy xuất, không phải phản đối plan: validator báo thiếu trong REPO DATA nhưng file có trong dữ liệu: {', '.join(missed)}"
     verified = evidence.verified(validation.get('objection'), files)
     if verified:
         claim = str((validation.get('objection') or {}).get('claim') or '')
