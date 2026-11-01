@@ -196,7 +196,7 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_GATE3_GUARDS"] = guards
     raw_fixes = plan_validate.DEFAULT_FIXES if args.gate25_fixes is None else args.gate25_fixes
     fixes = ",".join(sorted(f for f in raw_fixes.split(",") if f and f != "none"))
-    if set(fixes.split(",")) - {"", "quotes", "tokens", "context", "retry", "literal", "reasoning", "assume", "ellipsis", "shortquote", "truncated", "pinned", "targetpresent"}:
+    if set(fixes.split(",")) - {"", "quotes", "tokens", "context", "retry", "literal", "reasoning", "assume", "ellipsis", "shortquote", "truncated", "pinned", "targetpresent", "advquote"}:
         print("[suite] unknown gate 2.5 fix", file=sys.stderr)
         return 2
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes

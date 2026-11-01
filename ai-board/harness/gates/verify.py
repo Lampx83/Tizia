@@ -35,6 +35,13 @@ def acceptance_commands(state: dict) -> list[str]:
     return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
 
 
+def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
+    """Oracle verdict (not an infra error) loses to green evidence: user-stated acceptance ran and passed, generated tests and smoke passed."""
+    request = f"{state.get('request_title') or ''} {state.get('request_detail') or ''}"
+    stated = [item for item in acceptance if item in request]
+    return bool(stated and generated_ok and smoke_ok and result.get("probe_id") and result.get("observations"))
+
+
 def _internal() -> bool:
     """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
     with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
@@ -540,6 +547,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 parent = str(Path("/app", test_file).parent).replace("\\", "/")
                 command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                 command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
+            generated_ok = False
             try:
                 if test_files:  # `node --test` with no file would run the whole suite
                     command([*compose, "exec", "-T", "tizia", "node", "--test",
@@ -552,6 +560,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
             else:
                 if test_files:
+                    generated_ok = True
                     logs.append(f"Generated tests passed: {', '.join(test_files)}")
 
             # Feature acceptance (LF/107): lệnh e2e của plan chạy trong container disposable trước verdict.
@@ -601,7 +610,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if not functional_result.get('passed'):
-                raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
+                if not oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
+                    raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
+                functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
+                logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
+                            + str(functional_result.get('reason')))
             kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)

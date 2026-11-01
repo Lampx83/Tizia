@@ -99,3 +99,20 @@ def test_missing_or_extra_handlers_are_refused():
     h2["gate_1"] = lambda: "passed"
     with pytest.raises(exec_graph.GraphError):
         exec_graph.compile_graph(h2, "attempt_open")
+
+
+def _verdict_of(functional):
+    execution = worker._Execution({}, ticket_id=1, checkout_source=".", deps=None, budget=None, run_gate=None, cleanup=None, catalog=None,
+                                  request_detail=None, memory_path=None, should_stop=None, candidate_opts=None, request_type=None,
+                                  eval_tasks=None, preview_capture=None, checkpoint=None, plan_hash=None)
+    execution.gates = [{"gate": 5, "blocked": False, "smoke_passed": True, "http_observed": True, "runner": "docker", "functional": functional},
+                       {"gate": 5.5, "blocked": False, "reason": None, "risk_level": "low"}]
+    execution.kind = None
+    execution.verdict()
+    return execution.result
+
+
+def test_oracle_needs_review_flag_gives_needs_review_verdict_with_oracle_reason():
+    result = _verdict_of({"passed": True, "needs_review": True, "oracle_passed": False, "reason": "Chữ không hiển thị"})
+    assert result["outcome"] == "needs_review" and "Chữ không hiển thị" in result["reason"] and result["failure_class"] is None
+    assert _verdict_of({"passed": True})["outcome"] == "ready_for_pr"

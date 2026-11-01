@@ -328,7 +328,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
     if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
         raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
     clean = []
-    for task, evidence in zip(plan['subtasks'], records):
+    for index, (task, evidence) in enumerate(zip(plan['subtasks'], records)):
         # `target` is free text for the model (often the subtask title); the file it quotes is what identifies the evidence
         if not isinstance(evidence, dict) or task['file'] not in (evidence.get('target'), evidence.get('file')):
             given = evidence if isinstance(evidence, dict) else {}
@@ -369,6 +369,11 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
                            file=file, quote=str(quote or '')[:200])
         if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
                 or not _quoted_in(quote, files.get(file, ''))):  # models join source lines: compare content, not layout
+            if 'advquote' in fixes() and all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ('before', 'after', 'verify')):
+                records[index]['unverified'] = True  # target file is verified, so a rewritten quote is the validator's flaw, not the plan's
+                clean.append({**{key: str(evidence[key])[:1200] for key in ('before', 'after', 'verify')}, 'quote': '',
+                              'file': task['file'], 'target': task['file']})
+                continue
             raise Mismatch(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn', item=task['file'],
                            target=evidence.get('target'), file=file, quote=str(quote or '')[:200])
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
@@ -540,10 +545,22 @@ def _uncertain(validation: dict) -> bool:
 _EXISTS_CLAIM = re.compile(r"đã (?:có|tồn tại)|tương tự|already exists?|similar", re.I)
 
 
+_NOT_IN_DATA = re.compile(r'không (?:có|thấy|tìm thấy)[^.]{0,40}REPO DATA|not (?:in|found in) REPO DATA', re.I)
+
+
+def retrieval_miss(validation: dict, files: dict) -> list[str]:
+    """Files the validator calls absent from REPO DATA although they were loaded: a retrieval fault, not an objection to the plan."""
+    reason = str(validation.get('reason') or '')
+    return [path for path in files if _NOT_IN_DATA.search(reason) and path in reason]
+
+
 def objection_advisory(validation: dict, files: dict) -> str | None:
     """Note when grounded=false has no verified citation (gate 2.5 does not block on it); None when it is verified."""
     if validation.get('grounded'):
         return None
+    missed = retrieval_miss(validation, files)
+    if missed:
+        return f"lỗi truy xuất, không phải phản đối plan: validator báo thiếu trong REPO DATA nhưng file có trong dữ liệu: {', '.join(missed)}"
     verified = evidence.verified(validation.get('objection'), files)
     if verified:
         claim = str((validation.get('objection') or {}).get('claim') or '')
@@ -713,7 +730,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
             unverified = [r['file'] for r in validation['grounding'] if r.get('unverified')]
             if unverified:
-                state['validator_note'] = 'validator không đưa trích dẫn cho: ' + ', '.join(unverified) + ' (cổng 2.5 không chặn)'
+                state['validator_note'] = 'validator không đưa trích dẫn khớp cho: ' + ', '.join(unverified) + ' (cổng 2.5 không chặn)'
                 judge('unverified grounding', False, state['validator_note'])
         except ValueError as error:
             judge("source grounding", False, str(error))

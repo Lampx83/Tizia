@@ -410,11 +410,14 @@ class _Execution:
         passed = _passed(gates, kind)
         if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
             self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
-        needs_review = passed and last["risk_level"] in ("high", "critical")
+        smoke = next((gate for gate in gates if gate["gate"] == 5), {})
+        oracle_review = passed and bool((smoke.get("functional") or {}).get("needs_review"))
+        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical"))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
-        reason = "risk triage requires human review" if needs_review else last["reason"]
+        reason = ("oracle functional fail trong khi acceptance, generated tests và smoke xanh: " + str(smoke["functional"].get("reason"))[:300]
+                  if oracle_review else "risk triage requires human review" if needs_review else last["reason"])
         if self.stop_note and not passed:
             reason = f"{reason} | repair stop: {self.stop_note}"
         self.result = {
@@ -767,7 +770,7 @@ def _plan_repair_note(reason: str, files: list[str] | None = None,
         banned += "\n- File bị trùng: " + ", ".join(dupes)
     if old:
         banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
-    banned += ("\n- Mọi file, test, hạng mục người dùng nhắc tên phải có subtask riêng; thiếu thì plan bị từ chối."
+    banned += ("\n- Mọi file, hạng mục người dùng nhắc tên phải có subtask riêng; test nêu tên chỉ cần nằm trong acceptance/verify (không tạo subtask cho file test); thiếu thì plan bị từ chối."
                "\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
                "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
                "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
