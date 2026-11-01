@@ -2,8 +2,6 @@
 import gate_replay
 
 OPEN = {
-    ("1.coverage", 561), ("1.coverage", 589), ("1.coverage", 593), ("1.coverage", 649), ("1.coverage", 658),
-    ("1.coverage", 665), ("1.coverage", 671), ("1.coverage", 678), ("1.coverage", 691),
     ("2.5.grounding", 650), ("4.guard_pii", "599"),
 }
 

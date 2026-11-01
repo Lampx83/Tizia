@@ -128,9 +128,18 @@ def test_request_13_plan_with_two_of_four_files_and_no_test_is_incomplete():
     from runtime import coverage
     plan = _plan("public/so-tay-git.html", "public/js/domains/it/experiences.js")
     missing = coverage.requested_missing(plan, coverage.user_text(REQUEST_13))
-    assert missing == ["public/js/domains/it/modules.js", "public/b-iso-canvas.html", "test/so-tay-git.test.js"]
+    assert missing == ["public/js/domains/it/modules.js", "public/b-iso-canvas.html"]
     reason = coverage.plan_block(plan, lambda: [], lambda: missing)
-    assert reason.startswith("yêu cầu nhắc tên") and "modules.js" in reason and "test/so-tay-git.test.js" in reason
+    assert reason.startswith("yêu cầu nhắc tên") and "modules.js" in reason
+
+
+def test_named_test_needs_acceptance_or_verify_not_a_subtask():
+    from runtime import coverage
+    text = coverage.user_text(REQUEST_13)
+    full = ["public/so-tay-git.html", "public/js/domains/it/experiences.js", "public/js/domains/it/modules.js", "public/b-iso-canvas.html"]
+    bare = {"subtasks": [{"file": f, "title": "Sổ tay Git", "verify": "node --check x.js"} for f in full]}
+    assert coverage.requested_missing(bare, text) == ["test/so-tay-git.test.js"]
+    assert coverage.requested_missing({**bare, "acceptance": ["node --test test/so-tay-git.test.js"]}, text) == []
 
 
 def test_request_13_full_plan_passes_and_thread_paths_are_ignored():

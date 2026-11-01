@@ -117,11 +117,23 @@ def _plan_files(plan):
     return [str(t.get("file") or "").replace("\\", "/").lstrip("./") for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
 
 
+_TEST_FILE = re.compile(r"(?:^|/)tests?/|[._]test\.[a-z]+$|(?:^|/)test_[^/]+\.py$")
+
+
+def _checks(plan):
+    """acceptance + verify của mọi subtask: nơi test nêu tên được chạy (server không cấp scope file test)."""
+    plan = plan or {}
+    return "\n".join([str(a) for a in plan.get("acceptance") or []]
+                     + [str(t.get("verify") or "") for t in plan.get("subtasks") or [] if isinstance(t, dict)])
+
+
 def requested_missing(plan, text):
-    """Đường dẫn và chữ trong dấu ngoặc mà người dùng nhắc nhưng plan không có subtask/không nhắc tới."""
+    """Đường dẫn và chữ trong dấu ngoặc mà người dùng nhắc nhưng plan không có subtask/không nhắc tới. File test nêu tên đủ khi có trong acceptance/verify."""
     files = _plan_files(plan)
+    checks = _checks(plan)
     missing = [path for path in requested_paths(text)
-               if not any(f == path or f.endswith("/" + path) or ("/" not in path and f.rsplit("/", 1)[-1] == path) for f in files)]
+               if not any(f == path or f.endswith("/" + path) or ("/" not in path and f.rsplit("/", 1)[-1] == path) for f in files)
+               and not (_TEST_FILE.search(path) and path in checks)]
     haystack = json.dumps(plan or {}, ensure_ascii=False).casefold()
     for match in _LITERAL.finditer(text or ""):
         if match.group(1).strip().casefold() not in haystack:

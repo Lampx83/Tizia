@@ -767,7 +767,7 @@ def _plan_repair_note(reason: str, files: list[str] | None = None,
         banned += "\n- File bị trùng: " + ", ".join(dupes)
     if old:
         banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
-    banned += ("\n- Mọi file, test, hạng mục người dùng nhắc tên phải có subtask riêng; thiếu thì plan bị từ chối."
+    banned += ("\n- Mọi file, hạng mục người dùng nhắc tên phải có subtask riêng; test nêu tên chỉ cần nằm trong acceptance/verify (không tạo subtask cho file test); thiếu thì plan bị từ chối."
                "\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
                "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
                "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
