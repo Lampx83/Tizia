@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
 from runtime import coverage, objection_repeat  # noqa: E402
-from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
+from runtime.limits import config_sha256, contract, run_wall_clock_s, scaled_limit  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
@@ -272,7 +272,8 @@ class _Execution:
         retried = False
         while True:
             if not budget.tick():
-                result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
+                result = {"gate": gate, "blocked": True, "reason": f"budget exhausted: {budget.exhausted_detail()}",
+                          "failure_class": "budget"}
             else:
                 try:
                     if gate == 4:
@@ -1546,7 +1547,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
         if os.getenv("AI_BOARD_TOOL_LOOP") != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
             steps = len(plan.get("steps") or [])
-            budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
+            budget.max_wall_clock_s = run_wall_clock_s(steps, local=getattr(deps, "provider", "ollama") != "api")
             budget.max_model_calls = scaled_limit("model_calls", steps)
         artifact = {}
         def capture(state, private_candidate):

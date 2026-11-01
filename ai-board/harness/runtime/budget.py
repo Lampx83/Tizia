@@ -112,6 +112,19 @@ class Budget:
         """Còn ngân sách để đi tiếp 1 bước? Không tính phí, chỉ kiểm tra."""
         return self.exhausted() is None
 
+    def exhausted_detail(self) -> str | None:
+        """Tên cap đã chạm kèm đã dùng/trần để hiện cho admin; None nếu còn chỗ."""
+        cap = self.exhausted()
+        if cap is None:
+            return None
+        if cap == "wall_clock_s":
+            return f"{cap} {self.elapsed_s:.0f}/{self.max_wall_clock_s:.0f}s"
+        if cap == "node_wall_clock_s":
+            return f"{cap} {limits.budget()[cap]:.0f}s"
+        if hasattr(self, f"max_{cap}"):
+            return f"{cap} {getattr(self, cap)}/{getattr(self, f'max_{cap}')}"
+        return cap
+
     def can_request(self) -> bool:
         """A pinned engine context bounds one full response before remote work starts."""
         return self.tick() and 0 <= self.max_request_tokens <= self.max_tokens - self.tokens
