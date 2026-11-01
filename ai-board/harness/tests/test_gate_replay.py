@@ -2,7 +2,7 @@
 import gate_replay
 
 OPEN = {
-    ("2.5.grounding", 650), ("4.guard_pii", "599"),
+    ("2.5.grounding", 650),
 }
 
 
