@@ -67,4 +67,10 @@ test('admin count: non-admin gets 403', async () => {
   }
 });
 
-test.after(() => { rmSync(dir, { recursive: true, force: true }); });
+test.after(async () => {
+  await db.close();
+  await appFixture.dispose();
+  rmSync(dir, { recursive: true, force: true });
+  // Importing the admin module starts non-unref'd timers; without this the file never exits.
+  setTimeout(() => process.exit(0), 200).unref();
+});
