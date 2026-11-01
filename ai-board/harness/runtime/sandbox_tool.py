@@ -114,8 +114,8 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
 class Runner:
     """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
 
-    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None):
-        self.source, self.sha, self.client, self.trace = source, sha, client, trace
+    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None):
+        self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
         self.cfg = limits.sandbox_tool(env)
         self.receipts: list[dict] = [] if receipts is None else receipts
@@ -149,6 +149,8 @@ class Runner:
                 retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and time.monotonic() < deadline \
                     and (error.status in (0, 429) or error.status >= 500)
                 self._record(receipt, started)
+                if retry and self.budget is not None and not self.budget.spend("tool_calls"):
+                    retry = False
                 if not retry:
                     if error.status == 429:
                         raise RunnerBusy(f"sandbox runner busy (run {session.run_id})")

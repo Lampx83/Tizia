@@ -136,7 +136,7 @@
     "attachments": {
       "_why": "Request attachments (ticket 87). Flag AI_BOARD_MULTIMODAL off by default; text cut at max_chars total, cut shown to requester.",
       "flag": "AI_BOARD_MULTIMODAL", "default_enabled": false,
-      "max_chars": 6000, "max_bytes": 10485760, "max_files": 10
+      "max_chars": 6000, "max_bytes": 10485760, "max_files": 10, "exec_timeout_s": 20
     },
     "memory": {
       "_why": "Worker-local files under ai-board/memory/ (gitignored). Everything there is a rebuildable cache except lessons; the worker prunes at start. Folder memory lives in the DB, not here. With a second worker, lessons move to a server table.",

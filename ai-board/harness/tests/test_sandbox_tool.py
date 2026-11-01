@@ -74,8 +74,8 @@ def offered_tool(flag_on):
     tool_loop._SANDBOX_OFFERED.reset(token)
 
 
-def runner(client, lease_ok=lambda: True, trace=None):
-    return sandbox_tool.Runner("repo", "abc", client=client, lease_ok=lease_ok, trace=trace)
+def runner(client, lease_ok=lambda: True, trace=None, budget=None):
+    return sandbox_tool.Runner("repo", "abc", client=client, lease_ok=lease_ok, trace=trace, budget=budget)
 
 
 def assert_every_vm_destroyed(client):
@@ -126,6 +126,23 @@ def test_transient_error_retries_in_fresh_vm_up_to_two_retries():
     out = json.loads(runner(client)(ALLOWED, {}))
     assert out["error"] == "runner_unreachable"
     assert len(client.created) == 3 and len(set(client.created)) == 3
+    assert_every_vm_destroyed(client)
+
+
+def test_each_retry_is_charged_to_the_step_budget():
+    from runtime.budget import Budget, ChildBudget
+    budget = ChildBudget(Budget())
+    client = FakeClient([SandboxError("runner_unreachable", "exec", 503)] * 5)
+    json.loads(runner(client, budget=budget)(ALLOWED, {}))
+    assert budget._own["tool_calls"] == 2 and len(client.created) == 3
+
+
+def test_retry_stops_when_step_budget_is_spent():
+    from runtime.budget import Budget, ChildBudget
+    budget = ChildBudget(Budget(), max_tool_calls=1)
+    client = FakeClient([SandboxError("runner_unreachable", "exec", 503)] * 5)
+    out = json.loads(runner(client, budget=budget)(ALLOWED, {}))
+    assert out["error"] == "runner_unreachable" and len(client.created) == 1
     assert_every_vm_destroyed(client)
 
 
