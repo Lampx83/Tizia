@@ -398,6 +398,7 @@ function renderSystem(sys) {
 
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
+let pendingRequestCount = 0;
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
@@ -415,6 +416,7 @@ async function loadRequests() {
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
   renderRequests();
+  refreshRequestBadge();
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
@@ -1781,7 +1783,7 @@ const TABS = {
   dashboard:  { label:'Dashboard', load: loadDashboard },
   schools:    { label:'Trường', load: loadSchoolsCampus },
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
-  requests:   { label:'Góp ý', load: loadRequests, badge: () => reqCache.filter(r => r.status === 'pending').length },
+  requests:   { label:'Góp ý', load: loadRequests, badge: () => pendingRequestCount },
   features:   { label:'Chức năng', load: loadFeatureFolders },
   skills:     { label:'Skills & Tools', load: loadSkillsTools },
   users:     { label:'Người dùng', load: loadUsers },
@@ -2262,9 +2264,6 @@ async function showTab(key, { silent = false } = {}) {
       host.replaceChildren(...shown);
       morph(host, fresh);
     }
-    // Badge "Góp ý" lấy từ reqCache chỉ khi tab Góp ý vừa tải lại; tab khác (vd dashboard) tự cập nhật
-    // bằng số của server, không ghi đè bằng reqCache rỗng.
-    if (key === 'requests') updateRequestBadge(TABS.requests.badge());
   } catch(e) {
     $('#tabbody').innerHTML = `<div class="err">Lỗi: ${e.message}</div>`;
   }
@@ -2278,8 +2277,15 @@ function autoRefresh() {
   if (!busy && AUTO_REFRESH_TABS.has(currentTab)) refresh({ silent: true });
 }
 function updateRequestBadge(count) {
+  pendingRequestCount = Number(count) || 0;
   const tb = document.querySelector('.tab[data-k="requests"] .count');
-  if (tb) tb.textContent = count;
+  if (tb) tb.textContent = pendingRequestCount;
+}
+async function refreshRequestBadge() {
+  try {
+    const r = await api('/api/admin/requests/count');
+    if (r.ok) updateRequestBadge(r.data.requests_pending);
+  } catch {}
 }
 
 async function refresh({ silent = false } = {}) {
@@ -2327,14 +2333,9 @@ async function init() {
   });
   await showTab(startTab);
 
-  // Vào thẳng tab khác (vd #users): badge "Góp ý" vẫn có số, không đợi mở tab Góp ý.
-  if (!['requests', 'dashboard'].includes(currentTab)) {
-    api('/api/admin/requests?limit=300').then(r => {
-      if (!r.ok) return;
-      reqCache = r.data.requests || [];
-      updateRequestBadge(TABS.requests.badge());
-    }).catch(() => {});
-  }
+  refreshRequestBadge();
+  setInterval(() => { if (!document.hidden) refreshRequestBadge(); }, 20_000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshRequestBadge(); });
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
   setInterval(autoRefresh, 60_000);
 
