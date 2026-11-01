@@ -766,7 +766,8 @@ def _plan_repair_note(reason: str, files: list[str] | None = None,
         banned += "\n- File bị trùng: " + ", ".join(dupes)
     if old:
         banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
-    banned += ("\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
+    banned += ("\n- Mọi file, test, hạng mục người dùng nhắc tên phải có subtask riêng; thiếu thì plan bị từ chối."
+               "\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
                "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
                "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
                "\n- Mọi plan có `layer` phải có verify là LỆNH CHẠY ĐƯỢC (node --test <file>, curl <url>, pytest, python <file>, bash <script>)."
@@ -1380,7 +1381,7 @@ class HarnessPlanner:
         return {
             "id": f"req-{request['id']}", "db_id": request["id"],
             "from": request.get("student"), "domain": request.get("domain"),
-            "type": request.get("type"), "subject": request.get("title"),
+            "type": request.get("type"), "subject": request.get("title"), "detail": request.get("detail"),
             # Spec đã làm rõ với người gửi thay mô tả gốc; không có thì như cũ.
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "clarified_spec": request.get("clarified_spec"),
@@ -1435,8 +1436,8 @@ class HarnessPlanner:
             "domain": request["domain"],
             "goal": old["summary_vi"],
             "allowed_scope": [step["allowed_scope"][0] for step in steps],
-            "acceptance": list(old.get("acceptance") or [item for step in steps for item in step["acceptance"]]),
-            "tests": [item for step in steps for item in step["tests"]],
+            "acceptance": list(dict.fromkeys(old.get("acceptance") or [item for step in steps for item in step["acceptance"]])),
+            "tests": list(dict.fromkeys(item for step in steps for item in step["tests"])),
             "capabilities": capabilities,
             "risk": "high" if signals else "medium" if any(step["risk"] == "medium" for step in steps) else "low",
             "non_goals": ["Không sửa file ngoài allowed_scope.", "Không tự mở rộng quyền."],
@@ -1498,7 +1499,8 @@ class HarnessPlanner:
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:
-                reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget))
+                reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget),
+                                            lambda: coverage.requested_missing(plan_now, coverage.user_text(request)))
                 if reason:
                     result = {"gate": 1, "result": {"gate": 1, "blocked": True, "plan": None, "signals": [],
                                                     "reason": f"plan không hợp lệ: {reason}"}}
@@ -1522,7 +1524,6 @@ class HarnessPlanner:
             plan['grounding'] = state['grounding']
         if state.get('assumption'):
             note = f"Giả định chưa xác nhận với người gửi: {state['assumption']}"[:300]
-            plan['goal'] = f"{plan['goal']} [{note}]"
             plan['non_goals'] = [*plan['non_goals'], note]
         if (state.get('intake') or {}).get('read_only_verification'):
             plan['read_only_admin_verification'] = True

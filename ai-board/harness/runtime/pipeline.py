@@ -135,9 +135,10 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
 @functools.lru_cache(maxsize=None)
 def _static_prefix(prompt_name: str | None) -> str:
     """Phần prompt cố định (trước placeholder đầu tiên) — trace chỉ gửi phần sau nó."""
-    if not prompt_name:
+    path = PROMPTS_DIR / prompt_name if prompt_name else None
+    if path is None or not path.is_file():
         return ""
-    return (PROMPTS_DIR / prompt_name).read_text(encoding="utf-8").split("{", 1)[0]
+    return path.read_text(encoding="utf-8").split("{", 1)[0]
 
 
 @dataclass(frozen=True)

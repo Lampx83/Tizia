@@ -1,10 +1,14 @@
 """Neo đường dẫn plan vào danh sách file thật + BM25 tất định (stdlib) gợi ý file gần nhất."""
+import json
 import math
 import re
 import unicodedata
 from collections import Counter
+from pathlib import Path
 
 import code_index
+
+CONFIG = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json").read_text(encoding="utf-8"))["limits"]["retrieval"]
 
 _EXT = r"(?:html?|m?js|css|json|sql|py|md)"
 _ROOTED = re.compile(rf"(?<![\w./-])((?:public|server|test|tests|scripts|ai-board)/[\w./-]+\.{_EXT})(?![\w-])")
@@ -29,22 +33,39 @@ def _tokens(text: str) -> list[str]:
     return [t for t in _TOKEN.findall(folded.replace("đ", "d")) if t not in _GENERIC]
 
 
-def bm25_top(query: str, paths, k: int = 3, k1: float = 1.5, b: float = 0.75) -> list[tuple[str, float]]:
-    """Top-k (path, score) theo BM25 trên token của đường dẫn; điểm 0 bị loại."""
-    docs = {p: _tokens(p) for p in sorted(paths) if p.startswith(_NEAR_ROOTS)}
+def _bm25(terms: set[str], docs: dict[str, list[str]], k1: float, b: float) -> dict[str, float]:
+    """Điểm BM25 của từng tài liệu đã tách token; chỉ giữ điểm dương."""
     if not docs:
-        return []
+        return {}
     avg = sum(map(len, docs.values())) / len(docs) or 1
     df = Counter(t for toks in docs.values() for t in set(toks))
-    terms = set(_tokens(query))
-    scored = []
+    scores = {}
     for path, toks in docs.items():
         tf = Counter(toks)
         score = sum(math.log(1 + (len(docs) - df[t] + .5) / (df[t] + .5)) * tf[t] * (k1 + 1)
                     / (tf[t] + k1 * (1 - b + b * len(toks) / avg)) for t in terms if t in tf)
-        if score > 0 and len(terms & set(toks)) >= 2:
-            scored.append((path, round(score, 3)))
-    return sorted(scored, key=lambda item: (-item[1], item[0]))[:k]
+        if score > 0:
+            scores[path] = score
+    return scores
+
+
+def bm25_top(query: str, paths, k: int | None = None, k1: float | None = None, b: float | None = None) -> list[tuple[str, float]]:
+    """Top-k (path, score) theo BM25 trên token của đường dẫn; tham số mặc định từ contract.json retrieval.bm25."""
+    cfg = CONFIG["bm25"]
+    docs = {p: _tokens(p) for p in sorted(paths) if p.startswith(_NEAR_ROOTS)}
+    terms = set(_tokens(query))
+    scores = _bm25(terms, docs, k1 or cfg["k1"], b or cfg["b"])
+    scored = [(p, round(s, 3)) for p, s in scores.items() if len(terms & set(docs[p])) >= cfg["min_shared_terms"]]
+    return sorted(scored, key=lambda item: (-item[1], item[0]))[:k or cfg["top"]]
+
+
+def similar_basis(claim: str, evidence_files, files: dict) -> bool:
+    """Khẳng định 'đã có chức năng tương tự' có căn cứ: BM25 trên nội dung REPO DATA xếp một file dẫn chứng đã xác minh trong top, đạt ngưỡng."""
+    cfg = CONFIG["similar_exists"]
+    docs = {p: _tokens(text) for p, text in files.items()}
+    scores = _bm25(set(_tokens(claim)), docs, CONFIG["bm25"]["k1"], CONFIG["bm25"]["b"])
+    top = sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:cfg["top"]]
+    return any(path in set(evidence_files) and score >= cfg["min_score"] for path, score in top)
 
 
 def referenced_paths(plan: dict) -> list[str]:

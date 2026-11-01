@@ -109,3 +109,61 @@ def test_overlap_alone_never_blocks_plan_with_runnable_verify():
     plan = {"subtasks": [{"file": "a.js", "title": "x", "verify": "node --test t.js"}]}
     assert coverage.uncovered_items(["điều kiện không trùng từ nào"], plan) != []
     assert coverage.plan_block(plan, lambda: coverage.uncovered_items(["điều kiện không trùng từ nào"], plan)) is None
+
+
+REQUEST_13 = {
+    "subject": "Thêm sổ tay Git",
+    "detail": ("Làm trang public/so-tay-git.html, đăng ký trong public/js/domains/it/experiences.js và "
+               "public/js/domains/it/modules.js, thêm tòa nhà vào public/b-iso-canvas.html, "
+               "kèm test/so-tay-git.test.js. Trang phải có chữ \"Sổ tay Git\"."),
+    "thread": [{"role": "admin", "body": "Bạn muốn sửa public/khong-ai-hoi.html không?"}],
+}
+
+
+def _plan(*files, title="Sổ tay Git"):
+    return {"subtasks": [{"file": f, "title": title, "verify": "node --test test/so-tay-git.test.js"} for f in files]}
+
+
+def test_request_13_plan_with_two_of_four_files_and_no_test_is_incomplete():
+    from runtime import coverage
+    plan = _plan("public/so-tay-git.html", "public/js/domains/it/experiences.js")
+    missing = coverage.requested_missing(plan, coverage.user_text(REQUEST_13))
+    assert missing == ["public/js/domains/it/modules.js", "public/b-iso-canvas.html", "test/so-tay-git.test.js"]
+    reason = coverage.plan_block(plan, lambda: [], lambda: missing)
+    assert reason.startswith("yêu cầu nhắc tên") and "modules.js" in reason and "test/so-tay-git.test.js" in reason
+
+
+def test_request_13_full_plan_passes_and_thread_paths_are_ignored():
+    from runtime import coverage
+    plan = _plan("public/so-tay-git.html", "public/js/domains/it/experiences.js", "public/js/domains/it/modules.js",
+                 "public/b-iso-canvas.html", "test/so-tay-git.test.js")
+    assert coverage.requested_missing(plan, coverage.user_text(REQUEST_13)) == []
+    assert coverage.plan_block(plan, lambda: [], lambda: []) is None
+
+
+def test_reference_only_path_and_missing_literal_text():
+    from runtime import coverage
+    text = "Làm trang a.html giống trang mẫu b.html. Có chữ \"Xin chào bạn\"."
+    assert coverage.requested_paths(text) == ["a.html"]
+    assert coverage.requested_missing(_plan("a.html"), text) == ['chữ "Xin chào bạn"']
+    assert coverage.requested_missing({"subtasks": [{"file": "a.html", "title": "Hiện Xin chào bạn", "verify": "x"}]}, text) == []
+
+
+def test_plan_without_subtasks_is_never_valid():
+    from runtime import coverage
+    assert coverage.plan_block({"subtasks": []}, lambda: []) == "plan không có subtask nào"
+
+
+def test_canonical_plan_has_no_duplicate_acceptance_and_scope_matches_steps():
+    from worker import HarnessPlanner
+    old = {"summary_vi": "x", "subtasks": [
+        {"title": "a", "file": "public/a.html", "verify": "node --test test/a.test.js"},
+        {"title": "b", "file": "public/js/b.js", "verify": "node --test test/a.test.js"}]}
+    plan = HarnessPlanner._canonical({"domain": "it"}, old)
+    assert plan["acceptance"] == ["node --test test/a.test.js"] and plan["tests"] == plan["acceptance"]
+    assert plan["allowed_scope"] == [s["allowed_scope"][0] for s in plan["steps"]] == ["public/a.html", "public/js/b.js"]
+
+
+def test_repair_note_demands_a_subtask_for_every_named_item():
+    from worker import _plan_repair_note
+    assert "phải có subtask riêng" in _plan_repair_note("yêu cầu nhắc tên nhưng plan thiếu subtask/hạng mục: x.js")

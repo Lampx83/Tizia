@@ -45,7 +45,18 @@ const CLAIMS_WORK = /(?<![\p{L}])(tôi|mình|chúng tôi|ban điều hành|ban)\
 const CONTACT = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(?<![\d.])(?:\+?84|0)[35789](?:[\s.-]?\d){8}(?!\d)/iu;
 const CONVERSATION_CAP = 6000;
 const CONVERSATION_RECENT = 6;
+const CODE_QUESTION = /[\w./-]+\.(?:html|js|mjs|css|json|py|md)\b|\b(?:repo|codebase|selector|endpoint|building id|gx|gy|tọa độ|mã nguồn)\b/iu;
+const squash = (text) => String(text ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 const fence = (text) => String(text ?? '').replace(/<{3,}|>{3,}/g, '');
+
+/** Câu hỏi nhắc tên file hoặc chi tiết mã: người dùng không trả lời được, kế hoạch tự quyết. */
+export function asksAboutCode(question) { return CODE_QUESTION.test(String(question ?? '')); }
+
+/** Trích dẫn literal (>= 8 ký tự) nằm trong yêu cầu hoặc câu đáp cũ: điều đó đã có, không hỏi lại. */
+export function quotedInKnown(quote, known) {
+  const needle = squash(quote);
+  return needle.length >= 8 && known.some((text) => squash(text).includes(needle));
+}
 
 /** Hội thoại cho prompt: tiêu đề, mô tả, câu đáp cũ, rồi vài lượt hỏi/đáp gần nhất. Toàn bộ là dữ liệu của người dùng. */
 export function conversationText(request, turns) {
@@ -281,14 +292,15 @@ export function parseQuestionReply(raw) {
   if (question == null || question.length > 500) return { ok: false, error: 'question_invalid' };
   if (data.ready === false && !question) return { ok: false, error: 'empty_question' };
   if (data.ready === true && question) return { ok: false, error: 'question_when_ready' };
-  return { ok: true, ready: data.ready, missing, question };
+  const answeredBy = typeof data.answered_by === 'string' ? data.answered_by.trim().slice(0, 300) : '';
+  return { ok: true, ready: data.ready, missing, question, ...(answeredBy ? { answeredBy } : {}) };
 }
 
 /**
  * One question turn: ask the model for the JSON contract, retry once on a malformed reply, then give up
  * with a reason. The reply's question text streams to `send` while the JSON is still arriving.
  */
-export async function askQuestion({ generate, model, prompt, mode, send }) {
+export async function askQuestion({ generate, model, prompt, mode, send, known = [] }) {
   let lastError = 'model_failed';
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const stream = attempt === 0 && send ? new JsonQuestionStream(send) : null;
@@ -305,6 +317,8 @@ export async function askQuestion({ generate, model, prompt, mode, send }) {
     const parsed = parseQuestionReply(text);
     if (!parsed.ok) { lastError = parsed.error; continue; }
     if (parsed.ready) return { ok: true, ready: true, missing: parsed.missing, question: '' };
+    if (quotedInKnown(parsed.answeredBy ?? '', known)) return { ok: true, ready: true, missing: parsed.missing, question: '', skipped: 'answered_in_request' };
+    if (asksAboutCode(parsed.question)) return { ok: true, ready: true, missing: parsed.missing, question: '', skipped: 'code_question', assumed: true };
     const guard = guardModelText(parsed.question, 'question', mode);
     return { ok: true, ready: false, missing: parsed.missing, question: guard.text, replaced: guard.replaced, reason: guard.reason };
   }

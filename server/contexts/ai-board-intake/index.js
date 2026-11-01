@@ -222,7 +222,8 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
         const prompt = questionPrompt({ request, turns, techLevel: profile?.tech_level, mode, turn: asked + 1 });
         const deltas = [];
         const answer = await askQuestion({ generate: generateFor, model: models.question, prompt, mode,
-          send: (text) => deltas.push({ t: 'delta', text }) });
+          send: (text) => deltas.push({ t: 'delta', text }),
+          known: [request.title, request.detail, ...turns.filter((t) => t.kind === 'answer').map((t) => t.text)] });
         if (!answer.ok) {
           const handoff = await store.handoffClarification(request.id, req.user.id, `invalid_model_output:${answer.error}`);
           send({ t: 'done', kind: 'handoff', text: handoff.public_note, asked, max, complete: false });
@@ -251,8 +252,9 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
         // Model tự nhận đã đủ rõ: tóm tắt luôn, không hỏi thêm.
         step.kind = 'summary';
         step.complete = true;
+        step.assumed = answer.assumed === true;
       }
-      const closing = !feature && step.closing === true;
+      const closing = (!feature && step.closing === true) || step.assumed === true;
       const prompt = specPrompt({ request, turns, mode, closing });
       const out = await streamGuarded({ generate: generateFor, model: models.spec, prompt, kind: 'summary', mode, send,
         fallback: plainSpec(request, turns, { closing }) });

@@ -106,7 +106,12 @@
     },
     "clarify": {
       "_why": "Requester clarification (contexts/ai-board-intake): the model decides when it is ready, so this is only the hard cap on questions. At the cap the summary must list assumptions so the requester confirms them. Daily model turns stay DAILY_TURNS=20 in the intake context.",
-      "questions": 8
+      "questions": 2
+    },
+    "retrieval": {
+      "_why": "Closed-world retrieval grounding (LF/131): deterministic BM25 over stdlib, no GPU, no embeddings. bm25 ranks near files by path tokens; similar_exists decides when a verified 'similar function already exists' objection has a basis (an evidence file in the BM25 top over REPO DATA with at least min_score), otherwise it stays advisory.",
+      "bm25": { "k": 3, "k1": 1.5, "b": 0.75, "min_shared_terms": 2, "top": 3 },
+      "similar_exists": { "min_score": 0.5, "top": 3 }
     },
     "pending_roots_per_user": { "value": 100, "_why": "owner 2026-10-28: miễn cap cho người dùng thường — đủ lớp chặn phía sau (global_rate, gpu_s_per_user_day, intake/language/gibberish guards), giá trị lớn chỉ để chặn tràn DB" },
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
