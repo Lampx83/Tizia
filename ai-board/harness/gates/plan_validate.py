@@ -223,7 +223,7 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
-DEFAULT_FIXES = ""
+DEFAULT_FIXES = "quotes,ellipsis"
 
 
 def fixes() -> set[str]:
