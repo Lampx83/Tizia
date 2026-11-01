@@ -28,6 +28,7 @@ sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
 from runtime import coverage, objection_repeat  # noqa: E402
 from runtime.limits import config_sha256, contract, run_wall_clock_s, scaled_limit  # noqa: E402
+from settings import get_settings  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
@@ -360,7 +361,7 @@ class _Execution:
             self.kind = "budget"
             return "done"
         from runtime.root_allowance import current as root_allowance
-        if (os.getenv("AI_BOARD_TOOL_LOOP") == "1" or root_allowance() is not None) and not self.budget.spend_repair():
+        if (get_settings().tool_loop == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
         tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
@@ -491,7 +492,7 @@ def drop_screenshots(shots: list[dict]) -> None:
 def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
     """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ): qua API server khi có lease, DATABASE_URL chỉ cho chạy ngoài worker HTTP; None khi cờ tắt."""
     from runtime import exec_graph
-    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" and not exec_graph.persistence_enabled():
+    if get_settings().tool_loop != "1" and not exec_graph.persistence_enabled():
         return None
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
@@ -667,7 +668,7 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
 def server_url(env=None) -> str:
     """App base URL: AI_BOARD_SERVER_URL (compose: http://tizia:8041), else this machine on PORT."""
     env = os.environ if env is None else env
-    return (env.get("AI_BOARD_SERVER_URL") or f"http://127.0.0.1:{env.get('PORT') or '8041'}").rstrip("/")
+    return (get_settings(env).server_url or f"http://127.0.0.1:{env.get('PORT') or '8041'}").rstrip("/")
 
 
 def default_worker_id() -> str:
@@ -821,11 +822,11 @@ def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> 
 
 def _forge(candidate, token):
     """GitHub client, or a local bare-repo forge when AI_BOARD_LOCAL_FORGE names one (demo: no remote PR ever leaves the machine)."""
-    local = os.getenv("AI_BOARD_LOCAL_FORGE")
+    local = get_settings().local_forge
     if local:
         from services.local_forge import local_github
         return local_github(local, candidate.GitHub)
-    return candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), token) if token else None
+    return candidate.GitHub(get_settings().github_repo, token) if token else None
 
 
 def observe_base(client: WorkerClient, repo) -> dict:
@@ -1460,7 +1461,7 @@ class HarnessPlanner:
                     "gate": 1, "reason": f"folder_brief: {', '.join(stop)}", "signals": stop, "plan": None,
                     "public_message": "Chức năng này cần quản trị viên xem lại trước khi làm tiếp."})
         budget = self.Budget.from_env()
-        answered = os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+        answered = get_settings().gate25_answered
         # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
         # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
         budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
@@ -1546,7 +1547,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
-        if os.getenv("AI_BOARD_TOOL_LOOP") != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
+        if get_settings().tool_loop != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
             steps = len(plan.get("steps") or [])
             budget.max_wall_clock_s = run_wall_clock_s(steps, local=getattr(deps, "provider", "ollama") != "api")
             budget.max_model_calls = scaled_limit("model_calls", steps)
@@ -1558,7 +1559,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         result = execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=source or checkout_source or REPO_ROOT, deps=deps,
                               budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
                               memory_path=DEFAULT_PATH,
-                              preview_capture=capture if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true" else None, **kwargs)
+                              preview_capture=capture if get_settings().private_preview_enabled else None, **kwargs)
         if artifact: result["_preview_artifact"] = artifact
         return result
     return run
@@ -1589,7 +1590,7 @@ def poll(worker) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
-    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
+    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=get_settings().worker_mode)
     parser.add_argument("--once", action="store_true", help="poll once, then exit")
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
@@ -1614,7 +1615,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _, Deps, _ = _load_harness()
     if args.observe_base:
-        repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+        repo_dir = get_settings().repo_dir
         print(json.dumps(observe_base(WorkerClient(base_url, key), Path(repo_dir) if repo_dir else REPO_ROOT), ensure_ascii=False))
         return 0
     if args.sync_prs:
@@ -1628,14 +1629,14 @@ def main(argv: list[str] | None = None) -> int:
     worker = HttpWorker(
         WorkerClient(base_url, key),
         worker_id=default_worker_id(),
-        version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
+        version=get_settings().worker_version,
         mode=args.mode,
         tracer=tracer,
     )
     # Cổng báo tiến độ qua worker.gate_started → event gate_started của run đang giữ lease.
     # AI_BOARD_REPO_DIR = the worker's own clone (prod container): reset to origin/<PR_BASE_BRANCH> before
     # every ticket and used as the candidate base. Unset = this checkout, never reset (a dev's working tree).
-    repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+    repo_dir = get_settings().repo_dir
     repo = Path(repo_dir) if repo_dir else REPO_ROOT
     if repo_dir:
         import candidate
@@ -1648,12 +1649,12 @@ def main(argv: list[str] | None = None) -> int:
         from models import OllamaClient
         worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
-        if engine_url := os.getenv("AI_BOARD_ENGINE_URL"):
+        if engine_url := get_settings().engine_url:
             from api.client import RemotePlanner
             try:
                 worker.planner = RemotePlanner(
                     engine_url, take_secret("AI_BOARD_INTERNAL_KEY"),
-                    project=os.getenv("AI_BOARD_PROJECT", "tizia"),
+                    project=get_settings().project,
                     fallback=worker.planner, tracer=tracer,
                 )
             except ValueError as error:
@@ -1667,7 +1668,7 @@ def main(argv: list[str] | None = None) -> int:
                                                      progress=worker.gate_started)
         github = _forge(candidate, github_token)
         worker.candidates = candidate.Candidates(repo, github=github)
-        if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true":
+        if get_settings().private_preview_enabled:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before

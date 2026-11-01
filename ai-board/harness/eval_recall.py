@@ -26,6 +26,7 @@ import context  # noqa: E402
 import file_context  # noqa: E402
 from eval_strata import _exemplars  # noqa: E402
 from gates import implement  # noqa: E402
+from settings import get_settings
 
 GROUPS = ("kind", "style", "difficulty", "transformation", "split")  # trục nhóm, lấy từ trường có trong case
 TOOL_SECTION = {"grep": "excerpt", "outline": "outline", "repomap": "repomap", "exemplar": "exemplar", "lessons": "lessons", "tree": "tree"}
@@ -206,7 +207,7 @@ def render(rep: dict) -> str:
 def register(subs) -> None:
     import eval_run
     parser = subs.add_parser("recall", help="recall context cổng 1/3 + chi phí từng phần, không model")
-    parser.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(eval_run.DEFAULT_ROOT))
+    parser.add_argument("--root", default=str(get_settings().eval_dir or eval_run.DEFAULT_ROOT))
     parser.add_argument("--corpus", action="append", help="chỉ corpus này (tên thư mục; corpus-git); mặc định mọi corpus có sẵn")
     parser.add_argument("--label", default="latest", help="thư mục kết quả <root>/recall/<label>.*")
     parser.add_argument("--weights-alt", help="retrieval_weights.json khác: in hiệu recall so với trọng số hiện tại")

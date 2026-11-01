@@ -9,19 +9,19 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 from evaluation import feature
 from evaluation.feature_cases import CASES
+from settings import get_settings
 
 
 def register(subs) -> None:
     import eval_run
     p = subs.add_parser("feature", help="tầng chức năng e2e: acceptance tự động + rubric 0-3")
-    p.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(eval_run.DEFAULT_ROOT))
+    p.add_argument("--root", default=str(get_settings().eval_dir or eval_run.DEFAULT_ROOT))
     p.add_argument("--records", help="jsonl bản ghi run đã thu (offline, không model)")
     p.add_argument("--driver", help="module:hàm chạy pipeline thật, trả record cho (case, repeat)")
     p.add_argument("--model", default="recorded", help="nhãn model ghim vào báo cáo")

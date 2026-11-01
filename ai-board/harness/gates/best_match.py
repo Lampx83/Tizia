@@ -1,7 +1,7 @@
 """best_match policy shared by gates 1 and 2.5: reject by default, record-only when AI_BOARD_BEST_MATCH=advisory."""
 from __future__ import annotations
 
-import os
+from settings import get_settings
 
 ADVISORY = "advisory"
 REASON_CODE = "best_match_advisory"
@@ -9,8 +9,7 @@ REASON_CODE = "best_match_advisory"
 
 def mode() -> str:
     """Env AI_BOARD_BEST_MATCH; anything but `advisory` = enforce (empty string)."""
-    value = os.environ.get("AI_BOARD_BEST_MATCH", "").strip().lower()
-    return ADVISORY if value == ADVISORY else ""
+    return ADVISORY if get_settings().best_match == ADVISORY else ""
 
 
 def enforce(best_match, plan_files, message: str, judge, *, contradicted: bool = False) -> None:

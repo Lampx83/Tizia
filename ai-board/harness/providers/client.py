@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from providers.routing import ModelRouter
+from settings import get_settings
 
 # Gateway dùng chung thỉnh thoảng trả 5xx (đổi model, thiếu VRAM): thử lại 3 lần, nghỉ 3 s rồi 8 s. Lỗi 4xx và timeout không thử lại.
 RETRY_STATUS = (500, 502, 503, 504)
@@ -70,7 +71,7 @@ class OllamaClient:
             gate3_model=env.get("GATE3_MODEL_HEAVY") or "",
             gate3_model_light=env.get("GATE3_MODEL_LIGHT") or "",
             embed_model=env.get("EMBED_MODEL") or "",
-            classifier_model=env.get("AI_BOARD_CLASSIFIER_MODEL") or "",
+            classifier_model=get_settings(env).classifier_model,
             seckey=env.get("OLLAMA_SECKEY") or None,
             routing=ModelRouter.from_env(env),
             vllm_url=(env.get('VLLM_URL') or '').strip().rstrip('/'),

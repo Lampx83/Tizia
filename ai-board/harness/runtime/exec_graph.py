@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import json
 import operator
-import os
 from pathlib import Path
 from typing import Annotated, Callable, TypedDict
 
 from runtime import limits
+from settings import get_settings
 
 PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
 
@@ -17,7 +17,7 @@ def spec() -> dict:
 
 
 def persistence_enabled() -> bool:
-    return limits.truthy(os.environ.get("AI_BOARD_GRAPH_PERSISTENCE"))
+    return get_settings().graph_persistence
 
 
 class GraphState(TypedDict, total=False):

@@ -1,8 +1,8 @@
 """Tách lời gọi model thành system (luật nền tảng, giá trị) + user (nội dung, định dạng nhắc lại cuối). Bật bằng AI_BOARD_PROMPT_ROLE_SPLIT=1."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
+from settings import get_settings
 
 SYSTEM = (Path(__file__).resolve().parent.parent / "prompts" / "system_roles.md").read_text(encoding="utf-8").strip()
 RESTATE = "\n\nNhắc lại: trả đúng định dạng đã yêu cầu ở trên, không thêm chữ nào ngoài định dạng đó."
@@ -15,7 +15,7 @@ REASONING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_
 
 def enabled() -> bool:
     """Bật tách system/user; mặc định tắt."""
-    return os.environ.get("AI_BOARD_PROMPT_ROLE_SPLIT", "") == "1"
+    return get_settings().prompt_role_split
 
 
 def split(user: str) -> tuple[str, str]:

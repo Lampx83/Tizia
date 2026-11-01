@@ -6,6 +6,7 @@ import math
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
+from settings import get_settings
 
 CATALOG = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'model-routing.json'
 ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor'}
@@ -82,7 +83,7 @@ class ModelRouter:
 
     @classmethod
     def from_env(cls, settings):
-        return cls(settings) if str(settings.get('AI_BOARD_MODEL_ROUTING')).lower() == 'true' else None
+        return cls(settings) if get_settings(settings).model_routing else None
 
     def candidates(self, role, *, exclude=()):
         if role not in ROLES:
