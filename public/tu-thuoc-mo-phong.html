@@ -1292,6 +1292,18 @@
 </style>
 </head>
 <body class="view-facade">
+<script>
+/* req #259: bấm tủ trên sơ đồ tải lại trang (?tu=…) mà body mặc định là mặt tiền → mặt tiền nhà thuốc hiện chớp lên
+   rồi mới vào tủ ("ra màn hình cửa xong mới vào tủ"). Chọn đúng màn ngay từ đầu, trước khi trình duyệt vẽ lần đầu.
+   Khớp điểm khởi động cuối file (?tu → tủ, ?view=map → sơ đồ, còn lại → mặt tiền). */
+(function(){
+  try{
+    var q = new URLSearchParams(location.search), c = document.body.classList;
+    if(q.has('tu')){ c.remove('view-facade'); c.add('view-pharmacy'); }
+    else if(q.get('view') === 'map'){ c.remove('view-facade'); c.add('view-map'); }
+  }catch(e){}
+})();
+</script>
 
 <!-- ===================================================================
      req #154 (ThS Hương Lý) — MẶT TIỀN NHÀ THUỐC (màn đầu tiên)
@@ -3405,6 +3417,14 @@ function dn(it){
   return `<b class="dn">${esc(typeof it === 'string' ? it : it.name)}</b>`;
 }
 function m1RecOf(key){ return allRecords.find(r => m1KeyOf(r) === key) || null; }
+// req #258: tiền đồng gõ theo hoá đơn "64.000" — ô type=number hiểu là 64 (dấu chấm thập phân). Ô tiền dùng text
+// và đọc bằng viMoney: "64.000" / "64,000" / "64 000" / "64000" đều = 64000; "64,5" = 64,5.
+function viMoney(v){
+  const t = String(v == null ? '' : v).trim().replace(/\s/g, '');
+  if(!t) return NaN;
+  if(/^\d{1,3}([.,]\d{3})+$/.test(t)) return Number(t.replace(/[.,]/g, ''));
+  return Number(t.replace(',', '.'));
+}
 function m1PkgPrice(it){ return 12000 + m1HashNum(it.key+'p', 0, 78) * 1000; }   // giá nhập / 1 đơn vị đóng gói (chưa VAT)
 // req #226: danh mục thuốc của các nhiệm vụ 1-2-3 MỞ RỘNG dần theo mức độ — mức 1 lấy thuốc trong 2 tủ
 // đầu, rồi 4 tủ, 8, 12, 18… Mỗi lượt chơi mới bốc ngẫu nhiên 2 thuốc kê đơn + 2 thuốc không kê đơn.
@@ -4320,7 +4340,7 @@ function m2RenderPrice(){
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập (sau VAT) / đơn vị nhỏ nhất</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
       ${pass.map((it,i) => `<tr><td>${dn(it)}</td><td>${it.pack.spec}</td>
         <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b></td>
-        <td><input type="number" min="0" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
+        <td><input type="text" inputmode="decimal" autocomplete="off" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
     </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div><div id="m2PriceAsk"></div>`);
   const ask = body.querySelector('#m2PriceAsk');
   body.querySelector('#m2PriceOk').addEventListener('click', () => {
@@ -4328,8 +4348,8 @@ function m2RenderPrice(){
     const low = [];
     for(let i = 0; i < pass.length; i++){
       const sv = body.querySelector(`[data-s="${i}"]`).value, it = pass[i];
-      if(sv === '' || !(Number(sv) > 0)){ err.textContent = '⚠️ Nhập giá bán cho tất cả sản phẩm.'; return; }
-      if(Number(sv) < cost(it)) low.push(`${esc(it.name)} (${fmt(Number(sv))} đ &lt; giá nhập ${fmt(cost(it))} đ)`);
+      if(sv === '' || !(viMoney(sv) > 0)){ err.textContent = '⚠️ Nhập giá bán cho tất cả sản phẩm.'; return; }
+      if(viMoney(sv) < cost(it)) low.push(`${esc(it.name)} (${fmt(viMoney(sv))} đ &lt; giá nhập ${fmt(cost(it))} đ)`);
     }
     if(low.length){
       ask.innerHTML = `<div class="pos-note" style="background:#fff1e6;border:1px solid #e0a070;border-radius:8px;padding:8px 10px;margin-top:8px">⚠️ Giá bán của <b>${low.join(', ')}</b> thấp hơn giá nhập. Bạn có chắc chắn bán thấp hơn giá nhập không?<br>
@@ -4451,7 +4471,7 @@ function renderThucNhapTab(){
         <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
         <td><input type="number" min="0" data-f="qty" style="width:64px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td>
         <td>${sel('unit', ['hộp','lọ','vỉ','viên','ống','tuýp','gói'])}</td>
-        <td><input type="number" min="0" data-f="price" style="width:84px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td></tr>`; }).join('')}
+        <td><input type="text" inputmode="decimal" autocomplete="off" data-f="price" style="width:84px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td></tr>`; }).join('')}
     </tbody></table></div>
     <button type="button" class="pos-btn" id="m2LedgerOk">📝 Ghi sổ</button><div class="pos-err" id="m2LedErr"></div>`;
   posPanel.querySelectorAll('.m2-ref').forEach(b => b.addEventListener('click', () => m2RenderRef(Number(b.dataset.r))));
@@ -4464,7 +4484,7 @@ function renderThucNhapTab(){
       if(g('spec') !== it.pack.spec){ err.textContent = `⚠️ Quy cách đóng gói của "${it.name}" chưa đúng.`; return; }
       if(Number(g('qty')) !== it.recv){ err.textContent = `⚠️ Số lượng của "${it.name}" chưa đúng — theo số thực nhận.`; return; }
       if(g('unit') !== it.unit){ err.textContent = `⚠️ Đơn vị tính của "${it.name}" chưa đúng — đơn vị đóng gói lớn nhất (hộp, lọ…).`; return; }
-      if(Math.abs(Number(g('price')) - m1PkgPrice(it)) > 1){ err.textContent = `⚠️ Đơn giá của "${it.name}" chưa đúng — lấy giá nhập trên hoá đơn (chưa VAT).`; return; }
+      if(!(Math.abs(viMoney(g('price')) - m1PkgPrice(it)) <= 1)){ err.textContent = `⚠️ Đơn giá của "${it.name}" chưa đúng — lấy giá nhập trên hoá đơn (chưa VAT).`; return; }
     }
     x.step = 'done'; saveM2State(x); m2FinishDone();
   });
