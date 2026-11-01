@@ -1,9 +1,7 @@
 """Offline gate replay of recorded traces (requests 7, 11, 13, 14, 15): every non-correct verdict must be listed."""
 import gate_replay
 
-OPEN = {
-    ("2.5.grounding", 650),
-}
+OPEN = {("2.5.grounding", 650)}  # tip default has no advquote
 
 
 def test_replay_matches_labels_except_known_open():

@@ -61,3 +61,25 @@ def test_evidence_target_is_the_step_file(monkeypatch):
                                                    'quote': LEAGUE, 'before': 'b', 'after': 'a', 'verify': 'v'}]}
     checked = plan_validate.checked_grounding(validation, plan, 'sha', {'public/league.html': LEAGUE})
     assert checked['evidence'][0]['target'] == 'public/league.html'
+
+
+def test_advquote_makes_unmatched_quote_for_target_file_unverified_not_blocking(monkeypatch):
+    file, quote = 'public/league.html', 'KHÔNG CÓ TRONG FILE'
+    _rejects(file, quote, LEAGUE, monkeypatch, ['quotes'])
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'advquote')
+    record = {'target': file, 'file': file, 'quote': quote, 'before': 'b', 'after': 'a', 'verify': 'v'}
+    validation = {'grounded': True, 'grounding': [record]}
+    out = plan_validate.checked_grounding(validation, {'subtasks': [{'file': file, 'title': 't', 'verify': 'v'}]}, 'sha', {file: LEAGUE})
+    assert out['evidence'][0]['quote'] == '' and record['unverified'] is True
+
+
+def test_advquote_still_blocks_quote_from_another_file_and_missing_behaviour(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'advquote')
+    plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'v'}]}
+    files = {'public/a.html': 'x', 'public/b.html': 'y'}
+    other = {'grounded': True, 'grounding': [{'target': 'public/a.html', 'file': 'public/b.html', 'quote': 'zzzzzzzz', 'before': 'b', 'after': 'a', 'verify': 'v'}]}
+    with pytest.raises(plan_validate.Mismatch):
+        plan_validate.checked_grounding(other, plan, 'sha', files)
+    bare = {'grounded': True, 'grounding': [{'target': 'public/a.html', 'file': 'public/a.html', 'quote': 'zzzzzzzz', 'before': 'b', 'after': '', 'verify': 'v'}]}
+    with pytest.raises(plan_validate.Mismatch):
+        plan_validate.checked_grounding(bare, plan, 'sha', files)

@@ -208,10 +208,10 @@
    "fn": "grounding",
    "trace": 650,
    "truth": "pass",
-   "truth_source": "nhu tren, bo co dai",
+   "truth_source": "nhu tren, bo co dai kem advquote",
    "validation": "650",
    "env": {
-    "AI_BOARD_GATE25_FIXES": "quotes,ellipsis,context,retry,truncated,tokens,shortquote,literal"
+    "AI_BOARD_GATE25_FIXES": "quotes,ellipsis,context,retry,truncated,tokens,shortquote,literal,advquote"
    }
   },
   {
@@ -277,6 +277,17 @@
    "truth": "pass",
    "truth_source": "LF/123: objection khong trich dan khong duoc chan (request 7)",
    "record": "run69_gate25_validate"
+  },
+  {
+   "gate": "2.5.grounding",
+   "fn": "grounding",
+   "trace": 650,
+   "truth": "pass",
+   "truth_source": "nhu tren, mac dinh kem advquote",
+   "validation": "650",
+   "env": {
+    "AI_BOARD_GATE25_FIXES": "quotes,ellipsis,advquote"
+   }
   }
  ]
 }
