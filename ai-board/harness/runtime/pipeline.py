@@ -277,7 +277,7 @@ class Deps:
                         raise
                     error = caught
                     body = {}
-                provider = 'vllm' if candidate['provider'] == 'vllm' else 'ollama'
+                provider = candidate['provider'] if candidate['provider'] in ('vllm', 'api') else 'ollama'
                 metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
                 n = meter.units(provider, metrics)
                 budget.spend('model_calls')

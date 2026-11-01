@@ -119,7 +119,7 @@ def test_trial_request_bound_is_shared_after_planning_without_remote_cleanup(wor
     root, tasks = world
     deps, models = deps_for(world)
     budget = Budget(max_request_tokens=200000, max_wall_clock_s=300)
-    row = trial.run_trial(pick(tasks, 1), 'e2e', dataclasses.replace(deps, stop_on_model_error=True), root, ROOT, budget=budget)
+    row = trial.run_trial(pick(tasks, 1), 'e2e', dataclasses.replace(deps, stop_on_model_error=True, provider='api'), root, ROOT, budget=budget)
     assert [phase for phase, _ in models.calls] == ['gate1']
     assert row['budget']['model_calls'] == 1 and row['budget']['tokens'] == 600
     assert not row['resolved'] and not row['infra_error'] and not row['cleanup_pending']

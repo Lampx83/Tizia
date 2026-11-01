@@ -603,7 +603,7 @@ def test_ordinary_failure_gets_one_repair_pass_with_the_failure_reason():
     verdict, calls = run({5: [failed, {}]}, cleanups=cleanups)
     assert verdict['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in calls] == [3, 4, 5, 3, 4, 5, 5.5]
-    assert calls[3] == (3, 'cổng 5: generated tests failed')
+    assert calls[3] == (3, 'cổng 5 [test_assertion]: generated tests failed')
     assert verdict['repairs'] == [{'gate': 5, 'reason': 'generated tests failed'}]
     assert cleanups == [False, True]  # failed attempt's branch dropped, passing candidate kept
     assert verdict['candidate']['branch'] == 'ai-board/2026-09-24-ticket-7'
@@ -1774,7 +1774,7 @@ def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first
     with pytest.raises(Crash):
         execute_pre_pr(ONE_STEP_PLAN, ticket_id=7, checkout_source='unused', deps=object(), budget=TickBudget(),
                        run_gate=dying, cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
-    assert checkpoint.cursor['repair_reason'] == 'cổng 5: generated tests failed'
+    assert checkpoint.cursor['repair_reason'] == 'cổng 5 [test_assertion]: generated tests failed'
     assert checkpoint.cursor['graph'] == [{'child': 0, 'file': 'public/x.html', 'depends_on': [], 'level': 0}]
     first_calls = len(calls)
 
@@ -1782,7 +1782,7 @@ def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first
                              run_gate=inner, cleanup=lambda state, keep_branch: None, checkpoint=checkpoint)
     assert verdict['outcome'] == 'ready_for_pr'
     assert [gate for gate, _ in calls[first_calls:]] == [3, 4, 5, 5.5]  # the failed attempt's gates are not run again
-    assert calls[first_calls][1] == 'cổng 5: generated tests failed'
+    assert calls[first_calls][1] == 'cổng 5 [test_assertion]: generated tests failed'
     assert verdict['repairs'] == [{'gate': 5, 'reason': 'generated tests failed'}]
 
 

@@ -82,6 +82,7 @@ def test_runner_exec_sends_remaining_timeout_without_broadening_default(monkeypa
     assert 0 < json.loads(calls[-1][0][3])["timeout_s"] <= 0.5
 
 
+# first backoff step is 1s: a 0.5s budget ends inside it, with slack for a loaded host before the first create
 def test_create_retry_backoff_cannot_reset_deadline(tmp_path, monkeypatch):
     client = BudgetClient()
     def busy(*args, **kwargs):
@@ -90,7 +91,7 @@ def test_create_retry_backoff_cannot_reset_deadline(tmp_path, monkeypatch):
     client.create = busy
     monkeypatch.setattr(sandbox, "_sleep", time.sleep)
     request = state(checkout(tmp_path))
-    result = sandbox.run(request, client=client, budget=Budget(max_wall_clock_s=0.05))
+    result = sandbox.run(request, client=client, budget=Budget(max_wall_clock_s=0.5))
     assert result["reason"] == "sandbox budget: wall_clock_s"
     assert client.calls.count("create") == 1 and client.closed.is_set()
 
