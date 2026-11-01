@@ -51,7 +51,7 @@ function buildPrompt(persona, history, userMessage) {
 function stubReply(moduleId) {
   if (moduleId === 'gpp') return 'Em vẫn cứ muốn xin ít kháng sinh thôi, khỏi nhanh em đi làm.';
   if (moduleId === 'hospital') return 'Dược sĩ, đơn của tôi có gì sai à? Bệnh nhân đang đợi.';
-  if (moduleId === 'otc01') return 'Dạ vâng ạ.';
+  if (moduleId === 'otc01') return 'Ừ, em.';
   if (moduleId === 'otc02') return 'Ừ, dược sĩ lấy nhanh thuốc cho tôi nhé.';
   return 'Em cứ trình bày tiếp đi, tôi đang nghe.';
 }
@@ -89,6 +89,11 @@ XỬ LÝ NGOẠI LỆ
 - Hỏi lạc đề, không liên quan việc dùng thuốc (thời tiết, chính trị…): từ chối lịch sự và kéo về đúng chủ đề. VD: "Dược sĩ thông cảm, tôi đang lo/đang vội, mình tập trung vào bệnh trước nhé."
 
 CẢM XÚC: duy trì theo hồ sơ. Dược sĩ đồng cảm, ân cần → hợp tác hơn. Dược sĩ hỏi dồn dập/thiếu tôn trọng → giảm hợp tác trong giới hạn kịch bản.
+
+CÁCH DÙNG / LIỀU DÙNG THUỐC (BỔ SUNG 31/10 — #257 mục 2, áp cho MỌI tình huống):
+- Bạn KHÔNG biết cách dùng, liều dùng của bất kỳ thuốc nào cho tới khi dược sĩ hướng dẫn. Được hỏi "đã biết cách dùng thuốc này chưa" khi CHƯA được hướng dẫn → đáp "Chưa, hãy hướng dẫn cho tôi" (theo cách xưng hô của bạn).
+- TUYỆT ĐỐI KHÔNG tự ý nhắc lại cách dùng/liều dùng khi dược sĩ CHƯA yêu cầu nhắc lại. Sau khi được hướng dẫn chỉ đáp ngắn "đã hiểu".
+- CHỈ khi dược sĩ YÊU CẦU nhắc lại mới nhắc, và CHỈ những thuốc dược sĩ ĐÃ hướng dẫn, đúng theo lời dược sĩ.
 
 QUY TẮC 1 Ý / 1 LƯỢT (BỔ SUNG 25/07 — RẤT QUAN TRỌNG, lỗi hay mắc nhất):
 - Mỗi câu hỏi của dược sĩ, bạn CHỈ phản hồi ĐÚNG 1 ĐƠN VỊ THÔNG TIN. TUYỆT ĐỐI KHÔNG tự thêm triệu chứng, tiền sử, cân nặng, số lần, tính chất phân, sốt/nôn, thuốc đang dùng, chế độ ăn… khi dược sĩ CHƯA hỏi tới.
@@ -156,7 +161,7 @@ function trimReply(s, maxSentences = 2, maxChars = 200) {
 // nội dung đã được hướng dẫn, không được đáp "Vâng ạ" như các lượt dặn dò thường.
 const TEACHBACK_HINT = `
 
-LƯU Ý RIÊNG LƯỢT NÀY: Dược sĩ vừa yêu cầu bạn NHẮC LẠI cách dùng thuốc. Hãy nhắc lại NGẮN GỌN nhưng ĐẦY ĐỦ cách dùng của TỪNG thuốc đúng như dược sĩ đã hướng dẫn trong hội thoại (liều, số lần, cách pha/lắc…), kết thúc bằng "đúng không dược sĩ?". TUYỆT ĐỐI KHÔNG đáp cụt "Vâng ạ".`;
+LƯU Ý RIÊNG LƯỢT NÀY: Dược sĩ vừa yêu cầu bạn NHẮC LẠI cách dùng thuốc. Hãy nhắc lại NGẮN GỌN nhưng ĐẦY ĐỦ cách dùng của CHỈ NHỮNG THUỐC dược sĩ ĐÃ hướng dẫn trong hội thoại (đọc lại lịch sử), đúng theo LỜI dược sĩ (liều, số lần, cách pha/lắc…). TUYỆT ĐỐI KHÔNG nhắc thuốc dược sĩ chưa hướng dẫn, KHÔNG tự thêm liều/cách dùng không có trong lời dược sĩ. Kết thúc bằng câu xác nhận "…đúng không?" theo đúng cách xưng hô của bạn. TUYỆT ĐỐI KHÔNG đáp cụt "Vâng ạ".`;
 
 // Gom cấu hình sinh câu trả lời (bộ luật/độ dài/token) — DÙNG CHUNG cho cả /chat
 // (npcReply, không stream) và /chat-stream, để 2 đường KHÔNG lệch nhau (trước đây
@@ -359,13 +364,109 @@ export function scriptedPhaseReply(scenario, s, text) {
 
 // #122 — dược sĩ trấn an/động viên: bệnh nhân đáp lại bằng sự yên tâm & biết ơn.
 // Câu KHÔNG kèm câu hỏi → trả tất định luôn; có kèm câu hỏi → chỉ ghép làm câu mở đầu.
-const REASSURE_RE = /(đừng\s*lo|không\s*(cần\s*)?lo|yên\s*tâm|bình\s*tĩnh|không\s*sao|(em|tôi|mình)\s*hiểu|thông\s*cảm|chia\s*sẻ|sẽ\s*(tư vấn|giúp|hướng dẫn|lo)|không\s*đáng\s*ngại|bé\s*sẽ\s*(ổn|khỏi))/i;
-const QUESTION_RE = /\?|\bthế nào\b|\bra sao\b|\bmấy\b|\bbao nhiêu\b|\bbao lâu\b|\bgì\b|\bnào\b|\bkhông\b|\bchưa\b/i;
+// #256 (31/10): tách "TRẤN AN" (đáp: yên tâm, biết ơn) khỏi "CHỈ ĐỒNG CẢM" (đáp: chia sẻ cảm xúc).
+// Bản cũ coi bất kỳ chữ "chia sẻ"/"em hiểu" nào là trấn an → câu "chị có chia sẻ là cháu mới ăn
+// dặm… hàng ngày chị cho cháu ăn món gì" bị đáp "cám ơn, yên tâm hơn rồi" (L12) và câu hỏi
+// "bé có sốt hay mệt không ạ" bị đáp cảm ơn (L26). Nay: có CÂU HỎI thật → KHÔNG chen câu cảm ơn
+// (chỉ trả lời câu hỏi); câu nhẹ/không nghiêm trọng cũng tính là trấn an (L14, L30).
+const REASSURE_RE = /(đừng\s*lo|không\s*(cần\s*)?lo|yên\s*tâm|bình\s*tĩnh|không\s*sao|không\s*đáng\s*(ngại|lo)|(tiêu\s*chảy|bệnh|tình\s*trạng|trường\s*hợp)[^.?!]{0,30}(nhẹ|bình\s*thường|thông\s*thường|phổ\s*biến|không\s*nghiêm\s*trọng|không\s*nguy\s*hiểm)|(chưa|không)\s*cần\s*(đi\s*)?(bệnh\s*viện|khám|đi\s*viện)|sẽ\s*(ổn|khỏi)\b|em\s*sẽ\s*tư\s*vấn)/i;
+const EMPATHY_ONLY_RE = /((hiểu|thông\s*cảm|chia\s*sẻ)[^.?!]{0,40}(tâm\s*(lý|lí)|lo\s*lắng|sốt\s*ruột|vất\s*vả|khó\s*khăn|thương|lắng|\blo\b)|thông\s*cảm|đồng\s*cảm)/i;
+// Câu HỎI thật: có "?", từ nghi vấn, hoặc kết bằng không/chưa/hả… (KHÔNG coi "chưa cần…đâu ạ" là hỏi).
+const ASKING_RE = /\?|(?<![A-Za-zÀ-ỹ])(thế nào|ra sao|mấy|bao nhiêu|bao lâu|gì|nào|sao)(?![A-Za-zÀ-ỹ])|\b(không|chưa|phải không|đúng không|hả|nhỉ)\s*(ạ|vậy|thế|nhé|à)?\s*[.!…]*\s*$/i;
 export function reassureReply(scenario, s, text) {
   const lines = scenario?.empathyReplies;
   if (!Array.isArray(lines) || !lines.length) return null;
-  if (!REASSURE_RE.test(text)) return null;
-  return { line: rot(lines, s), standalone: !QUESTION_RE.test(text) };
+  if (ASKING_RE.test(text)) return null;
+  if (REASSURE_RE.test(text)) return { line: rot(lines, s), standalone: true };
+  if (EMPATHY_ONLY_RE.test(text)) {
+    const e = scenario.empathyOnlyLines;
+    return { line: rot(Array.isArray(e) && e.length ? e : lines, s), standalone: true };
+  }
+  return null;
+}
+
+// ── #256/#257 (31/10) — luật TẤT ĐỊNH bổ sung theo yêu cầu giảng viên Pharmacomm ──────
+const GREET_RE = /(chào|\b(hi|hello|helu|hey)\b)/i;
+// Dược sĩ HỎI NHU CẦU ("em có thể giúp gì được cho chị", "anh cần mua gì ạ", "cần tư vấn gì").
+const NEED_RE = /((giúp|hỗ trợ|tư vấn)[^.?!]{0,25}(gì|không|được)(?![A-Za-zÀ-ỹ])|\bcần\s*(mua\s*|tư vấn\s*|hỏi\s*)?(gì|thuốc gì)(?![A-Za-zÀ-ỹ])|\bmua\s+gì(?![A-Za-zÀ-ỹ])|có việc gì|cần em[^.?!]{0,15}gì)/i;
+const TEACHBACK_REQ_RE = /(nhắc lại|nói lại|lặp lại|kể lại)/i;
+const GUIDE_RE = /(cách dùng|liều|(uống|pha|dùng)[^.?!]{0,40}(gói|ống|viên|ml)|(sáng|tối|ngày)[^.?!]{0,25}(lần|gói|ống)|sau\s*(mỗi\s*)?(lần|ăn)|lắc\s*(kỹ|đều))/i;
+const KNOW_USE_RE = /((đã|có)\s*(biết|rõ|nắm|hiểu)[^.?!]{0,30}(cách|liều)[^.?!]{0,20}(dùng|uống)|(biết|rõ)[^.?!]{0,25}(dùng|uống)[^.?!]{0,20}(thuốc|này)[^.?!]{0,15}(chưa|không))/i;
+const WAIT_RE = /((đợi|chờ)\s*(em\s*)?(một|1|chút|xíu|lát|tí)|\b(em|để em)\s*(đi\s*)?(lấy|in|xuất|chuẩn bị|soạn|gói)[^.?!]{0,25}(thuốc|hóa đơn|hoá đơn|đơn)|\b(xuất|in)\s*(hóa đơn|hoá đơn))/i;
+const PRICE_RE = /\d[\d.,]*\s*(k|nghìn|ngàn|đồng|đ|vnđ|vnd)\b|\b\d{1,3}(\.\d{3})+\b/i;
+const TOTAL_RE = /(tổng(\s*cộng)?|tất cả|cộng lại|thành tiền)[^.?!]{0,30}\d/i;
+const PAYQ_RE = /(tiền mặt|chuyển khoản|thanh toán|quẹt thẻ|trả tiền|hình thức)/i;
+const PAYSAY_RE = /(tổng\s*(tiền|cộng)|tiền mặt|chuyển khoản)/i;
+const RECAP_RE = /(đúng không|phải không|đúng chưa)/i;
+const RECAP_DOSE_RE = /(\d+\s*(ml|gói|ống|viên|lần)|mỗi (lần|ngày)|sáng|tối|pha )/i;
+const DEFAULT_GUIDE_ACK = ['Tôi hiểu rồi.', 'Vâng, tôi hiểu rồi.'];
+const userTexts = (s, includeCurrent = true) => s.messages.filter(m => m.role === 'user').map(m => m.content).slice(0, includeCurrent ? undefined : -1);
+
+// #257 mục 1 (A1+A2 gộp): lượt ĐẦU dược sĩ vừa chào/giới thiệu VỪA hỏi nhu cầu → bệnh nhân
+// nói luôn lý do đến (trước đây chỉ chào lại, buộc sinh viên hỏi lại ở lượt sau).
+export function greetNeedReply(scenario, s, text) {
+  const lines = scenario?.chiefComplaintLines;
+  if (!Array.isArray(lines) || !lines.length) return null;
+  if (s.messages.filter(m => m.role === 'user').length !== 1) return null;
+  if (!GREET_RE.test(text) || !NEED_RE.test(text)) return null;
+  const hi = scenario.greetingReply ? scenario.greetingReply.trim() + ' ' : '';
+  return (hi + rot(lines, s)).trim();
+}
+
+// Các câu trả lời TẤT ĐỊNH theo kịch bản (chỉ chạy khi scenario khai trường tương ứng).
+export function directedGuard(scenario, s, text) {
+  const asking = ASKING_RE.test(text);
+  // #257 mục 2: chưa được hướng dẫn mà bị hỏi "đã biết cách dùng chưa" → "chưa, hãy hướng dẫn".
+  if (KNOW_USE_RE.test(text) && !userTexts(s, false).some(t => GUIDE_RE.test(t))) {
+    return rot(scenario.notGuidedLines || ['Chưa, hãy hướng dẫn cho tôi.'], s);
+  }
+  // #256 B3 (L12): hỏi ĐÍCH DANH một dữ kiện có đáp án chuẩn (vd "ăn dặm món gì") → trả đúng
+  // dữ kiện đó, không để câu hỏi bị đáp lạc sang chuyện khác.
+  for (const sa of (Array.isArray(scenario.specificAnswers) ? scenario.specificAnswers : [])) {
+    if (sa.re.test(text)) {
+      let out = rot(sa.lines, s);
+      for (const x of (sa.andIf || [])) if (x.re.test(text)) out += ' ' + x.line;
+      return out;
+    }
+  }
+  // #256 C3: không tự nói tổng tiền / hình thức thanh toán.
+  if (Array.isArray(scenario.askTotalLines) && scenario.askTotalLines.length) {
+    const price = PRICE_RE.test(text), total = TOTAL_RE.test(text), payq = PAYQ_RE.test(text);
+    const totalBefore = userTexts(s, false).some(t => TOTAL_RE.test(t));
+    if (total && payq) return rot(scenario.payLines || scenario.waitAckLines || ['Ừ.'], s);
+    if (total && !payq) return rot(scenario.waitAckLines || ['Ừ.'], s);
+    if (payq && !total) return totalBefore ? rot(scenario.payLines || scenario.waitAckLines || ['Ừ.'], s) : rot(scenario.askTotalLines, s);
+    if (price && !total && !totalBefore) return rot(scenario.askTotalLines, s);
+  }
+  // #256 mục 1 (L32, L36): báo đợi in hóa đơn / lấy thuốc → "Ừ, em", không "em cứ làm từ từ".
+  if (Array.isArray(scenario.waitAckLines) && scenario.waitAckLines.length && !asking && WAIT_RE.test(text)) {
+    return rot(scenario.waitAckLines, s);
+  }
+  // #256 mục 1 (L40-44): dược sĩ hướng dẫn cách dùng (không hỏi, không yêu cầu nhắc lại) → "Mình hiểu rồi".
+  if (Array.isArray(scenario.guideAckLines) && scenario.guideAckLines.length && !asking
+      && !TEACHBACK_REQ_RE.test(text) && GUIDE_RE.test(text)) {
+    return rot(scenario.guideAckLines, s);
+  }
+  return null;
+}
+
+// Lưới CUỐI cho câu do LLM sinh: bỏ nhắc lại liều khi KHÔNG được yêu cầu (#257 mục 2),
+// chặn tự nói tổng tiền/thanh toán (#256 C3), bỏ "dạ/ạ" thừa với bệnh nhân giọng thân mật.
+export function finalizeReply(scenario, s, text, reply) {
+  let out = String(reply || '').trim();
+  if (!out) return reply;
+  if (!TEACHBACK_REQ_RE.test(text) && RECAP_RE.test(out) && RECAP_DOSE_RE.test(out)) {
+    out = rot(scenario.guideAckLines || DEFAULT_GUIDE_ACK, s);
+  }
+  if (Array.isArray(scenario.askTotalLines) && scenario.askTotalLines.length && PAYSAY_RE.test(out)
+      && !userTexts(s).some(t => TOTAL_RE.test(t) || PAYQ_RE.test(t))) {
+    out = rot(scenario.askTotalLines, s);
+  }
+  if (scenario.casualTone) {
+    out = out.replace(/^\s*(Dạ|Vâng)\s*[,.]?\s*/i, '').replace(/(?<!em)\s+ạ(?=[\s.,!?…]|$)/g, '').trim();
+    if (out) out = out[0].toUpperCase() + out.slice(1);
+  }
+  return out || reply;
 }
 
 // NPC CHUYÊN MÔN (bác sĩ, trưởng khoa…): KHÔNG áp bộ quy tắc bệnh nhân — họ CÓ chuyên
@@ -489,6 +590,15 @@ export function attachPharmacy(r) {
     // hỏi gì) → bệnh nhân CHỈ chào lại theo kịch bản, KHÔNG kể bệnh (tất định,
     // model 14B hay "nhiệt tình" khai luôn triệu chứng ngay khi được chào).
     const userTurns = s.messages.filter(m => m.role === 'user').length; // đã gồm câu vừa push
+    // #257 mục 1: chào + giới thiệu + HỎI NHU CẦU trong cùng lượt đầu → nói luôn lý do đến.
+    {
+      const gn = isPatient ? greetNeedReply(scenario, s, text) : null;
+      if (gn) {
+        s.messages.push({ role: 'npc', content: gn, ts: Date.now() });
+        saveSession(s);
+        return res.json({ session: s });
+      }
+    }
     if (isPatient && scenario.greetingReply && userTurns === 1 && /(chào|\b(hi|hello|helu|hey)\b)/i.test(text) && !/\?/.test(text) && text.length <= 120) {
       s.messages.push({ role: 'npc', content: scenario.greetingReply, ts: Date.now() });
       saveSession(s);
@@ -505,6 +615,15 @@ export function attachPharmacy(r) {
       return res.json({ session: s });
     }
 
+    // GUARD 2c-ter (#256/#257) — đáp tất định theo kịch bản giảng viên (xem directedGuard).
+    if (isPatient) {
+      const dg = directedGuard(scenario, s, text);
+      if (dg) {
+        s.messages.push({ role: 'npc', content: dg, ts: Date.now() });
+        saveSession(s);
+        return res.json({ session: s });
+      }
+    }
     // GUARD 2c-bis (#122) — dược sĩ TRẤN AN/ĐỘNG VIÊN mà không hỏi gì → đáp lại
     // bằng sự yên tâm, biết ơn (tất định). Có kèm câu hỏi thì để xuống dưới ghép.
     const reassure = isPatient ? reassureReply(scenario, s, text) : null;
@@ -584,6 +703,7 @@ export function attachPharmacy(r) {
     }
     reply = applyMood(scenario, s, reply, text);
     if (reassure && !reply.includes(reassure.line)) reply = `${reassure.line} ${reply}`.trim();
+    if (isPatient) reply = finalizeReply(scenario, s, text, reply);
     // provider chỉ gắn cho câu TỪ MODEL (không gắn cho các guard tất định phía trên,
     // vì chúng không hỏi LLM) → client dùng field này để hiện badge "🐫 Qwen"/"✨ GPT".
     s.messages.push({ role: 'npc', content: reply, ts: Date.now(), provider: useGpt ? 'gpt' : 'qwen' });
@@ -640,6 +760,10 @@ export function attachPharmacy(r) {
       return finish(rot(scenario.deflects || DEFLECTS, s), { violation: true });
     }
     const userTurns = s.messages.filter(m => m.role === 'user').length;
+    {
+      const gn = isPatient ? greetNeedReply(scenario, s, text) : null;
+      if (gn) return finish(gn);
+    }
     if (isPatient && scenario.greetingReply && userTurns === 1 && /(chào|\b(hi|hello|helu|hey)\b)/i.test(text) && !/\?/.test(text) && text.length <= 120) {
       return finish(scenario.greetingReply);
     }
@@ -648,6 +772,11 @@ export function attachPharmacy(r) {
       const nNpc = s.messages.filter(m => m.role === 'npc').length;
       const passive = scenario.passiveLines || PASSIVE_LINES;
       return finish(passive[nNpc % passive.length]);
+    }
+    // GUARD 2c-ter (#256/#257) — đáp tất định theo kịch bản giảng viên.
+    if (isPatient) {
+      const dg = directedGuard(scenario, s, text);
+      if (dg) return finish(dg);
     }
     // GUARD 2d — câu hỏi CHUNG CHUNG → chỉ triệu chứng chính (25/07).
     // #122 — trấn an/động viên không kèm câu hỏi → đáp yên tâm, biết ơn (tất định).
@@ -735,6 +864,7 @@ export function attachPharmacy(r) {
       }
       let moody = applyMood(scenario, s, finalReply, text);
       if (reassure && !moody.includes(reassure.line)) moody = `${reassure.line} ${moody}`.trim();
+      if (isPatient) moody = finalizeReply(scenario, s, text, moody);
       finish(moody, { provider: useGpt ? 'gpt' : 'qwen' });
     } catch (err) {
       console.error(`[pharmacy] ${useGpt ? 'openai' : 'llm'} stream failed, using stub:`, err.message);
