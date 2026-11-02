@@ -1912,6 +1912,9 @@ def test_plan_repair_note_names_the_reason_and_the_rules():
     note = _plan_repair_note("plan không hợp lệ: 2 subtask cùng sửa x")
     assert "2 subtask cùng sửa x" in note
     assert "node --test" in note and "[CẤM TUYỆT ĐỐI]" in note
+    # A data list with an interaction still needs its module subtask: the planner prompt no longer
+    # carries the rule, so this hint is what the rejected model reads on the retry.
+    assert "public/js/features/" in note and "depends_on" in note
 
 
 def test_two_subtasks_on_one_file_merge_and_keep_depends_on_valid():
