@@ -1253,6 +1253,27 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await recordWorkerEventTransaction(ticketId, { ...input, idempotencyKey, now: input.now ?? Date.now() });
   }
 
+const RESUME_ORDER = ['gate_3', 'gate_4', 'gate_5', 'gate_5_5'];
+
+// Which nodes a resumed attempt replayed from the journal (the ones before its resume point).
+function resumeSummary(journal) {
+  const rows = (journal || []).filter((row) => row.node === 'resume');
+  const resumed = rows.filter((row) => row.outcome === 'resumed');
+  const position = (from) => RESUME_ORDER.indexOf(String(from));
+  const replayed = [...new Set(resumed.flatMap((row) => {
+    const index = position(row.state?.from_node);
+    return index < 0 ? [] : RESUME_ORDER.slice(0, index);
+  }))];
+  const last = resumed.at(-1);
+  return {
+    resumed_runs: new Set(resumed.map((row) => String(row.run_id))).size,
+    replayed_nodes: replayed,
+    pin_mismatches: rows.filter((row) => row.outcome === 'pin_mismatch')
+      .map((row) => ({ run_id: row.run_id, mismatch: row.state?.mismatch || [] })),
+    last: last ? { run_id: last.run_id, from_node: last.state?.from_node || null, created_at: last.created_at } : null,
+  };
+}
+
   const recordAttemptJournalTransaction = (ticketId, input) => db.tx(async () => {
     await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
     const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), Number(ticketId)]);
@@ -2027,6 +2048,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, journal, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
+      resume: resumeSummary(journal),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
       behavior: behaviorMetrics(evidences),
       totals: {
