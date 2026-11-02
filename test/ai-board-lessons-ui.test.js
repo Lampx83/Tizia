@@ -21,8 +21,9 @@ async function page({role='student',lessons=[],failure}={}) {
     const denied=failure && path.endsWith('/review');
     return {ok:!denied,status:denied?403:200,json:async()=>body};
   }});
-  const source=await readFile(new URL('../public/js/ai-board-lessons.js',import.meta.url),'utf8');
-  await vm.runInContext(`(async()=>{${source}\n})()`,context);
+  const clock=await readFile(new URL('../public/js/ai-board-clock.js',import.meta.url),'utf8');
+  const source=(await readFile(new URL('../public/js/ai-board-lessons.js',import.meta.url),'utf8')).replace(/^import .*$/m,'');
+  await vm.runInContext(`(async()=>{${clock.replace(/^export /gm,'')}\n${source}\n})()`,context);
   return {ids,requests};
 }
 const flatten=node=>[node,...node.children.flatMap(flatten)];

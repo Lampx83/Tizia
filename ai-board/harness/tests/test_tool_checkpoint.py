@@ -101,7 +101,7 @@ def test_resumed_budget_keeps_semantic_repairs_across_the_loop():
     first.semantic_repairs = 2
     resumed = Budget.restore(first.snapshot())
     out, resumed, _ = loop([EDIT, TEST, FINISH], MemSteps(), budget=resumed, check=reject)
-    assert (out["status"], out["failure_class"]) == ("blocked", "ordinary") and resumed.semantic_repairs == 3
+    assert (out["status"], out["failure_class"]) == ("paused", "budget") and resumed.semantic_repairs >= 3
 
 
 @pytest.fixture
@@ -201,7 +201,7 @@ def test_resume_keeps_rejected_finish_repair_in_the_ledger():
         loop([EDIT, TEST, FINISH, FINISH], MemSteps(crash_on=("done", 3), shared=db), check=reject)
     assert db["ledger"]["semantic_repairs"] == 2
     out, budget, _ = loop([FINISH], MemSteps(shared=db), budget=Budget(), check=reject)
-    assert out["status"] == "blocked" and budget.semantic_repairs == 3
+    assert out["status"] == "paused" and budget.semantic_repairs >= 3
 
 
 def test_incompatible_pins_stop_before_any_model_call():

@@ -293,3 +293,23 @@ def test_text_oracle_judges_the_settled_page_not_a_moment_before_a_script_rewrit
         "<script>setTimeout(() => { document.getElementById('t').textContent = 'Tiến độ · Trường' }, 300)</script></body>", encoding='utf-8')
     result = probe(site, "Đổi 'Tiến độ của bạn' thành 'Tiến độ học tập'", '/rewritten.html')
     assert not result['passed'] and 'Tiến độ học tập' in result['reason']
+
+
+SO_TAY_GIT = {'request_title': 'Thêm trang Sổ tay Git cho Trường CNTT', 'request_detail': (
+    'Tạo trang mới public/so-tay-git.html liệt kê 8 lệnh Git. Đăng ký trang trong public/js/domains/it/experiences.js. '
+    'Thêm một tòa nhà mặc định tên "Sổ tay Git" trong layout. Kiểm tra: file đăng ký chứa chuỗi "so-tay-git".')}
+
+
+def test_request_11_slug_in_a_file_clause_is_not_demanded_as_visible_text():
+    # the building name is a human label that the changed pages must show; the slug is registry content
+    assert functional.text_expectation(SO_TAY_GIT) == {'present': ['Sổ tay Git'], 'absent': []}
+
+
+@pytest.mark.parametrize('quote', ['so-tay-git', 'public/so-tay-git.html', 'experiences.js', 'MODULE_ID', 'a.b'])
+def test_identifier_shaped_quotes_are_not_visible_labels(quote):
+    assert functional.text_expectation(ASK(f'Thêm "{quote}" vào trang')) == {'present': [], 'absent': []}
+
+
+def test_only_identifier_quotes_leave_no_text_oracle():
+    assert functional.select(ASK('Đăng ký trang, file chứa chuỗi "so-tay-git"')) is None
+    assert functional.select(ASK('Thêm nút "Nộp bài" và đăng ký "so-tay-git"')) == functional.TEXT_PROBE

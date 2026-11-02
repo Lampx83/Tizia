@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_corpus  # noqa: E402
 import eval_fast  # noqa: E402
+import eval_feature  # noqa: E402
 import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
 import file_context  # noqa: E402
@@ -37,6 +38,7 @@ from eval_corpus import WORDS, sentence as _sentence  # noqa: E402
 from eval_gold import run_case  # noqa: E402
 from eval_strata import MAX_DROP  # noqa: E402
 from main import ROOT, Deps  # noqa: E402
+from settings import get_settings
 
 DEFAULT_ROOT = ROOT / ".scratch" / "ai-board-eval"
 PAGE = """<!DOCTYPE html>
@@ -279,7 +281,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     seeded = argparse.ArgumentParser(add_help=False)
     seeded.add_argument("--seed", type=int, required=True)
-    seeded.add_argument("--root", default=os.environ.get("AI_BOARD_EVAL_DIR") or str(DEFAULT_ROOT))
+    seeded.add_argument("--root", default=str(get_settings().eval_dir or DEFAULT_ROOT))
     common = argparse.ArgumentParser(add_help=False, parents=[seeded])
     common.add_argument("--repeats", type=int, default=3)
     common.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
@@ -294,6 +296,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     subs.add_parser("corpus", parents=[seeded], help="chỉ sinh corpus + manifest, in số case mỗi ô")
     eval_recall.register(subs)
     eval_git.register(subs)
+    eval_feature.register(subs)
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):

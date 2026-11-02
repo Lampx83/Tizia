@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireAdmin } from '../admin/index.js'; // sibling context, no circularity
+import { ALLOWED_DOMAINS, sanitize } from './layout-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', '..', '..', 'public');
@@ -75,27 +76,6 @@ const stmtUpsert = db.prepare(`
   ON CONFLICT(domain) DO UPDATE SET layout = excluded.layout, updated_at = excluded.updated_at
 `);
 const stmtDelete = db.prepare(`DELETE FROM campus_layouts WHERE domain = ?`);
-
-// Whitelist domain để tránh injection qua :domain
-const ALLOWED_DOMAINS = new Set(['preschool', 'primary', 'secondary', 'it', 'pharmacy', 'language', 'driving']);
-
-// Whitelist key cấp 1 — body chỉ giữ đúng các field này.
-// Bám theo schema CAMPUSES trong public/campus-proto/b-iso-canvas.html.
-const ALLOWED_KEYS = new Set([
-  'title', 'credit', 'grass', 'vroads', 'hroads', 'autoPaths', 'roads',
-  'buildings', 'facilities', 'fields', 'playthings', 'critters',
-  'trees', 'cars', 'props', 'walkways', 'tints', 'sportTargets',
-  'walls',
-]);
-
-function sanitize(input) {
-  if (!input || typeof input !== 'object') return null;
-  const out = {};
-  for (const k of Object.keys(input)) {
-    if (ALLOWED_KEYS.has(k)) out[k] = input[k];
-  }
-  return Object.keys(out).length ? out : null;
-}
 
 async function readLayout(domain) {
   const row = await stmtGet.get(domain);

@@ -10,6 +10,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
     catch (error) { if (error instanceof WorkerContractError) res.status(error.status).json({ error:error.code, message:error.message, ...(error.retry_after_s ? { retry_after_s:error.retry_after_s, scope:error.scope } : {}) }); else next(error); }
   };
   route.get('/api/admin/ai-board/skills', requireAuth, requireAdmin, handle(() => skills.list()));
+  route.post('/api/admin/ai-board/skills/count-tokens', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.countTokens(req.body?.text)));
   route.get('/api/admin/ai-board/skills/proposals', requireAuth, requireAdmin, handle(() => skills.proposals()));
   route.get('/api/admin/ai-board/skills/:id', requireAuth, requireAdmin, handle(req => skills.read(req.params.id)));
   route.post('/api/admin/ai-board/skills', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.upload(actor(req),req.body || {})));

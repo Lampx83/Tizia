@@ -119,7 +119,7 @@ def test_trial_request_bound_is_shared_after_planning_without_remote_cleanup(wor
     root, tasks = world
     deps, models = deps_for(world)
     budget = Budget(max_request_tokens=200000, max_wall_clock_s=300)
-    row = trial.run_trial(pick(tasks, 1), 'e2e', dataclasses.replace(deps, stop_on_model_error=True), root, ROOT, budget=budget)
+    row = trial.run_trial(pick(tasks, 1), 'e2e', dataclasses.replace(deps, stop_on_model_error=True, provider='api'), root, ROOT, budget=budget)
     assert [phase for phase, _ in models.calls] == ['gate1']
     assert row['budget']['model_calls'] == 1 and row['budget']['tokens'] == 600
     assert not row['resolved'] and not row['infra_error'] and not row['cleanup_pending']
@@ -523,7 +523,7 @@ def test_gate25_quote_fix_accepts_single_quoted_copy_only_when_enabled(monkeypat
     import pytest
     with pytest.raises(ValueError, match="trích dẫn"):
         run("<a class='back' href='/i.html'>Home</a>")
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES")
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "ellipsis")
     with pytest.raises(ValueError, match="trích dẫn"):  # off unless AI_BOARD_GATE25_FIXES lists quotes
         run("<a class='back' href='/i.html'>Home</a>")
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes")
@@ -644,7 +644,9 @@ def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restore
 
 def test_gate25_tokens_fix_raises_the_validator_output_budget_only_when_enabled(monkeypatch):
     from gates import plan_validate as pv
-    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,ellipsis")
+    assert pv._validator_options() is None
+    monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "")
     assert pv._validator_options() is None and pv.fixes() == set()
     monkeypatch.setenv("AI_BOARD_GATE25_FIXES", "quotes,tokens")
     assert pv._validator_options() == {"num_predict": 6144}
@@ -661,7 +663,8 @@ def test_tool_loop_budget_and_timing_pins_are_recorded(world, monkeypatch):
     assert runner.main([*argv, "--context-arm", "nosiblings"], deps) == 0 and os.environ["AI_BOARD_TOOL_LOOP"] == ""
     runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
     assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: "1", False: ""}
-    assert all(m["budget"]["model_calls"] == 40 for m in runs.values())
+    from runtime import limits
+    assert all(m["budget"]["model_calls"] == limits.budget(env={})["model_calls"] for m in runs.values())
     assert [m["winner_rule"] for n, m in runs.items() if n.endswith("-loop")] == ["arm wins at +4 tasks"] and all(len(m.get("winner_rule_sha", "")) == 16 for n, m in runs.items() if n.endswith("-loop"))
     assert [m["timing_conditions"]["comparable"] for n, m in runs.items() if n.endswith("-loop")] == [True]
 

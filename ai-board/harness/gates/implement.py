@@ -23,11 +23,12 @@ import file_context
 import path_policy
 from gates import gate3_guards
 from repositories.tool_steps import PgSteps
-from runtime import tool_loop
+from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
 import repomap
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
 _EXCERPT_LINE = re.compile(r"^L\d+\| ", re.M)
@@ -219,7 +220,7 @@ def whole_file_context(subtask: dict, state: dict, current: str | None, siblings
 
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
     """Excerpt by default; AI_BOARD_GATE3_CONTEXT=hybrid sends the whole file when it is <= WHOLE_FILE_MAX_CHARS."""
-    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and os.environ.get("AI_BOARD_GATE3_CONTEXT", "excerpt") == "hybrid":
+    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and get_settings().gate3_context == "hybrid":
         return whole_file_context(subtask, state, current, siblings, words)
     return excerpt_context(subtask, state, current, siblings, words)
 
@@ -580,6 +581,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     feedback = ""
     routing = getattr(deps.models, 'routing', None)
     failed_candidates = set()
+    attempt_hashes: list[str] = []
     receipts: list = []
     if trace:
         _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
@@ -680,6 +682,16 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
                     trace.attach_last("edits", {"parsed": parsed, "applied": False})
         if trace:
             trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
+        digest = loop_guard.state_hash(raw, str(error), "gate3")
+        if loop_guard.repeated(attempt_hashes, digest, limits.loop_guard()["repeat_state_count"]):
+            if tool_loop.mode() == "auto" and not state.get("repair_reason"):
+                out, stop = run_loop()
+                if stop:
+                    return "blocked", stop
+                return "ok", out, model, receipts
+            return "blocked", {"gate": 3, "blocked": True, "failure_class": "ordinary", "loop_guard": loop_guard.REASON_STATE_REPEAT,
+                               "reason": f"subtask '{subtask.get('title')}': {loop_guard.REASON_STATE_REPEAT}: model repeated the same output and error: {error}"}
+        attempt_hashes.append(digest)
         spent = (body.get("_metrics") or {}).get("gpu_ms") or 0
         room = getattr(budget, "max_units", None) is None or budget.units + spent / 1000 < budget.max_units
         if iteration == MAX_INNER_RETRIES or not budget.tick() or not room:
@@ -784,6 +796,10 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     trace = getattr(deps, "trace", None)
     known = _base_tree(state) | {st["file"] for st in subtasks} if gate3_guards.enabled("refs") else set()
     saved = _load_progress(state, trace)
+    child_by_file = {step["file"]: index for index, step in enumerate(prepared, start=1)}
+    for file, entry in (state.get("reuse") or {}).items():
+        if file in child_by_file:
+            saved.setdefault(str(child_by_file[file]), entry)
     diffs: list[dict] = []
     diff_child: list[int] = []
     receipts: list = []
@@ -799,6 +815,8 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
         })
         diff_child.append(child)
+        state.setdefault("produced", {})[subtask["file"]] = _progress_entry(
+            {"test_file": out["test_file"], "code": out["code"], "test": out["test"]}, model)
 
     def remember(child: int, out: dict, model: str) -> None:
         saved[str(child)] = _progress_entry(out, model)

@@ -39,6 +39,14 @@ def test_pii_in_public_content_is_repairable():
         assert ("pii", "ordinary") in kinds(diff("public/a.html", added=[line])), line
 
 
+def test_reserved_domains_and_obvious_fake_numbers_are_not_pii():
+    for line in ["Author: Nguyen Van A <email@example.com>", "you@example.org", "a@mail.example.net", "u@site.test", "u@x.localhost",
+                 "Gọi 0900000000", "Gọi 0987654321"]:
+        assert kinds(diff("public/a.html", added=[line])) == set(), line
+    for line in ["a@example.com.evil.io", "a@notexample.com", "hotro@example.edu.vn", "Gọi 0912345678"]:
+        assert ("pii", "ordinary") in kinds(diff("public/a.html", added=[line])), line
+
+
 def test_retina_image_names_are_not_email_addresses():
     for line in ['<img src="img/lumi-star@2x.png">', "background: url(logo@3x.webp)", "icon@2x.SVG"]:
         assert kinds(diff("public/a.html", added=[line])) == set(), line

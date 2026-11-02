@@ -26,8 +26,9 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import coverage, objection_repeat  # noqa: E402
-from runtime.limits import config_sha256, contract, scaled_limit  # noqa: E402
+from runtime import coverage, loop_guard, objection_repeat  # noqa: E402
+from runtime.limits import config_sha256, contract, loop_guard as loop_limits, run_wall_clock_s, scaled_limit  # noqa: E402
+from settings import get_settings  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
@@ -127,7 +128,7 @@ REPAIR_REPLAN = CONTRACT.get("repair_replan") or {}
 
 
 def repair_cap() -> int:
-    """Trần lượt sửa của một lượt chạy: contract, nâng theo cờ repair_replan khi bật (LF/74)."""
+    """Trần an toàn lượt sửa của một run (không phải điều kiện dừng thường): max_repairs, nâng theo repair_replan khi bật."""
     if not REPAIR_REPLAN.get("enabled"):
         return MAX_REPAIRS
     return max(MAX_REPAIRS, int(REPAIR_REPLAN.get("max_repairs") or 0))
@@ -178,6 +179,14 @@ class _Execution:
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
+        self.last_result: dict = {}
+        self.produced: dict[str, dict] = {}
+        self.repair_files: list[str] = []
+        self.round_metrics: list[dict] = []
+        self.progress_rounds = self.no_progress = 0
+        self.diff_texts: list[str] = []
+        self.halt: dict = {}
+        self.stop_note: str | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
@@ -205,10 +214,20 @@ class _Execution:
         saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
-                                       thread_id=saver.thread_id if saver else None)
+                                       thread_id=saver.thread_id if saver else None,
+                                       observe={"repair_check": self.observe_state}, report=self.halt)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
+
+    def observe_state(self) -> tuple | None:
+        """(code fingerprint, error, block signature) of the failed attempt, for the graph's state-hash router."""
+        if not self.gates or not self.gates[-1].get("blocked"):
+            return None
+        from runtime import repair_class
+        last = self.gates[-1]
+        code = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])["diff"]
+        return code, str(last.get("reason")), f"{last.get('gate')}:{self.kind}"
 
     def graph_persistence(self) -> bool:
         from runtime import exec_graph
@@ -246,6 +265,8 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
+        if self.repair_files and 0 < len(self.repair_files) < len(self.produced):
+            state["reuse"] = {file: entry for file, entry in self.produced.items() if file not in self.repair_files}
         state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
             import code_index
@@ -264,7 +285,8 @@ class _Execution:
         retried = False
         while True:
             if not budget.tick():
-                result = {"gate": gate, "blocked": True, "reason": "budget exhausted", "failure_class": "budget"}
+                result = {"gate": gate, "blocked": True, "reason": f"budget exhausted: {budget.exhausted_detail()}",
+                          "failure_class": "budget"}
             else:
                 try:
                     if gate == 4:
@@ -288,6 +310,7 @@ class _Execution:
                 budget.spend("retries")
                 continue
             break
+        self.last_result = result
         public = _public_gate_result(result)
         if gate == 5:
             public["retried"] = retried
@@ -327,6 +350,7 @@ class _Execution:
             lease_lost = True
         shutil.rmtree(self.scratch, ignore_errors=True)
         self.shots = list((state.get("evidence") or {}).get("screenshots") or [])
+        self.produced = dict(state.get("produced") or {})
         self.base_sha = state.get("base_sha")
         self.lease_lost = lease_lost
 
@@ -341,17 +365,55 @@ class _Execution:
         last = self.gates[-1]
         if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
-        if any(repair.get("reason") == last["reason"] for repair in self.repairs):
-            return "done"  # cùng một lỗi lặp lại: không có thông tin mới, dừng chứ không lặp (LF/74)
+        if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
+            return "done"
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
         from runtime.root_allowance import current as root_allowance
-        if (os.getenv("AI_BOARD_TOOL_LOOP") == "1" or root_allowance() is not None) and not self.budget.spend_repair():
+        if (get_settings().tool_loop == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
-        self.repair_reason = f"cổng {last['gate']}: {last['reason']}"
+        tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
+        self.repair_reason = f"cổng {last['gate']}{tag}: {last['reason']}"
         return "repair"
+
+    def _repair_allowed(self, last: dict) -> bool:
+        """Classify the failure, then spend a repair only while rounds make progress inside the hard cap."""
+        from runtime import repair_class
+        scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
+        scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
+        cls = repair_class.classify(self.last_result, self.produced, scope)
+        last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
+        if cls["action"] == repair_class.REPLAN:
+            self.kind, self.stop_note = "plan", f"plan_inconsistent: {last['reason'][:200]}"
+            return False
+        if cls["action"] != repair_class.REPAIR_CODE:
+            self.stop_note = f"{cls['class']}: {last['reason'][:200]}"
+            return False
+        now = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])
+        if self.round_metrics:
+            if repair_class.progressed(self.round_metrics[-1], now):
+                self.progress_rounds, self.no_progress = self.progress_rounds + 1, 0
+            else:
+                self.no_progress += 1
+        self.round_metrics.append(now)
+        spec = REPAIR_REPLAN
+        if self.no_progress >= int(spec.get("no_progress_rounds") or 2):
+            self.stop_note = (f"stuck: {self.no_progress} consecutive repair rounds without progress "
+                              f"(gate {now['gate']}, failing tests {now['fails']}, diff {now['diff'][:12]})")
+            return False
+        diff_text = chr(10).join(str(item.get("diff")) for item in (self.state or {}).get("diffs") or [])
+        self.diff_texts.append(diff_text)
+        guard = loop_limits()
+        low = loop_guard.stagnant(self.diff_texts, guard["similarity"], guard["similarity_window"], guard["similarity_max_chars"])
+        if low is not None:
+            self.halt.update(reason=loop_guard.REASON_STAGNATION, node="repair_check",
+                             detail=f"{guard['similarity_window']} consecutive repairs with similarity {low:.3f} > {guard['similarity']}")
+            self.stop_note = f"{loop_guard.REASON_STAGNATION}: {self.halt['detail']}"
+            return False
+        self.repair_files = cls["files"]
+        return True
 
     def repair(self) -> str:
         if self.checkpoint is not None:
@@ -364,14 +426,22 @@ class _Execution:
         passed = _passed(gates, kind)
         if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
             self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
-        needs_review = passed and last["risk_level"] in ("high", "critical")
+        smoke = next((gate for gate in gates if gate["gate"] == 5), {})
+        oracle_review = passed and bool((smoke.get("functional") or {}).get("needs_review"))
+        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical"))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
-        reason = "risk triage requires human review" if needs_review else last["reason"]
+        reason = ("oracle functional fail trong khi acceptance, generated tests và smoke xanh: " + str(smoke["functional"].get("reason"))[:300]
+                  if oracle_review else "risk triage requires human review" if needs_review else last["reason"])
+        if self.halt.get("reason") and not passed:
+            reason = f"loop stop {self.halt['reason']}: {self.halt['detail']} | {reason}"
+        elif self.stop_note and not passed:
+            reason = f"{reason} | repair stop: {self.stop_note}"
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
+            **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
@@ -444,10 +514,12 @@ def drop_screenshots(shots: list[dict]) -> None:
 def _worker_checkpoint(ticket_id: int, plan: dict, plan_hash: str | None = None):
     """Checkpoint theo ticket + plan_hash server (thiếu → băm plan cục bộ): qua API server khi có lease, DATABASE_URL chỉ cho chạy ngoài worker HTTP; None khi cờ tắt."""
     from runtime import exec_graph
-    if os.getenv("AI_BOARD_TOOL_LOOP") != "1" and not exec_graph.persistence_enabled():
+    if get_settings().tool_loop != "1" and not exec_graph.persistence_enabled():
         return None
     digest = str(plan_hash) if plan_hash else hashlib.sha256(
         json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    if plan.get("held_back"):  # tập step chạy đổi sau khi gỡ chặn: checkpoint cũ không khớp chỉ số child
+        digest = hashlib.sha256(f"{digest}:{plan['held_back']}".encode()).hexdigest()
     scope = f"ticket-{ticket_id}:{digest[:16]}"
     from repositories import server_hsm
     backend = server_hsm._SERVER.get()
@@ -618,7 +690,7 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
 def server_url(env=None) -> str:
     """App base URL: AI_BOARD_SERVER_URL (compose: http://tizia:8041), else this machine on PORT."""
     env = os.environ if env is None else env
-    return (env.get("AI_BOARD_SERVER_URL") or f"http://127.0.0.1:{env.get('PORT') or '8041'}").rstrip("/")
+    return (get_settings(env).server_url or f"http://127.0.0.1:{env.get('PORT') or '8041'}").rstrip("/")
 
 
 def default_worker_id() -> str:
@@ -650,6 +722,15 @@ class WorkerClient:
         return self.transport("POST", path, payload, headers)
 
 
+def _with_body(error):
+    """HTTPError kèm thân phản hồi (code + lý do server) trong message để admin thấy vì sao plan bị từ chối."""
+    try:
+        body = error.read().decode("utf-8", "replace")[:400]
+    except Exception:
+        return error
+    return RuntimeError(f"{error} — {body}") if body else error
+
+
 def _plan_rejection(error) -> str | None:
     """Nội dung từ chối của server khi plan sai schema; None nếu không phải lỗi nội dung plan."""
     if getattr(error, "code", None) not in (400, 409):
@@ -659,10 +740,6 @@ def _plan_rejection(error) -> str | None:
     except Exception:
         return None
     return body[:400] if "malformed_plan" in body else None
-
-
-_RUNNABLE_VERIFY = re.compile(
-    r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
 
 
 def _plan_repairable(stopped: dict) -> bool:
@@ -695,20 +772,11 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
 
 
 def _has_runnable_verify(plan: dict) -> bool:
-    return any(isinstance(task, dict) and _RUNNABLE_VERIFY.match(str(task.get("verify") or "").strip())
-               for task in plan.get("subtasks") or [])
+    return coverage.has_runnable(plan)
 
 
 def _non_runnable_layered(plan: dict) -> list[str]:
-    """verify của subtask có `layer` phải là lệnh chạy được (server chỉ ép plan nhiều bước)."""
-    bad = []
-    for task in plan.get("subtasks") or []:
-        if not isinstance(task, dict) or not task.get("layer"):
-            continue
-        verify = str(task.get("verify") or "").strip()
-        if not _RUNNABLE_VERIFY.match(verify):
-            bad.append(f"{task.get('file')}: {verify[:80]}")
-    return bad
+    return coverage.non_runnable_layered(plan)
 
 
 def _plan_repair_note(reason: str, files: list[str] | None = None,
@@ -721,7 +789,8 @@ def _plan_repair_note(reason: str, files: list[str] | None = None,
         banned += "\n- File bị trùng: " + ", ".join(dupes)
     if old:
         banned += "\n- KHÔNG dùng lại file của plan bị từ chối: " + ", ".join(old)
-    banned += ("\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
+    banned += ("\n- Mọi file, hạng mục người dùng nhắc tên phải có subtask riêng; test nêu tên chỉ cần nằm trong acceptance/verify (không tạo subtask cho file test); thiếu thì plan bị từ chối."
+               "\n- Yêu cầu cần trang mới thì TẠO FILE MỚI, không sửa trang có sẵn."
                "\n- Trang mới có danh sách dữ liệu + tương tác (tìm kiếm, mở/đóng): phải có 2 subtask — module "
                "public/js/features/<slug>/<name>.js chứa dữ liệu và logic, rồi trang public/<slug>.html nạp module đó (depends_on)."
                "\n- Mọi plan có `layer` phải có verify là LỆNH CHẠY ĐƯỢC (node --test <file>, curl <url>, pytest, python <file>, bash <script>)."
@@ -775,11 +844,11 @@ def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> 
 
 def _forge(candidate, token):
     """GitHub client, or a local bare-repo forge when AI_BOARD_LOCAL_FORGE names one (demo: no remote PR ever leaves the machine)."""
-    local = os.getenv("AI_BOARD_LOCAL_FORGE")
+    local = get_settings().local_forge
     if local:
         from services.local_forge import local_github
         return local_github(local, candidate.GitHub)
-    return candidate.GitHub(os.getenv("AI_BOARD_GITHUB_REPO", "Lampx83/Tizia"), token) if token else None
+    return candidate.GitHub(get_settings().github_repo, token) if token else None
 
 
 def observe_base(client: WorkerClient, repo) -> dict:
@@ -948,8 +1017,8 @@ class HttpWorker:
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
         if self.model_check and (blocked := self.model_check()):
             # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
-            print(f"[worker] model {blocked['model']} chưa load được, không claim: {blocked['error']}")
-            return blocked
+            print(f"[worker] model {blocked['model']} chưa load được, chờ GPU, không claim: {blocked['error']}")
+            return {**blocked, "status": "waiting_gpu"}
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
@@ -1061,10 +1130,16 @@ class HttpWorker:
         except Exception as error:  # noqa: BLE001
             print(f"[worker] đăng ảnh bản nháp lỗi: {str(error)[:200]}")
 
-    def _release(self, ticket_id: int, payload: dict) -> dict:
+    def _release(self, ticket_id: int, payload: dict, *, after_verdict: bool = False) -> dict:
         """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
         self._close_trace(payload.get("outcome"))
-        return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+        try:
+            return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+        except urllib.error.HTTPError as error:
+            # Verdict đã được nhận và server có thể đã replan/requeue (xoá lease): release là no-op.
+            if after_verdict and _is_stale_lease(error):
+                return {"ok": True, "stale_lease": True}
+            raise
 
     def _requeue_busy(self, ticket_id: int, lease: dict, prefix: str, run: dict, result: dict) -> dict:
         """Runner busy: give the lease back without a verdict; server requeues after a not-before delay."""
@@ -1139,7 +1214,7 @@ class HttpWorker:
             if _is_stale_lease(error):
                 self.candidates.discard(result.get("candidate"))
             raise
-        self._release(ticket_id, {**lease, "outcome": "planned", "idempotency_key": f"{prefix}:release"})
+        self._release(ticket_id, {**lease, "outcome": "planned", "idempotency_key": f"{prefix}:release"}, after_verdict=True)
         return {"status": "planned", "ticket_id": ticket_id, "run_id": run["id"], "reverify": verdict["outcome"], "pre_pr_verdict": verdict}
 
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
@@ -1181,7 +1256,7 @@ class HttpWorker:
                     # then the same submit. Any other 4xx/5xx keeps the old fail-fast path.
                     reason = _plan_rejection(rejected)
                     if not reason:
-                        raise
+                        raise _with_body(rejected)
                     repaired = _repaired_snapshot(snapshot, reason)
                     plan, used_again = self._with_heartbeat(lambda _lost: self.planner(repaired, **plan_kwargs), ticket_id, lease)
                     budget_used += used_again
@@ -1247,9 +1322,10 @@ class HttpWorker:
                 hsm_api = server_hsm.RemoteGate4(self.client,ticket_id=ticket_id,run_id=run['id'],
                     worker_id=self.worker_id,lease_token=lease['lease_token'],contract=hsm_contract)
                 with memory.server_scope(memory_api), server_hsm.server_scope(hsm_api):
+                    from runtime.step_gate import runnable_plan
                     result = self._with_heartbeat(
                         lambda lost: self.change_runner(
-                            plan, ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
+                            runnable_plan(plan, planned.get("runnable_orders")), ticket_id, max(limit - budget_used, 0),  # giây GPU còn lại của lượt (trừ phần lập plan)
                             # {} when missing: fails the hash check closed instead of skipping the catalog.
                             policy=snapshot.get("capability_policy") or {},
                             accepted_policy_hash=planned.get("capability_policy_hash"),
@@ -1300,7 +1376,7 @@ class HttpWorker:
             self._release(ticket_id, {
                 **lease, "outcome": "waiting" if pr_blocked else "planned", "idempotency_key": f"{prefix}:release",
                 **({"internal_detail": pr_problem} if pr_problem else {}),
-            })
+            }, after_verdict=True)
             result = {
                 "status": planned["status"], "ticket_id": ticket_id, "run_id": run["id"],
                 "tier": planned["tier"], "children": len(planned.get("children") or []),
@@ -1334,7 +1410,7 @@ class HarnessPlanner:
         return {
             "id": f"req-{request['id']}", "db_id": request["id"],
             "from": request.get("student"), "domain": request.get("domain"),
-            "type": request.get("type"), "subject": request.get("title"),
+            "type": request.get("type"), "subject": request.get("title"), "detail": request.get("detail"),
             # Spec đã làm rõ với người gửi thay mô tả gốc; không có thì như cũ.
             "body": request.get("clarified_spec") or request.get("detail") or request.get("title"),
             "clarified_spec": request.get("clarified_spec"),
@@ -1389,8 +1465,8 @@ class HarnessPlanner:
             "domain": request["domain"],
             "goal": old["summary_vi"],
             "allowed_scope": [step["allowed_scope"][0] for step in steps],
-            "acceptance": list(old.get("acceptance") or [item for step in steps for item in step["acceptance"]]),
-            "tests": [item for step in steps for item in step["tests"]],
+            "acceptance": list(dict.fromkeys(old.get("acceptance") or [item for step in steps for item in step["acceptance"]])),
+            "tests": list(dict.fromkeys(item for step in steps for item in step["tests"])),
             "capabilities": capabilities,
             "risk": "high" if signals else "medium" if any(step["risk"] == "medium" for step in steps) else "low",
             "non_goals": ["Không sửa file ngoài allowed_scope.", "Không tự mở rộng quyền."],
@@ -1413,7 +1489,7 @@ class HarnessPlanner:
                     "gate": 1, "reason": f"folder_brief: {', '.join(stop)}", "signals": stop, "plan": None,
                     "public_message": "Chức năng này cần quản trị viên xem lại trước khi làm tiếp."})
         budget = self.Budget.from_env()
-        answered = os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+        answered = get_settings().gate25_answered
         # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
         # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
         budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
@@ -1434,7 +1510,7 @@ class HarnessPlanner:
         def run_plan(req):
             """Một lượt cổng 1 → 2.5 trên `req`; trả {gate, result} của cổng chặn (rỗng nếu qua)."""
             stopped.clear()
-            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill"):
+            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill", "attachments"):
                 state.pop(key, None)
 
             def plan_gate(gate):
@@ -1452,19 +1528,11 @@ class HarnessPlanner:
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:
-                # Plan có `layer` phải có verify chạy được (server chỉ ép plan nhiều bước).
-                bad = _non_runnable_layered(state.get("plan") or {})
-                if bad:
-                    result = {"gate": 1, "result": {
-                        "gate": 1, "blocked": True, "plan": None, "signals": [],
-                        "reason": f"plan không hợp lệ: verify phải là lệnh chạy được: {bad[0]}"}}
-                else:
-                    missing = _uncovered_conditions(request, state.get("plan") or {}, self.deps, budget)
-                    # Word overlap cannot prove a condition is uncovered; only a plan with no runnable verify at all is blocked.
-                    if missing and not _has_runnable_verify(state.get("plan") or {}):
-                        result = {"gate": 1, "result": {
-                            "gate": 1, "blocked": True, "plan": None, "signals": [],
-                            "reason": f"plan không hợp lệ: điều kiện chưa có subtask verify chạy được: {missing[0][:160]}"}}
+                reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget),
+                                            lambda: coverage.requested_missing(plan_now, coverage.user_text(request)))
+                if reason:
+                    result = {"gate": 1, "result": {"gate": 1, "blocked": True, "plan": None, "signals": [],
+                                                    "reason": f"plan không hợp lệ: {reason}"}}
             return result
 
         stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
@@ -1472,6 +1540,7 @@ class HarnessPlanner:
             gate, result = stopped["gate"], stopped["result"]
             raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
                 "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+                **({"evidence": result["evidence"]} if result.get("evidence") else {}),
                 "public_message": result.get("public_message"),
                 "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
                 **_objection_evidence(history),
@@ -1484,7 +1553,6 @@ class HarnessPlanner:
             plan['grounding'] = state['grounding']
         if state.get('assumption'):
             note = f"Giả định chưa xác nhận với người gửi: {state['assumption']}"[:300]
-            plan['goal'] = f"{plan['goal']} [{note}]"
             plan['non_goals'] = [*plan['non_goals'], note]
         if (state.get('intake') or {}).get('read_only_verification'):
             plan['read_only_admin_verification'] = True
@@ -1507,9 +1575,9 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
-        if os.getenv("AI_BOARD_TOOL_LOOP") != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
+        if get_settings().tool_loop != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
             steps = len(plan.get("steps") or [])
-            budget.max_wall_clock_s = float(scaled_limit("wall_clock_s", steps))
+            budget.max_wall_clock_s = run_wall_clock_s(steps, local=getattr(deps, "provider", "ollama") != "api")
             budget.max_model_calls = scaled_limit("model_calls", steps)
         artifact = {}
         def capture(state, private_candidate):
@@ -1519,7 +1587,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         result = execute_pre_pr(plan, ticket_id=ticket_id, checkout_source=source or checkout_source or REPO_ROOT, deps=deps,
                               budget=budget, run_gate=run_gate, cleanup=candidate.cleanup,
                               memory_path=DEFAULT_PATH,
-                              preview_capture=capture if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true" else None, **kwargs)
+                              preview_capture=capture if get_settings().private_preview_enabled else None, **kwargs)
         if artifact: result["_preview_artifact"] = artifact
         return result
     return run
@@ -1550,7 +1618,7 @@ def poll(worker) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Tizia AI Board HTTP worker")
-    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=os.getenv("AI_BOARD_WORKER_MODE", "off"))
+    parser.add_argument("--mode", choices=("off", "shadow", "active"), default=get_settings().worker_mode)
     parser.add_argument("--once", action="store_true", help="poll once, then exit")
     parser.add_argument("--plan", action="store_true", help="run gates 1, 2 and 2.5, then submit child-ticket plan")
     parser.add_argument("--execute", action="store_true", help="run the accepted plan through gates 3, 4, 5 and 5.5")
@@ -1575,7 +1643,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("AI_BOARD_WORKER_KEY must be at least 24 characters")
     _, Deps, _ = _load_harness()
     if args.observe_base:
-        repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+        repo_dir = get_settings().repo_dir
         print(json.dumps(observe_base(WorkerClient(base_url, key), Path(repo_dir) if repo_dir else REPO_ROOT), ensure_ascii=False))
         return 0
     if args.sync_prs:
@@ -1589,14 +1657,14 @@ def main(argv: list[str] | None = None) -> int:
     worker = HttpWorker(
         WorkerClient(base_url, key),
         worker_id=default_worker_id(),
-        version=os.getenv("AI_BOARD_WORKER_VERSION", "d0"),
+        version=get_settings().worker_version,
         mode=args.mode,
         tracer=tracer,
     )
     # Cổng báo tiến độ qua worker.gate_started → event gate_started của run đang giữ lease.
     # AI_BOARD_REPO_DIR = the worker's own clone (prod container): reset to origin/<PR_BASE_BRANCH> before
     # every ticket and used as the candidate base. Unset = this checkout, never reset (a dev's working tree).
-    repo_dir = os.getenv("AI_BOARD_REPO_DIR")
+    repo_dir = get_settings().repo_dir
     repo = Path(repo_dir) if repo_dir else REPO_ROOT
     if repo_dir:
         import candidate
@@ -1609,12 +1677,12 @@ def main(argv: list[str] | None = None) -> int:
         from models import OllamaClient
         worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
-        if engine_url := os.getenv("AI_BOARD_ENGINE_URL"):
+        if engine_url := get_settings().engine_url:
             from api.client import RemotePlanner
             try:
                 worker.planner = RemotePlanner(
                     engine_url, take_secret("AI_BOARD_INTERNAL_KEY"),
-                    project=os.getenv("AI_BOARD_PROJECT", "tizia"),
+                    project=get_settings().project,
                     fallback=worker.planner, tracer=tracer,
                 )
             except ValueError as error:
@@ -1628,7 +1696,7 @@ def main(argv: list[str] | None = None) -> int:
                                                      progress=worker.gate_started)
         github = _forge(candidate, github_token)
         worker.candidates = candidate.Candidates(repo, github=github)
-        if os.getenv("AI_BOARD_PRIVATE_PREVIEW_ENABLED") == "true":
+        if get_settings().private_preview_enabled:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)
         worker.open_prs = github is not None  # no token: verdicts stop at ready_for_pr, as before

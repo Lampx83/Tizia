@@ -36,8 +36,8 @@ class Models:
                 'eval_duration': 1_000_000_000}
 
 
-def deps(models):
-    return pipeline.Deps(models=models, notify=None)
+def deps(models, provider='ollama'):
+    return pipeline.Deps(models=models, notify=None, provider=provider)
 
 
 def test_idle_queue_makes_no_model_call():
@@ -49,7 +49,7 @@ def test_idle_queue_makes_no_model_call():
 def test_rewrite_is_thinking_off_authoring_in_system_original_as_advisory_data_and_smoke_reported():
     server = Server()
     models = Models({'skill': REWRITTEN}, {'answer': 'Rename the button.'})
-    result = skill_rewrite.run_step(server, deps(models), worker_id='w')
+    result = skill_rewrite.run_step(server, deps(models, 'api'), worker_id='w')
     assert result['status'] == 'reported'
     rewrite, smoke = models.calls
     for call in (rewrite, smoke):

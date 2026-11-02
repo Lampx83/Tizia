@@ -21,6 +21,13 @@ RUN_CAPS = ("model_calls", "tool_calls", "tokens", "units")
 VERIFY_RESERVE = {"model_calls": 2, "tool_calls": 0, "tokens": 20_000, "wall_clock_s": 240.0}
 _DEFAULTS = limits.budget(env={})
 _LOOP = limits.loop(env={})
+# Một node chạy tuần tự trong process; fan-out cổng 3 dùng thread nên hạn là biến chung, không phải ContextVar.
+_NODE = {"deadline": None}
+
+
+def start_node(seconds: float | None) -> None:
+    """Đặt hạn cứng cho node đang chạy; None hoặc <=0 bỏ hạn."""
+    _NODE["deadline"] = time.monotonic() + seconds if seconds and seconds > 0 else None
 
 
 class BudgetExhausted(RuntimeError):
@@ -94,6 +101,8 @@ class Budget:
             return reason
         if self.elapsed_s >= self.max_wall_clock_s:
             return "wall_clock_s"
+        if _NODE["deadline"] is not None and time.monotonic() >= _NODE["deadline"]:
+            return "node_wall_clock_s"
         for cap in RUN_CAPS:
             if getattr(self, cap) >= getattr(self, f"max_{cap}"):
                 return cap
@@ -102,6 +111,19 @@ class Budget:
     def tick(self) -> bool:
         """Còn ngân sách để đi tiếp 1 bước? Không tính phí, chỉ kiểm tra."""
         return self.exhausted() is None
+
+    def exhausted_detail(self) -> str | None:
+        """Tên cap đã chạm kèm đã dùng/trần để hiện cho admin; None nếu còn chỗ."""
+        cap = self.exhausted()
+        if cap is None:
+            return None
+        if cap == "wall_clock_s":
+            return f"{cap} {self.elapsed_s:.0f}/{self.max_wall_clock_s:.0f}s"
+        if cap == "node_wall_clock_s":
+            return f"{cap} {limits.budget()[cap]:.0f}s"
+        if hasattr(self, f"max_{cap}"):
+            return f"{cap} {getattr(self, cap)}/{getattr(self, f'max_{cap}')}"
+        return cap
 
     def can_request(self) -> bool:
         """A pinned engine context bounds one full response before remote work starts."""

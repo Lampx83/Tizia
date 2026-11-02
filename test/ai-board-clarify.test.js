@@ -10,7 +10,7 @@ import { openBoard } from './support/ai-board-db.js';
 import { CLARIFY_AUTHOR } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { attachAiBoardIntake, createAsyncProfileStore } from '../server/contexts/ai-board-intake/index.js';
-import { guardModelText, MAX_QUESTIONS, parseQuestionReply } from '../server/contexts/ai-board-intake/clarify.js';
+import { askQuestion, asksAboutCode, guardModelText, MAX_QUESTIONS, parseQuestionReply } from '../server/contexts/ai-board-intake/clarify.js';
 import { repeatedQuestion } from '../server/ai-board/clarity-rules.js';
 
 const WORKER_KEY = 'clarification-test-worker-key-32chars';
@@ -439,4 +439,34 @@ test('ordinary questions, specs and numbers are not mistaken for claims or phone
     'Mã đơn 0123456789012 hiển thị đúng', 'Ai đã thêm bài này, bạn nhớ không?']) {
     assert.equal(guardModelText(ok, 'summary', 'ask', 'fallback').replaced, false, ok);
   }
+});
+
+test('a question whose answer is quoted literally in the request is not asked', async () => {
+  const request = { title: 'Trang FAQ cơ sở dữ liệu', detail: 'Hiện 10 câu hỏi mới nhất ở trên cùng, dành cho sinh viên năm nhất' };
+  const asked = JSON.stringify({ ready: false, missing: 'đối tượng', question: 'Dành cho ai?', answered_by: 'dành cho sinh viên năm nhất' });
+  const model = fakeModel([asked]);
+  const known = [request.title, request.detail];
+  const result = await askQuestion({ generate: model.generate, model: 'm', prompt: 'p', mode: 'ask', known });
+  assert.equal(result.ready, true);
+  assert.equal(result.skipped, 'answered_in_request');
+  const invented = JSON.stringify({ ready: false, missing: 'đối tượng', question: 'Dành cho ai?', answered_by: 'dành cho giáo viên trường khác' });
+  const kept = await askQuestion({ generate: fakeModel([invented]).generate, model: 'm', prompt: 'p', mode: 'ask', known });
+  assert.equal(kept.ready, false);
+  assert.equal(kept.question, 'Dành cho ai?');
+});
+
+test('a question about files or code is dropped and the summary carries an assumption', async () => {
+  const codeQuestion = JSON.stringify({ ready: false, missing: 'file', question: 'Bạn muốn sửa file public/index.html hay tọa độ gx?' });
+  const result = await askQuestion({ generate: fakeModel([codeQuestion]).generate, model: 'm', prompt: 'p', mode: 'ask' });
+  assert.deepEqual([result.ready, result.skipped, result.assumed], [true, 'code_question', true]);
+  assert.equal(asksAboutCode('Bạn muốn nút màu gì?'), false);
+  assert.equal(asksAboutCode('Sửa trong mã nguồn nào?'), true);
+});
+
+test('the question cap is two and a genuinely vague request is still asked', async () => {
+  assert.equal(MAX_QUESTIONS, 2);
+  const vague = JSON.stringify({ ready: false, missing: 'trang', question: 'Bạn muốn đổi ở trang nào?' });
+  const result = await askQuestion({ generate: fakeModel([vague]).generate, model: 'm', prompt: 'p', mode: 'ask', known: ['Làm cho đẹp hơn'] });
+  assert.equal(result.ready, false);
+  assert.equal(result.question, 'Bạn muốn đổi ở trang nào?');
 });

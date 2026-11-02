@@ -16,8 +16,9 @@ GOLDEN = json.loads((REPO / "test" / "fixtures" / "ai-board-scaled-limit.json").
 
 
 def test_defaults_equal_old_constants():
-    assert limits.budget(env={}) == {"model_calls": 40, "tool_calls": 200, "tokens": 200_000, "retries": 3, "units": 600,
-                                     "wall_clock_s": 900.0, "semantic_repairs": 3, "child_wall_clock_s": 300.0}
+    assert limits.budget(env={}) == {"model_calls": 400, "tool_calls": 2000, "tokens": 200_000, "retries": 3, "units": 600,
+                                     "wall_clock_s": 900.0, "semantic_repairs": 24, "child_wall_clock_s": 300.0,
+                                     "node_wall_clock_s": 1200.0}
     assert limits.loop(env={}) == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000}
     assert limits.sandbox_client()["backoff_s"] == (1, 2, 4, 8)
     assert limits.sandbox_client()["call_attempts"] == 3
@@ -33,7 +34,7 @@ def test_from_env_defaults_match_contract_without_env(monkeypatch):
         if key.startswith("BUDGET_MAX_") or key.startswith("AI_BOARD_LOOP_"):
             monkeypatch.delenv(key)
     b = Budget.from_env()
-    assert (b.max_model_calls, b.max_tool_calls, b.max_units, b.max_wall_clock_s) == (40, 200, 600, 900.0)
+    assert (b.max_model_calls, b.max_tool_calls, b.max_units, b.max_wall_clock_s) == (400, 2000, 600, 900.0)
 
 
 def test_env_override_applies_inside_loader(monkeypatch):
@@ -71,3 +72,22 @@ def test_every_flag_accepts_the_same_truthy_spellings():
         assert limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]
     for value in ("0", "false", "no"):
         assert not limits.sandbox_tool({"AI_BOARD_SANDBOX_TOOL": value})["enabled"]
+
+
+def test_local_run_wall_clock_is_sum_of_node_caps():
+    node = limits.budget(env={})["node_wall_clock_s"]
+    assert limits.run_wall_clock_s(2, local=True) == 300 + 2 * node
+    assert limits.run_wall_clock_s(2, local=True) > 1073  # run 100: 2 steps ran 1073 s, api cap 1020 s
+    assert limits.run_wall_clock_s(2, local=False) == limits.scaled_limit("wall_clock_s", 2) == 1020
+    assert limits.run_wall_clock_s(99, local=True) == 12300 <= limits._parsed()["limits"]["local_wall_clock_s"]["max"]
+
+
+def test_exhausted_detail_names_the_cap():
+    b = Budget(max_wall_clock_s=10.0)
+    b.elapsed_before_s = 20.0
+    assert b.exhausted_detail().startswith("wall_clock_s 2")
+    assert "/10s" in b.exhausted_detail()
+    c = Budget()
+    c.units = c.max_units
+    assert c.exhausted_detail() == f"units {c.max_units}/{c.max_units}"
+    assert Budget().exhausted_detail() is None

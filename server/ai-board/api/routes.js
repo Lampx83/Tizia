@@ -442,6 +442,16 @@ export function attachAiBoardRequestRoutes(router, {
       throw error;
     }
   });
+  route.post('/api/admin/ai-board/tickets/:id/data-steps/:childId/acknowledge', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try {
+      res.json(await store.acknowledgeDataStep(req.params.id, req.params.childId, req.user.id));
+    } catch (error) {
+      if (error instanceof WorkerContractError) {
+        return res.status(error.status).json({ error: error.code, message: error.message });
+      }
+      throw error;
+    }
+  });
   route.post('/api/admin/ai-board/requests/:id/rerun-gate', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }

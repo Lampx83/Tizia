@@ -54,6 +54,7 @@ const PHASES = {
   pr_open: { label: 'đã mở PR vào dev, chờ người duyệt' },
   critical_violation: { label: 'vi phạm an toàn' },
   budget_exhausted: { label: 'hết ngân sách' },
+  root_allowance_exhausted: { label: 'hết hạn mức của yêu cầu, chờ gia hạn' },
   plan_unfit: { label: 'kế hoạch không làm được' },
   // Dừng giữa chừng nhưng đã xong một phần plan (LF/107): checkpoint còn nguyên, người gửi bấm "Tiếp tục"
   // để worker chạy nốt phần còn thiếu — không tính là lượt hỏng, không mở plan mới.
@@ -324,6 +325,8 @@ function validatePrePrVerdict(value, selfRequest = false) {
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
+    ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),
+      detail: String(value.loop_guard.detail ?? '').slice(0, 300) } } : {}),
     // Tuỳ chọn: sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
     ...(SHA.test(String(value.base_sha)) ? { base_sha: value.base_sha } : {}),
     ...(/^[a-z0-9-]{1,80}$/.test(String(value.skill)) ? { skill: value.skill } : {}) };

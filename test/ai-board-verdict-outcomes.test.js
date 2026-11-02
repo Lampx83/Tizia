@@ -10,6 +10,8 @@ import { openBoard } from './support/ai-board-db.js';
 import { CONTRACT, LIMITS, scaledLimit, WorkerContractError } from '../server/ai-board/store.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 
+CONTRACT.repair_replan.enabled = false; // tests below opt in per case
+
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 // Per-run cap after a 1-step plan (contract.json limits.per_run.units) and the extension ceiling.
@@ -219,12 +221,13 @@ test('the replan round is bounded by the existing automatic round limit', async 
   assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'plan_unfit' });
 });
 
-test('the repair_replan flag raises the repair bound to two, never three', async () => {
+test('the repair_replan flag raises the repair bound to contract max_repairs, never one more', async () => {
+  const cap = CONTRACT.repair_replan.max_repairs;
   const accepted = await plannedRoot();
   CONTRACT.repair_replan.enabled = true;
   try {
     await assert.doesNotReject(async () => accepted.submit(blocked(5, 'x', 'ordinary',
-      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }] })));
+      { repairs: Array.from({ length: cap }, (_, i) => ({ gate: 5, reason: `r${i + 1}` })) })));
   } finally {
     CONTRACT.repair_replan.enabled = false;
   }
@@ -232,7 +235,7 @@ test('the repair_replan flag raises the repair bound to two, never three', async
   CONTRACT.repair_replan.enabled = true;
   try {
     await assert.rejects(async () => rejected.submit(blocked(5, 'x', 'ordinary',
-      { repairs: [{ gate: 5, reason: 'a' }, { gate: 4, reason: 'b' }, { gate: 3, reason: 'c' }] })), /repairs/);
+      { repairs: Array.from({ length: cap + 1 }, (_, i) => ({ gate: 5, reason: `r${i + 1}` })) })), /repairs/);
   } finally {
     CONTRACT.repair_replan.enabled = false;
   }

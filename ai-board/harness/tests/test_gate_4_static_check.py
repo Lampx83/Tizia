@@ -306,3 +306,18 @@ def test_forbidden_import_in_a_generated_test_still_blocks_even_with_an_oracle(t
     diffs = [{"title": "t", "file": "public/x.js", "test_file": "test/x.test.js", "diff": "+x\n"}]
     out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": ORACLE_REQUEST})
     assert out["blocked"] is True and out["failure_class"] == "critical"
+
+
+def test_content_review_root_allowance_exhaustion_is_budget_not_outage():
+    from types import SimpleNamespace
+    from runtime.budget import Budget, BudgetExhausted
+
+    def call_model(*_args, **_kwargs):
+        raise BudgetExhausted('root_allowance_exhausted')
+
+    deps = SimpleNamespace(models=SimpleNamespace(gate1_model='guard', classifier_model=''), call_model=call_model)
+    diffs = [{'file': 'public/x.html', 'diff': '+<h1>Study</h1>\n'}]
+    result = static_check.content_review({'diffs': diffs}, deps, Budget())
+    assert result['blocked'] is True
+    assert result['failure_class'] == 'budget'
+    assert result['reason'] == 'root_allowance_exhausted'

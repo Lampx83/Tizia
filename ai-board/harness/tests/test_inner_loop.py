@@ -11,6 +11,8 @@ ESM_TEST = ("import test from 'node:test';\nimport assert from 'node:assert/stri
             "// public/tinh-nang.html public/app.js public/new.html public/a.html\n")
 GOOD = {"edits": [{"after_line": 4, "insert": "    <p>Mới.</p>"}], "test_file": "test/moi.test.js", "test": ESM_TEST}
 BAD_SEARCH = {**GOOD, "edits": [{"search": "<h1>Không có</h1>", "replace": "x"}]}
+def bad_search(n):
+    return {**BAD_SEARCH, "edits": [{"search": f"<h1>Không có {n}</h1>", "replace": "x"}]}
 
 
 class SeqModels(FakeModels):
@@ -61,7 +63,7 @@ def test_search_mismatch_is_retried_with_the_error_and_snippet_then_passes(tmp_p
 
 
 def test_gives_up_after_the_retry_cap_as_ordinary_with_the_last_snippet(tmp_path):
-    out, prompts = _run(tmp_path, SeqModels([BAD_SEARCH]))
+    out, prompts = _run(tmp_path, SeqModels([bad_search(i) for i in range(4)]))
     assert len(prompts) == implement.MAX_INNER_RETRIES + 1
     assert out["blocked"] is True and out["failure_class"] == "ordinary"
     assert "sau 4 lần thử" in out["reason"] and "Không có" in out["reason"]
@@ -175,7 +177,7 @@ def test_near_miss_retry_hint_says_to_copy_the_quoted_line_exactly():
 
 
 def test_inner_retries_vary_the_sampling_so_a_deterministic_loop_can_break(tmp_path):
-    models = SeqModels([BAD_SEARCH, BAD_SEARCH, GOOD])
+    models = SeqModels([bad_search(1), bad_search(2), GOOD])
     out, _ = _run(tmp_path, models)
     assert out["blocked"] is False and len(models.calls) == 3
     temperatures = [call["temperature"] for call in models.calls]

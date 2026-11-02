@@ -5,9 +5,12 @@ import pytest
 
 from evaluation.suite import comparison, interleaved
 
+PINS = {'python': '3.0', 'packages': {'pydantic': '1'}}
+
 
 @pytest.mark.parametrize('details', [{}, {'runtime_dependencies': {'python': '0.0', 'packages': {}}}])
-def test_dependency_drift_or_missing_freeze_refuses_trial_before_model_setup(details):
+def test_dependency_drift_or_missing_freeze_refuses_trial_before_model_setup(details, monkeypatch):
+    monkeypatch.setattr(comparison.mini_swe, 'dependency_pins', lambda: PINS)
     with pytest.raises(ValueError, match='runtime dependencies changed'):
         comparison.one_trial({'config': {}, 'details': details}, {'id': 't1', 'arm': 'mini-swe'})
 
@@ -48,6 +51,7 @@ def test_both_arms_receive_the_common_request_bound(tmp_path, monkeypatch, arm):
     corpus = tmp_path/'cases.json'
     corpus.write_bytes(b'[]')
     monkeypatch.setattr(comparison, 'configured_deps', lambda model: object())
+    monkeypatch.setattr(comparison.mini_swe, 'dependency_pins', lambda: PINS)
     monkeypatch.setattr(comparison, 'code_pins', lambda deps: {})
     monkeypatch.setattr(comparison, 'cases', lambda path: [{'id': 't1'}])
     def run(*args, budget=None, **kwargs):
@@ -57,7 +61,7 @@ def test_both_arms_receive_the_common_request_bound(tmp_path, monkeypatch, arm):
     monkeypatch.setattr(comparison.mini_swe, 'run_trial', run)
     protocol = {'config': {'model': 'model', 'context_length': 32768, 'corpus': str(corpus),
                  'root': str(tmp_path), 'source': str(tmp_path), 'mini_runtime': str(tmp_path)},
-                'details': {'code': {}, 'runtime_dependencies': comparison.mini_swe.dependency_pins()},
+                'details': {'code': {}, 'runtime_dependencies': PINS},
                 'pins': {'corpus': comparison.hashlib.sha256(b'[]').hexdigest()}}
     assert comparison.one_trial(protocol, {'id': 't1', 'arm': arm})['arm'] == arm
 

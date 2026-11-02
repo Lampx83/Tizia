@@ -77,6 +77,6 @@ def test_other_variant_does_not_add_review_block(monkeypatch):
 def test_oversized_proposal_is_refused(monkeypatch, tmp_path, axes_on):
     path = tmp_path / 'SKILL.md'
     path.write_text(default_skills.REVIEW_AXES.read_text(encoding='utf-8') + 'x' * 2000, encoding='utf-8')
-    monkeypatch.setattr(default_skills, 'REVIEW_AXES', path)
+    monkeypatch.setitem(default_skills.VARIANTS, 'review-two-axes', path)
     with pytest.raises(ValueError):
         default_skills.review_axes_block()

@@ -103,7 +103,7 @@ const ok = (state, text) => `<span class="s-${state}">${esc(text)}</span>`;
 function eventState(e) {
   const t = `${e.event_type} ${e.transition || ''}`;
   if (/transient/.test(t)) return 'warn';
-  if (/blocked|critical|rejected|cancel|budget_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
+  if (/blocked|critical|rejected|cancel|budget_exhausted|root_allowance_exhausted|waiting_admin|rollback_failed/.test(t)) return 'bad';
   if (/waiting|review|clarif|rollback/.test(t)) return 'warn';
   return 'ok';
 }
@@ -295,7 +295,7 @@ async function authorizePlan(btn) {
 
 // ─── Hoàn tác / hủy: 2 bước xác nhận (đọc hậu quả → gõ số yêu cầu) ───
 const ADMIN_ACTION = { note: 'ghi chú', reject: 'từ chối', authorize_plan: 'cho phép kế hoạch', rerun_gate: 'chạy lại bước',
-  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng' };
+  rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng', acknowledge_data_step: 'xác nhận bước dữ liệu' };
 const managedLine = (m) => `<div class="meta" data-managed>${m
   ? `Phụ trách: <b>${esc(m.managed_by_name || '#' + m.managed_by)}</b> từ ${fmt(m.claimed_at)}${m.last_admin_id !== m.managed_by ? ` · gần nhất ${esc(m.last_admin_name || '#' + m.last_admin_id)}` : ''} · ${esc(ADMIN_ACTION[m.last_action] || m.last_action)} ${fmt(m.last_action_at)}`
   : 'Chưa có admin nào phụ trách; admin đầu tiên thao tác sẽ nhận yêu cầu.'}</div>`;
@@ -307,9 +307,11 @@ function renderActions(request, trace) {
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
   const canRetryTransient = root?.phase === 'transient_blocked';
   const canContinuePartial = root?.phase === 'partial';
-  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
+  const hit = root?.phase === 'root_allowance_exhausted' ? root.allowance?.hit : null;
+  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
+      ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng. Hạn mức cấu hình trong contract.json; đổi xong cần triển khai lại mới áp dụng, rồi bấm Chạy lại.</p>` : ''}
       ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
         title="Đã xong một phần plan; chạy nốt phần còn lại từ checkpoint, không lập plan mới">Tiếp tục phần còn lại</button>` : ''}
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
@@ -321,6 +323,9 @@ function renderActions(request, trace) {
     </div>
     ${ui.confirm ? renderConfirm(request, candidate) : ''}`;
 }
+
+const GROUP_LABEL = { model_calls: 'số lần gọi model', tool_calls: 'số lần gọi công cụ', tokens: 'token',
+  semantic_repairs: 'số lần tự sửa theo ngữ nghĩa', quality_switches: 'số lần đổi sang model chất lượng' };
 
 async function retryTransient(btn) {
   btn.disabled = true;
@@ -600,6 +605,40 @@ function resultBox(t, messages = []) {
   </div>`;
 }
 
+// Bước dữ liệu: admin tự áp payload (POST /api/admin/campus-layout/:domain) rồi ghi nhận; worker không ghi DB.
+function dataSteps(t) {
+  const rows = (t.children || []).filter((c) => c.layer === 'data' && Number(c.plan_revision) === Number(t.root.plan_revision));
+  if (!rows.length) return '';
+  const items = rows.map((c) => {
+    let spec = {};
+    try { spec = JSON.parse(c.description || '{}'); } catch { /* mô tả hỏng: vẫn hiện tiêu đề */ }
+    const payload = spec.payload;
+    const target = payload ? `POST /api/admin/campus-layout/${payload.domain}` : (spec.allowed_scope || []).join(', ');
+    const body = payload ? `<details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(payload.layout, null, 2))}</pre></details>` : '';
+    const action = c.status === 'waiting_data'
+      ? `<button class="btn ok" data-action="ack-data" data-root="${esc(t.root.id)}" data-child="${esc(c.id)}" data-title="${esc(c.title)}">Đã áp dụng, ghi nhận</button>`
+      : `<span class="meta">${c.status === 'done' ? 'Đã ghi nhận' : esc(c.status)}</span>`;
+    return `<li><b>${esc(c.title)}</b> <span class="meta">${code(target)}</span>${body}${action}</li>`;
+  }).join('');
+  return `<div class="g-result"><div class="g-caption">Bước dữ liệu cần quản trị viên</div><ul>${items}</ul>
+    <span class="meta" id="data-step-result" role="status" tabindex="-1">${esc(ui.dataMsg || '')}</span></div>`;
+}
+
+async function ackDataStep(btn) {
+  const yes = await askConfirm({ title: 'Đã áp dụng bước dữ liệu?', message: `${btn.dataset.title}. Các bước phụ thuộc sẽ chạy tiếp sau khi bạn xác nhận.`,
+    ok: 'Đã áp dụng, ghi nhận', cancel: 'Chưa' });
+  if (!yes) return;
+  btn.disabled = true;
+  try {
+    await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/data-steps/${encodeURIComponent(btn.dataset.child)}/acknowledge`, {});
+    ui.dataMsg = 'Đã ghi nhận bước dữ liệu; các bước phụ thuộc sẽ chạy ở lượt tới.';
+  } catch (e) {
+    ui.dataMsg = `Không ghi nhận được: ${errText(e)}`;
+  }
+  await refresh();
+  $('#data-step-result')?.focus();
+}
+
 function renderAiBoard(t, messages = []) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
@@ -613,6 +652,7 @@ function renderAiBoard(t, messages = []) {
       ${traceLine(t.trace_ref)}
       ${managedLine(root.managed)}
       ${renderWrites(t)}
+      ${dataSteps(t)}
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
     </div>`;
   const events = minimalEvents(t.events || []);
@@ -757,6 +797,7 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-ask') { ui.authorizeConfirm = btn.dataset.hash; ui.authorizeMsg = ''; ui.focus = '[data-action="authorize-close"]'; }
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; ui.focus = '[data-action="authorize-ask"]'; }
   else if (action === 'authorize-go') return authorizePlan(btn);
+  else if (action === 'ack-data') return ackDataStep(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
   else if (action === 'continue-partial') {
     btn.disabled = true;

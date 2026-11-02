@@ -84,42 +84,42 @@
     {
       "kind": "model_calls",
       "n": 0,
-      "expected": 10
+      "expected": 100
     },
     {
       "kind": "model_calls",
       "n": 1,
-      "expected": 22
+      "expected": 160
     },
     {
       "kind": "model_calls",
       "n": 2,
-      "expected": 34
+      "expected": 220
     },
     {
       "kind": "model_calls",
       "n": 3,
-      "expected": 46
+      "expected": 280
     },
     {
       "kind": "model_calls",
       "n": 5,
-      "expected": 70
+      "expected": 400
     },
     {
       "kind": "model_calls",
       "n": 10,
-      "expected": 130
+      "expected": 700
     },
     {
       "kind": "model_calls",
       "n": 11,
-      "expected": 130
+      "expected": 700
     },
     {
       "kind": "model_calls",
       "n": -2,
-      "expected": 10
+      "expected": 100
     }
   ]
 }

@@ -220,3 +220,9 @@ def test_shadow_mode_never_rejects(monkeypatch):
     assert (shadow["shadow"], shadow["escalate"], shadow["reject"]) == (True, False, False)
     monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")
     assert classifier.danger("x", None, None, gate=1)["reject"] is True
+
+
+def test_static_prefix_is_empty_for_a_task_name_without_prompt_file():
+    from runtime import pipeline
+    assert pipeline._static_prefix("classifier_danger") == ""
+    assert pipeline._static_prefix(None) == ""

@@ -12,6 +12,21 @@ if str(HARNESS_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
+def _fresh_settings():
+    import settings
+    settings.reset_settings()
+    yield
+    settings.reset_settings()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_intake_cache():
+    from gates import intake_guard
+    intake_guard._CACHE.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _no_repomap(monkeypatch, request):
     """repomap.related dựng chỉ mục cả public/ (~20 s/process): mọi test mặc định nhận [] — test của repomap
     tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""

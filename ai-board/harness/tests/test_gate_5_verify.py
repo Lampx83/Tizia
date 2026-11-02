@@ -815,3 +815,38 @@ def test_http_probe_login_retry_cannot_forward_student_cookie_to_redirects(monke
     response.url = 'http://outside/login.html'
     with pytest.raises(RuntimeError, match='outside disposable app origin'):
         REAL_HTTP_PROBE('http://candidate/404.html', token='synthetic-student')
+
+
+ORACLE_FAIL = {"probe_id": "text-visible-v1", "passed": False, "reason": "Chữ không hiển thị", "observations": {"expected": "x"}}
+
+
+def _defer_state(tmp_path, *, detail="Kiểm tra: node --test test/generated.test.js", acceptance=("node --test test/generated.test.js",)):
+    return {**state(checkout(tmp_path)), "request_detail": detail, "acceptance": list(acceptance)}
+
+
+def test_oracle_fail_with_user_acceptance_generated_tests_and_smoke_green_is_needs_review(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(ORACLE_FAIL))
+    out = verify.run(_defer_state(tmp_path), runner=FakeRunner())
+    assert out["blocked"] is False
+    assert out["evidence"]["functional"]["needs_review"] is True and out["evidence"]["functional"]["oracle_passed"] is False
+    assert "needs_review" in out["evidence"]["text"]
+
+
+def test_oracle_fail_still_blocks_without_user_stated_acceptance_or_when_acceptance_fails(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(ORACLE_FAIL))
+    for index, kwargs in enumerate(({"detail": "không nêu lệnh"}, {"acceptance": ()})):
+        (tmp_path / str(index)).mkdir()
+        assert verify.run(_defer_state(tmp_path / str(index), **kwargs), runner=FakeRunner())["blocked"] is True
+    (tmp_path / "x").mkdir()
+    infra = {"probe_id": "text-visible-v1", "passed": False, "reason": "Session fixture unavailable"}
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(infra))
+    assert verify.run(_defer_state(tmp_path / "x"), runner=FakeRunner())["blocked"] is True
+
+
+def test_oracle_defers_needs_generated_tests_and_smoke():
+    s = {"request_detail": "node --test t.js"}
+    assert verify.oracle_defers(s, ["node --test t.js"], True, True, ORACLE_FAIL) is True
+    assert verify.oracle_defers(s, ["node --test t.js"], False, True, ORACLE_FAIL) is False
+    assert verify.oracle_defers(s, ["node --test t.js"], True, False, ORACLE_FAIL) is False

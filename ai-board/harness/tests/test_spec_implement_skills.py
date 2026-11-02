@@ -42,3 +42,8 @@ def test_selection_unchanged_with_skills_off(text):
 
 def test_existing_skill_still_selected():
     assert context.pick_skill('đổi màu chữ tiêu đề sang xanh dương', None, 'public/school.css').name == 'edit-css-style'
+
+
+def test_plan_skill_sits_in_gate1_and_slice_skill_in_gate3_only():
+    assert set(context.SKILLS['plan-from-request'].sections) == {1}
+    assert set(context.SKILLS['implement-one-slice'].sections) == {3}

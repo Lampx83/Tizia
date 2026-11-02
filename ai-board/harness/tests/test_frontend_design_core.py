@@ -38,3 +38,16 @@ def test_selection_unchanged_with_skill_disabled(text, monkeypatch):
 def test_lock_hash_matches_file():
     lock = json.loads((SKILL.parent.parent / 'skills.lock.json').read_text(encoding='utf-8'))
     assert lock[NAME] == hashlib.sha256(SKILL.read_bytes()).hexdigest()
+
+
+def test_gate3_covers_a11y_and_copy_rules():
+    text = context.SKILLS[NAME].sections[3].lower()
+    for term in ('focus', 'keyboard', 'em dash'):
+        assert term in text
+
+
+def test_machine_checked_rules_map_to_existing_gates():
+    root = Path(__file__).resolve().parents[1]
+    assert 'low_contrast' in (root / 'gates' / 'guard.py').read_text(encoding='utf-8')
+    assert 'overflow' in (root / 'gates' / 'visual.py').read_text(encoding='utf-8')
+    assert 'focus' in (root / 'gates' / 'verify.py').read_text(encoding='utf-8')

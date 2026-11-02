@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import copy
-import os
 import hashlib
 import json
 import posixpath
@@ -23,6 +22,7 @@ from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_c
 from runtime.budget import Budget
 from runtime import tool_loop
 from runtime.pipeline import Deps
+from settings import get_settings
 
 MODES = ("e2e", "gold", "e2e:nodia", "e2e:approved")  # e2e:nodia = request typed without diacritics; e2e:approved = a gate 1/2/2.5 block is treated as admin-approved and gate 3 still runs
 
@@ -180,7 +180,7 @@ def _plan_stage(task: dict, repo, deps: RecordingDeps, budget: Budget, variant: 
              "first_plans_new_page": False, "first_extra": 0, "blocked": False, "validator_blocked": False, "validator_reason": None,
              "final_hit": False, "final_exact": False, "final_files": [], "reason": None, "approved": "approved" in (variant or "").split("+")}
     request = request_of(task, variant)
-    if os.environ.get("AI_BOARD_GATE25_SIM_USER") == "1" and gold:  # ceiling run: the requester names the page when asked
+    if get_settings().gate25_sim_user and gold:  # ceiling run: the requester names the page when asked
         request = {**request, "_simulated_answer": f"Chỉ sửa {gold[0]}, đúng như yêu cầu ở trên; không sửa trang nào khác."}
     deps.capture["phase"] = "planning"
     out = brainstorm.run(request, deps, budget, source=repo, sha=sha)

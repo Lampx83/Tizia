@@ -7,8 +7,10 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from settings import get_settings
+
 CONTRACT_PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
-_FLOAT_KEYS = {"wall_clock_s", "child_wall_clock_s"}
+_FLOAT_KEYS = {"wall_clock_s", "child_wall_clock_s", "node_wall_clock_s"}
 
 
 def truthy(raw) -> bool:
@@ -61,11 +63,10 @@ def loop(env=None) -> dict:
 
 def loop_adaptive(env=None) -> dict:
     """Soft budget + stuck rules for the tool loop; flag AI_BOARD_ADAPTIVE_BUDGET (contract default) gates their use."""
-    env = os.environ if env is None else env
     spec = _parsed()["limits"]["loop"]
-    raw = env.get(spec["flag"])
+    flag = get_settings(env).adaptive_budget
     return {
-        "enabled": spec["default_enabled"] if raw in (None, "") else truthy(raw),
+        "enabled": spec["default_enabled"] if flag is None else flag,
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],
@@ -75,11 +76,10 @@ def loop_adaptive(env=None) -> dict:
 
 def react_plan(env=None) -> dict:
     """Gate 2 ReAct loop caps + stuck rules; flag AI_BOARD_REACT_PLAN (contract default) gates use."""
-    env = os.environ if env is None else env
     spec = _parsed()["limits"]["react_plan"]
-    raw = env.get(spec["flag"])
+    flag = get_settings(env).react_plan
     return {
-        "enabled": spec["default_enabled"] if raw in (None, "") else truthy(raw),
+        "enabled": spec["default_enabled"] if flag is None else flag,
         "model_calls": spec["model_calls"],
         "tool_calls": spec["tool_calls"],
         "observation_chars": spec["observation_chars"],
@@ -113,9 +113,8 @@ def sandbox_client() -> dict:
 
 def sandbox_tool(env=None) -> dict:
     """run_in_sandbox limits; enabled only when flag env == "1" (contract default off)."""
-    env = os.environ if env is None else env
     spec = _parsed()["limits"]["sandbox_tool"]
-    return {**spec, "enabled": truthy(env.get(spec["flag"])), "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
+    return {**spec, "enabled": get_settings(env).sandbox_tool, "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
 
 
 def scaled_limit(kind: str, n: int) -> int:
@@ -124,3 +123,17 @@ def scaled_limit(kind: str, n: int) -> int:
     spec = limits["per_run"][kind]
     count = min(max(int(n or 0), 0), limits["max_subtasks_per_run"])
     return min(spec["base"] + spec["per_subtask"] * count, spec["max"])
+
+
+def run_wall_clock_s(n: int, *, local: bool) -> float:
+    """Trần giây cả run theo số subtask n; vllm/ollama (local) = base + node_wall_clock_s·n, api = scaled_limit."""
+    if not local:
+        return float(scaled_limit("wall_clock_s", n))
+    spec = _parsed()["limits"]["local_wall_clock_s"]
+    count = min(max(int(n or 0), 0), _parsed()["limits"]["max_subtasks_per_run"])
+    return float(min(spec["base"] + _parsed()["limits"]["budget"]["node_wall_clock_s"] * count, spec["max"]))
+
+
+def loop_guard() -> dict:
+    """Ngưỡng chống vòng lặp: lặp hash trạng thái, tương đồng sửa, cửa sổ topology, trần an toàn số vòng sửa."""
+    return dict(_parsed()["limits"]["loop_guard"])

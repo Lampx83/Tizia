@@ -39,7 +39,6 @@ guardrail nội dung).
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -48,7 +47,9 @@ import context
 import code_index
 import file_context
 from dbconn import harness_db
-from gates import best_match, evidence
+from gates import best_match, evidence, grounding_paths
+from runtime import coverage
+from settings import DEFAULT_GATE25_FIXES, get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
@@ -161,6 +162,8 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
     files = {}
     chunks = [state.get('planning_context') or '']
     tasks = list(plan.get('subtasks') or []) + [{'file': path} for path in state.get('source_targets') or []]
+    named = coverage.requested_paths("\n".join(str(request.get(key) or "") for key in ("subject", "body", "detail")))
+    tasks += [{'file': path} for path in named if path not in {str(task.get('file') or '') for task in tasks}]
     for task in tasks:
         path = str(task.get('file') or '')
         if not path.startswith(('public/', 'server/contexts/_ai-generated/', 'ai-board/harness/skills/', 'ai-board/harness/prompts/')) or '..' in Path(path).parts:
@@ -223,12 +226,12 @@ def _squash(text: str) -> str:
 
 
 _QUOTE_CHARS = re.compile('["`‘’“”]')
-DEFAULT_FIXES = ""
+DEFAULT_FIXES = ",".join(sorted(DEFAULT_GATE25_FIXES))
 
 
 def fixes() -> set[str]:
     """Gate 2.5 patches on: AI_BOARD_GATE25_FIXES comma list; unset or empty = none."""
-    return {f.strip() for f in os.environ.get("AI_BOARD_GATE25_FIXES", DEFAULT_FIXES).split(",") if f.strip()}
+    return set(get_settings().gate25_fixes)
 
 
 def _fold(text: str) -> str:
@@ -290,7 +293,15 @@ def feature_request(request: dict) -> bool:
     return request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
 
 
-def filled_grounding(validation: dict, plan: dict, files: dict) -> list:
+class Mismatch(ValueError):
+    """Grounding sai chứng minh được; `evidence` = {item, target, file, quote, why} cho vết chặn."""
+
+    def __init__(self, message, **evidence):
+        super().__init__(message)
+        self.evidence = {'why': message, **evidence}
+
+
+def filled_grounding(validation: dict, plan: dict, files: dict, asserted: bool = False) -> list:
     """Grounding records for every subtask. A new file has no source line to quote, so the harness can state
     its before/after/verify from the subtask itself; an existing file still needs the validator's own record."""
     records = validation.get('grounding')
@@ -299,6 +310,11 @@ def filled_grounding(validation: dict, plan: dict, files: dict) -> list:
     for index, task in enumerate(plan.get('subtasks') or []):
         record = records[index] if index < len(records) and isinstance(records[index], dict) else {}
         if task['file'] in files:
+            if asserted and not record.get('file') and not record.get('target') and not record.get('quote'):
+                # Validator gave no record: nothing is provably wrong, so the harness states it and flags it unverified.
+                record = {'target': task['file'], 'file': task['file'], 'quote': '', 'unverified': True,
+                          'before': 'chưa xác minh bằng trích dẫn', 'after': str(task.get('title') or ''),
+                          'verify': str(task.get('verify') or '')}
             filled.append(record)
             continue
         filled.append({'target': task['file'], 'file': task['file'], 'quote': str(record.get('quote') or ''),
@@ -312,13 +328,26 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
     """Dẫn chứng hành vi cho từng subtask. File mới (chưa có ở base) không có dòng nguồn nào để trích:
     chấp nhận `quote` rỗng khi before/after/verify đã nêu; nếu có trích từ file mẫu có thật thì vẫn kiểm khớp."""
     records = validation.get('grounding')
-    if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
+    if not sha or not validation['grounded'] or not isinstance(records, list):
         raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
+    # Records identify their subtask by the file they quote; a model that adds a new file leaves that task
+    # without a record, and the harness states it as unverified instead of shifting every later record.
+    by_file = {}
+    for record in records:
+        if isinstance(record, dict):
+            for name in (record.get('file'), record.get('target')):
+                if isinstance(name, str) and name:
+                    by_file.setdefault(name, record)
     clean = []
-    for task, evidence in zip(plan['subtasks'], records):
-        # `target` is free text for the model (often the subtask title); the file it quotes is what identifies the evidence
-        if not isinstance(evidence, dict) or task['file'] not in (evidence.get('target'), evidence.get('file')):
-            raise ValueError('dẫn chứng không khớp file dự định sửa')
+    for index, task in enumerate(plan['subtasks']):
+        evidence = by_file.get(task['file'])
+        if evidence is None:
+            if task['file'] in files:
+                raise Mismatch('dẫn chứng không khớp file dự định sửa', item=task['file'], target=None,
+                               file=None, quote='')
+            evidence = {'target': task['file'], 'file': task['file'], 'quote': '', 'unverified': True,
+                        'before': 'chưa có file', 'after': str(task.get('title') or ''),
+                        'verify': str(task.get('verify') or '')}
         file = evidence.get('file')
         quote = evidence.get('quote')
         cut_at_cap = isinstance(quote, str) and len(quote) >= _QUOTE_MAX
@@ -335,18 +364,32 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
             # check; a quote is only accepted when it comes from a pattern file that really exists at the base.
             file = file or task['file']  # the record always names a file: the board's plan policy requires it
             if isinstance(quote, str) and quote.strip():
-                if file not in files or not _quoted_in(quote, files[file]):
+                if file == task['file'] and file not in files:  # quote "from" the file being created: nothing to verify, evidence only
+                    quote = ''
+                    evidence = {**evidence, 'quote': ''}
+                elif file not in files or not _quoted_in(quote, files[file]):
                     raise ValueError(f'{task["file"]}: trích dẫn mẫu không có trong {file or "(file mới)"}')
             if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
                 raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
             clean.append({**{key: str(evidence.get(key) or '')[:1200] for key in ('quote', 'before', 'after', 'verify')},
                           'file': file, 'target': task['file']})
             continue
+        if task['file'] in files and evidence.get('unverified'):
+            clean.append({**{key: str(evidence.get(key) or '')[:1200] for key in ('quote', 'before', 'after', 'verify')},
+                          'file': task['file'], 'target': task['file']})
+            continue
         if task['file'] in files and file != task['file']:
-            raise ValueError('trích dẫn phải thuộc file hiện có dự định sửa')
+            raise Mismatch('trích dẫn phải thuộc file hiện có dự định sửa', item=task['file'], target=evidence.get('target'),
+                           file=file, quote=str(quote or '')[:200])
         if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
                 or not _quoted_in(quote, files.get(file, ''))):  # models join source lines: compare content, not layout
-            raise ValueError(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn')
+            if 'advquote' in fixes() and all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ('before', 'after', 'verify')):
+                by_file.get(task['file'], evidence)['unverified'] = True  # target file is verified: a rewritten quote is the validator's flaw, not the plan's
+                clean.append({**{key: str(evidence[key])[:1200] for key in ('before', 'after', 'verify')}, 'quote': '',
+                              'file': task['file'], 'target': task['file']})
+                continue
+            raise Mismatch(f'{task["file"]}: không tìm thấy trích dẫn hành vi trong code nguồn', item=task['file'],
+                           target=evidence.get('target'), file=file, quote=str(quote or '')[:200])
         if any(not isinstance(evidence.get(key), str) or not evidence[key].strip() for key in ('before', 'after', 'verify')):
             raise ValueError('thiếu hành vi trước/sau hoặc tiêu chí kiểm chứng')
         clean.append({**{key: evidence[key][:1200] for key in ('file', 'quote', 'before', 'after', 'verify')}, 'target': task['file']})  # server matches target against the step's allowed_scope
@@ -433,7 +476,7 @@ def write_clarification(db_path, request: dict, question: str) -> None:
 
 def answered_on() -> bool:
     """AI_BOARD_GATE25_ANSWERED truthy: a clarification answerable by a verbatim request/source quote is answered, validator reruns."""
-    return os.environ.get("AI_BOARD_GATE25_ANSWERED", "").strip().lower() in {"1", "true", "yes", "on"}
+    return get_settings().gate25_answered
 
 
 _WORD = re.compile(r"\w{3,}")
@@ -489,14 +532,54 @@ def _assumable(plan: dict, validation: dict, request: dict) -> bool:
             and bool(validation.get("grounded")) and request.get("type") != "feature" and not complexity_signals(plan))
 
 
+_CODE_QUESTION = re.compile(r"[\w./-]+\.(?:html|js|mjs|css|json|py|md)\b|\b(?:repo|codebase|selector|endpoint|building id|gx|gy|tọa độ|mã nguồn)\b", re.I)
+
+
+def clarify_limit() -> int:
+    """Trần vòng hỏi: limits.clarify.questions của contract.json."""
+    path = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
+    return int(json.loads(path.read_text(encoding="utf-8"))["limits"]["clarify"]["questions"])
+
+
+def rounds_asked(request: dict) -> int:
+    """Số câu hỏi làm rõ cổng 2.5 đã gửi (tin nhắn admin trong thread)."""
+    return sum(1 for item in request.get("thread") or [] if isinstance(item, dict) and item.get("role") == "admin")
+
+
+def asks_about_code(question: str | None) -> bool:
+    """Question names a file path or code detail: the student cannot answer it, the plan decides."""
+    return bool(question and _CODE_QUESTION.search(question))
+
+
 def _uncertain(validation: dict) -> bool:
     """The non-thinking validator did not clear the plan: unclear request or no verified grounding."""
     return not validation['clear'] or not validation.get('grounded')
 
 
+_EXISTS_CLAIM = re.compile(r"đã (?:có|tồn tại)|tương tự|already exists?|similar", re.I)
+
+
+_NOT_IN_DATA = re.compile(r'không (?:có|thấy|tìm thấy)[^.]{0,40}REPO DATA|not (?:in|found in) REPO DATA', re.I)
+
+
+def retrieval_miss(validation: dict, files: dict) -> list[str]:
+    """Files the validator calls absent from REPO DATA although they were loaded: a retrieval fault, not an objection to the plan."""
+    reason = str(validation.get('reason') or '')
+    return [path for path in files if _NOT_IN_DATA.search(reason) and path in reason]
+
+
 def objection_advisory(validation: dict, files: dict) -> str | None:
     """Note when grounded=false has no verified citation (gate 2.5 does not block on it); None when it is verified."""
-    if validation.get('grounded') or evidence.verified(validation.get('objection'), files):
+    if validation.get('grounded'):
+        return None
+    missed = retrieval_miss(validation, files)
+    if missed:
+        return f"lỗi truy xuất, không phải phản đối plan: validator báo thiếu trong REPO DATA nhưng file có trong dữ liệu: {', '.join(missed)}"
+    verified = evidence.verified(validation.get('objection'), files)
+    if verified:
+        claim = str((validation.get('objection') or {}).get('claim') or '')
+        if _EXISTS_CLAIM.search(claim) and not grounding_paths.similar_basis(claim, {item['file'] for item in verified}, files):
+            return f"khẳng định 'đã có tương tự' không đạt ngưỡng BM25 trên repo, cổng 2.5 không chặn: {claim[:200]}"
         return None
     return f"grounded=false không có trích dẫn kiểm chứng được, cổng 2.5 không chặn: {str(validation.get('reason') or '')[:200]}"
 
@@ -564,6 +647,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     validation, stop = validate(request)
     if stop:
         return stop
+    if not validation['clear'] and asks_about_code(validation.get('question')):
+        state['assumption'] = validation['question']
+        judge('code question dropped', True, validation['question'])
+        validation = {**validation, 'clear': True, 'question': None}
     anchored = bool(request.get('grounding_required')) and target_anchored(plan, files, request)
     if anchored and not validation['clear'] and validation.get('grounded'):
         judge('target anchored', True, 'anchors verified in plan files; clarification not raised')
@@ -608,6 +695,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         state["assumption"] = validation["question"] or validation.get("reason") or "spec đã làm rõ"
         judge("clarified spec", True, state["assumption"])
         validation = {**validation, "clear": True}
+    if not validation["clear"] and rounds_asked(request) >= clarify_limit():
+        state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
+        judge("clarify limit", True, state["assumption"])
+        validation = {**validation, "clear": True}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
@@ -615,6 +706,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification",
                 "public_message": question}
 
+    # An objection we could not verify leaves the plan running without records; a bare grounded=false
+    # with no objection, or a veto backed by verified evidence, keeps blocking at source grounding.
+    objection = validation.get('objection')
+    asserted = bool(validation.get('grounded')) or bool(objection) and not evidence.verified(objection, files)
     note = objection_advisory(validation, files)
     if note:
         # Unverifiable objection: the plan goes on, the admin sees the note in the trace.
@@ -623,7 +718,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         validation = {**validation, 'grounded': True}
 
     if request.get('grounding_required'):
-        validation = {**validation, 'grounding': filled_grounding(validation, plan, files)}
+        validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
         try:
             import functional
             targets = {task['file'] for task in plan['subtasks']}
@@ -650,10 +745,15 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                    contradicted=contradicted)
             state['grounding'] = checked_grounding(validation, plan, sha, files)
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
+            unverified = [r['file'] for r in validation['grounding'] if r.get('unverified')]
+            if unverified:
+                state['validator_note'] = 'validator không đưa trích dẫn khớp cho: ' + ', '.join(unverified) + ' (cổng 2.5 không chặn)'
+                judge('unverified grounding', False, state['validator_note'])
         except ValueError as error:
             judge("source grounding", False, str(error))
             return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
-                    'signals': [str(error)], 'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
+                    'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
+                    'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
 
     signals = complexity_signals(plan)
     if request.get("complexity_by_server"):

@@ -1,4 +1,5 @@
 """Cổng 1 (plan) + cổng 2 (scope-check). Model fake ở biên I/O, không Ollama thật."""
+import dataclasses
 import pytest
 
 from budget import Budget
@@ -58,7 +59,7 @@ def test_non_string_capability_is_blocked():
 # ── cổng 1: schema plan ──────────────────────────────────────────────────────
 
 def test_brainstorm_returns_validated_plan_and_charges_budget(request_item):
-    deps = deps_with(plan_with(["features"]))
+    deps = dataclasses.replace(deps_with(plan_with(["features"])), provider="api")
     budget = Budget(max_wall_clock_s=999)
 
     out = brainstorm.run(request_item, deps, budget)

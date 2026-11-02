@@ -226,6 +226,8 @@ test('folder brief: purpose, flow, done, requested, owned files and recent reque
   assert.match(brief.text, /Luồng người dùng: bấm Bắt đầu/);
   assert.match(brief.text, /Đang yêu cầu:\n- Thêm bảng điểm cuối ván/);
   assert.match(brief.text, /Đã làm \(mới nhất trước\):\n- Trò đoán từ khoá/);
+  assert.doesNotMatch(brief.text, /· trang:/);  // no page path invented from the folder slug
+  assert.doesNotMatch(brief.text, /js\/features\//);
   assert.deepEqual(brief.owned_files, ['public/tro-doan-tu.html']); // test files are not owned
   assert.match(brief.recent, /\[#2\] Thêm bảng điểm cuối ván/);
   assert.ok(brief.text.length <= LIMITS.context.brief_chars && brief.recent.length <= LIMITS.context.recent_chars);

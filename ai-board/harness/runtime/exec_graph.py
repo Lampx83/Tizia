@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import json
 import operator
-import os
+import time
 from pathlib import Path
 from typing import Annotated, Callable, TypedDict
 
-from runtime import limits
+from langchain_core.runnables import RunnableConfig
+
+from runtime import limits, loop_guard
+from settings import get_settings
 
 PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
 
@@ -17,20 +20,25 @@ def spec() -> dict:
 
 
 def persistence_enabled() -> bool:
-    return limits.truthy(os.environ.get("AI_BOARD_GRAPH_PERSISTENCE"))
+    return get_settings().graph_persistence
 
 
 class GraphState(TypedDict, total=False):
     outcome: str
     path: Annotated[list, operator.add]
+    hashes: Annotated[list, operator.add]
+    halt: str
 
 
 class GraphError(RuntimeError):
     """The spec and the handlers disagree, or a node reported an outcome the spec has no edge for."""
 
 
-def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, checkpointer=None):
-    """Every reachable node but a bare end node needs a handler; every outcome a handler returns needs an edge."""
+def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, checkpointer=None,
+                  observe: dict[str, Callable[[], tuple | None]] | None = None, report: dict | None = None):
+    """Every reachable node but a bare end node needs a handler; every outcome a handler returns needs an edge.
+    `observe[node]` returns (code, error, signature) before the node runs; a state seen again skips the node and halts the walk.
+    `report` receives {reason, node, detail} of the halt; a halt routes to the verdict node (or the end when there is none)."""
     from langgraph.graph import END, START, StateGraph
 
     graph_spec = graph_spec or spec()
@@ -52,15 +60,48 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
     if missing or extra:
         raise GraphError(f"handlers do not match the graph: missing {sorted(missing)}, extra {sorted(extra)}")
 
+    guard = limits.loop_guard()
+    observe = observe or {}
+    report = report if report is not None else {}
+
+    def halt_at(nid: str, reason: str, detail: str) -> dict:
+        report.update(reason=reason, node=nid, detail=detail)
+        return {"halt": reason}
+
     def make(nid: str):
-        def node(_state: GraphState) -> GraphState:
-            return {"outcome": handlers[nid](), "path": [nid]}
+        def node(state: GraphState, config: RunnableConfig) -> GraphState:
+            from runtime import budget
+
+            seconds = (config.get("configurable") or {}).get("node_wall_clock_s")
+            seconds = limits.budget()["node_wall_clock_s"] if seconds is None else seconds
+            if nid in observe and (material := observe[nid]()) is not None:
+                digest = loop_guard.state_hash(*material)
+                if loop_guard.repeated(state.get("hashes") or [], digest, guard["repeat_state_count"]):
+                    detail = f"same code, error and signature seen {guard['repeat_state_count']} times before {nid}"
+                    return {"path": [nid], **halt_at(nid, loop_guard.REASON_STATE_REPEAT, detail)}
+                hashed = {"hashes": [digest]}
+            else:
+                hashed = {}
+            started = time.monotonic()
+            budget.start_node(seconds)
+            try:
+                update = {"outcome": handlers[nid](), "path": [nid], **hashed}
+            finally:
+                budget.start_node(None)
+            elapsed = time.monotonic() - started
+            if "gate" in nodes[nid] and seconds and elapsed >= seconds:
+                update.update(halt_at(nid, loop_guard.REASON_NODE_TIMEOUT, f"{nid} ran {elapsed:.0f}s of {seconds:.0f}s"))
+            return update
         return node
+
+    halt_target = next((t for t in ("verdict",) if t in work), END)
 
     def router(nid: str):
         def route(state: GraphState) -> str:
             if nodes[nid].get("end"):
                 return END
+            if state.get("halt"):
+                return halt_target
             outcome = state.get("outcome")
             if outcome not in routes[nid]:
                 raise GraphError(f"node {nid} reported {outcome!r}; the graph has no such edge")
@@ -79,18 +120,21 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 
 
 def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None,
-        checkpointer=None, thread_id: str | None = None) -> list[str]:
+        checkpointer=None, thread_id: str | None = None, observe: dict | None = None, report: dict | None = None) -> list[str]:
     """Walk the graph from `entry`; return the executed node path including the end node reached.
+    `observe`/`report`: see compile_graph; the node time budget travels in config["configurable"].
     With `checkpointer` + `thread_id` each node's progress is saved; the thread is purged first, so a
     rerun re-enters from `entry` (resume is the caller's replay of tool steps, not a graph jump)."""
     from langgraph.errors import GraphRecursionError
 
     graph_spec = graph_spec or spec()
-    compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer)
-    config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80))}
+    compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer,
+                                           observe=observe, report=report)
+    config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80)),
+              "configurable": {"node_wall_clock_s": limits.budget()["node_wall_clock_s"]}}
     if checkpointer is not None:
         checkpointer.purge(thread_id)
-        config["configurable"] = {"thread_id": thread_id, "checkpoint_ns": ""}
+        config["configurable"].update(thread_id=thread_id, checkpoint_ns="")
     payload = {"path": []}
     try:
         final = compiled.invoke(payload, config=config)

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
@@ -13,6 +13,11 @@ import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { planOf } from './support/ai-board-scenarios.js';
 import { LIMITS } from '../server/ai-board/repositories/store-contract.js';
 
+const SAVED = JSON.stringify([LIMITS.root_work, LIMITS.root_work_scaling]);
+// Limits live in contract.json: tests narrow them in-process, scaling off so the cap is exactly the value set.
+const setContract = limits => { restoreContract(); Object.assign(LIMITS.root_work, limits); for (const c of Object.values(LIMITS.root_work_scaling)) if (typeof c === 'object') c.per_step = 0; };
+const restoreContract = () => { const [work, scaling] = JSON.parse(SAVED); Object.assign(LIMITS.root_work, work); for (const k in scaling) if (typeof scaling[k] === 'object') Object.assign(LIMITS.root_work_scaling[k], scaling[k]); };
+afterEach(restoreContract);
 const KEY = 'fixture-root-allowance-worker-key';
 async function fixture({ dropReserveAck = false, delayReserveAckMs = 0 } = {}) {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'pharmacy'], [2, 'minh', 'Minh', 'student', 'pharmacy']] });
@@ -77,7 +82,7 @@ test('a crashed model attempt stays charged across takeover and a new planning r
       ['test/support/root-allowance-worker-probe.py', f.origin, String(a.id), 'allowance-a', a.lease_token, '--crash-after-reserve'], { timeout: 15000 }),
     error => error.code === 73);
     const reserved = await f.post(a.id, 'read', leaseA);
-    assert.deepEqual(reserved.body.used, { model_calls: 1, tool_calls: 0, tokens: 32768, semantic_repairs: 0, quality_switches: 0 });
+    assert.deepEqual(reserved.body.used, { model_calls: 1, tool_calls: 0, tokens: 32768, metered_tokens: 0, semantic_repairs: 0, quality_switches: 0 });
     await f.db.d.run('UPDATE ai_tickets SET lease_expires_at=0 WHERE id=?', [a.id]); // Crash/lease expiry injection.
     const b = await f.store.claimNext({ workerId: 'allowance-b', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     assert.equal(b.id, a.id);
@@ -146,9 +151,10 @@ test('denied model admission is not recorded as a sent model call in the phase b
     const lease = leaseOf(ticket, 'no-model-admission');
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'earlier-unknown-attempt',
       kind: 'model', provider: 'vllm', token_bound: 199500 })).status, 200);
+    setContract({ model_calls: 1 }); // local tokens are free: denial comes from the model-call cap
     const result = await promisify(execFile)(VENV_PYTHON,
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'no-model-admission', ticket.lease_token, '--expect-admission-denied'], { timeout: 30000 });
-    assert.deepEqual(JSON.parse(result.stdout), { model_requests: 0, planner_calls: 0, error: 'root_allowance_exhausted' });
+    assert.deepEqual(JSON.parse(result.stdout), { model_requests: 0, planner_calls: 0, error: 'budget exhausted before model call (request token bound): root_model_calls' });
     const current = (await f.post(ticket.id, 'read', lease)).body;
     assert.equal(current.used.model_calls, 1);
     assert.equal(current.used.tokens, 199500);
@@ -199,7 +205,7 @@ test('real worker transport shares root spend across a failed HTTP attempt, plan
       ['test/support/root-allowance-worker-probe.py', f.origin, String(ticket.id), 'whole-trial', ticket.lease_token], { timeout: 30000 });
     assert.deepEqual(JSON.parse(result.stdout), { model_requests: 3, planner_calls: 2, editing_calls: 1 });
     const current = (await f.post(ticket.id, 'read', leaseOf(ticket, 'whole-trial'))).body;
-    assert.deepEqual(current.used, { model_calls: 3, tool_calls: 1, tokens: 1060, semantic_repairs: 3, quality_switches: 1 });
+    assert.deepEqual(current.used, { model_calls: 3, tool_calls: 1, tokens: 1060, metered_tokens: 0, semantic_repairs: 3, quality_switches: 1 });
     assert.equal(current.by_provider.vllm.tokens_in, 22);
     assert.equal(current.by_provider.vllm.missing.tokens_in, 1);
   } finally { await f.close(); }
@@ -239,7 +245,7 @@ test('concurrent requests cannot both consume the last root model slot', async (
   try {
     const ticket = await f.store.claimNext({ workerId: 'last-slot', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'last-slot');
-    for (let n = 0; n < 39; n++) {
+    for (let n = 0; n < LIMITS.root_work.model_calls - 1; n++) {
       const idempotency_key = `known-model-${n}`;
       assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'vllm', token_bound: 1 })).status, 200);
       assert.equal((await f.post(ticket.id, 'settle', { ...lease, idempotency_key, metrics: { tokens_in: 0, tokens_out: 0 } })).status, 200);
@@ -248,7 +254,7 @@ test('concurrent requests cannot both consume the last root model slot', async (
       f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'api', token_bound: 1 })));
     assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
     const current = (await f.post(ticket.id, 'read', lease)).body;
-    assert.equal(current.used.model_calls, 40);
+    assert.equal(current.used.model_calls, LIMITS.root_work.model_calls);
     assert.equal(current.used.tokens, 1);
     assert.equal(current.by_provider.api.gpu_ms, null);
     assert.equal(current.by_provider.api.missing.gpu_ms, 1);
@@ -261,15 +267,34 @@ test('unknown token usage cannot refund a root reservation and invalid metrics c
     const ticket = await f.store.claimNext({ workerId: 'unknown-usage', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'unknown-usage');
     const idempotency_key = 'unknown-full-token-reservation';
-    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'vllm', token_bound: 200000 })).status, 200);
+    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key, kind: 'model', provider: 'api', token_bound: 200000 })).status, 200);
     assert.equal((await f.post(ticket.id, 'settle', { ...lease, idempotency_key, metrics: { tokens_in: -1 } })).status, 400);
     const missing = await f.post(ticket.id, 'settle', { ...lease, idempotency_key, metrics: { wall_ms: 12 } });
     assert.equal(missing.body.used.tokens, 200000);
-    assert.equal(missing.body.by_provider.vllm.tokens_in, null);
-    const denied = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'retry-after-unknown', kind: 'model', provider: 'ollama', token_bound: 1 });
+    assert.equal(missing.body.by_provider.api.tokens_in, null);
+    const denied = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'retry-after-unknown', kind: 'model', provider: 'api', token_bound: 1 });
     assert.equal(denied.status, 409);
     assert.equal(denied.body.error, 'root_allowance_exhausted');
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'tool-after-exhaustion', kind: 'tool' })).status, 409);
+  } finally { await f.close(); }
+});
+
+test('vllm and ollama reservations are not capped by root tokens, api reservations are', async () => {
+  const f = await fixture();
+  try {
+    const ticket = await f.store.claimNext({ workerId: 'local-free', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
+    const lease = leaseOf(ticket, 'local-free');
+    await f.post(ticket.id, 'read', lease);
+    setContract({ tokens: 1000 });
+    for (const [i, provider] of ['vllm', 'ollama', 'vllm'].entries()) {
+      const ok = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: `local-free-${i}`, kind: 'model', provider, token_bound: 5000 });
+      assert.equal(ok.status, 200, provider);
+      assert.equal(ok.body.used.metered_tokens, 0);
+    }
+    assert.equal((await f.post(ticket.id, 'read', lease)).body.used.tokens, 15000);
+    const paid = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'paid-api', kind: 'model', provider: 'api', token_bound: 5000 });
+    assert.equal(paid.status, 409);
+    assert.equal(paid.body.reason, 'root_tokens_reserve');
   } finally { await f.close(); }
 });
 
@@ -279,12 +304,11 @@ test('each root budget denial names the one limit it hit and keeps the legacy er
     const ticket = await f.store.claimNext({ workerId: 'reason-codes', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'reason-codes');
     await f.post(ticket.id, 'read', lease);
-    const setLimits = limits => f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, ...limits }), ticket.id]);
+    const setLimits = limits => setContract(limits);
     const cases = [
       ['root_model_calls', { model_calls: 0 }, { kind: 'model', provider: 'vllm', token_bound: 1 }],
       ['root_tool_calls', { tool_calls: 0 }, { kind: 'tool' }],
-      ['root_tokens_reserve', { tokens: 1000 }, { kind: 'model', provider: 'vllm', token_bound: 1024 }],
+      ['root_tokens_reserve', { tokens: 1000 }, { kind: 'model', provider: 'api', token_bound: 1024 }],
       ['root_semantic_repairs', { semantic_repairs: 0 }, { kind: 'semantic_repair' }],
       ['root_quality_switches', { quality_switches: 0 }, { kind: 'quality_switch' }],
     ];
@@ -296,10 +320,10 @@ test('each root budget denial names the one limit it hit and keeps the legacy er
       assert.equal(denied.body.reason, reason);
     }
     await setLimits({ tokens: 1024 });
-    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'vllm', token_bound: 1024 })).status, 200);
-    const capped = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-capped-tokens', kind: 'model', provider: 'vllm', token_bound: 1 });
+    assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'api', token_bound: 1024 })).status, 200);
+    const capped = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-capped-tokens', kind: 'model', provider: 'api', token_bound: 1 });
     assert.equal(capped.body.reason, 'root_tokens');
-    const repeated = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'vllm', token_bound: 1024 });
+    const repeated = await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'reason-fill-tokens', kind: 'model', provider: 'api', token_bound: 1024 });
     assert.equal(repeated.body.error, 'attempt_already_reserved');
     assert.equal(repeated.body.reason, 'attempt_already_reserved');
   } finally { await f.close(); }
@@ -311,8 +335,7 @@ test('admin request trace shows which root limit is at its cap and the unknown h
     const ticket = await f.store.claimNext({ workerId: 'admin-reasons', version: 'test', mode: 'shadow', intent: 'plan', leaseMs: 120000 });
     const lease = leaseOf(ticket, 'admin-reasons');
     await f.post(ticket.id, 'read', lease);
-    await f.db.d.run('UPDATE ai_root_allowances SET limits_json=? WHERE root_ticket_id=?',
-      [JSON.stringify({ ...LIMITS.root_work, model_calls: 1 }), ticket.id]);
+    setContract({ model_calls: 1 });
     assert.equal((await f.post(ticket.id, 'reserve', { ...lease, idempotency_key: 'admin-trace-first', kind: 'model', provider: 'vllm', token_bound: 512 })).status, 200);
     const before = (await f.post(ticket.id, 'read', lease)).body;
     const trace = await f.store.getRequestTrace(f.request.request_id);

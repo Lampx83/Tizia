@@ -201,6 +201,29 @@ def test_a_grounding_veto_about_a_real_plan_file_still_blocks(tmp_path):
     assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
 
 
+def test_an_unverifiable_objection_without_records_is_unverified_not_blocking(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'trang.html').write_text('<h1>Trang</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Sửa trang", "file": "public/trang.html", "verify": "trang có chữ mới",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Sửa trang", "body": "đổi chữ", "grounding_required": True}
+    validation = {"clear": True, "grounded": False, "grounding": [],
+                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi.",
+                  "objection": {"claim": "đã có yêu cầu trước tạo trang này",
+                                "evidence": [{"file": "FEATURE BRIEF", "snippet": "trang: public/trang.html"}]}}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out.get("blocked") is not True
+    assert "không đưa trích dẫn" in state.get("validator_note", "")
+
+
 def test_a_grounding_veto_without_a_verifiable_snippet_is_advisory(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     (tmp_path / 'public').mkdir(parents=True)
@@ -366,6 +389,17 @@ def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
     assert seen['budget'] == 6000 and 'tất cả' in seen['words']
 
 
+def test_named_request_file_is_loaded_even_when_the_plan_omits_it(monkeypatch):
+    monkeypatch.setattr(plan_validate.code_index, 'git',
+                        lambda *a: b'abc' if a[1] == 'rev-parse' else b'<section id="campus"></section>')
+    plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'x'}]}
+    _, files, context = plan_validate.source_evidence(
+        {'subject': 'them toa nha', 'body': 'layout trong public/campus-proto/b-iso-canvas.html'},
+        plan, {'checkout_source': '.'})
+    assert 'public/campus-proto/b-iso-canvas.html' in files
+    assert 'FILE public/campus-proto/b-iso-canvas.html' in context
+
+
 def test_http_worker_leaves_complexity_to_the_server_tier():
     from conftest import FakeModels, deps_with
     from budget import Budget
@@ -442,3 +476,35 @@ def test_search_terms_parse_keeps_four_clean_strings_and_ignores_garbage():
     assert brainstorm.parse_search_terms('{"terms": ["Câu hỏi mới", "x", "btn-new", "Câu hỏi mới", "a\\nb", 5, "một hai ba", "bốn năm"]}') == [
         "Câu hỏi mới", "btn-new", "một hai ba", "bốn năm"]
     assert brainstorm.parse_search_terms("không phải JSON") == [] and brainstorm.parse_search_terms('{"terms": "x"}') == []
+
+
+def _clarify_request(rounds):
+    thread = [{"role": "admin", "body": f"Câu {i + 1}?"} for i in range(rounds)]
+    return {"subject": "Thêm trang", "body": "trang mới", "thread": thread, "grounding_required": False}
+
+
+def test_clarify_rounds_come_from_the_contract_and_count_admin_messages():
+    assert plan_validate.clarify_limit() == 2
+    assert plan_validate.rounds_asked(_clarify_request(2)) == 2
+    assert plan_validate.rounds_asked({"thread": [{"role": "requester", "body": "x"}]}) == 0
+
+
+def test_gate_asks_while_under_the_round_limit_then_assumes(tmp_path):
+    plan = plan_with(["features"])
+    question = {"clear": False, "question": "Bạn muốn trang có màu gì?"}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    out = plan_validate.run(_clarify_request(1), deps_with(FakeModels(plan, validation=question)), Budget(), state)
+    assert out["blocked"] and out["outcome"] == "needs_clarification"
+
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    out = plan_validate.run(_clarify_request(2), deps_with(FakeModels(plan, validation=question)), Budget(), state)
+    assert out["blocked"] is False
+    assert state["assumption"] == "Bạn muốn trang có màu gì?"
+
+
+def test_validator_claiming_a_loaded_file_is_missing_is_a_retrieval_fault_not_an_objection():
+    validation = {'grounded': False, 'objection': None, 'reason': 'public/js/domains/it/modules.js không có trong REPO DATA'}
+    note = plan_validate.objection_advisory(validation, {'public/js/domains/it/modules.js': 'x'})
+    assert note.startswith('lỗi truy xuất') and 'modules.js' in note
+    other = plan_validate.objection_advisory(validation, {'public/other.js': 'x'})
+    assert other and not other.startswith('lỗi truy xuất')

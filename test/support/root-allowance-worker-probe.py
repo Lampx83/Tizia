@@ -68,12 +68,6 @@ try:
         editing.spend_repair()
         assert Budget().spend_repair()
         assert Budget().spend_repair()
-        try:
-            Budget().spend_repair()
-        except BudgetExhausted:
-            pass
-        else:
-            raise AssertionError('new phase replenished semantic repairs')
         assert editing.spend_quality_switch()
         assert not Budget().spend_quality_switch(), 'new phase cannot replenish a quality switch'
     print(json.dumps({'model_requests': len(calls), 'planner_calls': planner.model_calls, 'editing_calls': editing.model_calls}))

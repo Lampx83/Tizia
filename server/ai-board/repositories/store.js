@@ -1,10 +1,12 @@
 // Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
+import { behaviorMetrics } from '../services/behavior.js';
 import { randomBytes } from 'node:crypto';
+import { runnableOrders, splitGates } from '../security/step-gate.js';
 import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../security/policy.js';
 import { check as checkPath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
-import { readRootAllowance } from '../services/root-allowance.js';
+import { ROOT_GROUP_LABEL, hitRootGroup, readRootAllowance } from '../services/root-allowance.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
@@ -321,8 +323,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         }
       } else if (!['cancelled', 'done'].includes(row.status)) requested.push(clip(row.title, 120));
     }
-    // Trang = slug folder: cờ phát hành mở/ẩn đúng /<slug>.html, module ở js/features/<slug>/.
-    const lines = [`Chức năng: ${clip(folder.title, 120)} · trang: public/${folder.slug}.html · module: public/js/features/${folder.slug}/index.js`];
+    // Không bịa đường dẫn từ slug: yêu cầu tự nêu file, file đã có nằm trong "File sở hữu";
+    // tên slug từng bị model trích như file có thật và làm gate 3 lặp vô ích.
+    const lines = [`Chức năng: ${clip(folder.title, 120)}`];
     if (answers[0]) lines.push(`Mục đích: ${clip(answers[0], 300)}`);
     if (answers[1]) lines.push(`Luồng người dùng: ${clip(answers[1], 300)}`);
     const owned = [...files].slice(-cap.owned_files);
@@ -1352,6 +1355,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
     return { status: 'planned', child: 'queued', reason: null, note: 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.' };
   }
+  const DATA_GATE = { status: 'waiting_authorization', child: 'waiting_data', reason: 'data_step_pending',
+    note: 'Bước thay đổi dữ liệu đang chờ quản trị viên áp dụng và xác nhận.' };
   const folderNotApproved = async (requestId) => !!await db.get(
     'SELECT 1 FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ? AND f.approved_at IS NULL', [Number(requestId)]);
 
@@ -1377,6 +1382,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const authorized = !!await db.get(`
         SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
       `, [Number(ticketId), existing.plan_hash, existing.revision]);
+      const existingChildren = await planChildren(ticketId, existing.revision);
       const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
       const plannedStatus = plannedGate.status;
       if (!sameSubmission) {
@@ -1423,7 +1429,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         capability_policy_hash: existing.capability_policy_hash,
         tier: existing.tier,
         status: duplicateStatus,
-        children: await planChildren(ticketId, existing.revision),
+        children: existingChildren,
+        runnable_orders: runnableOrders(existingChildren),
         duplicate: true,
       };
     }
@@ -1444,7 +1451,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     const authorized = !!await db.get(`
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
     `, [Number(ticketId), checked.planHash, revision]);
-    const gate = planGate({ tier: checked.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+    const folderHeld = await folderNotApproved(root.source_request_id);
+    const stepGates = checked.stepTiers.map((tier, i) => (checked.plan.steps[i].layer === 'data' && !folderHeld
+      ? DATA_GATE : planGate({ tier, authorized, folderHeld })));
+    const split = splitGates(stepGates);
+    const gate = split ?? planGate({ tier: checked.tier, authorized, folderHeld });
+    const effectiveTier = split ? 'surface' : checked.tier;
     const rootStatus = gate.status;
     const childStatus = gate.child;
     const publicNote = gate.note;
@@ -1453,7 +1465,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       INSERT INTO ai_plans(root_ticket_id, revision, plan_hash, plan_json, status, tier,
         capability_policy_hash, public_reason, internal_reason, created_at)
       VALUES (?, ?, ?, ?, 'valid', ?, ?, ?, ?, ?)
-    `, [Number(ticketId), revision, checked.planHash, checked.planJson, checked.tier,
+    `, [Number(ticketId), revision, checked.planHash, checked.planJson, effectiveTier,
       checked.policyHash, publicNote, internalReason, now]);
     // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới.
     const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
@@ -1461,7 +1473,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       UPDATE ai_tickets SET status=?, phase='ticketized', public_note=?, internal_reason=?,
         tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, budget_limit=?, updated_at=?
       WHERE id=?
-    `, [rootStatus, publicNote, internalReason, checked.tier, checked.planHash, revision, rounds, budget, runLimit, now,
+    `, [rootStatus, publicNote, internalReason, effectiveTier, checked.planHash, revision, rounds, budget, runLimit, now,
       Number(ticketId)]);
     await db.run(`UPDATE ai_runs SET plan_hash=?, plan_revision=?, updated_at=? WHERE id=?`, [checked.planHash, revision, now, run.id]);
 
@@ -1475,10 +1487,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         JSON.stringify({
           description: step.description, allowed_scope: step.allowed_scope,
           acceptance: step.acceptance, tests: step.tests, risk: step.risk, non_goals: step.non_goals,
-          layer: step.layer, depends_on: step.depends_on,
+          layer: step.layer, depends_on: step.depends_on, ...(step.payload ? { payload: step.payload } : {}),
         }),
-        childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
-        checked.tier, revision, step.layer ?? null, JSON.stringify(step.depends_on ?? []), now, now,]);
+        split ? stepGates[step.order - 1].child : childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
+        checked.stepTiers[step.order - 1], revision, step.layer ?? null, JSON.stringify(step.depends_on ?? []), now, now,]);
       const childId = info;
       await db.run(insertTag, [childId, 'implementation']);
       await db.run(insertTag, [childId, `capability:${step.capability}`]);
@@ -1490,12 +1502,16 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     for (const gate of [1, 2, 2.5]) await db.run(trace, [run.id, gate, now]);
     await db.run(insertEvent, [Number(ticketId), 'plan_validated', 'worker', input.workerId, `running->${rootStatus}`,
       publicNote, internalReason, `plan-valid:${input.idempotencyKey}`, now,]);
+    const children = await planChildren(ticketId, revision);
     return {
       plan_hash: checked.planHash,
       capability_policy_hash: checked.policyHash,
-      tier: checked.tier,
+      tier: effectiveTier,
+      aggregate_tier: checked.tier,
+      risk_advisory: checked.riskAdvisory,
       status: rootStatus,
-      children: await planChildren(ticketId, revision),
+      children,
+      runnable_orders: runnableOrders(children),
       duplicate: false,
     };
   });
@@ -1548,6 +1564,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [root.id, plan.plan_hash, plan.revision])) {
       throw new WorkerContractError('protected plan requires authorization', 409, 'authorization_required');
     }
+    if (await db.get(`SELECT 1 FROM ai_tickets t WHERE t.parent_id=? AND t.plan_revision=? AND t.tier<>'surface' AND t.status='queued'
+      AND NOT EXISTS (SELECT 1 FROM ai_authorizations a WHERE a.root_ticket_id=? AND a.plan_hash=? AND a.plan_revision=?)`,
+    [root.id, plan.revision, root.id, plan.plan_hash, plan.revision])) {
+      throw new WorkerContractError('protected step requires authorization', 409, 'authorization_required');
+    }
     // Any run of this plan revision: an authorized protected plan executes in a later run than it was planned in.
     const precheckGates = new Set((await db.all(`
       SELECT g.gate FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
@@ -1594,6 +1615,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     let note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
+    let internalReason = verdict.reason;
     let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
     let replan = false;
     if (verdict.failure_class === 'critical') {
@@ -1608,6 +1630,12 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       status = 'waiting_admin';
       phase = 'budget_exhausted';
       note = 'Yêu cầu đang chờ quản trị viên xem xét.';
+      const hit = hitRootGroup(await readRootAllowance(db, root.id));
+      if (hit) {
+        phase = 'root_allowance_exhausted';
+        note = `Đã hết hạn mức ${ROOT_GROUP_LABEL[hit.group]} của yêu cầu (${hit.used}/${hit.limit}); hạn mức cấu hình trong contract.json, đổi xong cần triển khai lại mới áp dụng.`;
+        internalReason = `root_allowance_exhausted:${hit.group}:${hit.used}/${hit.limit}`;
+      }
     } else if (verdict.failure_class === 'plan') {
       // The accepted plan cannot be carried out as written: admin clarifies, rejects or hands it to a human.
       // LF/74 (cờ repair_replan, mặc định tắt): lập lại kế hoạch một vòng tự động, vẫn trong trần lượt tự động
@@ -1673,18 +1701,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (leaseExpiresAt != null) {
       // Về hàng đợi (không ai giữ): xoá lease_owner/token cũ, lease_expires_at dùng làm "không nhận trước giờ này".
       await db.run(`UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?,
-          lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?`, [status, phase, note, verdict.reason, cumulativeBudget, leaseExpiresAt, input.now, root.id]);
+          lease_owner=NULL, lease_token=NULL, lease_expires_at=?, updated_at=? WHERE id=?`, [status, phase, note, internalReason, cumulativeBudget, leaseExpiresAt, input.now, root.id]);
     } else {
-      await db.run('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?', [status, phase, note, verdict.reason, cumulativeBudget, input.now, root.id]);
+      await db.run('UPDATE ai_tickets SET status=?, phase=?, public_note=?, internal_reason=?, cumulative_budget=?, updated_at=? WHERE id=?', [status, phase, note, internalReason, cumulativeBudget, input.now, root.id]);
     }
     await db.run(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)
       VALUES (?, ?, 'pre_pr_verdict', 'worker', ?, ?, ?, ?, ?, ?)
-    `, [root.id, run.id, input.workerId, `running->${phase}`, note, verdict.reason,
+    `, [root.id, run.id, input.workerId, `running->${phase}`, note, internalReason,
       input.idempotencyKey, input.now]);
     if (verdict.outcome === 'blocked' && leaseExpiresAt == null && status !== 'waiting_admin'
-      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', verdict.reason, input.now);
+      && !replan && verdict.failure_class !== 'partial') await recordFolderDecision(root, 'blocked', internalReason, input.now);
     return verdict;
   });
 
@@ -1866,7 +1894,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.lost_worker = root.lease_owner && !root.live ? { worker_id: root.lease_owner, lease_expired_at: root.lease_expires_at } : null;
     root.phase_label = PHASES[root.phase]?.label ?? root.phase;
     const children = await db.all(`
-      SELECT id, title, status, sequence AS "order", plan_revision FROM ai_tickets
+      SELECT id, title, status, sequence AS "order", plan_revision, layer, tier, description FROM ai_tickets
       WHERE parent_id=? ORDER BY plan_revision, sequence, id
     `, [root.id]);
     const traces = await db.all(`
@@ -1950,12 +1978,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     root.rerun_stage = rerun.stage; // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     root.rerun_allowed = !!rerun.stage;
     root.rerun_reason = rerun.reason;
-    const allowance = await readRootAllowance(db, root.id);
+    // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
+    let allowance = await readRootAllowance(db, root.id);
+    if (allowance && !hitRootGroup(allowance)) {
+      const planView = await readRootAllowance(db, root.id, 'plan');
+      if (hitRootGroup(planView)) allowance = planView;
+    }
     root.allowance = allowance && { blocked_reason: allowance.blocked_reason, unknown_holds: allowance.unknown_holds,
-      groups: allowance.groups, daily_gpu: await dailyGpuStatus(Number(requestId)) };
+      groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
+      behavior: behaviorMetrics(evidences),
       totals: {
         ...summarizeCalls(evidences),
         by_model: Object.fromEntries(Object.entries(byModel).map(([model, list]) => [model, summarizeCalls(list)])),
@@ -1989,7 +2023,18 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await db.run(`INSERT INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now]);
     if (plan.tier === 'protected') {
       await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note='Kế hoạch đã được cho phép; đang chờ thực hiện.', internal_reason=NULL, updated_at=? WHERE id=?`, [now, Number(rootTicketId)]);
-      await db.run(`UPDATE ai_tickets SET status='queued', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE parent_id=? AND plan_revision=?`, [now, Number(rootTicketId), plan.revision]);
+      await db.run(`UPDATE ai_tickets SET status='queued', public_note='Kế hoạch đã được cho phép.', internal_reason=NULL, updated_at=? WHERE parent_id=? AND plan_revision=? AND layer IS DISTINCT FROM 'data'`, [now, Number(rootTicketId), plan.revision]);
+    }
+    if (plan.tier === 'surface') {
+      const woken = await db.get(`SELECT 1 FROM ai_tickets WHERE parent_id=? AND plan_revision=? AND tier='protected' AND status='waiting_authorization'`,
+        [Number(rootTicketId), plan.revision]);
+      if (woken) {
+        await db.run(`UPDATE ai_tickets SET status='queued', public_note='Bước cần duyệt đã được cho phép.', internal_reason=NULL, updated_at=?
+          WHERE parent_id=? AND plan_revision=? AND tier='protected' AND status='waiting_authorization'`, [now, Number(rootTicketId), plan.revision]);
+        if (root.status === 'planned') {
+          await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', updated_at=? WHERE id=?`, [now, Number(rootTicketId)]);
+        }
+      }
     }
     return { ok: true };
   });
@@ -2015,10 +2060,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         'Đang thực hiện kế hoạch đã được cho phép.', `run ${run.id} executes plan revision ${plan.revision}`,
         `plan-resumed:${run.id}`, input.now]);
     }
+    const resumeChildren = await planChildren(root.id, plan.revision);
     return {
       status: 'planned', tier: plan.tier, plan_hash: plan.plan_hash,
       capability_policy_hash: plan.capability_policy_hash, plan: JSON.parse(plan.plan_json),
-      children: await planChildren(root.id, plan.revision), duplicate: resumed,
+      children: resumeChildren, runnable_orders: runnableOrders(resumeChildren), duplicate: resumed,
     };
   });
 
@@ -2029,6 +2075,33 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   async function authorizePlan(rootTicketId, planHash, adminUserId) {
     const result = await authorizePlanTransaction(rootTicketId, planHash, adminUserId, Date.now());
     await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'authorize_plan');
+    return result;
+  }
+
+  const acknowledgeDataStepTransaction = (rootTicketId, childId, adminUserId, now) => db.tx(async () => {
+    const root = await db.get(`SELECT * FROM ai_tickets WHERE id=? AND parent_id IS NULL${db.lockRow}`, [Number(rootTicketId)]);
+    if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
+      throw new WorkerContractError('request is already closed', 409, 'request_closed');
+    }
+    const child = await db.get(`SELECT id, status, layer, plan_revision FROM ai_tickets WHERE id=? AND parent_id=?${db.lockRow}`,
+      [Number(childId), root.id]);
+    if (!child || child.layer !== 'data' || Number(child.plan_revision) !== Number(root.plan_revision)) {
+      throw new WorkerContractError('data step not found in the current plan', 404, 'data_step_not_found');
+    }
+    if (child.status !== 'waiting_data') throw new WorkerContractError('data step is not waiting for the admin', 409, 'data_step_not_waiting');
+    await db.run(`UPDATE ai_tickets SET status='done', phase='acknowledged', public_note=?, internal_reason=NULL, updated_at=? WHERE id=?`,
+      ['Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', now, child.id]);
+    await db.run(insertEvent, [root.id, 'data_step_acknowledged', 'admin', String(adminUserId), `waiting_data->done`,
+      'Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', `child ${child.id}`, `data-ack:${child.id}`, now]);
+    if (root.status === 'planned') {
+      await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', updated_at=? WHERE id=?`, [now, root.id]);
+    }
+    return { ok: true };
+  });
+
+  async function acknowledgeDataStep(rootTicketId, childId, adminUserId) {
+    const result = await acknowledgeDataStepTransaction(rootTicketId, childId, adminUserId, Date.now());
+    await recordAdminAction({ ticketId: rootTicketId }, adminUserId, 'acknowledge_data_step');
     return result;
   }
 
@@ -2067,7 +2140,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   // gate 1; the pre-PR gates (3-5.5) are one unit on the approved plan and restart from gate 3.
   const PLAN_BLOCKED_PHASES = ['clarification_limit', 'plan_blocked', 'precheck_blocked'];
   // plan_unfit is not rerunnable: the plan cannot be carried out as written, repeating gates 3-5 fails the same way.
-  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked'];
+  const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'root_allowance_exhausted'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
   /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason}. */
@@ -2170,6 +2243,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     handoffClarification,
     requestWorkerClarification,
     authorizePlan,
+    acknowledgeDataStep,
     recordAdminAction,
     resumeAuthorizedPlan,
     extendBudget,

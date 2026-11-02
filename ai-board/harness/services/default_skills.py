@@ -1,7 +1,6 @@
 """Reviewed advisory skills; tool/context policy remains outside these files."""
 import hashlib
 import json
-import os
 import re
 import html
 from dataclasses import dataclass, replace
@@ -9,9 +8,11 @@ from pathlib import Path
 
 from runtime import limits
 from services import skill_selection
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
+VARIANTS = {'review-two-axes': REVIEW_AXES}
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
 OPTIONAL_FIELDS = {'topic'}  # trùng topic thì chỉ 1 skill được chọn (skill_selection.choose)
@@ -156,6 +157,7 @@ def select_report(role, context=None):
             skill = replace(skill, token_bound=bound)
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
+    candidates += variant_candidates(role)
     budget = stage_budget(role)
     chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
     selected = [c.payload for c in chosen]
@@ -169,15 +171,21 @@ def system_text(skills):
     return '\n\n'.join(_render(s.name, s.version, s.body) for s in skills if s.source == 'default')
 
 
-def review_axes_block():
-    """Two-axis review skill as advisory block when AI_BOARD_SKILL_VARIANT names it, else ''. Cap enforced as for admin skills."""
-    if 'review-two-axes' not in [v.strip() for v in os.environ.get('AI_BOARD_SKILL_VARIANT', '').split(',')]:
-        return ''
-    skill = parse(REVIEW_AXES.read_bytes().decode('utf-8'))
-    text = admin_text(skill)
-    if len(text.encode('utf-8')) > skill.max_tokens:
-        raise ValueError('review-two-axes exceeds token budget')
-    return '\n\n' + text
+def variant_candidates(role):
+    """Biến thể thử nghiệm (AI_BOARD_SKILL_VARIANT) qua node chọn; không tính cap, không đè skill khác."""
+    if role != 'gate4_review':
+        return []
+    names = list(get_settings().skill_variant)
+    skills = [parse(VARIANTS[n].read_bytes().decode('utf-8')) for n in names if n in VARIANTS]
+    return [skill_selection.Candidate(s.name, 3, 'experiment variant (AI_BOARD_SKILL_VARIANT)', s.token_bound,
+                                      counted=False, payload=s) for s in skills]
+
+
+def review_axes_block(selected=None):
+    """Biến thể review trong node đã chọn thành block advisory; '' khi không bật."""
+    if selected is None:
+        selected = select('gate4_review', {})
+    return ''.join('\n\n' + admin_text(s) for s in selected if s.name in VARIANTS)
 
 
 def pin(role, context=None):

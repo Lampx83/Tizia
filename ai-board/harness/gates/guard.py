@@ -296,8 +296,19 @@ def contacts_in(text: str) -> set[str]:
     return {m.group() for p in _PII for m in p.finditer(text)}
 
 
+# RFC 2606/6761: miền dành riêng không gửi thư được, ví dụ trong tài liệu không phải PII.
+_RESERVED_DOMAIN = re.compile(r"@(?:[\w-]+\.)*(?:example\.(?:com|org|net)|[\w-]+\.(?:test|invalid|example|localhost)|test|invalid|example|localhost)$", re.I)
+_DIGIT_RUN = "01234567890123456789" "98765432109876543210"
+
+
+def _fake_number(value: str) -> bool:
+    digits = value.replace("+84", "0")
+    return digits.isdigit() and len(digits) == 10 and (len(set(digits[2:])) == 1 or digits[1:] in _DIGIT_RUN)
+
+
 def _pii(line: str, allowed: set[str]) -> bool:
-    return any(not _IMAGE_NAME.search(value) and not _OWN_DOMAIN.search(value) and value not in allowed
+    return any(not _IMAGE_NAME.search(value) and not _OWN_DOMAIN.search(value) and not _RESERVED_DOMAIN.search(value)
+               and not _fake_number(value) and value not in allowed
                for p in _PII for value in (m.group() for m in p.finditer(line)))
 
 

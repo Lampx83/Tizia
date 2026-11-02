@@ -1,3 +1,5 @@
+import pytest
+
 from runtime import limits
 from services import default_skills, skill_selection
 from services.skill_selection import Candidate
@@ -25,3 +27,13 @@ def test_node_cap_drops_extra_skill_with_reason():
     chosen, report = skill_selection.choose(cands, 1, 3000)
     assert [c.name for c in chosen] == ['a']
     assert report['dropped'] == [{'name': 'b', 'reason': 'max_per_prompt'}]
+
+
+@pytest.mark.parametrize('role', ['gate1', 'gate3_light', 'gate3_heavy', 'gate4_review'])
+@pytest.mark.parametrize('task', sorted(default_skills.TASK_TYPES - {'review'}) + ['review'])
+def test_every_task_and_role_fits_its_node_budget(role, task):
+    budget = default_skills.stage_budget(role)
+    selected, _ = default_skills.select_report(role, {'task_type': task})
+    assert len(selected) <= budget['max_per_prompt']
+    assert sum(s.token_bound for s in selected) + 2 * max(len(selected) - 1, 0) <= budget['max_tokens_per_prompt']
+    assert sum(s.token_bound for s in selected if s.source == 'default') <= 1000

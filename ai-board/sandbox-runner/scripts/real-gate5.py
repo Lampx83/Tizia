@@ -1,7 +1,7 @@
 """Opt-in real check: the existing Gate 5 flow through the sandbox runner (needs the compose runner + pushed guest image).
 
 docker run --rm --network tizia-local_sandbox-api -v <repo>/ai-board:/opt/ai-board/ai-board:ro -v <repo>/server:/opt/ai-board/server:ro -v <checkout>:/ck -v <token file>:/token:ro \
-  -v <this script>:/real-gate5.py:ro python:3.12-slim-bookworm python /real-gate5.py <base_sha> <kind>
+  -v <this script>:/real-gate5.py:ro python:3.12-slim-bookworm sh -c "pip install -q pydantic-settings && python /real-gate5.py <base_sha> <kind>"
 """
 import os
 import json

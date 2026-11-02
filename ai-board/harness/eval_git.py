@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -30,6 +29,7 @@ import eval_judge  # noqa: E402
 import eval_recall  # noqa: E402
 from gates import static_check  # noqa: E402
 from main import ROOT  # noqa: E402
+from settings import get_settings
 
 DIR = "corpus-git"
 MAX_FILES, MAX_LINES = 3, 60
@@ -239,7 +239,7 @@ def case_record(case: dict, root: Path, meta: dict) -> dict:
 
 def register(subs) -> None:
     import eval_run
-    root = os.environ.get("AI_BOARD_EVAL_DIR") or str(eval_run.DEFAULT_ROOT)
+    root = str(get_settings().eval_dir or eval_run.DEFAULT_ROOT)
     parser = subs.add_parser("git-build", help="lọc commit sạch → corpus-git (không model)")
     parser.add_argument("--repo", default=str(ROOT))
     parser.add_argument("--branch", default="main")

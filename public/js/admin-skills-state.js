@@ -45,8 +45,9 @@ export const parseMaxTokens = text => {
   const cap = head && /^max_tokens:\s*(\d+)\s*$/m.exec(head[1]);
   return cap ? Number(cap[1]) : null;
 };
-export const tokenLabel = text => {
-  const count = estimateTokens(text), cap = parseMaxTokens(text);
+// `counted` is the server count for this exact text; without it the UTF-8 estimate shows.
+export const tokenLabel = (text, counted = null) => {
+  const count = counted ?? estimateTokens(text), cap = parseMaxTokens(text);
   return { count, cap, over: cap != null && count > cap, text: `${count.toLocaleString('vi-VN')}${cap != null ? ` / ${cap.toLocaleString('vi-VN')}` : ''} token` };
 };
 

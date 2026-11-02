@@ -212,6 +212,9 @@ export async function attachAdmin(r) {
   });
 
   // Góp ý — xuyên tenant (giám sát Ban điều hành AI) + can thiệp status
+  route.get('/api/admin/requests/count', requireAdmin, async (_req, res) => {
+    res.json(await board().requests.requestCounts());
+  });
   route.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
     res.json({ requests: await board().requests.adminListRequests(limit) });

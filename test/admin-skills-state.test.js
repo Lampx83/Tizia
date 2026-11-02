@@ -56,6 +56,12 @@ test('poll only when visible, connected and a job is active', () => {
   assert.equal(shouldPoll({ visible: true, connected: true, versions: [{ rewrite: job('failed') }] }), false);
 });
 
+test('server count for the same text replaces the estimate; other text keeps it', () => {
+  const text = 'Xin chào';
+  assert.equal(tokenLabel(text, 3).count, 3);
+  assert.equal(tokenLabel(text).count, estimateTokens(text));
+});
+
 test('token counter is the UTF-8 upper bound and reads max_tokens from the front matter only', () => {
   assert.equal(estimateTokens(''), 0);
   assert.equal(estimateTokens('abc'), 3);

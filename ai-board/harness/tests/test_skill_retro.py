@@ -38,8 +38,8 @@ class Models:
                 'eval_duration': 1_000_000_000}
 
 
-def deps(models):
-    return pipeline.Deps(models=models, notify=None)
+def deps(models, provider='ollama'):
+    return pipeline.Deps(models=models, notify=None, provider=provider)
 
 
 def test_nothing_to_review_makes_no_model_call():
@@ -51,7 +51,7 @@ def test_nothing_to_review_makes_no_model_call():
 def test_retro_proposes_with_thinking_off_evidence_escaped_and_smoke_reported():
     server = Server()
     models = Models({'skill': BETTER, 'reason': 'Labels failed tests because they were vague.'}, {'answer': 'Rename the button.'})
-    assert skill_retro.run_step(server, deps(models), worker_id='w')['status'] == 'reported'
+    assert skill_retro.run_step(server, deps(models, 'api'), worker_id='w')['status'] == 'reported'
     retro, smoke = models.calls
     assert retro['extra']['thinking'] is False and smoke['extra']['thinking'] is False
     assert 'Preserve the uploaded intent' in retro['extra']['system']

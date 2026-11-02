@@ -111,7 +111,7 @@ def test_infrastructure_failover_charges_every_attempt_and_separates_credentials
     deps = Deps(models=client(), notify=None, sleep=lambda _: None, trace=trace)
     budget = Budget()
     result = deps.call_model('a', 'prompt', gate=1, budget=budget)
-    assert budget.model_calls == 4 and budget.tokens == 5 and budget.units == 4
+    assert budget.model_calls == 4 and budget.tokens == 0 and budget.units == 4  # local providers spend no tokens
     assert [c[0] for c in calls] == ['http://primary/api/generate'] * 3 + ['http://secondary/v1/chat/completions']
     assert calls[0][1]['X-ollama-seckey'] == 'primary-key'
     assert calls[-1][1]['X-ollama-seckey'] == 'secondary-key'
@@ -204,7 +204,7 @@ def test_gate3_switches_once_across_subtasks_without_adding_attempts(monkeypatch
     monkeypatch.setattr(implement, 'check_file_path', lambda _: None)
     good = {'response': json.dumps({'code': 'export const x = 1;', 'test_file': 'test/x.test.js',
                                   'test': "import test from 'node:test';\n// public/one.js public/two.js\n"})}
-    calls = mock_gateway(monkeypatch, [{'response': 'bad'}] * 3 + [good] + [{'response': 'bad'}] * 3 + [good])
+    calls = mock_gateway(monkeypatch, [{'response': f'bad{i}'} for i in range(3)] + [good] + [{'response': f'bad{i}'} for i in range(3, 6)] + [good])
     state = {'plan': {'subtasks': [{'file': f'public/{name}.js', 'title': name, 'verify': 'renders', 'size': 'large'}
                                   for name in ['one', 'two']]}, 'scratch_repo': str(tmp_path)}
     budget = Budget()

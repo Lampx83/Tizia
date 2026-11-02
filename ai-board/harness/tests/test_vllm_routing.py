@@ -64,7 +64,7 @@ def test_heavy_uses_vllm_and_shared_budget_trace(routing, suffix):
         assert payload['response_format'] == {'type': 'json_object'}
         assert payload['max_tokens'] > 0 and 'options' not in payload
         assert result['response'] == '{"code":"ok"}'
-        assert budget.model_calls == 1 and budget.tokens == 18
+        assert budget.model_calls == 1 and budget.tokens == 0
         assert trace.pending[0]['provider'] == 'vllm'
         assert trace.pending[0]['metrics']['tokens_in'] == 11
         assert trace.pending[0]['metrics']['gpu_ms'] is None
@@ -115,7 +115,7 @@ def test_infrastructure_fallback_preserves_heavy_role_budget_and_credentials(mon
             result = Deps(models=models, notify=None, sleep=lambda _: None).call_model(
                 'heavy', 'p', gate=3, role='gate3_heavy', budget=budget)
             assert len(vllm_calls) == 3 and len(ollama_calls) == 1
-            assert budget.model_calls == 4 and budget.tokens == 3
+            assert budget.model_calls == 4 and budget.tokens == 0
             assert result['_route']['reason'] == 'infrastructure_failover'
             assert result['_route']['candidate'] == 'test-ollama-heavy'
             assert ollama_calls[0][1]['X-Ollama-Seckey'] == 'ollama-only'

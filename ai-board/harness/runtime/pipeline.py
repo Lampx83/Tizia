@@ -30,6 +30,7 @@ from gates import brainstorm, implement, intake_guard, plan_validate, risk_triag
 from providers.client import OllamaClient    # noqa: E402
 from services import prescreen                   # noqa: E402
 from evaluation import self_eval                   # noqa: E402
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
 ENV_FILE = ROOT / ".env"
@@ -123,8 +124,8 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
             raise default_skills.SkillPolicyChanged('selected skills changed; restart under current guidance')
         system += '\n\n' + default_skills.system_text(selected)
         if role == 'gate4_review':
-            system += default_skills.review_axes_block()
-        admin = '\n\n'.join(default_skills.admin_text(s) for s in selected if s.source == 'admin')
+            system += default_skills.review_axes_block(selected)
+        admin = '\n\n'.join(default_skills.admin_text(s) for s in selected if s.source == 'admin' and s.name not in default_skills.VARIANTS)
         if admin:
             _, user = prompt_roles.split(prompt + '\n\n' + admin)
         extra = {**(extra or {}), '_skill_evidence': [s.evidence() for s in selected], '_skill_selection': selection}
@@ -135,9 +136,10 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
 @functools.lru_cache(maxsize=None)
 def _static_prefix(prompt_name: str | None) -> str:
     """Phần prompt cố định (trước placeholder đầu tiên) — trace chỉ gửi phần sau nó."""
-    if not prompt_name:
+    path = PROMPTS_DIR / prompt_name if prompt_name else None
+    if path is None or not path.is_file():
         return ""
-    return (PROMPTS_DIR / prompt_name).read_text(encoding="utf-8").split("{", 1)[0]
+    return path.read_text(encoding="utf-8").split("{", 1)[0]
 
 
 @dataclass(frozen=True)
@@ -222,7 +224,8 @@ class Deps:
         metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
         n = meter.units(provider, metrics)
         budget.spend("model_calls")
-        budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
+        if provider == 'api':
+            budget.spend("tokens", int(body.get("prompt_eval_count") or 0) + int(body.get("eval_count") or 0))
         budget.spend("units", n)
         if db_path is not None and proposal_id is not None:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate,
@@ -275,11 +278,12 @@ class Deps:
                         raise
                     error = caught
                     body = {}
-                provider = 'vllm' if candidate['provider'] == 'vllm' else 'ollama'
+                provider = candidate['provider'] if candidate['provider'] in ('vllm', 'api') else 'ollama'
                 metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
                 n = meter.units(provider, metrics)
                 budget.spend('model_calls')
-                budget.spend('tokens', int(body.get('prompt_eval_count') or 0) + int(body.get('eval_count') or 0))
+                if provider == 'api':
+                    budget.spend('tokens', int(body.get('prompt_eval_count') or 0) + int(body.get('eval_count') or 0))
                 budget.spend('units', n)
                 self._trace(gate, candidate['model'], prompt, prompt_name, body.get('response', ''), metrics, n,
                             'http_error' if error else 'ok', str(error) if error else None, child, iteration,
@@ -350,7 +354,7 @@ def _smoke(request, deps, budget, state, **_) -> dict:
         return candidate.ensure(state, 5) or self_eval.run(state, deps, budget)
     if deps.verify is not None:
         return deps.verify.run(state, deps, budget)
-    if os.getenv("AI_BOARD_SANDBOX_URL"):  # Gate 5 inside a Microsandbox microVM instead of worker-side Docker
+    if get_settings().sandbox_url:  # Gate 5 inside a Microsandbox microVM instead of worker-side Docker
         import sandbox_verify
         return candidate.ensure(state, 5) or sandbox_verify.run(state, deps, budget)
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)

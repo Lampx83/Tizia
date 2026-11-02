@@ -14,6 +14,11 @@ def current():
     return _ROOT.get()
 
 
+def _used(state, cap):
+    """Tokens are capped only for paid api calls (metered_tokens); older receipts fall back to the total."""
+    return state['used'].get('metered_tokens', state['used']['tokens']) if cap == 'tokens' else state['used'][cap]
+
+
 class RootAllowance:
     def __init__(self, client, ticket_id, lease):
         self.client, self.lease = client, dict(lease)
@@ -63,12 +68,12 @@ class RootAllowance:
         if state.get('blocked_reason'):
             return state['blocked_reason']
         return next((f'root_{cap}' for cap in ('model_calls', 'tool_calls', 'tokens')
-                     if state['used'][cap] >= state['limits'][cap]), None)
+                     if _used(state, cap) >= state['limits'][cap]), None)
 
     def can_afford(self, reserve):
         state = self.state or self._call('read')
         return not state.get('blocked_reason') and all(
-            state['limits'][cap] - state['used'][cap] >= reserve[cap]
+            state['limits'][cap] - _used(state, cap) >= reserve[cap]
             for cap in ('model_calls', 'tool_calls', 'tokens'))
 
     def reserve_quality_switch(self):
