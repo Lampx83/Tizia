@@ -35,6 +35,27 @@ Dữ liệu chính nằm trong PostgreSQL (service `postgres`, volume `tizia-pos
 
 ---
 
+## 🧪 Chạy test
+
+Hai bộ tách rời: Node (`test/`) và harness Python (`ai-board/harness/tests/`).
+
+```bash
+# Bộ nhanh, chạy hằng ngày: bỏ mọi test đánh dấu `slow` (eval tier thật, Playwright, test timeout)
+npm run test:fast            # pytest ai-board/harness/tests -m "not slow"
+npm test                     # toàn bộ test/*.test.js (node --test)
+
+# Bộ đầy đủ (đêm/trước khi merge): giữ nguyên mọi test, gồm cả nhóm slow
+npm run test:harness         # pytest ai-board/harness/tests (không lọc marker)
+npm test
+```
+
+- Marker `slow` khai báo trong [ai-board/harness/pytest.ini](ai-board/harness/pytest.ini); thêm `pytestmark = pytest.mark.slow` ở đầu file test chậm (eval chạy trial thật, Playwright, đo timeout).
+- Chạy một file: `ai-board/harness/.venv/Scripts/python.exe -m pytest ai-board/harness/tests/test_eval_run.py -q` (Linux/macOS: `ai-board/harness/.venv/bin/python`).
+- Vài test Node cần Postgres: đặt `TEST_PG_URL` (vd `postgres://test:test@127.0.0.1:54329/postgres`); không có thì test tự skip.
+- Corpus eval được đóng băng theo `(seed, commit ghim, nguồn checkout, mã sinh corpus)` và giữ trong `%TEMP%/tizia-eval-freeze-cache` (giữ 5 bản gần nhất) để lần chạy sau không dựng lại; sửa code sinh corpus là cache tự trượt.
+
+---
+
 ## 🧱 Kiến trúc
 
 ```
