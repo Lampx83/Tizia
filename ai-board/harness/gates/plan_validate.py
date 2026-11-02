@@ -706,7 +706,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "needs_clarification", "outcome": "needs_clarification",
                 "public_message": question}
 
-    asserted = bool(validation.get('grounded'))
+    # An objection we could not verify leaves the plan running without records; a bare grounded=false
+    # with no objection, or a veto backed by verified evidence, keeps blocking at source grounding.
+    objection = validation.get('objection')
+    asserted = bool(validation.get('grounded')) or bool(objection) and not evidence.verified(objection, files)
     note = objection_advisory(validation, files)
     if note:
         # Unverifiable objection: the plan goes on, the admin sees the note in the trace.

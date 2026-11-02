@@ -201,6 +201,29 @@ def test_a_grounding_veto_about_a_real_plan_file_still_blocks(tmp_path):
     assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
 
 
+def test_an_unverifiable_objection_without_records_is_unverified_not_blocking(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    (tmp_path / 'public').mkdir(parents=True)
+    (tmp_path / 'public' / 'trang.html').write_text('<h1>Trang</h1>\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+    plan = plan_with(["features"])
+    plan["subtasks"] = [{"title": "Sửa trang", "file": "public/trang.html", "verify": "trang có chữ mới",
+                         "size": "small", "layer": "frontend", "depends_on": []}]
+    request = {"subject": "Sửa trang", "body": "đổi chữ", "grounding_required": True}
+    validation = {"clear": True, "grounded": False, "grounding": [],
+                  "reason": "Plan sửa public/trang.html nhưng không có dẫn chứng hành vi.",
+                  "objection": {"claim": "đã có yêu cầu trước tạo trang này",
+                                "evidence": [{"file": "FEATURE BRIEF", "snippet": "trang: public/trang.html"}]}}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
+
+    assert out.get("blocked") is not True
+    assert "không đưa trích dẫn" in state.get("validator_note", "")
+
+
 def test_a_grounding_veto_without_a_verifiable_snippet_is_advisory(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     (tmp_path / 'public').mkdir(parents=True)
