@@ -1130,10 +1130,16 @@ class HttpWorker:
         except Exception as error:  # noqa: BLE001
             print(f"[worker] đăng ảnh bản nháp lỗi: {str(error)[:200]}")
 
-    def _release(self, ticket_id: int, payload: dict) -> dict:
+    def _release(self, ticket_id: int, payload: dict, *, after_verdict: bool = False) -> dict:
         """Gửi nốt trace còn đệm khi còn lease (sau release server trả 409 stale_lease), rồi trả lease."""
         self._close_trace(payload.get("outcome"))
-        return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+        try:
+            return self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/release", payload)
+        except urllib.error.HTTPError as error:
+            # Verdict đã được nhận và server có thể đã replan/requeue (xoá lease): release là no-op.
+            if after_verdict and _is_stale_lease(error):
+                return {"ok": True, "stale_lease": True}
+            raise
 
     def _requeue_busy(self, ticket_id: int, lease: dict, prefix: str, run: dict, result: dict) -> dict:
         """Runner busy: give the lease back without a verdict; server requeues after a not-before delay."""
@@ -1208,7 +1214,7 @@ class HttpWorker:
             if _is_stale_lease(error):
                 self.candidates.discard(result.get("candidate"))
             raise
-        self._release(ticket_id, {**lease, "outcome": "planned", "idempotency_key": f"{prefix}:release"})
+        self._release(ticket_id, {**lease, "outcome": "planned", "idempotency_key": f"{prefix}:release"}, after_verdict=True)
         return {"status": "planned", "ticket_id": ticket_id, "run_id": run["id"], "reverify": verdict["outcome"], "pre_pr_verdict": verdict}
 
     def _run_leased(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict,
@@ -1370,7 +1376,7 @@ class HttpWorker:
             self._release(ticket_id, {
                 **lease, "outcome": "waiting" if pr_blocked else "planned", "idempotency_key": f"{prefix}:release",
                 **({"internal_detail": pr_problem} if pr_problem else {}),
-            })
+            }, after_verdict=True)
             result = {
                 "status": planned["status"], "ticket_id": ticket_id, "run_id": run["id"],
                 "tier": planned["tier"], "children": len(planned.get("children") or []),
