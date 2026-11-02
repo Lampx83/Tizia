@@ -48,6 +48,7 @@ import code_index
 import file_context
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
+from runtime import coverage
 from settings import DEFAULT_GATE25_FIXES, get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
@@ -161,6 +162,8 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
     files = {}
     chunks = [state.get('planning_context') or '']
     tasks = list(plan.get('subtasks') or []) + [{'file': path} for path in state.get('source_targets') or []]
+    named = coverage.requested_paths("\n".join(str(request.get(key) or "") for key in ("subject", "body", "detail")))
+    tasks += [{'file': path} for path in named if path not in {str(task.get('file') or '') for task in tasks}]
     for task in tasks:
         path = str(task.get('file') or '')
         if not path.startswith(('public/', 'server/contexts/_ai-generated/', 'ai-board/harness/skills/', 'ai-board/harness/prompts/')) or '..' in Path(path).parts:
@@ -325,15 +328,26 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
     """Dẫn chứng hành vi cho từng subtask. File mới (chưa có ở base) không có dòng nguồn nào để trích:
     chấp nhận `quote` rỗng khi before/after/verify đã nêu; nếu có trích từ file mẫu có thật thì vẫn kiểm khớp."""
     records = validation.get('grounding')
-    if not sha or not validation['grounded'] or not isinstance(records, list) or len(records) != len(plan.get('subtasks') or []):
+    if not sha or not validation['grounded'] or not isinstance(records, list):
         raise ValueError(validation.get('reason') or 'thiếu dẫn chứng hành vi từ code nguồn')
+    # Records identify their subtask by the file they quote; a model that adds a new file leaves that task
+    # without a record, and the harness states it as unverified instead of shifting every later record.
+    by_file = {}
+    for record in records:
+        if isinstance(record, dict):
+            for name in (record.get('file'), record.get('target')):
+                if isinstance(name, str) and name:
+                    by_file.setdefault(name, record)
     clean = []
-    for index, (task, evidence) in enumerate(zip(plan['subtasks'], records)):
-        # `target` is free text for the model (often the subtask title); the file it quotes is what identifies the evidence
-        if not isinstance(evidence, dict) or task['file'] not in (evidence.get('target'), evidence.get('file')):
-            given = evidence if isinstance(evidence, dict) else {}
-            raise Mismatch('dẫn chứng không khớp file dự định sửa', item=task['file'], target=given.get('target'),
-                           file=given.get('file'), quote=str(given.get('quote') or '')[:200])
+    for index, task in enumerate(plan['subtasks']):
+        evidence = by_file.get(task['file'])
+        if evidence is None:
+            if task['file'] in files:
+                raise Mismatch('dẫn chứng không khớp file dự định sửa', item=task['file'], target=None,
+                               file=None, quote='')
+            evidence = {'target': task['file'], 'file': task['file'], 'quote': '', 'unverified': True,
+                        'before': 'chưa có file', 'after': str(task.get('title') or ''),
+                        'verify': str(task.get('verify') or '')}
         file = evidence.get('file')
         quote = evidence.get('quote')
         cut_at_cap = isinstance(quote, str) and len(quote) >= _QUOTE_MAX
@@ -370,7 +384,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
         if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
                 or not _quoted_in(quote, files.get(file, ''))):  # models join source lines: compare content, not layout
             if 'advquote' in fixes() and all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ('before', 'after', 'verify')):
-                records[index]['unverified'] = True  # target file is verified, so a rewritten quote is the validator's flaw, not the plan's
+                by_file.get(task['file'], evidence)['unverified'] = True  # target file is verified: a rewritten quote is the validator's flaw, not the plan's
                 clean.append({**{key: str(evidence[key])[:1200] for key in ('before', 'after', 'verify')}, 'quote': '',
                               'file': task['file'], 'target': task['file']})
                 continue

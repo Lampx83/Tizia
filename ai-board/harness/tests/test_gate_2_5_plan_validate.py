@@ -366,6 +366,17 @@ def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
     assert seen['budget'] == 6000 and 'tất cả' in seen['words']
 
 
+def test_named_request_file_is_loaded_even_when_the_plan_omits_it(monkeypatch):
+    monkeypatch.setattr(plan_validate.code_index, 'git',
+                        lambda *a: b'abc' if a[1] == 'rev-parse' else b'<section id="campus"></section>')
+    plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'x'}]}
+    _, files, context = plan_validate.source_evidence(
+        {'subject': 'them toa nha', 'body': 'layout trong public/campus-proto/b-iso-canvas.html'},
+        plan, {'checkout_source': '.'})
+    assert 'public/campus-proto/b-iso-canvas.html' in files
+    assert 'FILE public/campus-proto/b-iso-canvas.html' in context
+
+
 def test_http_worker_leaves_complexity_to_the_server_tier():
     from conftest import FakeModels, deps_with
     from budget import Budget
