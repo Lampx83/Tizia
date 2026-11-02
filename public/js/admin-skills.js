@@ -66,7 +66,7 @@ const budgetLine = (budgets, method) => Object.entries(budgets).map(([node, b]) 
   + (method === 'qwen_tokenizer' ? ' (đếm bằng Qwen)' : ' (ước lượng UTF-8, chưa có bộ đếm Qwen)');
 const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', merge:'Hợp nhất', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
-const NODE = { intake:'Nhận yêu cầu', plan:'Lập plan', execute:'Viết code', verdict:'Kết luận' };
+const NODE = { plan:'Lập plan', execute:'Viết code', verdict:'Kết luận' };
 const lineDiff = (a, b) => {
   const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
   for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i+1][j+1] + 1 : Math.max(t[i+1][j], t[i][j+1]);
