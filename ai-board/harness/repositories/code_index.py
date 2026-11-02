@@ -25,7 +25,7 @@ from services import file_context
 import path_policy
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "memory" / "code_index.json"
-ROOTS = ("public", "server/contexts")
+ROOTS = path_policy.code_roots()
 EXTS = (".html", ".css", ".js", ".mjs")
 MAX_BYTES = 400_000   # ponytail: file lớn hơn là bundle/vendor, bỏ qua; nâng nếu thiếu file thật
 MAX_ITEMS = 150       # mỗi danh sách trong 1 entry, giữ file index nhỏ
