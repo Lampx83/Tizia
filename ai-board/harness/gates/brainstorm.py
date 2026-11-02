@@ -280,6 +280,10 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         if not attempt and react_plan.enabled():
             react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
                                    db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
+        # Plain JSON, not guided_json (LF/131): the vLLM gateway offers no guided_json/enum, so a path
+        # field cannot be constrained while it is generated. Paths are instead closed after generation,
+        # deterministically: parse_plan + check_files (real file at the pinned sha, or an allowed new
+        # path) + grounding_paths.check_references.
         body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                         db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
                                         skill_context=skill_context,
