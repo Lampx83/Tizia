@@ -72,6 +72,27 @@ def test_gate_model_and_tool_steps_become_one_span_tree(monkeypatch):
     assert "<p>B</p>" not in text and "Thêm dòng" not in text  # no prompt, completion or observation content
 
 
+def test_non_gate_graph_nodes_write_one_span_each():
+    import worker
+
+    posted = []
+    tracer = meter.Tracer()
+    tracer.begin(10, lambda calls: None, posted.extend)
+    deps = pipeline.Deps(models=None, notify=None, trace=tracer)
+    execution = worker._Execution({}, ticket_id=1, checkout_source=".", deps=deps, budget=Budget(), run_gate=None, cleanup=None,
+                                  catalog=None, request_detail=None, memory_path=None, should_stop=None, candidate_opts=None,
+                                  request_type=None, eval_tasks=None, preview_capture=None, checkpoint=None, plan_hash=None)
+    assert execution.handlers()["repair"]() == "passed"
+    tracer.end_run("planned")
+    tracer.flush()
+
+    run = next(s for s in posted if s["name"] == "invoke_agent ai-board")
+    node = next(s for s in posted if s["name"] == "repair")
+    assert node["parent_span_id"] == run["span_id"] and node["end_ms"] >= node["start_ms"]
+    assert node["attributes"]["tizia.node.id"] == "repair"
+    assert node["attributes"]["tizia.node.status"] == "passed"
+
+
 def test_gate_exception_closes_its_span_as_error(monkeypatch):
     posted = []
     tracer = meter.Tracer()
