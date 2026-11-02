@@ -946,7 +946,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
-                budget = Budget(max_model_calls=6, max_units=120)
+                budget = Budget(max_model_calls=6, max_units=600, max_wall_clock_s=600.0)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
                         role=role, budget=budget, format=None,
