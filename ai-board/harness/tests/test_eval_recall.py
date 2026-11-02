@@ -1,9 +1,12 @@
+import pytest
 """Seam: eval_run.main(["recall", ...]) trên corpus có sẵn dưới --root (không model, không mạng), thư mục tạm, seed cố định.
 Corpus synthetic 3 trang do eval_run.write_corpus dựng (quick đã chuyển sang corpus trang thật); không test riêng hàm đo, chỉ soi báo cáo và file ghi ra."""
 import json
 from pathlib import Path
 
 import eval_run
+
+pytestmark = pytest.mark.slow
 
 
 def make_corpus(root, cases=4):

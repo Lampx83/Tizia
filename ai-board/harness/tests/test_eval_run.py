@@ -19,6 +19,8 @@ import eval_fast
 import eval_run
 from main import Deps
 
+pytestmark = pytest.mark.slow
+
 pytest.importorskip("playwright.sync_api")
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 SEED = 9

@@ -9,6 +9,8 @@
     "dev": "node --watch server/index.js",
     "dev:prod": "node --watch server/dev-proxy.js",
     "test": "node scripts/run-tests.mjs",
+    "test:fast": "node scripts/test-fast.mjs",
+    "test:harness": "node scripts/test-fast.mjs --full",
     "check:content": "node scripts/check-content-integrity.mjs",
     "check:skills": "node scripts/check-skills.mjs",
     "codegraph:update": "graphify update .",

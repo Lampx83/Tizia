@@ -767,7 +767,10 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
                                prompt_name="spec_conditions.md")
         return str(body.get("response") or "")
 
-    items, _source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    items, source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    trace = getattr(deps, "trace", None)
+    if trace:
+        trace.note("knows", "spec conditions", source, {"source": source, "items": len(items)})
     return coverage.uncovered_items(items, plan)
 
 

@@ -1,6 +1,9 @@
+import pytest
 import json
 
 import eval_strata
+
+pytestmark = pytest.mark.slow
 
 
 def test_regressions_flags_only_drops_over_limit():
