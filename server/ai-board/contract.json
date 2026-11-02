@@ -97,7 +97,6 @@
     "behavior": {
       "_why": "Thresholds of the behaviour metrics shown per ticket (services/behavior.js). context_limit_tokens is the vLLM max_model_len; compression_ratio is compressed/original bytes, so a low value means repetitive output.",
       "context_limit_tokens": 32768,
-      "context_ratio_warn": 0.75,
       "distinct_line_warn": 0.5,
       "compression_ratio_warn": 0.15,
       "compression_min_chars": 300,

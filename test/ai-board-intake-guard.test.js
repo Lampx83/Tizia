@@ -124,6 +124,21 @@ test('JS and Python share one lexicon and fold diacritics the same way', () => {
   assert.equal(checkIntake('hoàng sa'.normalize('NFD'), '').labels[0], 'politics_sovereignty');
 });
 
+test('POST /api/requests rejects text mangled by a non-UTF-8 client', async () => {
+  const db = await fixtureDb();
+  const { post, close } = await serve(db);
+  try {
+    const response = await post('intake-encoding-001', { title: 'Thêm trang', detail: 'Sổ tay Git \uFFFD mất ký tự' });
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.equal(body.error, 'invalid_encoding');
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM requests').get()).n, 0);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
 test('POST /api/requests rejects blocked text with 422 and creates nothing', async () => {
   const db = await fixtureDb();
   const { post, close } = await serve(db);

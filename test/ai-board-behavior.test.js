@@ -28,12 +28,12 @@ test('a node that reruns with identical output counts as an idle run', () => {
   assert.equal(idleRuns([call(3, 10, 'x'), call(3, 11, 'x'), call(3, 12, 'y')]), 1);
 });
 
-test('context delta and ratio warn above 0.75 of the vLLM limit', () => {
+test('context reports the tokens used and the delta against the previous call', () => {
   const m = behaviorMetrics([call(3, 1000, 'a\nb'), call(4, 26000, 'c\nd')]);
+  assert.equal(m.context.tokens_in, 26000);
   assert.equal(m.context.delta, 25000);
-  assert.equal(m.context.ratio, 0.793);
-  assert.equal(m.context.warn, true);
-  assert.equal(behaviorMetrics([call(3, 1000, 'a'), call(3, 2000, 'b')]).context.warn, false);
+  assert.equal(m.context.limit, 32768);
+  assert.equal('ratio' in m.context, false);
 });
 
 test('a looping run raises the output and topology warnings', () => {
@@ -47,5 +47,5 @@ test('a looping run raises the output and topology warnings', () => {
 
 test('no calls yields empty metrics without warnings', () => {
   const m = behaviorMetrics([]);
-  assert.deepEqual([m.context.warn, m.output.warn, m.topology.warn], [false, false, false]);
+  assert.deepEqual([m.context.tokens_in, m.context.delta, m.output.warn, m.topology.warn], [null, null, false, false]);
 });

@@ -1015,6 +1015,11 @@ class HttpWorker:
         if self.tracer and self.tracer.over_hourly_cap():
             # GPU dùng chung: hết trần giờ thì không nhận ticket mới; ticket đang chạy không bị phạt.
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
+        # A finished run may leave a node deadline or allowance in this process; clear both before probing models.
+        from runtime import root_allowance
+        from runtime.budget import start_node
+        start_node(None)
+        root_allowance.reset()
         if self.model_check and (blocked := self.model_check()):
             # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
             print(f"[worker] model {blocked['model']} chưa load được, chờ GPU, không claim: {blocked['error']}")

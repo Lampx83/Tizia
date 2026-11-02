@@ -57,6 +57,10 @@ export function attachAiBoardRequestRoutes(router, {
     const body = req.body || {};
     // Yêu cầu board tự sửa chỉ hệ thống tạo (POST /api/ai-board/worker/self-requests), không bao giờ từ FAB.
     if (body.type === 'self') return res.status(400).json({ error: 'invalid_request', message: 'Loại yêu cầu không hợp lệ.' });
+    // Một client gửi sai bảng mã (Latin-1) biến chữ Việt thành U+FFFD; từ chối sớm thay vì lưu bản hỏng.
+    if ([body.title, body.detail].some((part) => typeof part === 'string' && part.includes('\uFFFD'))) {
+      return res.status(422).json({ error: 'invalid_encoding', message: 'Nội dung phải là UTF-8 hợp lệ; hãy gửi lại bằng UTF-8.' });
+    }
     // Onboarding / làm rõ chỉ bật cho client có giao diện cho chúng (FAB public/ gửi header này). Client cũ
     // (FAB React web-next trên prod) vẫn gửi như trước: không 428, không kẹt ở phase clarifying.
     const features = new Set(String(req.get('X-AI-Board-Features') || '').split(',').map((f) => f.trim()));

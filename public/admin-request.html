@@ -159,6 +159,7 @@
   .g-state.st-succeeded { color:var(--ok); }
   .g-state.st-failed { color:var(--bad); }
   .g-state.st-running { color:var(--accent2); }
+  .g-state.st-stopped { color:var(--warn); }
   .g-frame { margin-top:28px; overflow-x:auto; overflow-y:hidden; }
   .g-svg { display:block; width:100%; min-width:900px; height:auto; }
   .g-edge { fill:none; stroke:var(--muted); stroke-opacity:.6; stroke-width:1.5; marker-end:url(#g-arr); }
@@ -178,6 +179,7 @@
   .g-node.st-succeeded .g-box, .g-node.st-succeeded .g-glyph { stroke:var(--ok); color:var(--ok); }
   .g-node.st-failed .g-box, .g-node.st-failed .g-glyph { stroke:var(--bad); color:var(--bad); }
   .g-node.st-running .g-box, .g-node.st-running .g-glyph { stroke:var(--accent2); color:var(--accent2); }
+  .g-node.st-stopped .g-box, .g-node.st-stopped .g-glyph { stroke:var(--warn); color:var(--warn); }
   .g-node.st-running .g-glyph { animation:g-turn 1.4s linear infinite; transform-box:fill-box; transform-origin:center; }
   @keyframes g-turn { to { transform:rotate(360deg); } }
   .g-halo { fill:none; stroke:var(--accent); stroke-width:1.5; }
@@ -195,7 +197,7 @@
   .g-step-name { flex:1; min-width:0; overflow-wrap:anywhere; }
   .g-step-state { font-size:11px; color:var(--muted); }
   .g-step:hover, .g-step.is-selected { background:var(--bg3); color:var(--txt); }
-  .g-step.st-succeeded .g-icon { color:var(--ok); } .g-step.st-failed .g-icon { color:var(--bad); } .g-step.st-running .g-icon { color:var(--accent2); }
+  .g-step.st-succeeded .g-icon { color:var(--ok); } .g-step.st-failed .g-icon { color:var(--bad); } .g-step.st-running .g-icon { color:var(--accent2); } .g-step.st-stopped .g-icon { color:var(--warn); }
   .g-pane { padding:20px 24px; min-width:0; min-height:80px; }
   .g-icon { flex:none; }
   .g-empty { margin:0; }

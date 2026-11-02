@@ -24,7 +24,7 @@ const NODES = {
 };
 const STEP_STATE = { run: 'running', ok: 'succeeded', bad: 'failed' };
 const STEP_NOTE = { queued: 'The worker has not started this run yet.', unfinished: 'Stopped before a result.', wait: 'Not reached yet.' };
-const STATE_LABEL = { idle: 'Waiting', running: 'Running', succeeded: 'Done', failed: 'Failed' };
+const STATE_LABEL = { idle: 'Waiting', running: 'Running', succeeded: 'Done', failed: 'Failed', stopped: 'Stopped' };
 const CALL_LABEL = { ok: 'Done', retry: 'Retry needed', error: 'Failed', http_error: 'Connection failed', timeout: 'Timed out' };
 const ROLLBACK_LABEL = { discarded: 'branch deleted', revert_ready: 'revert branch ready', failed: 'rollback failed' };
 const PURPOSE_EN = {
@@ -60,6 +60,7 @@ function modelCall(call) {
     model: call.model || '',
     ms: call.metrics?.wall_ms ?? null,
     budget: call.budget_units ?? null,
+    tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null,
   };
 }
 
@@ -104,8 +105,10 @@ function gateDetail(step, trace) {
   const failedCall = calls.find(c => c.error);
   const latest = models.at(-1);
   const earlier = (step.previousResults || []).map(r => r.public_reason).filter(Boolean);
+  const tokenSum = calls.reduce((sum, call) => ({
+    in: sum.in + numberOr(call.metrics?.tokens_in), out: sum.out + numberOr(call.metrics?.tokens_out) }), { in: 0, out: 0 });
   return {
-    step, models, tools, earlier, sandbox: sandboxOf(step), skills: skillsOf(step),
+    step, models, tools, earlier, sandbox: sandboxOf(step), skills: skillsOf(step), tokens: tokenSum,
     error: step.result?.public_reason || step.result?.internal_reason || failedCall?.error || '',
     budget: calls.reduce((sum, c) => sum + numberOr(c.budget_units), 0),
     ms: totals.ms,
@@ -132,7 +135,7 @@ export function graphNodes(trace = {}) {
     let detail = {};
     if (gate != null) {
       const step = steps.get(gate);
-      state = STEP_STATE[step?.state] || 'idle';
+      state = STEP_STATE[step?.state] || (step?.state === 'unfinished' ? 'stopped' : 'idle');
       detail = step ? gateDetail(step, trace) : {};
     } else if (id === 'plan_stopped') state = planBad ? 'failed' : 'idle';
     else if (id === 'plan_ready') state = steps.get(2.5)?.state === 'ok' ? 'succeeded' : 'idle';
@@ -169,8 +172,8 @@ function behaviorCells(b) {
   const tone = (warn, known) => (!known ? 'idle' : warn ? 'warn' : 'ok');
   const ctx = b?.context, out = b?.output, topo = b?.topology;
   return [
-    { label: 'Context', big: ctx?.ratio == null ? 'No data' : `${pct(ctx.ratio)} of ${fmt(ctx.limit)}`,
-      sub: ctx?.ratio == null ? '' : `${signed(ctx.delta ?? 0)} tokens vs previous step${ctx.warn ? ' · over 75%' : ''}`, tone: tone(ctx?.warn, ctx?.ratio != null), bar: false },
+    { label: 'Context', big: ctx?.tokens_in == null ? 'No data' : `${fmt(ctx.tokens_in)} / ${fmt(ctx.limit)} token`,
+      sub: ctx?.tokens_in == null ? '' : `${signed(ctx.delta ?? 0)} token so với bước trước`, tone: ctx?.tokens_in == null ? 'idle' : 'ok', bar: false },
     { label: 'Output', big: out?.distinct_line_ratio == null ? 'No data' : `${pct(out.distinct_line_ratio)} distinct lines`,
       sub: out?.compression_ratio == null ? 'Compression: short output' : `Compression ${out.compression_ratio}${out.warn ? ' · repetitive' : ''}`, tone: tone(out?.warn, out?.distinct_line_ratio != null), bar: false },
     { label: 'Topology', big: topo?.entropy == null ? 'Too few steps' : `Entropy ${topo.entropy}`,
@@ -218,6 +221,7 @@ const ICON = {
   running: '<circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="18 14"/>',
   succeeded: '<path d="M4.5 8.5l2.3 2.3 4.7-4.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   failed: '<path d="M5 5l6 6M11 5l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  stopped: '<rect x="4" y="7" width="8" height="2" rx="1" fill="currentColor"/>',
 };
 const icon = (state) => `<svg class="g-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">${ICON[state]}</svg>`;
 const pick = (nodes, selectedId) => nodes[selectedId] ? selectedId
@@ -253,7 +257,7 @@ function propsPanel(node, root) {
       : node.state === 'failed' ? 'This step failed in the current run.' : 'This step was not reached yet.';
     return `${head}${purpose}<p>${esc(text)}</p>`;
   }
-  const status = { running: node.current, failed: 'Stopped at this step.', succeeded: 'Finished.', idle: node.note }[node.state];
+  const status = { running: node.current, failed: 'Stopped at this step.', succeeded: 'Finished.', stopped: node.note, idle: node.note }[node.state];
   const typical = node.typical.ms == null ? 'No estimate. No earlier run timed this step.'
     : `about ${secs(node.typical.ms)} · ${SOURCE_TEXT[node.typical.source]} · All models`;
   const rows = [
@@ -274,13 +278,15 @@ function propsPanel(node, root) {
 function logPanel(node) {
   if (!node) return '<p class="meta g-empty">Chọn một bước để xem nhật ký.</p>';
   if (!node.step) return `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
-  const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map(m => `<li><b>${esc(m.title)}</b> · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
+  const total = (node.tokens?.in || 0) + (node.tokens?.out || 0);
+  const tokens = `<h4>Token</h4><p>vào ${esc(num(node.tokens?.in))} · ra ${esc(num(node.tokens?.out))} · tổng ${esc(num(total))}</p>`;
+  const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map(m => `<li><b>${esc(m.title)}</b> · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
   const tools = node.tools.length ? `<h4>Tool calls</h4><ol class="g-list">${node.tools.map(t => `<li><b>${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(CALL_LABEL[t.result] || 'No result yet')} · ${esc(secs(t.ms))}</li>`).join('')}</ol>` : '';
   const sandbox = node.sandbox.length ? `<h4>Sandbox runs</h4><ol class="g-list">${node.sandbox.map(r => `<li><code>${esc((r.argv || []).join(' '))}</code> · exit ${esc(r.rc ?? 'none')} · ${esc(secs(r.duration_ms))}${r.error ? ` · ${esc(r.error)}` : ''}</li>`).join('')}</ol>` : '';
   const skills = node.skills.length ? `<h4>Skills</h4><p>${node.skills.map(s => esc(s)).join(', ')}</p>` : '';
   const earlier = node.earlier.length ? `<h4>Earlier attempts</h4><ol class="g-list">${node.earlier.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
   const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Raw record</summary><pre class="mono">${esc(JSON.stringify({ result: node.step.result || null, calls: callsOf(node.step) }, null, 2))}</pre></details>`;
-  return `${models}${tools}${sandbox}${skills}${earlier}${raw}`;
+  return `${tokens}${models}${tools}${sandbox}${skills}${earlier}${raw}`;
 }
 
 // Orthogonal edge: straight when aligned, else one bend. Loop-back runs under the row. Starts at the source centre, ends on the target box edge so the arrowhead stays visible.

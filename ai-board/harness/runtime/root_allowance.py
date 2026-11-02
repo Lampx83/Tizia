@@ -14,6 +14,11 @@ def current():
     return _ROOT.get()
 
 
+def reset() -> None:
+    """Clear the ambient allowance so a finished run cannot gate the next one in the same process."""
+    _ROOT.set(None)
+
+
 def _used(state, cap):
     """Tokens are capped only for paid api calls (metered_tokens); older receipts fall back to the total."""
     return state['used'].get('metered_tokens', state['used']['tokens']) if cap == 'tokens' else state['used'][cap]
