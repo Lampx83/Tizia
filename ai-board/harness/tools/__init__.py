@@ -88,11 +88,13 @@ def grep(source, sha: str, *, words: list[str], file: str | None = None, path: s
     return "file khớp từ khoá: " + ", ".join(f"{f} ({n})" for n, f in hits[:file_context.WEIGHTS["grep_top_files"]]) if hits else ""
 
 
-def _files_with(index: dict, gram: str) -> list[str]:
-    """File có cụm (đã fold) nằm trọn trong 1 mảnh chữ hiển thị."""
+@functools.lru_cache(maxsize=2048)
+def _files_with(source: str, commit: str, gram: str) -> tuple[str, ...]:
+    """File có cụm (đã fold) nằm trọn trong 1 mảnh chữ hiển thị; cache theo (checkout, commit, cụm) để case lặp câu hỏi không quét lại chỉ mục."""
+    index = code_index.ui_index(source, commit)
     words = gram.split()
     candidates = set.intersection(*(index["words"].get(w, set()) for w in words)) if words else set()
-    return sorted(f for f in candidates if any(f" {gram} " in t for _, t in index["files"][f]["text"]))
+    return tuple(sorted(f for f in candidates if any(f" {gram} " in t for _, t in index["files"][f]["text"])))
 
 
 # Lesson/scenario data repeats everyday words ("ô tiêu đề", "gửi đề nghị") in prose; it is content, not app UI code.
@@ -111,7 +113,7 @@ def matching_files(source, sha: str, phrases: list[str], *, limit: int = 2, min_
     score: dict[str, float] = {}
     seen: dict[str, list[str]] = {}
     for gram in dict.fromkeys(g for g in map(file_context.fold, phrases) if g):
-        holders = _files_with(index, gram)
+        holders = _files_with(str(source), commit, gram)
         for file in (f for f in holders if not _CONTENT_DIRS.intersection(f.split("/"))):
             score[file] = score.get(file, 0.0) + (gram.count(" ") + 1) * math.log(1 + total / len(holders))
             seen.setdefault(file, []).append(gram)
@@ -211,7 +213,7 @@ def _ranked(source: str, commit: str, grams: tuple, pages: tuple) -> tuple[dict,
     mà không thêm file nào. Cache: find_text và renderers cùng hỏi 1 câu."""
     index = code_index.ui_index(source, commit)
     depth = _reach(index["files"], list(pages))
-    found = {g: _files_with(index, g) for g in grams}
+    found = {g: list(_files_with(source, commit, g)) for g in grams}
     chosen: list[tuple[str, list[str]]] = []
     for gram in sorted((g for g in grams if found[g]),
                        key=lambda g: (not any(f in depth for f in found[g]), len(found[g]), -g.count(" "))):

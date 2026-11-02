@@ -67,6 +67,15 @@ def test_a_passing_run_walks_every_gate_then_closes_and_ends_in_the_verdict():
     assert calls == path == ["attempt_open", "gate_3", "gate_4", "gate_5", "gate_5_5", "attempt_close", "repair_check", "verdict"]
 
 
+def test_each_node_reports_its_outcome_to_the_journal():
+    seen = []
+    handlers = {"gate_1": lambda: "passed", "gate_2": lambda: "passed", "gate_2_5": lambda: "passed",
+                "plan_ready": lambda: "passed"}
+    path = exec_graph.run(handlers, "gate_1", journal=lambda node, outcome: seen.append((node, outcome)))
+    assert path[:3] == ["gate_1", "gate_2", "gate_2_5"]
+    assert seen[:3] == [("gate_1", "passed"), ("gate_2", "passed"), ("gate_2_5", "passed")]
+
+
 def test_a_blocked_gate_skips_the_later_gates_but_still_closes_the_attempt():
     h, calls = handlers({"gate_4": ["blocked"], "repair_check": ["done"]})
     assert exec_graph.run(h, "attempt_open") == ["attempt_open", "gate_3", "gate_4", "attempt_close", "repair_check", "verdict"]

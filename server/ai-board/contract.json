@@ -82,7 +82,7 @@
     },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
-      "model_calls": 400, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
+      "model_calls": 400, "plan_model_calls": 24, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
       "wall_clock_s": 900, "semantic_repairs": 24, "child_wall_clock_s": 300,
       "node_wall_clock_s": 1200
     },
@@ -134,10 +134,9 @@
     "open_folders_per_user": { "value": 3, "_why": "feature folders not yet archived; keeps branches and context bounded" },
     "folder_archive_days": { "value": 30, "_why": "a folder with no activity this long is archived: its cycle closes, history and brief stay" },
     "skills": {
-      "_why": "Skill selection node (ai-board/harness/services/skill_selection.py). Counts every counted skill per prompt, platform baseline included; token bound is the UTF-8 upper bound of the rendered text. stages overrides per node (intake, plan=gate1, execute=gate3, verdict=gate4_review); an undeclared node uses the global values.",
+      "_why": "Skill selection node (ai-board/harness/services/skill_selection.py). Counts every counted skill per prompt, platform baseline included; token bound is the UTF-8 upper bound of the rendered text. stages overrides per node (plan=gate1, execute=gate3, verdict=gate4_review); an undeclared node uses the global values. Intake runs in the server context without skill selection, so it has no stage here.",
       "max_per_prompt": 2, "max_tokens_per_prompt": 3000,
       "stages": {
-        "intake": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000},
         "plan": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000},
         "execute": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000},
         "verdict": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000}

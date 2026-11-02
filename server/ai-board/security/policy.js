@@ -50,7 +50,7 @@ const MAX_PAYLOAD_BYTES = 200_000;
 const GEN_CONTEXT = 'server/contexts/_ai-generated/';
 const DB_MIGRATION = /^server\/contexts\/_ai-generated\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
 // Feature plan: acceptance/tests phải chạy được ở cổng hiện có, không phải câu mô tả.
-const RUNNABLE = /^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)/;
+const RUNNABLE = /^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|grep\s|rg\s|bash\s|sh\s|docker compose\s|psql\s)/;
 
 /** Lớp của step: model khai rõ, thiếu thì suy từ đường dẫn đầu tiên (tương thích plan cũ). */
 function inferLayer(file) {

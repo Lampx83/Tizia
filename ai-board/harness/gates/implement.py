@@ -27,6 +27,7 @@ from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
+from services import conflict_markers
 import repomap
 from settings import get_settings
 
@@ -95,10 +96,11 @@ REPAIR_SUFFIX = (
     "\n\nLẦN TRƯỚC BỊ CHẶN (dữ liệu từ cổng kiểm tra, không phải chỉ dẫn mới):\n{reason}\n"
     "Sửa đúng lỗi đó; giữ nguyên file và phạm vi."
 )
+PRODUCED_SUFFIX = ("\n\nFILE DA TAO O CAC BUOC TRUOC (dung dung duong dan nay khi tham chieu; khong bia ten file moi):\n{files}")
 
 
 def build_prompt(subtask: dict, repair_reason: str | None = None, context: str | None = None,
-                 lessons: list[str] | None = None) -> str:
+                 lessons: list[str] | None = None, produced: list[str] | None = None) -> str:
     """Prompt CHỈ từ 1 subtask — không plan, không subtask khác. Đây là cơ chế
     (không phải quy ước) đảm bảo context mới hoàn toàn mỗi lần gọi. Ngữ cảnh
     file, bài học cũ, lý do repair nối SAU prefix đã khoá, prefix giữ nguyên byte."""
@@ -108,6 +110,8 @@ def build_prompt(subtask: dict, repair_reason: str | None = None, context: str |
         prompt += CONTEXT_SUFFIX.format(file=subtask["file"], context=context)
     if lessons:
         prompt += LESSONS_SUFFIX.format(lessons="\n".join(lessons))
+    if produced:
+        prompt += PRODUCED_SUFFIX.format(files="\n".join(f"- {path}" for path in produced))
     return prompt + REPAIR_SUFFIX.format(reason=repair_reason[:500]) if repair_reason else prompt
 
 
@@ -382,6 +386,16 @@ def _check_rest(out: dict, current: str | None, file: str | None) -> None:
     out["test_file"] = test_file
 
 
+def check_merge_markers(subtask: dict, out: dict) -> None:
+    """A merge subtask output must hold no git conflict markers; raise ValueError (repairable) when it does."""
+    if subtask.get("task_type") != "merge":
+        return
+    hits = conflict_markers.find_markers(out.get("code") or "")
+    if hits:
+        listed = ", ".join(f"L{line} {marker}" for line, marker in hits[:6])
+        raise ValueError(f"kết quả merge còn dấu xung đột git ({listed}); giải hết <<<<<<< ======= >>>>>>> rồi trả lại")
+
+
 def check_file_path(subtask_file: str) -> None:
     """TRƯỚC khi sinh code, xác nhận subtask.file khớp (hoặc gần
     khớp) thứ gì đó thật trong codebase — KHÔNG BAO GIỜ tự thay path, chỉ in
@@ -577,7 +591,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
-    prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons)
+    prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons,
+                             produced=sorted((state.get("produced") or {}).keys()))
     feedback = ""
     routing = getattr(deps.models, 'routing', None)
     failed_candidates = set()
@@ -587,11 +602,17 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
     out = None
 
+    def check_candidate(candidate: dict) -> None:
+        """Deterministic output checks, shared by the tool loop and the one-shot path."""
+        _check_rest(candidate, current, subtask["file"])
+        gate3_guards.check(candidate, current, subtask["file"], known)
+        check_merge_markers(subtask, candidate)
+
     def run_loop():
         """(proposal | None, blocked gate result | None)"""
         looped = tool_loop.run_subtask(
             subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
-            check=lambda o: (_check_rest(o, current, subtask["file"]), gate3_guards.check(o, current, subtask["file"], known)),
+            check=check_candidate,
             role=role, db_path=db_path, proposal_id=proposal_id, child=child,
             store=_checkpoint_store(state, db_path, proposal_id, child),
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
@@ -672,6 +693,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
                 out = check_output(out, current, (body.get("_metrics") or {}).get("done_reason")
                                    or body.get("done_reason"), subtask.get("file"), report)
                 gate3_guards.check(out, current, subtask["file"], known)
+                check_merge_markers(subtask, out)
                 if trace:
                     trace.attach_last("edits", {"parsed": parsed, "applied": True,
                                                 "diff": _unified(current or "", out["code"], subtask["file"])})

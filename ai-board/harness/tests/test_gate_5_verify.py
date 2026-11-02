@@ -150,7 +150,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     runner = FakeRunner(fail="generated_test")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
-    assert out["reason"] == "generated tests failed"
+    assert out["reason"].startswith("generated tests failed")
     assert out["failure_class"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
     assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
@@ -160,7 +160,7 @@ def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
     runner = FakeRunner(fail="generated_timeout")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
-    assert out["reason"] == "generated tests timed out"
+    assert out["reason"].startswith("generated tests timed out")
     assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 

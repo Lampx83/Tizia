@@ -25,7 +25,7 @@ const rateLimited = (scope, waitMs) => Object.assign(bad('Rewrite rate limit rea
   { scope, retry_after_s: Math.max(1, Math.ceil(waitMs / 1000)) });
 const validId = value => (typeof value === 'number' || typeof value === 'string' && /^[1-9]\d*$/.test(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 const escape = text => text.replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#x27;' }[c]));
-const NODE_STAGES = ['intake', 'plan', 'execute', 'verdict'];
+const NODE_STAGES = ['plan', 'execute', 'verdict'];
 const FORBIDDEN = /(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)/i;
 
 // Per-node skill caps; a node without its own value uses the global limits.

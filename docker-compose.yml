@@ -192,7 +192,8 @@ services:
     image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d  # 4.48
     profiles: [storage]
     restart: unless-stopped
-    command: -logtostderr -log_json server -s3 -dir=/data  # master + volume + filer + S3 trong 1 container; log JSON ra stderr
+    # -ip.bind=0.0.0.0: mặc định bind theo -ip (IP tự dò của container) nên các mạng khác chỉ thấy ECONNREFUSED
+    command: -logtostderr -log_json server -s3 -dir=/data -ip.bind=0.0.0.0  # master + volume + filer + S3 trong 1 container; log JSON ra stderr
     logging: *logging
     environment:  # đặt AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY bằng đúng giá trị AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY
       AWS_ACCESS_KEY_ID:

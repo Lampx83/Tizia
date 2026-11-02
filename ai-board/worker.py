@@ -164,18 +164,37 @@ def _preview_eligible(gates: list[dict], kind: str | None) -> bool:
             and not oracle.get("probe_id") and oracle.get("reason") == "No trusted behavioral oracle for this request")
 
 
+def node_span(deps, node_id: str, fn: Callable[[], str]) -> Callable[[], str]:
+    """Bọc 1 handler node của graph trong 1 span tên `node_id`; không tracer thì trả nguyên hàm."""
+    trace = getattr(deps, "trace", None)
+    if trace is None or not hasattr(trace, "open_span"):
+        return fn
+
+    def run():
+        span = trace.open_span(node_id, {"gen_ai.operation.name": "invoke_agent", "tizia.node.id": node_id})
+        try:
+            outcome = fn()
+        except BaseException as error:
+            trace.close_span(span, "error", {"tizia.node.status": "error", "tizia.error.type": type(error).__name__})
+            raise
+        trace.close_span(span, "ok", {"tizia.node.status": str(outcome)[:40]})
+        return outcome
+    return run
+
+
 class _Execution:
     """Gates 3→5.5 and the repair loop as one run of the execution graph (contract.json `execution_graph`).
     Each node is a method; the graph owns the order and the termination, the node bodies own the work."""
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash):
+                 checkpoint, plan_hash, journal_hook=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
         self.should_stop, self.candidate_opts, self.request_type = should_stop, candidate_opts, request_type
         self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
+        self.journal_hook = journal_hook
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
@@ -196,9 +215,11 @@ class _Execution:
         self.path: list[str] = []
 
     def handlers(self) -> dict:
-        return {"attempt_open": self.attempt_open, "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
-                "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": self.attempt_close,
-                "repair_check": self.repair_check, "repair": self.repair, "verdict": self.verdict}
+        node = lambda name, fn: node_span(self.deps, name, fn)  # gates already span inside run_gate
+        return {"attempt_open": node("attempt_open", self.attempt_open), "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
+                "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": node("attempt_close", self.attempt_close),
+                "repair_check": node("repair_check", self.repair_check), "repair": node("repair", self.repair),
+                "verdict": node("verdict", self.verdict)}
 
     ENTRY = "execute"
 
@@ -215,7 +236,8 @@ class _Execution:
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
                                        thread_id=saver.thread_id if saver else None,
-                                       observe={"repair_check": self.observe_state}, report=self.halt)
+                                       observe={"repair_check": self.observe_state}, report=self.halt,
+                                       journal=self.journal)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
@@ -228,6 +250,15 @@ class _Execution:
         last = self.gates[-1]
         code = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])["diff"]
         return code, str(last.get("reason")), f"{last.get('gate')}:{self.kind}"
+
+    def journal(self, node: str, outcome: str) -> None:
+        """Node outcome plus a compact attempt snapshot for the server journal (LF/147)."""
+        if not self.journal_hook:
+            return
+        self.journal_hook(node, outcome, {
+            "produced": sorted(self.produced), "base_sha": self.base_sha, "repairs": len(self.repairs),
+            "ledger": self.budget.snapshot(),
+        })
 
     def graph_persistence(self) -> bool:
         from runtime import exec_graph
@@ -582,6 +613,7 @@ def _dependency_graph(plan: dict) -> list[dict]:
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
+                   journal=None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
@@ -608,6 +640,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
+        journal_hook=journal,
         **extra)
     return execution.run()
 
@@ -926,13 +959,18 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
+                budget = Budget(max_model_calls=6, max_units=600, max_wall_clock_s=600.0)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
-                        role=role, budget=Budget(max_model_calls=6, max_units=120), format=None,
+                        role=role, budget=budget, format=None,
                         options={'num_predict': 1})
                 except Exception as error:
                     ok_at.pop(role, None)
-                    return {'status': 'model_unavailable', 'model': role, 'error': str(error)[:200]}
+                    from runtime import root_allowance as _root
+                    from runtime import budget as _budget
+                    detail = (f"{error} | exhausted={budget.exhausted()} | node={_budget._NODE}"
+                              f" | root={_root.current() is not None}")
+                    return {'status': 'model_unavailable', 'model': role, 'error': detail[:300]}
                 ok_at[role] = clock()
             return None
         # Only what every request needs at intake. Gate 3 models are loaded when Gate 3 runs: probing them here
@@ -1230,6 +1268,16 @@ class HttpWorker:
         # Folder: planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
         plan_kwargs = {"source": folder_src["path"]} if folder_src else {}
         brief = (snapshot.get("folder") or {}).get("brief") or {}
+        def journal_hook(node: str, outcome: str, snapshot: dict) -> None:
+            try:
+                self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/journal", {
+                    **lease, "run_id": run["id"], "node": node, "outcome": outcome,
+                    "state": {key: snapshot.get(key) for key in ("produced", "base_sha", "repairs")},
+                    "ledger": snapshot.get("ledger") or {},
+                })
+            except Exception as error:  # noqa: BLE001 - journal is best effort
+                print(f"[worker] journal loi: {str(error)[:160]}")
+
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
             "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
             "folder_brief": brief.get("text")}} if folder_src else {}
@@ -1340,7 +1388,7 @@ class HttpWorker:
                             request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
                                 + ((snapshot.get('request') or {}).get('clarified_spec')
                                    or (snapshot.get('request') or {}).get('detail') or '')),
-                            should_stop=lost, **run_kwargs, **type_kwargs,
+                            should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook,
                         **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                         ), ticket_id, lease,
                         on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
@@ -1500,7 +1548,8 @@ class HarnessPlanner:
         answered = get_settings().gate25_answered
         # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
         # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
-        budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
+        plan_calls = int(LIMITS['budget'].get('plan_model_calls') or 24)
+        budget.max_model_calls = min(budget.max_model_calls, plan_calls)
         # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
         budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
@@ -1533,6 +1582,8 @@ class HarnessPlanner:
                 return node
 
             handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
+            # plan_ready is an end node; give it a handler so the walk emits the marker span (the router ends there anyway).
+            handlers["plan_ready"] = node_span(self.deps, "plan_ready", lambda: "passed")
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:

@@ -46,6 +46,23 @@ def test_marker_check_exact_seven_chars(line):
     assert conflict_markers.find_markers(line + ' x\n') == [(1, line)]
 
 
+def test_merge_subtask_output_with_markers_is_rejected_before_commit():
+    from gates import implement
+    out = {"code": 'a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> feat\n',
+           "test_file": "test/x.test.js", "test": 'import test from "node:test";'}
+    with pytest.raises(ValueError, match='dấu xung đột git'):
+        implement.check_merge_markers({'task_type': 'merge'}, out)
+    implement.check_merge_markers({'task_type': 'merge'}, {**out, "code": 'a\nb\n'})
+    implement.check_merge_markers({'task_type': 'frontend'}, out)
+
+
+def test_merge_skill_tells_the_model_to_run_the_marker_script_and_the_tests():
+    from services import default_skills
+    body = {s.name: s for s in default_skills.catalog()}['default-merge'].body
+    assert 'conflict_markers.py' in body and '<<<<<<<' in body and 'test' in body
+    assert '--abort' in body and 'push' in body
+
+
 def test_rewrite_smoke_task_exists_for_merge_skill():
     from services import skill_rewrite
     assert 'merge' in skill_rewrite.SMOKE_TASKS

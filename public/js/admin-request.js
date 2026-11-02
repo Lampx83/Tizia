@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeEvent, TECHNICAL_EVENTS, TRACE_STEPS, renderVerificationClaims, budgetSummary, renderRootAllowance } from './ai-board-trace.js';
+import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261029a';
 import { fmt as clockFmt } from './ai-board-clock.js';
@@ -14,7 +14,6 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = (t) => t ? clockFmt(t) : 'chưa có';
 const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-VN');
-const secs = (ms) => ms == null ? 'chưa có' : (ms / 1000).toFixed(1);
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
@@ -22,7 +21,6 @@ const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
 const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null };
 let view = null;
-let gateNames = {}; // tên cổng lấy từ trace (contract.gates.names của server)
 
 async function api(path, options = {}) {
   const r = await fetch(path, { credentials:'same-origin', ...options, signal: options.signal ?? AbortSignal.timeout(10000) });
@@ -86,8 +84,6 @@ function budgetCell(used, limit) {
 }
 
 const tag = (state, text) => `<span class="tag st-${state}">${esc(text)}</span>`;
-const gatePos = (g) => esc(Number(g));
-const gateName = (g) => `${gatePos(g)} · ${esc(TRACE_STEPS.find(s => s.gate === Number(g))?.title || gateNames[Number(g)] || 'Bước xử lý')}`;
 
 const ROOT_STATUS = {
   queued: ['idle', 'Chờ worker nhận'], running: ['run', 'Đang xử lý'], planned: ['ok', 'Đã có kế hoạch'],
@@ -512,77 +508,6 @@ async function rolloutDo(btn) {
   await refresh();
 }
 
-const SPAN_STATUS = { ok: ['ok', 'Xong'], error: ['bad', 'Lỗi'], unset: ['idle', 'Chưa đóng'] };
-const TOOL_STATUS = { ok: ['ok', 'Xong'], finish_ok: ['ok', 'Hoàn tất'], error: ['bad', 'Sai tham số'], forbidden: ['bad', 'Bị chặn'],
-  finish_rejected: ['warn', 'Bị loại'], repeated: ['bad', 'Lặp lại'] };
-const tokenText = (n) => n == null ? 'không rõ' : fmtNum(n);
-const thinkingText = (v) => v === true ? 'Bật' : v === false ? 'Tắt' : 'Mặc định';
-
-// Một hàng mỗi span (run, cổng, lần gọi model, tool) theo OTel GenAI; thanh ngang = vị trí và độ dài trên trục thời gian của lượt.
-function spanRows(spans) {
-  const depth = new Map();
-  const ids = new Set(spans.map((s) => s.span_id));
-  const level = (s) => {
-    if (depth.has(s.span_id)) return depth.get(s.span_id);
-    const parent = ids.has(s.parent_span_id) ? spans.find((p) => p.span_id === s.parent_span_id) : null;
-    const d = parent ? level(parent) + 1 : 0;
-    depth.set(s.span_id, d);
-    return d;
-  };
-  const t0 = Math.min(...spans.map((s) => s.start_ms));
-  const t1 = Math.max(...spans.map((s) => s.end_ms ?? Date.now()));
-  const span = Math.max(1, t1 - t0);
-  const kids = new Map();
-  for (const s of spans) { const p = ids.has(s.parent_span_id) ? s.parent_span_id : null; kids.set(p, [...(kids.get(p) || []), s]); }
-  const ordered = [];
-  const walk = (parent) => (kids.get(parent) || []).sort((x, y) => x.start_ms - y.start_ms).forEach((s) => { ordered.push(s); walk(s.span_id); });
-  walk(null);
-  return ordered.map((s) => {
-    const a = s.attributes || {};
-    const op = a['gen_ai.operation.name'];
-    const end = s.end_ms ?? Date.now();
-    const left = ((s.start_ms - t0) / span) * 100, width = Math.max(0.6, ((end - s.start_ms) / span) * 100);
-    let what = esc(s.name), think = '', tokens = '', finish = '';
-    let [state, label] = SPAN_STATUS[s.status] || SPAN_STATUS.unset;
-    if (op === 'chat') {
-      what = `Gọi ${code(a['gen_ai.request.model'] || '?')}`;
-      think = thinkingText(a['tizia.thinking']);
-      tokens = `${tokenText(a['gen_ai.usage.input_tokens'])} / ${tokenText(a['gen_ai.usage.output_tokens'])}`;
-      finish = esc((a['gen_ai.response.finish_reasons'] || []).join(', ') || '');
-    } else if (op === 'execute_tool') {
-      what = `Tool ${code(a['gen_ai.tool.name'])}`;
-      [state, label] = TOOL_STATUS[a['tizia.tool.status']] || [state, label];
-    } else if (a['tizia.gate.id'] != null) {
-      what = `<b>${gateName(a['tizia.gate.id'])}</b>`;
-      if (a['tizia.gate.status'] === 'blocked') [state, label] = ['bad', 'Dừng'];
-    } else {
-      what = '<b>Lượt xử lý</b>';
-    }
-    const skills = (s.events || []).filter((e) => e.name === 'tizia.skill.used').slice(0, 2);
-    if (skills.length) what += `<div class="meta">${skills.map((e) => {
-      const skill = e.attributes || {};
-      return tag(skill['tizia.skill.source'] === 'admin' ? 'warn' : 'idle',
-        `${skill['tizia.skill.name'] || '?'} v${skill['tizia.skill.version'] || '?'}`);
-    }).join(' ')}</div>`;
-    return `<tr class="span-row d${Math.min(level(s), 3)}">
-      <td class="span-what">${what}</td><td>${think}</td><td class="num">${tokens}</td>
-      <td class="num">${s.end_ms == null ? 'đang chạy' : end - s.start_ms < 1000 ? `${end - s.start_ms} ms` : `${secs(end - s.start_ms)} s`}</td><td>${finish}</td><td>${tag(state, label)}</td>
-      <td class="span-bar" aria-hidden="true"><i class="st-${state}" style="left:calc(12px + (100% - 24px) * ${(left / 100).toFixed(4)});width:calc((100% - 24px) * ${(Math.min(width, 100 - left) / 100).toFixed(4)})"></i></td></tr>`;
-  }).join('');
-}
-
-function renderSpanTimeline(trace) {
-  const runs = (trace.runs || []).filter((r) => r.spans?.length);
-  if (!runs.length) return `<h2>Dòng thời gian từng bước</h2><p class="meta blk">Chưa có dữ liệu span cho yêu cầu này. Các lượt xử lý mới sẽ hiện ở đây.</p>`;
-  const table = (run) => `<div class="table-wrap"><table class="span-table">
-    <thead><tr><th>Bước</th><th>Suy luận</th><th class="num">Token vào / ra</th><th class="num">Thời gian</th><th>Kết thúc</th><th>Trạng thái</th><th class="span-bar-head">Trục thời gian</th></tr></thead>
-    <tbody>${spanRows(run.spans)}</tbody></table></div>`;
-  const [latest, ...older] = [...runs].reverse();
-  return `<h2>Dòng thời gian từng bước</h2>
-    <div class="blk"><p class="meta">Lượt #${esc(latest.id)} · ${esc(latest.spans.length)} bước đã ghi</p>${table(latest)}</div>
-    ${older.map((run) => det(`spans-${run.id}`, `Lượt #${esc(run.id)} · ${esc(run.spans.length)} bước`, table(run))).join('')}`;
-}
-
 // Screenshots of the newest message that carries any (before/after pairs go through renderAtts).
 function shotsOf(messages) {
   const withShots = [...messages].reverse().find((m) => Array.isArray(m.attachments) && m.attachments.some((a) => a?.kind === 'screenshot'));
@@ -649,6 +574,7 @@ function renderAiBoard(t, messages = []) {
       ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
       ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
       ${root.lost_worker ? `<div class="meta warn">Worker mất kết nối khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Cần quản trị viên quyết định.</div>` : ''}
+      ${renderRunnerTrace(t)}
       ${traceLine(t.trace_ref)}
       ${managedLine(root.managed)}
       ${renderWrites(t)}
@@ -739,7 +665,6 @@ async function refresh() {
   ui.traceError = trace.ok ? '' : `Không tải được tiến trình (${trace.status}). Đã dừng hiệu ứng; đang chờ kết nối lại.`;
   if (ui.traceError) ui.flash = ui.traceError;
   if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
-  gateNames = view.trace?.gate_names || {};
   render();
   return true;
   } catch (e) {

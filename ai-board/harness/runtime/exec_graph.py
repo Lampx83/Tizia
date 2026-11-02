@@ -34,7 +34,7 @@ class GraphError(RuntimeError):
     """The spec and the handlers disagree, or a node reported an outcome the spec has no edge for."""
 
 
-def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, checkpointer=None,
+def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, journal: Callable | None = None, checkpointer=None,
                   observe: dict[str, Callable[[], tuple | None]] | None = None, report: dict | None = None):
     """Every reachable node but a bare end node needs a handler; every outcome a handler returns needs an edge.
     `observe[node]` returns (code, error, signature) before the node runs; a state seen again skips the node and halts the walk.
@@ -85,9 +85,12 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
             started = time.monotonic()
             budget.start_node(seconds)
             try:
-                update = {"outcome": handlers[nid](), "path": [nid], **hashed}
+                outcome = handlers[nid]()
             finally:
                 budget.start_node(None)
+            update = {"outcome": outcome, "path": [nid], **hashed}
+            if journal:
+                journal(nid, outcome)
             elapsed = time.monotonic() - started
             if "gate" in nodes[nid] and seconds and elapsed >= seconds:
                 update.update(halt_at(nid, loop_guard.REASON_NODE_TIMEOUT, f"{nid} ran {elapsed:.0f}s of {seconds:.0f}s"))
@@ -120,7 +123,8 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 
 
 def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None,
-        checkpointer=None, thread_id: str | None = None, observe: dict | None = None, report: dict | None = None) -> list[str]:
+        checkpointer=None, thread_id: str | None = None, observe: dict | None = None, report: dict | None = None,
+        journal: Callable | None = None) -> list[str]:
     """Walk the graph from `entry`; return the executed node path including the end node reached.
     `observe`/`report`: see compile_graph; the node time budget travels in config["configurable"].
     With `checkpointer` + `thread_id` each node's progress is saved; the thread is purged first, so a
@@ -129,7 +133,7 @@ def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict 
 
     graph_spec = graph_spec or spec()
     compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer,
-                                           observe=observe, report=report)
+                                           observe=observe, report=report, journal=journal)
     config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80)),
               "configurable": {"node_wall_clock_s": limits.budget()["node_wall_clock_s"]}}
     if checkpointer is not None:

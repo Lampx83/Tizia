@@ -16,7 +16,7 @@ GOLDEN = json.loads((REPO / "test" / "fixtures" / "ai-board-scaled-limit.json").
 
 
 def test_defaults_equal_old_constants():
-    assert limits.budget(env={}) == {"model_calls": 400, "tool_calls": 2000, "tokens": 200_000, "retries": 3, "units": 600,
+    assert limits.budget(env={}) == {"model_calls": 400, "plan_model_calls": 24, "tool_calls": 2000, "tokens": 200_000, "retries": 3, "units": 600,
                                      "wall_clock_s": 900.0, "semantic_repairs": 24, "child_wall_clock_s": 300.0,
                                      "node_wall_clock_s": 1200.0}
     assert limits.loop(env={}) == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000}

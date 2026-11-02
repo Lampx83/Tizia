@@ -104,6 +104,13 @@ def test_db_must_be_a_new_generated_context_migration_and_backend_stays_generate
         brainstorm.check_files(brainstorm.parse_plan(json.dumps(ai_board)), None, None)
 
 
+def test_new_generated_context_file_at_plugin_root_is_allowed(monkeypatch):
+    plan = brainstorm.parse_plan(json.dumps(feature_plan()))
+    plan["subtasks"][1]["file"] = "server/contexts/_ai-generated/faq/index.js"
+    monkeypatch.setattr(brainstorm.code_index, "git", lambda *a: b"")
+    brainstorm.check_files(plan, "src", "a" * 40)
+
+
 def test_existing_migration_is_not_additive(monkeypatch):
     plan = brainstorm.parse_plan(json.dumps(feature_plan()))
     monkeypatch.setattr(brainstorm.code_index, "git",
