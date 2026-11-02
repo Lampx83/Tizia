@@ -51,11 +51,11 @@ class FakeCheckpoint:
         return HttpGraphSaver(self.server, 7, self.lease, pin, thread_id=f"{self.run_scope}:graph")
 
 
-def worker(checkpoint, run_gate, budget):
+def worker(checkpoint, run_gate, budget, resume=None):
     return _Execution(PLAN, ticket_id=7, checkout_source=".", deps=object(), budget=budget, run_gate=run_gate,
                       cleanup=lambda *a, **k: None, catalog=None, request_detail=None, memory_path=None, should_stop=None,
                       candidate_opts=None, request_type=None, eval_tasks=None, preview_capture=None,
-                      checkpoint=checkpoint, plan_hash=None)
+                      checkpoint=checkpoint, plan_hash=None, resume=resume)
 
 
 @pytest.fixture
@@ -127,3 +127,64 @@ def test_changed_plan_starts_a_separate_thread_and_leaves_old_progress(flag):
     assert any(key[0].startswith("ticket-7:digA") for key in server.checkpoints), "old thread untouched"
     assert any(key[0].startswith("ticket-7:digB") for key in server.checkpoints)
     assert log[0] == 3
+
+
+def test_journal_keeps_the_code_gate_3_wrote_into_the_attempt_state():
+    seen = []
+    instance = _Execution(PLAN, ticket_id=7, checkout_source=".", deps=object(), budget=Budget(), run_gate=None,
+                          cleanup=None, catalog=None, request_detail=None, memory_path=None, should_stop=None,
+                          candidate_opts=None, request_type=None, eval_tasks=None, preview_capture=None,
+                          checkpoint=None, plan_hash=None, journal_hook=lambda node, outcome, snap: seen.append(snap))
+    instance.state = {"produced": dict(PRODUCED), "base_sha": "a" * 40}
+    instance.journal("gate_3", "passed")
+    assert seen[0]["state"]["produced"] == PRODUCED
+    assert seen[0]["state"]["base_sha"] == "a" * 40
+
+
+PRODUCED = {"public/a.html": {"model": "light", "test_file": "test/a.test.js", "code": "<!doctype html>",
+                              "test": "import test from 'node:test';"}}
+
+
+def journal_run(plan_hash=None, graph=None, base=None, produced=None, outcome="passed"):
+    from runtime import exec_graph
+    return [{"run_id": "41", "entries": [{
+        "node": "gate_3", "outcome": outcome, "created_at": 1,
+        "state": {
+            "produced": dict(PRODUCED if produced is None else produced),
+            "base_sha": base or "a" * 40, "repairs": [], "gates": [{"gate": 3, "blocked": False}],
+            "pins": {"plan_hash": plan_hash, "graph": graph or exec_graph.digest(), "base": base},
+            "resumable": True,
+        },
+    }]}]
+
+
+def test_matching_journal_skips_gate_3_and_reuses_the_generated_code(flag):
+    server, log, seen = FakeServer(), [], {}
+    cp = FakeCheckpoint(server)
+    result = worker(cp, gates(log, seen), Budget(), resume=journal_run()).run()
+    assert log == [4], "gate 3 không chạy lại; gate 4 chạy tiếp"
+    assert seen.get("calls_on_entry") is None, "không có model call nào cho gate 3"
+    assert result["gates"][0]["gate"] == 3, "gate 3 đã xong vẫn nằm trong gates"
+    assert result["gate_reached"] == 4
+
+
+def test_resume_pin_mismatch_runs_gate_3_again(flag):
+    server, log, seen = FakeServer(), [], {}
+    cp = FakeCheckpoint(server)
+    worker(cp, gates(log, seen), Budget(), resume=journal_run(plan_hash="other-plan")).run()
+    assert log == [3, 4], "pin lệch thì chạy lại từ gate 3"
+    assert seen["calls_on_entry"] == [0]
+
+
+def test_resume_unavailable_when_no_generated_code_in_the_journal(flag):
+    server, log, seen = FakeServer(), [], {}
+    worker(FakeCheckpoint(server), gates(log, seen), Budget(), resume=journal_run(produced={})).run()
+    assert log == [3, 4], "journal thiếu code thì gate 3 làm lại"
+
+
+def test_resume_only_when_gate_3_is_the_last_completed_node(flag):
+    server, log, seen = FakeServer(), [], {}
+    journal = journal_run()
+    journal[0]["entries"].append({"node": "gate_4", "outcome": "passed", "created_at": 2, "state": {}})
+    worker(FakeCheckpoint(server), gates(log, seen), Budget(), resume=journal).run()
+    assert log == [3, 4], "crash sau gate 4 chưa được resume ở lát này"

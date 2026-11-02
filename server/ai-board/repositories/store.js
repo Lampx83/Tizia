@@ -1161,8 +1161,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   async function getLeasedSnapshot(ticketId, workerId, leaseToken, now = Date.now()) {
     const ticket = await assertLease(ticketId, workerId, leaseToken, now);
-    const request = await db.get(`
-      SELECT id, domain, type, title, detail, student, status, owner_user_id,
+    const request = await db.get(`      SELECT id, domain, type, title, detail, student, status, owner_user_id,
              owner_domain, owner_state, created_at, updated_at, attachments, clarified_spec
       FROM requests WHERE id=?
     `, [ticket.source_request_id]);
@@ -1170,9 +1169,23 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       SELECT id, role, author_name, body, attachments, created_at
       FROM request_messages WHERE request_id=? ORDER BY created_at, id
     `, [ticket.source_request_id])).map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
+    // Run bi kill (chua co verdict) giu journal lai: worker dung no de chay tiep thay vi sinh lai code.
+    const journalRows = await db.all(`
+      SELECT r.id AS run_id, j.node, j.outcome, j.state_delta, j.ledger, j.created_at
+      FROM ai_runs r JOIN ai_attempt_journal j ON j.run_id = r.id
+      WHERE r.ticket_id=? AND r.outcome IS NULL
+      ORDER BY r.id DESC, j.created_at, j.id
+    `, [ticket.id]);
+    const resumeJournal = [];
+    for (const { state_delta: state, ledger, ...row } of journalRows) {
+      let run = resumeJournal.find((item) => String(item.run_id) === String(row.run_id));
+      if (!run) resumeJournal.push(run = { run_id: row.run_id, entries: [] });
+      run.entries.push({ node: row.node, outcome: row.outcome, state: parseJson(state), ledger: parseJson(ledger), created_at: row.created_at });
+    }
     return {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: await latestPullRequest(ticket.id),
+      resume_journal: resumeJournal,
       requester_profile: await requesterProfile(request.owner_user_id),
       // Spec chưa đủ rõ: cổng 2.5 / tier xử lý kỹ hơn.
       clarification_incomplete: !!await db.get("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [ticket.id]),
@@ -1244,12 +1257,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
     const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), Number(ticketId)]);
     if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const stateJson = JSON.stringify(input.state || {});
+    if (stateJson.length > 200_000) throw new WorkerContractError('journal state too large', 413, 'journal_too_large');
     await db.run(`INSERT INTO ai_attempt_journal(ticket_id, run_id, node, outcome, state_delta, ledger, created_at)
       VALUES (?,?,?,?,?,?,?)
       ON CONFLICT (ticket_id, run_id, node) DO UPDATE SET outcome=excluded.outcome,
-        state_delta=excluded.state_delta, ledger=excluded.ledger`,
+        state_delta=excluded.state_delta, ledger=excluded.ledger, created_at=excluded.created_at`,
       [Number(ticketId), Number(input.runId), String(input.node).slice(0, 80), String(input.outcome).slice(0, 40),
-       JSON.stringify(input.state || {}), JSON.stringify(input.ledger || {}), input.now]);
+       stateJson, JSON.stringify(input.ledger || {}), input.now]);
     return { ok: true };
   });
 

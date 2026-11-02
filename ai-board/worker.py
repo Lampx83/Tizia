@@ -188,13 +188,15 @@ class _Execution:
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash, journal_hook=None):
+                 checkpoint, plan_hash, journal_hook=None, resume=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
         self.should_stop, self.candidate_opts, self.request_type = should_stop, candidate_opts, request_type
         self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
         self.journal_hook = journal_hook
+        self.resume = resume or []
+        self.resume_seed: dict | None = None
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
@@ -232,15 +234,72 @@ class _Execution:
             cursor = self.checkpoint.load_cursor()
             if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
                 self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
+        self.resume_seed = self._prepare_resume()
+        resume_nodes = {"gate_3": "passed"} if self.resume_seed else None
         saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
                                        thread_id=saver.thread_id if saver else None,
                                        observe={"repair_check": self.observe_state}, report=self.halt,
-                                       journal=self.journal)
+                                       journal=self.journal, resume_nodes=resume_nodes)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
+
+    def _checkout_head(self) -> str | None:
+        import code_index
+        try:
+            return code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip()
+        except Exception:  # noqa: BLE001 - khong phai repo: khong resume
+            return None
+
+    def _note(self, detail: str) -> None:
+        trace = getattr(self.deps, "trace", None)
+        if trace is not None and hasattr(trace, "note"):
+            trace.note("tool", "graph resume", detail)
+
+    def _prepare_resume(self) -> dict | None:
+        """Doc journal cua cac run truoc: pin khop + gate 3 da xong -> dung lai scratch/diffs, bo qua gate 3."""
+        if not self.resume:
+            return None
+        from runtime import exec_graph
+        head, graph = self._checkout_head(), exec_graph.digest()
+        for candidate in self.resume:  # server tra run moi nhat truoc
+            entries = sorted(candidate.get("entries") or [], key=lambda e: (e.get("created_at") or 0))
+            # Chi resume khi gate 3 la node vua xong: crash giua mot luot sua thi phai lam lai gate 3.
+            done = entries[-1] if entries else None
+            if done is None or done.get("node") != "gate_3" or done.get("outcome") != "passed":
+                continue
+            state = done.get("state") or {}
+            pins = state.get("pins") or {}
+            mismatch = (pins.get("plan_hash") != self.plan_hash or pins.get("graph") != graph
+                        or (pins.get("base") and head and pins["base"] != head)
+                        or state.get("resumable") is False)
+            if mismatch:
+                self._note(f"journal run {candidate.get('run_id')} khong dung pin; chay moi")
+                continue
+            produced = state.get("produced") or {}
+            base = state.get("base_sha") or pins.get("base") or head
+            if not produced or not base:
+                continue
+            scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+            seed = {"plan": _execution_plan(self.plan), "produced": dict(produced),
+                    "base_sha": base, "scratch_repo": str(scratch)}
+            try:
+                from gates import implement
+                implement.restore(seed)
+            except Exception as error:  # noqa: BLE001 - khong dung lai duoc scratch thi chay lai gate 3
+                shutil.rmtree(scratch, ignore_errors=True)
+                self._note(f"khong dung lai duoc scratch tu journal: {str(error)[:200]}")
+                continue
+            self.produced = dict(produced)
+            self.gates = list(state.get("gates") or [])
+            self.repairs = list(state.get("repairs") or [])
+            self.base_sha = base
+            self._note(f"resume tu journal run {candidate.get('run_id')} tai gate 4")
+            return {"scratch": str(scratch), "diffs": seed["diffs"], "base_sha": base,
+                    "gates": list(self.gates)}
+        return None
 
     def observe_state(self) -> tuple | None:
         """(code fingerprint, error, block signature) of the failed attempt, for the graph's state-hash router."""
@@ -252,13 +311,26 @@ class _Execution:
         return code, str(last.get("reason")), f"{last.get('gate')}:{self.kind}"
 
     def journal(self, node: str, outcome: str) -> None:
-        """Node outcome plus a compact attempt snapshot for the server journal (LF/147)."""
+        """Node outcome plus the state a later attempt needs to continue right after it (LF/147/LF/148)."""
         if not self.journal_hook:
             return
-        self.journal_hook(node, outcome, {
-            "produced": sorted(self.produced), "base_sha": self.base_sha, "repairs": len(self.repairs),
-            "ledger": self.budget.snapshot(),
-        })
+        from runtime import exec_graph, limits
+        state = self.state or {}
+        produced = dict(state.get("produced") or self.produced)
+        base = state.get("base_sha") or self.base_sha or self.grounded
+        entry = {
+            "pins": {"plan_hash": self.plan_hash, "base": base, "graph": exec_graph.digest(),
+                     "config": limits.config_sha256()},
+            "base_sha": base, "repairs": list(self.repairs), "gates": list(self.gates),
+            "produced_files": sorted(produced), "resumable": True,
+        }
+        if node == "gate_3":  # the full generated code is only needed once per attempt; other nodes cost little
+            entry["produced"] = produced
+        if len(json.dumps(entry, ensure_ascii=False, default=str)) > 190_000:
+            entry.pop("produced", None)  # qua lon: journal van ghi, nhung khong du de resume
+            entry["resumable"] = False
+        self.journal_hook(node, outcome, {"state": entry,
+                                          "ledger": self.budget.snapshot() if hasattr(self.budget, "snapshot") else {}})
 
     def graph_persistence(self) -> bool:
         from runtime import exec_graph
@@ -266,12 +338,13 @@ class _Execution:
 
     # ── nodes ──
     def attempt_open(self) -> str:
+        seed, self.resume_seed = self.resume_seed, None
         if getattr(self.deps, "trace", None):
             self.deps.trace.attempt = len(self.repairs)
         drop_screenshots(self.shots)  # ảnh của lần trước lần sửa: bỏ
         self.shots, self.gates, self.kind, self.candidate = [], [], None, None
         self.attempt_checkpoint = self.checkpoint.attempt(len(self.repairs)) if self.checkpoint is not None else None
-        self.scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
+        self.scratch = Path(seed["scratch"]) if seed else Path(tempfile.mkdtemp(prefix="ai-board-change-"))
         execution_plan = _execution_plan(self.plan)
         state = self.state = {
             "plan": execution_plan, "scratch_repo": str(self.scratch),
@@ -279,6 +352,11 @@ class _Execution:
             # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (và gửi sang guest nếu dùng sandbox).
             "acceptance": list(execution_plan.get("acceptance") or []),
         }
+        if seed:  # gate 3 da xong trong journal: dung lai state + scratch, khong goi model lai
+            state["produced"] = dict(self.produced)
+            state["diffs"] = list(seed["diffs"])
+            state["base_sha"] = seed["base_sha"]
+            self.gates = list(seed["gates"])
         self.open = True
         if self.catalog is not None:
             state["catalog"] = self.catalog
@@ -613,7 +691,7 @@ def _dependency_graph(plan: dict) -> list[dict]:
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
-                   journal=None,
+                   journal=None, resume=None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
@@ -640,7 +718,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
-        journal_hook=journal,
+        journal_hook=journal, resume=None if reverify else resume,
         **extra)
     return execution.run()
 
@@ -1272,11 +1350,15 @@ class HttpWorker:
             try:
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/journal", {
                     **lease, "run_id": run["id"], "node": node, "outcome": outcome,
-                    "state": {key: snapshot.get(key) for key in ("produced", "base_sha", "repairs")},
+                    "state": snapshot.get("state") or {},
                     "ledger": snapshot.get("ledger") or {},
                 })
             except Exception as error:  # noqa: BLE001 - journal is best effort
                 print(f"[worker] journal loi: {str(error)[:160]}")
+
+        # Run truoc bi kill (chua co verdict) + pin khop: _Execution tu dung lai scratch tu journal.
+        resume = [item for item in snapshot.get("resume_journal") or []
+                  if str(item.get("run_id")) != str(run["id"])]
 
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
             "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
@@ -1388,7 +1470,7 @@ class HttpWorker:
                             request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
                                 + ((snapshot.get('request') or {}).get('clarified_spec')
                                    or (snapshot.get('request') or {}).get('detail') or '')),
-                            should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook,
+                            should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook, resume=resume,
                         **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                         ), ticket_id, lease,
                         on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),

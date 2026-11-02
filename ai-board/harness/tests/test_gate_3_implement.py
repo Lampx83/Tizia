@@ -506,3 +506,29 @@ def test_dep_file_context_skips_dependency_already_at_base(tmp_path, monkeypatch
                                     "size": "small", "verify": "v"}, page]}}
     monkeypatch.setattr(implement, "_base_tree", lambda s: {"server/contexts/_existing/index.js"})
     assert implement._dep_file_context(page, state, repo) == ""
+
+
+def test_restore_rebuilds_scratch_and_diffs_without_a_model(tmp_path):
+    subtasks = [{"title": "A", "file": "public/a.html"}, {"title": "B", "file": "public/b.html"}]
+    state = {"plan": {"subtasks": subtasks}, "scratch_repo": str(tmp_path), "produced": {
+        "public/a.html": {"model": "light", "test_file": "test/a.test.js", "code": "<h1>A</h1>",
+                          "test": "import test from 'node:test';"},
+        "public/b.html": {"model": "light", "test_file": "test/b.test.js", "code": "<h1>B</h1>",
+                          "test": "import test from 'node:test';"},
+    }}
+    implement.restore(state)
+    assert (tmp_path / "public/a.html").read_text(encoding="utf-8") == "<h1>A</h1>"
+    assert [item["file"] for item in state["diffs"]] == ["public/a.html", "public/b.html"]
+    assert len({item["commit"] for item in state["diffs"]}) == 2
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=tmp_path, capture_output=True,
+                          text=True).stdout.strip() == ""
+
+
+def test_restore_refuses_a_partial_production(tmp_path):
+    state = {"plan": {"subtasks": [{"title": "A", "file": "public/a.html"},
+                                   {"title": "B", "file": "public/b.html"}]},
+             "scratch_repo": str(tmp_path), "produced": {
+                 "public/a.html": {"model": "light", "test_file": "test/a.test.js", "code": "<h1>A</h1>",
+                                   "test": "import test from 'node:test';"}}}
+    with pytest.raises(ValueError, match="gate 3"):
+        implement.restore(state)
