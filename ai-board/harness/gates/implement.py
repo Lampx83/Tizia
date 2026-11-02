@@ -460,6 +460,32 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
     return diff
 
 
+def restore(state: dict, repo_dir: str | Path | None = None) -> None:
+    """Dung lai repo scratch + diffs tu state['produced'] (journal), khong goi model.
+    Raise ValueError khi thieu subtask: resume khong the chay tiep tu gate 3."""
+    from runtime import schedule
+
+    subtasks = schedule.prepare((state.get("plan") or {}).get("subtasks") or [])
+    produced = state.get("produced") or {}
+    repo = _ensure_scratch_repo(repo_dir if repo_dir is not None else state.get("scratch_repo"))
+    diffs = []
+    for subtask in subtasks:
+        entry = produced.get(subtask["file"])
+        if not entry:
+            continue
+        diff_text = _write_and_diff(repo, subtask["file"], entry["code"], entry["test_file"], entry["test"])
+        diffs.append({
+            "title": subtask.get("title"), "file": subtask["file"], "test_file": entry["test_file"],
+            "model": entry.get("model"), "diff": diff_text,
+            **({"verification": entry["verification"]} if entry.get("verification") else {}),
+            "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
+        })
+    if len(diffs) != len(subtasks):
+        raise ValueError(f"gate 3 chua xong: {len(diffs)}/{len(subtasks)} child co diff")
+    state["diffs"] = diffs
+    state["scratch_repo"] = str(repo)
+
+
 def _produced_lines(old: str, new: str, limit: int = 12) -> str:
     """`Lnn| text` for the lines of `new` that differ from `old`: the model sees what its edit really wrote (e.g. a doubled `';`)."""
     shown, matcher = [], difflib.SequenceMatcher(None, old.splitlines(), new.splitlines(), autojunk=False)

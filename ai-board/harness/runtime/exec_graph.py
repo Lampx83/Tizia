@@ -1,6 +1,7 @@
 """Execution graph: one LangGraph built from server/ai-board/contract.json, so the engine, the server and the admin diagram share one spec."""
 from __future__ import annotations
 
+import hashlib
 import json
 import operator
 import time
@@ -19,6 +20,12 @@ def spec() -> dict:
     return json.loads(PATH.read_text(encoding="utf-8"))["execution_graph"]
 
 
+def digest() -> str:
+    """sha256 của graph spec: đổi spec là mọi resume cũ mất hiệu lực."""
+    raw = json.dumps(spec(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def persistence_enabled() -> bool:
     return get_settings().graph_persistence
 
@@ -35,10 +42,12 @@ class GraphError(RuntimeError):
 
 
 def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None, journal: Callable | None = None, checkpointer=None,
-                  observe: dict[str, Callable[[], tuple | None]] | None = None, report: dict | None = None):
+                  observe: dict[str, Callable[[], tuple | None]] | None = None, report: dict | None = None,
+                  resume_nodes: dict[str, str] | None = None):
     """Every reachable node but a bare end node needs a handler; every outcome a handler returns needs an edge.
     `observe[node]` returns (code, error, signature) before the node runs; a state seen again skips the node and halts the walk.
-    `report` receives {reason, node, detail} of the halt; a halt routes to the verdict node (or the end when there is none)."""
+    `report` receives {reason, node, detail} of the halt; a halt routes to the verdict node (or the end when there is none).
+    `resume_nodes` maps node -> recorded outcome: the first visit returns it without running the handler (journal-driven resume)."""
     from langgraph.graph import END, START, StateGraph
 
     graph_spec = graph_spec or spec()
@@ -63,6 +72,7 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
     guard = limits.loop_guard()
     observe = observe or {}
     report = report if report is not None else {}
+    resumed: set[str] = set()
 
     def halt_at(nid: str, reason: str, detail: str) -> dict:
         report.update(reason=reason, node=nid, detail=detail)
@@ -72,6 +82,9 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
         def node(state: GraphState, config: RunnableConfig) -> GraphState:
             from runtime import budget
 
+            if resume_nodes and nid in resume_nodes and nid not in resumed:
+                resumed.add(nid)  # one replay only: a repair re-enters the node for real
+                return {"path": [nid], "outcome": resume_nodes[nid]}
             seconds = (config.get("configurable") or {}).get("node_wall_clock_s")
             seconds = limits.budget()["node_wall_clock_s"] if seconds is None else seconds
             if nid in observe and (material := observe[nid]()) is not None:
@@ -124,16 +137,20 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 
 def run(handlers: dict[str, Callable[[], str]], entry: str, *, graph_spec: dict | None = None,
         checkpointer=None, thread_id: str | None = None, observe: dict | None = None, report: dict | None = None,
-        journal: Callable | None = None) -> list[str]:
+        journal: Callable | None = None, resume_nodes: dict[str, str] | None = None) -> list[str]:
     """Walk the graph from `entry`; return the executed node path including the end node reached.
     `observe`/`report`: see compile_graph; the node time budget travels in config["configurable"].
     With `checkpointer` + `thread_id` each node's progress is saved; the thread is purged first, so a
-    rerun re-enters from `entry` (resume is the caller's replay of tool steps, not a graph jump)."""
+    rerun re-enters from `entry` (resume is the caller's replay of tool steps, not a graph jump).
+    `resume_nodes` (from the attempt journal) replays the recorded outcome and leaves the old thread intact:
+    the journal, not the checkpoint, decides where a resumed attempt continues."""
     from langgraph.errors import GraphRecursionError
 
     graph_spec = graph_spec or spec()
+    if resume_nodes:
+        checkpointer = None  # the old thread stays intact; the journal drives the resume
     compiled, nodes, routes = compile_graph(handlers, entry, graph_spec=graph_spec, checkpointer=checkpointer,
-                                           observe=observe, report=report, journal=journal)
+                                           observe=observe, report=report, journal=journal, resume_nodes=resume_nodes)
     config = {"recursion_limit": int(graph_spec.get("recursion_limit", 80)),
               "configurable": {"node_wall_clock_s": limits.budget()["node_wall_clock_s"]}}
     if checkpointer is not None:

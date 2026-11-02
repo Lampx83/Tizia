@@ -363,7 +363,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
                 'risk_level': 'low', 'risk_signals': []}
 
     def change_runner(plan, ticket_id, max_units, *, policy, accepted_policy_hash, request_detail, should_stop,
-                      plan_hash=None):
+                      plan_hash=None, **_):
         assert plan_hash is None  # server sent none: no kwarg at all would also pass the strict signature
         assert should_stop() is False  # lease healthy while the heartbeat succeeds
         assert max_units == 200 - 80  # per-run limit minus what planning spent

@@ -1,4 +1,6 @@
 """The execution graph is one spec shared with the server: coverage, termination and cleanup."""
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -74,6 +76,30 @@ def test_each_node_reports_its_outcome_to_the_journal():
     path = exec_graph.run(handlers, "gate_1", journal=lambda node, outcome: seen.append((node, outcome)))
     assert path[:3] == ["gate_1", "gate_2", "gate_2_5"]
     assert seen[:3] == [("gate_1", "passed"), ("gate_2", "passed"), ("gate_2_5", "passed")]
+
+
+def test_journal_resume_replays_a_finished_node_once_without_running_it():
+    h, calls = handlers({"gate_4": ["blocked"], "repair_check": ["done"]})
+    seen = []
+    path = exec_graph.run(h, "attempt_open", resume_nodes={"gate_3": "passed"},
+                          journal=lambda node, outcome: seen.append(node))
+    assert calls.count("gate_3") == 0, "gate 3 replays the journal outcome instead of running"
+    assert calls.count("gate_4") >= 1 and "gate_3" not in seen
+    assert path.index("gate_3") < path.index("gate_4")
+
+
+def test_a_repair_after_a_resumed_node_runs_it_for_real_again():
+    h, calls = handlers({"gate_4": ["blocked"], "repair_check": ["repair", "done"]})
+    exec_graph.run(h, "attempt_open", resume_nodes={"gate_3": "passed"})
+    assert calls.count("gate_3") == 1, "the repair attempt must regenerate code, not replay the journal"
+
+
+def test_graph_digest_changes_when_the_spec_changes():
+    assert exec_graph.digest() == exec_graph.digest()
+    changed = exec_graph.spec()
+    changed["recursion_limit"] = int(changed.get("recursion_limit", 80)) + 1
+    raw = json.dumps(changed, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    assert hashlib.sha256(raw.encode("utf-8")).hexdigest() != exec_graph.digest()
 
 
 def test_a_blocked_gate_skips_the_later_gates_but_still_closes_the_attempt():

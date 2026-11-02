@@ -127,8 +127,8 @@
   .claim-evidence code { white-space:normal; overflow-wrap:anywhere; word-break:break-all; }
   .claim-evidence pre { white-space:pre-wrap; overflow-wrap:anywhere; }
   /* Ticket graph: thin edges, no boxes. Colour: one accent plus the state colours. */
-  .ticket-graph { margin:24px 0 0; display:grid; gap:14px; }
-  .ticket-graph .blk { margin:0; padding:18px; }
+  .ticket-graph { margin:24px 0 0; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+  .ticket-graph .blk { margin:0; padding:18px; min-width:0; }
   .g-caption { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
   .g-summary { display:grid; gap:6px; padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border); font-size:13px; }
   .g-summary .line1 { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
@@ -181,6 +181,10 @@
   .g-node:hover .g-label, .g-node.is-selected .g-label { fill:var(--txt); }
   .g-node:focus-visible .g-box { stroke:var(--accent); stroke-width:2.5; }
   .g-loop { margin:28px 0 0; }
+  .g-resume { margin:12px 0 0; color:var(--ok); }
+  .g-journal { list-style:none; display:flex; flex-wrap:wrap; gap:6px 8px; margin:0 0 12px; padding:0; font-size:12px; color:var(--muted); }
+  .g-journal li { padding:4px 9px; border:1px solid var(--border); border-radius:999px; overflow-wrap:anywhere; }
+  .g-journal li.is-replay { color:var(--ok); border-color:var(--ok); }
   .g-props, .g-graph, .g-log { margin-top:16px; }
   .g-graph { padding-bottom:8px; }
   .g-log { display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); padding:0; overflow:hidden; }
@@ -208,6 +212,7 @@
   @media (max-width:600px) {
     .g-strip { grid-template-columns:1fr 1fr; }
     .g-big { font-size:22px; }
+    .g-result-row { grid-template-columns:minmax(0,1fr); gap:2px; }
     .g-log { grid-template-columns:minmax(0,1fr); }
     .g-steps { border-right:0; border-bottom:1px solid var(--border); }
     .g-pane { padding:16px; }
@@ -221,6 +226,6 @@
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
 <nav aria-label="Bài học AI Board"><a class="back" href="/ai-board-lessons.html">Review bài học AI Board</a> <a class="back" href="/admin-shots.html">Ảnh nháp đã lưu</a></nav>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
-<script type="module" src="/js/admin-request.js?v=20261030d"></script>
+<script type="module" src="/js/admin-request.js?v=20261103a"></script>
 </body>
 </html>

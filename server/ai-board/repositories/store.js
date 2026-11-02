@@ -1161,8 +1161,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   async function getLeasedSnapshot(ticketId, workerId, leaseToken, now = Date.now()) {
     const ticket = await assertLease(ticketId, workerId, leaseToken, now);
-    const request = await db.get(`
-      SELECT id, domain, type, title, detail, student, status, owner_user_id,
+    const request = await db.get(`      SELECT id, domain, type, title, detail, student, status, owner_user_id,
              owner_domain, owner_state, created_at, updated_at, attachments, clarified_spec
       FROM requests WHERE id=?
     `, [ticket.source_request_id]);
@@ -1170,9 +1169,23 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       SELECT id, role, author_name, body, attachments, created_at
       FROM request_messages WHERE request_id=? ORDER BY created_at, id
     `, [ticket.source_request_id])).map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
+    // Run bi kill (chua co verdict) giu journal lai: worker dung no de chay tiep thay vi sinh lai code.
+    const journalRows = await db.all(`
+      SELECT r.id AS run_id, j.node, j.outcome, j.state_delta, j.ledger, j.created_at
+      FROM ai_runs r JOIN ai_attempt_journal j ON j.run_id = r.id
+      WHERE r.ticket_id=? AND r.outcome IS NULL
+      ORDER BY r.id DESC, j.created_at, j.id
+    `, [ticket.id]);
+    const resumeJournal = [];
+    for (const { state_delta: state, ledger, ...row } of journalRows) {
+      let run = resumeJournal.find((item) => String(item.run_id) === String(row.run_id));
+      if (!run) resumeJournal.push(run = { run_id: row.run_id, entries: [] });
+      run.entries.push({ node: row.node, outcome: row.outcome, state: parseJson(state), ledger: parseJson(ledger), created_at: row.created_at });
+    }
     return {
       ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: await latestPullRequest(ticket.id),
+      resume_journal: resumeJournal,
       requester_profile: await requesterProfile(request.owner_user_id),
       // Spec chưa đủ rõ: cổng 2.5 / tier xử lý kỹ hơn.
       clarification_incomplete: !!await db.get("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [ticket.id]),
@@ -1240,16 +1253,39 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await recordWorkerEventTransaction(ticketId, { ...input, idempotencyKey, now: input.now ?? Date.now() });
   }
 
+const RESUME_ORDER = ['gate_3', 'gate_4', 'gate_5', 'gate_5_5'];
+
+// Which nodes a resumed attempt replayed from the journal (the ones before its resume point).
+function resumeSummary(journal) {
+  const rows = (journal || []).filter((row) => row.node === 'resume');
+  const resumed = rows.filter((row) => row.outcome === 'resumed');
+  const position = (from) => RESUME_ORDER.indexOf(String(from));
+  const replayed = [...new Set(resumed.flatMap((row) => {
+    const index = position(row.state?.from_node);
+    return index < 0 ? [] : RESUME_ORDER.slice(0, index);
+  }))];
+  const last = resumed.at(-1);
+  return {
+    resumed_runs: new Set(resumed.map((row) => String(row.run_id))).size,
+    replayed_nodes: replayed,
+    pin_mismatches: rows.filter((row) => row.outcome === 'pin_mismatch')
+      .map((row) => ({ run_id: row.run_id, mismatch: row.state?.mismatch || [] })),
+    last: last ? { run_id: last.run_id, from_node: last.state?.from_node || null, created_at: last.created_at } : null,
+  };
+}
+
   const recordAttemptJournalTransaction = (ticketId, input) => db.tx(async () => {
     await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
     const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), Number(ticketId)]);
     if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const stateJson = JSON.stringify(input.state || {});
+    if (stateJson.length > 200_000) throw new WorkerContractError('journal state too large', 413, 'journal_too_large');
     await db.run(`INSERT INTO ai_attempt_journal(ticket_id, run_id, node, outcome, state_delta, ledger, created_at)
       VALUES (?,?,?,?,?,?,?)
       ON CONFLICT (ticket_id, run_id, node) DO UPDATE SET outcome=excluded.outcome,
-        state_delta=excluded.state_delta, ledger=excluded.ledger`,
+        state_delta=excluded.state_delta, ledger=excluded.ledger, created_at=excluded.created_at`,
       [Number(ticketId), Number(input.runId), String(input.node).slice(0, 80), String(input.outcome).slice(0, 40),
-       JSON.stringify(input.state || {}), JSON.stringify(input.ledger || {}), input.now]);
+       stateJson, JSON.stringify(input.ledger || {}), input.now]);
     return { ok: true };
   });
 
@@ -2012,6 +2048,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       groups: allowance.groups, hit: hitRootGroup(allowance), daily_gpu: await dailyGpuStatus(Number(requestId)) };
     return {
       root, plan, children, runs, events, journal, candidate, pull_request: await latestPullRequest(root.id), trace_ref: await traceRef(root.id),
+      resume: resumeSummary(journal),
       gate_names: CONTRACT.gates.names, graph: EXECUTION_GRAPH,
       behavior: behaviorMetrics(evidences),
       totals: {

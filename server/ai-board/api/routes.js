@@ -358,6 +358,12 @@ export function attachAiBoardRequestRoutes(router, {
       for (const run of trace.runs) run.spans = byRun.get(Number(run.id)) || [];
       trace.gate_history = await spans.gateHistory(30);
     }
+    if (trace.resume) {
+      trace.resume.saved_ms = (trace.resume.replayed_nodes || []).reduce((sum, node) => {
+        const gate = Number(String(node).slice(5).replace('_', '.'));
+        return sum + Number(trace.gate_history?.[gate]?.median_ms || 0);
+      }, 0);
+    }
     res.json(trace);
   });
 
