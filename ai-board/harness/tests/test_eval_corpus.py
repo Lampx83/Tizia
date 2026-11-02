@@ -11,6 +11,8 @@ import pytest
 import eval_run
 from main import Deps
 
+pytestmark = pytest.mark.slow
+
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 
 

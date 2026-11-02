@@ -15,7 +15,7 @@ from main import ROOT, Deps
 
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 SEED = 11
-pytestmark = pytest.mark.usefixtures("pinned_head")
+pytestmark = [pytest.mark.usefixtures("pinned_head"), pytest.mark.slow]
 
 
 def plan_json(key, file):

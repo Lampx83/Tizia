@@ -8,6 +8,8 @@ import pytest
 
 from evaluation.suite.process_tree import run_owned
 
+pytestmark = pytest.mark.slow
+
 
 def alive(pid):
     if os.name == 'nt':

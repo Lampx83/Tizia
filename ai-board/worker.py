@@ -767,7 +767,10 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
                                prompt_name="spec_conditions.md")
         return str(body.get("response") or "")
 
-    items, _source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    items, source = coverage.spec_conditions(str(request.get("clarified_spec") or ""), call_model)
+    trace = getattr(deps, "trace", None)
+    if trace:
+        trace.note("knows", "spec conditions", source, {"source": source, "items": len(items)})
     return coverage.uncovered_items(items, plan)
 
 
@@ -1015,6 +1018,11 @@ class HttpWorker:
         if self.tracer and self.tracer.over_hourly_cap():
             # GPU dùng chung: hết trần giờ thì không nhận ticket mới; ticket đang chạy không bị phạt.
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
+        # A finished run may leave a node deadline or allowance in this process; clear both before probing models.
+        from runtime import root_allowance
+        from runtime.budget import start_node
+        start_node(None)
+        root_allowance.reset()
         if self.model_check and (blocked := self.model_check()):
             # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
             print(f"[worker] model {blocked['model']} chưa load được, chờ GPU, không claim: {blocked['error']}")

@@ -71,6 +71,14 @@ test('failed fixture marks the blocking gate and plan_stopped as failed', () => 
   assert.equal(n.plan_ready.state, 'idle');
 });
 
+test('a gate that ran without a result is stopped, not waiting', () => {
+  const t = { root: root({ status: 'waiting_admin' }), graph,
+    runs: [execRun(20, [], [call(30, 3, 'implement.md', 150)])], events: [] };
+  const n = graphNodes(t);
+  assert.equal(n.gate_3.state, 'stopped');
+  assert.equal(n.gate_4.state, 'idle');
+});
+
 test('idle nodes are waiting, with no run at all', () => {
   const n = graphNodes({ root: root(), runs: [], events: [] });
   for (const node of Object.values(n)) assert.equal(node.state, 'idle', node.id);
@@ -180,11 +188,11 @@ test('budget cells: API shows paid tokens with a bar; no model-call or GPU cell;
   const labels = budgetCells(local, EPOCH).map(c => c.label);
   assert.ok(!labels.includes('Model calls') && !labels.includes('GPU time') && !labels.includes('Tokens'));
   assert.deepEqual(labels.filter(l => ['Context', 'Output', 'Topology', 'Run time'].includes(l)), ['Run time', 'Context', 'Output', 'Topology']);
-  const behavior = { context: { ratio: 0.8, limit: 32768, delta: 1200, warn: true }, output: { distinct_line_ratio: 0.1, compression_ratio: 0.05, warn: true },
+  const behavior = { context: { tokens_in: 26000, limit: 32768, delta: 1200 }, output: { distinct_line_ratio: 0.1, compression_ratio: 0.05, warn: true },
     topology: { entropy: 0, idle_runs: 2, warn: true } };
   const by = Object.fromEntries(budgetCells({ ...local, behavior }, EPOCH).map(c => [c.label, c]));
-  assert.equal(by.Context.big, '80% of 32,768');
-  assert.equal(by.Context.sub, '+1,200 tokens vs previous step · over 75%');
+  assert.equal(by.Context.big, '26,000 / 32,768 token');
+  assert.equal(by.Context.sub, '+1,200 token so với bước trước');
   assert.equal(by.Output.tone, 'warn');
   assert.equal(by.Topology.sub, '2 steps changed nothing');
   assert.equal(by.Topology.tone, 'warn');

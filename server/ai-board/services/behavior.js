@@ -43,7 +43,6 @@ export function behaviorMetrics(evidences, limits = LIMITS.behavior) {
   const calls = evidences.filter(Boolean);
   const tokens = calls.map(c => c.metrics?.tokens_in).filter(Number.isFinite);
   const last = tokens.at(-1) ?? null;
-  const ratio = last == null ? null : round(last / limits.context_limit_tokens);
   const outputs = calls.filter(c => (c.output_len ?? 0) > 0 && c.output);
   const latest = outputs.at(-1)?.output ?? null;
   const lineRatio = latest == null ? null : distinctLineRatio(latest);
@@ -51,8 +50,7 @@ export function behaviorMetrics(evidences, limits = LIMITS.behavior) {
   const entropy = topologyEntropy(calls.map(c => `${c.gate}:${c.child ?? ''}`), limits.topology_window);
   const idle = idleRuns(calls);
   return {
-    context: { tokens_in: last, delta: tokens.length > 1 ? last - tokens.at(-2) : null, limit: limits.context_limit_tokens,
-      ratio, warn: ratio != null && ratio > limits.context_ratio_warn },
+    context: { tokens_in: last, delta: tokens.length > 1 ? last - tokens.at(-2) : null, limit: limits.context_limit_tokens },
     output: { distinct_line_ratio: lineRatio, compression_ratio: squeeze,
       warn: (lineRatio != null && lineRatio < limits.distinct_line_warn) || (squeeze != null && squeeze < limits.compression_ratio_warn) },
     topology: { entropy, idle_runs: idle, warn: (entropy != null && entropy < limits.topology_entropy_warn) || idle > 0 },

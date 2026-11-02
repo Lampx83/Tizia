@@ -9,6 +9,8 @@ import pytest
 
 from gates import visual
 
+pytestmark = pytest.mark.slow
+
 REPO = Path(__file__).resolve().parents[3]
 
 

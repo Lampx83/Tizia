@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 ASK = lambda text: {'request_title': 'x', 'request_detail': text}
 
 
