@@ -3389,10 +3389,32 @@ function m1HashNum(s, min, max){
 }
 var M1_ITEMS = null;
 // req #174: đơn vị tính theo QUY CÁCH ĐÓNG GÓI (hộp/lọ…), không lấy đơn vị nhỏ nhất.
-function m1UnitOf(name){ return /nhỏ mắt|nhỏ mũi|siro|xịt|lọ|dung dịch/i.test(name) ? 'lọ' : 'hộp'; }
+function m1UnitOf(name, rec){
+  const q = rec && m1StdPack(rec);
+  if(q) return q.big;
+  return /nhỏ mắt|nhỏ mũi|siro|xịt|lọ|dung dịch/i.test(name) ? 'lọ' : 'hộp';
+}
+// req #261: tên chuẩn cột I ghi sẵn quy cách ("Betaloc 50 H60v …" = Hộp 60 viên; "… L60ml" = Lọ 60 ml; "H10ô" = Hộp 10 ống;
+// "H24g" = Hộp 24 gói; "TU20g" = Tuýp 20 g). Đọc quy cách từ đó để khớp với bao bì/hoá đơn người học đang xem.
+function m1StdPack(rec){
+  const std = (rec && rec['Tên hoạt chất']) || '';
+  const m = std.match(/(?:^|\s)(H|L|V|TU|Túi)\s?(\d+)\s?(v|ô|g|ml|lọ|bút|liều)?(?=\s|$)/);
+  if(!m) return null;
+  const n = Number(m[2]), u = m[3] || '';
+  const ct = { H:['Hộp','hộp'], L:['Lọ','lọ'], V:['Vỉ','vỉ'], TU:['Tuýp','tuýp'], 'Túi':['Túi','túi'] }[m[1]];
+  const word = (m[1] !== 'H' && u === 'g') ? 'g' : ({ v:'viên', 'ô':'ống', g:'gói', 'lọ':'lọ', 'bút':'bút', ml:'ml', 'liều':'liều' }[u] || '');
+  let unit = 'viên', per = n;
+  if(m[1] === 'H'){ unit = u === 'ô' ? 'ống' : u === 'g' ? 'gói' : u === 'lọ' ? 'lọ' : u === 'bút' ? 'bút' : 'viên'; }
+  else if(m[1] === 'L'){ if(u === 'v'){ unit = 'viên'; } else { unit = 'lọ'; per = 1; } }
+  else if(m[1] === 'V'){ unit = 'viên'; }
+  else { unit = ct[1]; per = 1; }
+  return { big: ct[1], unit, per, spec: `${ct[0]} ${n}${word && !(m[1] === 'H' && u === '') ? ' ' + word : ''}` };
+}
 // req #224: quy cách đóng gói + đơn vị nhỏ nhất (dùng cho niêm yết giá & sổ kiểm nhập).
 function m1PackInfo(it){
   const rec0 = it.key ? m1RecOf(it.key) : null;   // quy cách suy từ tên MẪU (vd "… ống tiêm"), không từ tên thuốc chuẩn hiển thị
+  const q = rec0 && m1StdPack(rec0);
+  if(q) return { unit:q.unit, per:q.per, spec:q.spec, big:q.big };
   const n = ((rec0 && rec0._gen) || it.name).toLowerCase();
   if(/ống/.test(n)) return { unit:'ống', per:10, spec:'Hộp 10 ống' };
   if(/nhỏ mắt|nhỏ mũi|xịt|siro|dung dịch|lọ/.test(n)) return { unit:'lọ', per:1, spec:'Hộp 1 lọ' };
@@ -3482,7 +3504,7 @@ function getM1Ksdb(){
   M1_KS = rec ? [(() => { const k = m1KeyOf(rec);
     const lastYear = 2 * m1HashNum(k+'ly', 8, 30);           // chẵn để 150% là số nguyên
     const tonDau = m1HashNum(k+'td', 4, 14), nhap = m1HashNum(k+'nh', 14, 40), xuat = Math.min(tonDau + nhap - 1, m1HashNum(k+'xu', 10, 38));
-    return { key:k, name:rec['Tên hoạt chất'], kind:ksdbKind(rec), unit:m1UnitOf(rec._gen || rec['Tên hoạt chất']), spec: rec['Hoạt chất, hàm lượng/nồng độ'] || '', form: rec['Dạng bào chế'] || '',
+    return { key:k, name:rec['Tên hoạt chất'], kind:ksdbKind(rec), unit:m1UnitOf(rec._gen || rec['Tên hoạt chất'], rec), spec: rec['Hoạt chất, hàm lượng/nồng độ'] || '', form: rec['Dạng bào chế'] || '',
       lastYear, maxQty: lastYear * 1.5, tonDau, nhap, xuat, tonCuoi: tonDau + nhap - xuat };
   })()] : [];
   return M1_KS;
@@ -3565,7 +3587,7 @@ function getM1Items(){
   M1_ITEMS = keys.map(key => {
     const r = byKey[key];
     const ton = m1HashNum(key+'k',1,2);   // hộp; tủ chỉ chứa 1–2 hộp mỗi loại
-    const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r._gen || r['Tên hoạt chất']), banTuan: m1HashNum(key+'b',6,38),
+    const it = { key, name: r['Tên hoạt chất'], cabinet: drugClass(r), tonKho: ton, tonThuc: ton, unit: m1UnitOf(r._gen || r['Tên hoạt chất'], r), banTuan: m1HashNum(key+'b',6,38),
                  cold: m1IsCold(r) };
     it.pack = m1PackInfo(it);
     return it;
@@ -3671,7 +3693,7 @@ function qlRows(){
     const key = m1KeyOf(r), it = m1[key];
     const pack = (it && it.pack) || m1PackInfo({ name: r['Tên hoạt chất'], key });
     return { code: 'T' + String(i + 1).padStart(3, '0'), rec: r, name: r['Tên hoạt chất'], form: r['Dạng bào chế'] || '', spec: pack.spec,
-      unit: it ? it.unit : m1UnitOf(r._gen || r['Tên hoạt chất']), maker: r['Nơi sản xuất'] || '', ton: it ? it.tonKho : m1HashNum(key + 'qlt', 0, 12),
+      unit: it ? it.unit : m1UnitOf(r._gen || r['Tên hoạt chất'], r), maker: r['Nơi sản xuất'] || '', ton: it ? it.tonKho : m1HashNum(key + 'qlt', 0, 12),
       group: (r['Nhóm dược lý'] || '').replace(/-$/, ''), m1: !!it, gen: r._gen || '' };
   });
 }
@@ -4333,14 +4355,14 @@ function m2RenderPrice(){
   if(!pass.length){ x.step = 'done'; saveM2State(x); m2FinishDone(); return; }
   // req #237: chỉ hiện GIÁ NHẬP (sau VAT) theo đơn vị nhỏ nhất và ô GIÁ BÁN. Giá bán ≥ giá nhập → đồng ý;
   // thấp hơn giá nhập → hỏi lại "có chắc chắn không", người học xác nhận thì vẫn đồng ý.
-  const cost = it => (m1PkgPrice(it) * 1.05) / it.pack.per;
+  const cost = it => (m1PkgPrice(it) * 1.05) / m1PackInfo(it).per;
   const fmt = v => v.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
   const body = m2Modal('🏷️ Bước 7 — Niêm yết giá bán', `
     <p class="pos-note">Ghi <b>giá bán</b> cho các sản phẩm <b>đạt</b>, tính theo <b>đơn vị đóng gói nhỏ nhất</b> (viên, ống, lọ, tuýp…).</p>
     <table class="pos-table"><thead><tr><th>Sản phẩm</th><th>Quy cách</th><th>Giá nhập (sau VAT) / đơn vị nhỏ nhất</th><th>Giá bán niêm yết / đơn vị nhỏ nhất (đ)</th></tr></thead><tbody>
-      ${pass.map((it,i) => `<tr><td>${dn(it)}</td><td>${it.pack.spec}</td>
-        <td><b>${fmt(cost(it))} đ/${it.pack.unit}</b></td>
-        <td><input type="text" inputmode="decimal" autocomplete="off" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${it.pack.unit}</td></tr>`).join('')}
+      ${pass.map((it,i) => `<tr><td>${dn(it)}</td><td>${m1PackInfo(it).spec}</td>
+        <td><b>${fmt(cost(it))} đ/${m1PackInfo(it).unit}</b></td>
+        <td><input type="text" inputmode="decimal" autocomplete="off" data-s="${i}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> đ/${m1PackInfo(it).unit}</td></tr>`).join('')}
     </tbody></table><button type="button" class="pos-btn" id="m2PriceOk">✅ Niêm yết giá</button><div class="pos-err" id="m2Err"></div><div id="m2PriceAsk"></div>`);
   const ask = body.querySelector('#m2PriceAsk');
   body.querySelector('#m2PriceOk').addEventListener('click', () => {
@@ -4381,7 +4403,7 @@ function pkgData(it){
   const rec = (it.key && m1RecOf(it.key)) || allRecords.find(r => r['Tên hoạt chất'] === it.name || r._gen === it.name) || {};
   const k = it.key || it.name, d = new Date();
   const base = (typeof getM1Items === 'function' ? getM1Items().find(a => a.key === it.key) : null) || it;
-  const pack = it.pack || base.pack || m1PackInfo({ name: it.name, key: k });
+  const pack = m1PackInfo({ name: it.name, key: k });
   const cold = it.cold != null ? !!it.cold : m1IsCold(rec);
   const maker = [rec['Nơi sản xuất'], rec['Nước sản xuất']].filter(Boolean).join(' – ');
   return { name: it.name, brand: rec['Tên biệt dược'] || '', strength: rec['Hoạt chất, hàm lượng/nồng độ'] || '',
@@ -4458,7 +4480,7 @@ function renderThucNhapTab(){
   const pass = x.items.filter(it => !m2Reasons(it).length);
   const d = new Date(), dt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   const rec = it => m1RecOf(it.key) || allRecords.find(r => r['Tên hoạt chất'] === it.name || r._gen === it.name) || {};
-  const specs = () => ['Hộp 3 vỉ × 10 viên','Hộp 10 vỉ × 10 viên','Hộp 10 ống','Hộp 1 lọ','Hộp 1 tuýp','Hộp 20 gói'];
+  const specs = () => [...new Set(['Hộp 3 vỉ × 10 viên','Hộp 10 vỉ × 10 viên','Hộp 10 ống','Hộp 1 lọ','Hộp 1 tuýp','Hộp 20 gói','Hộp 30 viên','Hộp 100 viên', ...pass.map(it => m1PackInfo(it).spec)])].sort((a,b) => a.localeCompare(b, 'vi', { numeric:true }));
   const sel = (nm, opts) => `<select data-f="${nm}" style="padding:3px;border:1px solid #caa25a;border-radius:6px;max-width:130px"><option value="">— chọn —</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
   const th = ['Ngày/tháng/năm','Tên thuốc, hàm lượng nồng độ','Số ĐK/GPNK','Số lô, hạn dùng','Nhà SX/nhập khẩu','Cơ sở cung cấp','Số hóa đơn/chứng từ','Điều kiện bảo quản','Quy cách đóng gói','Số lượng','Đơn vị tính','Đơn giá (đ, chưa VAT)'];
   posPanel.innerHTML = `
@@ -4470,7 +4492,7 @@ function renderThucNhapTab(){
         <td>${esc(pk.maker)}</td><td>${esc(x.supplierName)}</td><td>00000014</td>
         <td>${sel('cold', ['Nhiệt độ thường, dưới 30°C, tránh ánh sáng','Tủ lạnh 2–8°C'])}</td><td>${sel('spec', specs())}</td>
         <td><input type="number" min="0" data-f="qty" style="width:64px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td>
-        <td>${sel('unit', ['hộp','lọ','vỉ','viên','ống','tuýp','gói'])}</td>
+        <td>${sel('unit', ['hộp','lọ','vỉ','viên','ống','tuýp','gói','túi'])}</td>
         <td><input type="text" inputmode="decimal" autocomplete="off" data-f="price" style="width:84px;padding:3px;border:1px solid #caa25a;border-radius:6px"></td></tr>`; }).join('')}
     </tbody></table></div>
     <button type="button" class="pos-btn" id="m2LedgerOk">📝 Ghi sổ</button><div class="pos-err" id="m2LedErr"></div>`;
@@ -4481,9 +4503,9 @@ function renderThucNhapTab(){
       const it = pass[Number(tr.dataset.i)], g = n => tr.querySelector(`[data-f="${n}"]`).value;
       if(!g('cold') || !g('spec') || g('qty') === '' || !g('unit') || g('price') === ''){ err.textContent = '⚠️ Điền đủ các ô của tất cả sản phẩm.'; return; }
       if((g('cold').startsWith('Tủ lạnh')) !== !!it.cold){ err.textContent = `⚠️ Điều kiện bảo quản của "${it.name}" chưa đúng — đọc lại nhãn bảo quản.`; return; }
-      if(g('spec') !== it.pack.spec){ err.textContent = `⚠️ Quy cách đóng gói của "${it.name}" chưa đúng.`; return; }
+      if(g('spec') !== m1PackInfo(it).spec){ err.textContent = `⚠️ Quy cách đóng gói của "${it.name}" chưa đúng.`; return; }
       if(Number(g('qty')) !== it.recv){ err.textContent = `⚠️ Số lượng của "${it.name}" chưa đúng — theo số thực nhận.`; return; }
-      if(g('unit') !== it.unit){ err.textContent = `⚠️ Đơn vị tính của "${it.name}" chưa đúng — đơn vị đóng gói lớn nhất (hộp, lọ…).`; return; }
+      if(g('unit') !== (m1PackInfo(it).big || it.unit)){ err.textContent = `⚠️ Đơn vị tính của "${it.name}" chưa đúng — đơn vị đóng gói lớn nhất (hộp, lọ…).`; return; }
       if(!(Math.abs(viMoney(g('price')) - m1PkgPrice(it)) <= 1)){ err.textContent = `⚠️ Đơn giá của "${it.name}" chưa đúng — lấy giá nhập trên hoá đơn (chưa VAT).`; return; }
     }
     x.step = 'done'; saveM2State(x); m2FinishDone();
@@ -5039,7 +5061,20 @@ function renderM1Checklist(){
     missionsEl.querySelector('[data-mission="2"]')?.addEventListener('click', () => { if(typeof m2Click === 'function') m2Click(); });
     missionsEl.querySelector('[data-mission="3"]')?.addEventListener('click', () => { if(typeof m3Click === 'function') m3Click(); });
     // req #241: bấm thẻ nhiệm vụ → cột phải hiện các bước của nhiệm vụ đó
-    missionsEl.querySelectorAll('[data-mission]').forEach(li => li.addEventListener('click', () => { mcSel = Number(li.dataset.mission); try{ renderMissionChecklist(); }catch(e){} }));
+    missionsEl.querySelectorAll('[data-mission]').forEach(li => li.addEventListener('click', () => { mcSel = Number(li.dataset.mission); try{ renderMissionChecklist(); }catch(e){}
+      // req #260: trên điện thoại danh sách nhiệm vụ nằm DƯỚI bản đồ — bấm "Chơi" chỉ đổi dòng chỉ dẫn + tô sáng vùng làm tiếp ở trên
+      // (ngoài khung nhìn) nên người học tưởng không có gì xảy ra. Kéo bản đồ lên khung nhìn để thấy chỉ dẫn và vùng nhấp nháy.
+      if(!li.classList.contains('soon')){
+        const mp = document.querySelector('.pharmacy-map');
+        if(mp && mp.offsetParent){
+          let sc = mp.parentElement; while(sc && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
+          const r = mp.getBoundingClientRect(), box = sc ? sc.getBoundingClientRect() : { top:0 };
+          if(sc ? (r.top < box.top || r.bottom > box.top + sc.clientHeight) : (r.top < 0 || r.bottom > window.innerHeight)){
+            const top = Math.max(0, r.top - box.top + (sc ? sc.scrollTop : window.scrollY) - 76);
+            (sc || window).scrollTo({ top, behavior:'auto' });
+          }
+        }
+      } }));
     try{ renderMissionChecklist(); }catch(e){}
   }
   if(missionsEl){ renderMissions(); window.refreshMissionsList = renderMissions; }
