@@ -7,7 +7,7 @@ const ENV = 'AI_BOARD_QWEN_TOKENIZER';
 
 test('mỗi node có ngân sách; node không khai báo lấy giá trị toàn cục', () => {
   const budgets = stageBudgets();
-  assert.deepEqual(Object.keys(budgets), ['intake', 'plan', 'execute', 'verdict']);
+  assert.deepEqual(Object.keys(budgets), ['plan', 'execute', 'verdict']);
   for (const [node, budget] of Object.entries(budgets)) {
     const own = LIMITS.skills.stages?.[node] ?? {};
     assert.equal(budget.max_per_prompt, own.max_per_prompt ?? LIMITS.skills.max_per_prompt, node);

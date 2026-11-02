@@ -132,6 +132,34 @@ test('admin trace gives each run its wall-clock limit from the subtask count of 
   } finally { await t.close(); }
 });
 
+test('a local-provider run reports the local wall-clock cap, an api run keeps the scaled one', async () => {
+  const t = await setup();
+  try {
+    const root = await t.db.d.get('SELECT source_request_id FROM ai_tickets WHERE id=?', [t.ticket.id]);
+    for (let i = 1; i <= 3; i++) {
+      await t.db.d.run(`INSERT INTO ai_tickets(parent_id, source_request_id, sequence, kind, title, status, phase, plan_revision, created_at, updated_at)
+        VALUES (?, ?, ?, 'implementation', ?, 'queued', 'ticketized', 1, 0, 0)`, [t.ticket.id, root.source_request_id, i, `step ${i}`]);
+    }
+    await t.db.d.run('UPDATE ai_runs SET plan_revision=1 WHERE id=?', [t.run.id]);
+    const call = (callId, provider, at) => t.db.d.run(`INSERT INTO ai_gate_traces(run_id, gate, status, public_reason, internal_reason, evidence_json, created_at)
+      VALUES (?, 1, 'model_call', NULL, ?, ?, ?)`, [t.run.id, callId, JSON.stringify({ call_id: callId, provider, gate: 1, metrics: { wall_ms: 1000 } }), at]);
+
+    await call('call-vllm', 'vllm', 1);
+    let run = (await t.trace()).runs.find((r) => r.id === t.run.id);
+    assert.equal(run.wall_clock_limit_s, 300 + 1200 * 3);
+
+    await t.db.d.run("UPDATE ai_gate_traces SET evidence_json=? WHERE run_id=? AND internal_reason='call-vllm'",
+      [JSON.stringify({ call_id: 'call-vllm', provider: 'api', gate: 1, metrics: { wall_ms: 1000 } }), t.run.id]);
+    run = (await t.trace()).runs.find((r) => r.id === t.run.id);
+    assert.equal(run.wall_clock_limit_s, 300 + 360 * 3);
+
+    await t.db.d.run("UPDATE ai_gate_traces SET evidence_json=? WHERE run_id=? AND internal_reason='call-vllm'",
+      [JSON.stringify({ call_id: 'call-vllm', gate: 1, metrics: { wall_ms: 1000 } }), t.run.id]);
+    run = (await t.trace()).runs.find((r) => r.id === t.run.id);
+    assert.equal(run.wall_clock_limit_s, 300 + 360 * 3, 'no provider evidence keeps the shared cap');
+  } finally { await t.close(); }
+});
+
 test('gate_history is the per-gate median over recent runs of all tickets, skipping errors and stubs', async () => {
   const t = await setup();
   try {

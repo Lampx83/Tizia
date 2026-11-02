@@ -13,7 +13,7 @@ import {
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
   SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
   assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
-  validatePrePrVerdict,
+  validatePrePrVerdict, wallClockLimit,
 } from './store-contract.js';
 
 export { PlanGuardrailError };
@@ -1930,6 +1930,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       allCalls.push(...calls);
       // Ngân sách tính theo lượt: mỗi run có trần budget_limit riêng.
       const budgetUsed = calls.reduce((sum, c) => sum + (Number(c.evidence?.budget_units) || 0), 0);
+      // Provider của lượt lấy từ evidence lần gọi model; nhiều provider (hiếm) thì quay về trần chung.
+      const providers = new Set(calls.map((c) => c.evidence?.provider).filter(Boolean));
+      const provider = providers.size === 1 ? [...providers][0] : null;
       const rollback = parseJson(runEvidence)?.rollback ?? null;
       const live = root.live && i === runRows.length - 1 && !run.status && !rollback;
       const produced = parseJson(runEvidence)?.verdict?.candidate; // commit của chính lượt này (trace admin)
@@ -1941,7 +1944,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       return { ...run, rollback, gates, calls, change_class: changeClass, runner_failure: runnerFailure, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         budget_used: budgetUsed, budget_limit: root.budget_limit,
-        subtask_count: subtaskCount, wall_clock_limit_s: scaledLimit('wall_clock_s', subtaskCount),
+        subtask_count: subtaskCount, wall_clock_limit_s: wallClockLimit(subtaskCount, provider),
         progress: runProgress({ ...run, gates, calls }, events, live) };
     });
     const evidences = allCalls.map((c) => c.evidence);

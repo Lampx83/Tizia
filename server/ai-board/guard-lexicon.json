@@ -46,7 +46,15 @@
       "^server/db\\.js$",
       "^server/contexts/registry\\.js$",
       "(^|/)(node_modules|__pycache__|secrets?|credentials|heldout|evaluation|vault)/"
-    ]
+    ],
+    "parts": [
+      "node_modules", "__pycache__", "secrets", "credentials", "ai-board", "evaluation", "heldout", "vault"
+    ],
+    "_parts_why": "Tên thư mục bị chặn ở bất kỳ độ sâu nào; ai-board/harness/verification/loop_checks.py dùng thẳng danh sách này thay vì bản sao cứng."
+  },
+  "code_index": {
+    "_why": "Thư mục gốc code index đọc (ai-board/harness/repositories/code_index.py ROOTS), đọc qua ai-board/harness/path_policy.py; từng file vẫn bị lọc tiếp bởi deny_paths.",
+    "roots": ["public", "server/contexts"]
   },
   "readonly_admin_verification": {
     "surface": "trang (quan tri|admin)|admin-request\\.html",

@@ -164,6 +164,24 @@ def _preview_eligible(gates: list[dict], kind: str | None) -> bool:
             and not oracle.get("probe_id") and oracle.get("reason") == "No trusted behavioral oracle for this request")
 
 
+def node_span(deps, node_id: str, fn: Callable[[], str]) -> Callable[[], str]:
+    """Bọc 1 handler node của graph trong 1 span tên `node_id`; không tracer thì trả nguyên hàm."""
+    trace = getattr(deps, "trace", None)
+    if trace is None or not hasattr(trace, "open_span"):
+        return fn
+
+    def run():
+        span = trace.open_span(node_id, {"gen_ai.operation.name": "invoke_agent", "tizia.node.id": node_id})
+        try:
+            outcome = fn()
+        except BaseException as error:
+            trace.close_span(span, "error", {"tizia.node.status": "error", "tizia.error.type": type(error).__name__})
+            raise
+        trace.close_span(span, "ok", {"tizia.node.status": str(outcome)[:40]})
+        return outcome
+    return run
+
+
 class _Execution:
     """Gates 3→5.5 and the repair loop as one run of the execution graph (contract.json `execution_graph`).
     Each node is a method; the graph owns the order and the termination, the node bodies own the work."""
@@ -196,9 +214,11 @@ class _Execution:
         self.path: list[str] = []
 
     def handlers(self) -> dict:
-        return {"attempt_open": self.attempt_open, "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
-                "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": self.attempt_close,
-                "repair_check": self.repair_check, "repair": self.repair, "verdict": self.verdict}
+        node = lambda name, fn: node_span(self.deps, name, fn)  # gates already span inside run_gate
+        return {"attempt_open": node("attempt_open", self.attempt_open), "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
+                "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": node("attempt_close", self.attempt_close),
+                "repair_check": node("repair_check", self.repair_check), "repair": node("repair", self.repair),
+                "verdict": node("verdict", self.verdict)}
 
     ENTRY = "execute"
 
@@ -1533,6 +1553,8 @@ class HarnessPlanner:
                 return node
 
             handlers = {f"gate_{str(g).replace('.', '_')}": plan_gate(g) for g in PLAN_GATES}
+            # plan_ready is an end node; give it a handler so the walk emits the marker span (the router ends there anyway).
+            handlers["plan_ready"] = node_span(self.deps, "plan_ready", lambda: "passed")
             exec_graph.run(handlers, exec_graph.spec()["entries"]["plan"])
             result = dict(stopped)
             if not result:

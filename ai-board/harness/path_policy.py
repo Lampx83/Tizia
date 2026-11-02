@@ -5,8 +5,21 @@ import re
 from pathlib import Path
 
 LEXICON_FILE = Path(__file__).resolve().parents[2] / "server" / "ai-board" / "guard-lexicon.json"
-_DENY = [re.compile(p, re.I) for p in json.loads(LEXICON_FILE.read_text(encoding="utf-8"))["deny_paths"]["patterns"]]
+_LEXICON = json.loads(LEXICON_FILE.read_text(encoding="utf-8"))
+_DENY = [re.compile(p, re.I) for p in _LEXICON["deny_paths"]["patterns"]]
+_PARTS = frozenset(part.lower() for part in _LEXICON["deny_paths"]["parts"])
+_ROOTS = tuple(_LEXICON["code_index"]["roots"])
 _CONTROL = re.compile(r"[\x00-\x1f]")
+
+
+def denied_parts() -> frozenset[str]:
+    """Tên thư mục bị chặn ở mọi độ sâu, đọc từ deny_paths.parts."""
+    return _PARTS
+
+
+def code_roots() -> tuple[str, ...]:
+    """Thư mục gốc code index đọc, đọc từ code_index.roots."""
+    return _ROOTS
 
 
 def normalize(value) -> str | None:

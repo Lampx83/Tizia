@@ -7,11 +7,16 @@ from services.skill_selection import Candidate
 
 def test_each_skill_node_gets_its_stage_budget():
     contract = limits.contract()['limits']['skills']
-    assert set(contract['stages']) == {'intake', 'plan', 'execute', 'verdict'}
+    assert set(contract['stages']) == {'plan', 'execute', 'verdict'}
     assert default_skills.stage_budget('gate1') == {
         'max_per_prompt': contract['stages']['plan']['max_per_prompt'],
         'max_tokens_per_prompt': contract['stages']['plan']['max_tokens_per_prompt']}
     assert default_skills.stage_budget('gate4_review')['max_per_prompt'] == contract['stages']['verdict']['max_per_prompt']
+
+
+def test_every_declared_stage_has_a_node_role():
+    declared = set(limits.contract()['limits']['skills']['stages'])
+    assert declared <= set(default_skills.STAGE_OF_ROLE.values())
 
 
 def test_undeclared_stage_falls_back_to_global(monkeypatch):

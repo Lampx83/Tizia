@@ -131,6 +131,17 @@ export function scaledLimit(kind, n) {
   const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
   return Math.min(base + step * count, max);
 }
+export const LOCAL_PROVIDERS = new Set(['vllm', 'ollama']);
+/** Trần giây cả lượt cho provider local (limits.local_wall_clock_s): base + node_wall_clock_s·n, kẹp ở max. */
+export function localWallClockLimit(n) {
+  const { base, max } = LIMITS.local_wall_clock_s;
+  const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
+  return Math.min(base + LIMITS.budget.node_wall_clock_s * count, max);
+}
+/** Trần giây cả lượt: provider vllm/ollama dùng công thức local, còn lại scaledLimit('wall_clock_s'). */
+export function wallClockLimit(n, provider = null) {
+  return LOCAL_PROVIDERS.has(provider) ? localWallClockLimit(n) : scaledLimit('wall_clock_s', n);
+}
 // Trần budget một lượt do worker báo lên; vượt là bị từ chối, không kẹp âm thầm.
 export const BUDGET_UNITS_CEILING = LIMITS.per_run.units.max;
 export function assertWithinCeiling(budgetUsed) {

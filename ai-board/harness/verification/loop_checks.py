@@ -15,7 +15,7 @@ import path_policy
 
 PROFILES = ('light', 'platform', 'relevant')
 VERSION = 1
-DENIED_PARTS = {'node_modules', '__pycache__', 'secrets', 'credentials', 'ai-board', 'evaluation', 'heldout', 'vault'}
+DENIED_PARTS = path_policy.denied_parts()
 SOURCE_EXTENSIONS = {'.html', '.css', '.js', '.mjs', '.cjs', '.ts', '.json', '.md', '.txt', '.py', '.yml', '.yaml', '.toml', '.sql', '.sh',
                      '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf'}
 
