@@ -92,6 +92,23 @@ def _execution_plan(plan: dict) -> dict:
             "acceptance": [str(item) for item in (plan.get("acceptance") or []) if str(item).strip()]}
 
 
+PIN_KEYS = ("plan_hash", "base", "policy", "config", "graph")
+
+
+def resume_pins(*, plan_hash=None, base=None, policy_hash=None) -> dict:
+    """Pin set of one attempt: any changed pin forbids resuming its journal (LF/150)."""
+    from runtime import exec_graph, limits
+    return {"plan_hash": plan_hash, "base": base, "policy": policy_hash,
+            "config": limits.config_sha256(), "graph": exec_graph.digest()}
+
+
+def pin_mismatch(pins, current: dict) -> list[str]:
+    """Names of pins that differ; missing/stale pin data fails closed -> ['missing']."""
+    if not isinstance(pins, dict) or any(key not in pins for key in PIN_KEYS):
+        return ["missing"]
+    return sorted(key for key in PIN_KEYS if pins.get(key) != current.get(key))
+
+
 def _public_gate_result(result: dict) -> dict:
     out = {
         "gate": result["gate"], "blocked": bool(result.get("blocked")),
@@ -188,7 +205,7 @@ class _Execution:
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash, journal_hook=None, resume=None):
+                 checkpoint, plan_hash, journal_hook=None, resume=None, policy_hash=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
@@ -197,6 +214,7 @@ class _Execution:
         self.journal_hook = journal_hook
         self.resume = resume or []
         self.resume_seed: dict | None = None
+        self.policy_hash = policy_hash
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
@@ -235,7 +253,7 @@ class _Execution:
             if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
                 self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
         self.resume_seed = self._prepare_resume()
-        resume_nodes = {"gate_3": "passed"} if self.resume_seed else None
+        resume_nodes = (self.resume_seed or {}).get("resume_nodes")
         saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
@@ -258,33 +276,58 @@ class _Execution:
         if trace is not None and hasattr(trace, "note"):
             trace.note("tool", "graph resume", detail)
 
+    def _journal_mismatch(self, mismatch: list[str], pins) -> None:
+        """Ghi ly do khong resume vao journal de admin thay (LF/150)."""
+        if not self.journal_hook:
+            return
+        try:
+            self.journal_hook("resume", "pin_mismatch", {
+                "state": {"mismatch": mismatch, "pins": pins}, "ledger": {}})
+        except Exception:  # noqa: BLE001 - journal la best effort
+            pass
+
+    def _journal_resume(self, previous_run_id, from_node: str = "gate_4") -> None:
+        """Danh dau run nay chay tiep tu `from_node` (LF/152 doc de hien badge)."""
+        if not self.journal_hook:
+            return
+        try:
+            self.journal_hook("resume", "resumed", {
+                "state": {"from_node": from_node, "previous_run_id": previous_run_id}, "ledger": {}})
+        except Exception:  # noqa: BLE001 - journal la best effort
+            pass
+
     def _prepare_resume(self) -> dict | None:
         """Doc journal cua cac run truoc: pin khop + gate 3 da xong -> dung lai scratch/diffs, bo qua gate 3."""
         if not self.resume:
             return None
-        from runtime import exec_graph
-        head, graph = self._checkout_head(), exec_graph.digest()
+        head = self._checkout_head()
+        current = resume_pins(plan_hash=self.plan_hash, base=head, policy_hash=self.policy_hash)
         for candidate in self.resume:  # server tra run moi nhat truoc
             entries = sorted(candidate.get("entries") or [], key=lambda e: (e.get("created_at") or 0))
-            # Chi resume khi gate 3 la node vua xong: crash giua mot luot sua thi phai lam lai gate 3.
+            # Chi resume khi gate 3 hoac gate 4 la node vua xong: crash giua mot luot sua thi phai lam lai.
             done = entries[-1] if entries else None
-            if done is None or done.get("node") != "gate_3" or done.get("outcome") != "passed":
+            if (done is None or done.get("node") not in ("gate_3", "gate_4")
+                    or done.get("outcome") != "passed"):
                 continue
             state = done.get("state") or {}
-            pins = state.get("pins") or {}
-            mismatch = (pins.get("plan_hash") != self.plan_hash or pins.get("graph") != graph
-                        or (pins.get("base") and head and pins["base"] != head)
-                        or state.get("resumable") is False)
+            mismatch = pin_mismatch(state.get("pins"), current)
+            if state.get("resumable") is False:
+                mismatch = sorted(set(mismatch) | {"state"})
             if mismatch:
-                self._note(f"journal run {candidate.get('run_id')} khong dung pin; chay moi")
+                detail = f"pin lech ({', '.join(mismatch)}); purge checkpoint va chay moi"
+                self._note(detail)
+                self._journal_mismatch(mismatch, state.get("pins"))
                 continue
-            produced = state.get("produced") or {}
-            base = state.get("base_sha") or pins.get("base") or head
+            produced = ((next((entry for entry in reversed(entries)
+                               if (entry.get("state") or {}).get("produced")), None) or {}).get("state") or {}).get("produced") or {}
+            base = state.get("base_sha") or head
             if not produced or not base:
                 continue
+            from_gate = 4 if done.get("node") == "gate_3" else 5
             scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
             seed = {"plan": _execution_plan(self.plan), "produced": dict(produced),
-                    "base_sha": base, "scratch_repo": str(scratch)}
+                    "base_sha": base, "scratch_repo": str(scratch), "checkout_source": str(self.checkout_source),
+                    "skill_id": f"ticket-{self.ticket_id}", **dict(self.candidate_opts or {})}
             try:
                 from gates import implement
                 implement.restore(seed)
@@ -292,13 +335,37 @@ class _Execution:
                 shutil.rmtree(scratch, ignore_errors=True)
                 self._note(f"khong dung lai duoc scratch tu journal: {str(error)[:200]}")
                 continue
+            if from_gate >= 5:  # gate 5 can the candidate worktree: dung lai mot lan, khong commit trung
+                from services import candidate as candidates
+                failed = candidates.ensure(seed, 5)
+                if failed:
+                    shutil.rmtree(scratch, ignore_errors=True)
+                    self._note(f"khong dung lai duoc candidate: {str(failed.get('reason'))[:200]}")
+                    continue
+                base = seed.get("base_sha") or base
+            produced_keys = ("full_checkout", "checkout_repo", "branch", "branch_restore", "commits",
+                             "full_diff", "_owned_full_checkout")
+            candidate_state = {key: seed[key] for key in produced_keys if key in seed}
             self.produced = dict(produced)
             self.gates = list(state.get("gates") or [])
             self.repairs = list(state.get("repairs") or [])
+            repair_state = state.get("repair_state") or {}
+            self.round_metrics = list(repair_state.get("round_metrics") or [])
+            self.diff_texts = list(repair_state.get("diff_texts") or [])
+            self.progress_rounds = int(repair_state.get("progress_rounds") or 0)
+            self.no_progress = int(repair_state.get("no_progress") or 0)
+            self.stop_note = repair_state.get("stop_note")
+            self.repair_reason = repair_state.get("repair_reason")
             self.base_sha = base
-            self._note(f"resume tu journal run {candidate.get('run_id')} tai gate 4")
+            ledger = done.get("ledger") or {}
+            if ledger:  # chi phi da tieu truoc khi kill: cong don, khong reset
+                self.budget.absorb(ledger)
+            self._journal_resume(candidate.get("run_id"), f"gate_{from_gate}")
+            self._note(f"resume tu journal run {candidate.get('run_id')} tai gate {from_gate}")
             return {"scratch": str(scratch), "diffs": seed["diffs"], "base_sha": base,
-                    "gates": list(self.gates)}
+                    "gates": list(self.gates), "candidate_state": candidate_state,
+                    "resume_nodes": {"gate_3": "passed", "gate_4": "passed"} if from_gate >= 5
+                    else {"gate_3": "passed"}}
         return None
 
     def observe_state(self) -> tuple | None:
@@ -314,15 +381,19 @@ class _Execution:
         """Node outcome plus the state a later attempt needs to continue right after it (LF/147/LF/148)."""
         if not self.journal_hook:
             return
-        from runtime import exec_graph, limits
         state = self.state or {}
         produced = dict(state.get("produced") or self.produced)
         base = state.get("base_sha") or self.base_sha or self.grounded
         entry = {
-            "pins": {"plan_hash": self.plan_hash, "base": base, "graph": exec_graph.digest(),
-                     "config": limits.config_sha256()},
+            "pins": resume_pins(plan_hash=self.plan_hash, base=base, policy_hash=self.policy_hash),
             "base_sha": base, "repairs": list(self.repairs), "gates": list(self.gates),
             "produced_files": sorted(produced), "resumable": True,
+            # Repair classification/stagnation is cumulative; a resume must not restart it (LF/153).
+            "repair_state": {
+                "round_metrics": list(self.round_metrics), "progress_rounds": self.progress_rounds,
+                "no_progress": self.no_progress, "stop_note": self.stop_note, "repair_reason": self.repair_reason,
+                "diff_texts": [str(text)[-8000:] for text in self.diff_texts[-3:]],
+            },
         }
         if node == "gate_3":  # the full generated code is only needed once per attempt; other nodes cost little
             entry["produced"] = produced
@@ -353,6 +424,7 @@ class _Execution:
             "acceptance": list(execution_plan.get("acceptance") or []),
         }
         if seed:  # gate 3 da xong trong journal: dung lai state + scratch, khong goi model lai
+            state.update(seed.get("candidate_state") or {})
             state["produced"] = dict(self.produced)
             state["diffs"] = list(seed["diffs"])
             state["base_sha"] = seed["base_sha"]
@@ -718,7 +790,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
-        journal_hook=journal, resume=None if reverify else resume,
+        journal_hook=journal, resume=None if reverify else resume, policy_hash=accepted_policy_hash,
         **extra)
     return execution.run()
 

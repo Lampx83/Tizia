@@ -308,6 +308,8 @@ def ensure(state: dict, gate: float) -> dict | None:
     if state.get("full_checkout") or not state.get("checkout_source"):
         return None
     try:
+        # A killed takeover leaves its own worktree behind; drop it before creating the same attempt again.
+        _drop_leftover_worktrees(str(state["checkout_source"]))
         # Same base gate 3 showed the model, even if the source HEAD moved since.
         create(state, state["checkout_source"], base_ref=state.get("base_sha") or "HEAD")
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
