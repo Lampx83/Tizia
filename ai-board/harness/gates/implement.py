@@ -684,6 +684,11 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             trace.mark_last("retry" if iteration < MAX_INNER_RETRIES else "error", str(error))
         digest = loop_guard.state_hash(raw, str(error), "gate3")
         if loop_guard.repeated(attempt_hashes, digest, limits.loop_guard()["repeat_state_count"]):
+            if tool_loop.mode() == "auto" and not state.get("repair_reason"):
+                out, stop = run_loop()
+                if stop:
+                    return "blocked", stop
+                return "ok", out, model, receipts
             return "blocked", {"gate": 3, "blocked": True, "failure_class": "ordinary", "loop_guard": loop_guard.REASON_STATE_REPEAT,
                                "reason": f"subtask '{subtask.get('title')}': {loop_guard.REASON_STATE_REPEAT}: model repeated the same output and error: {error}"}
         attempt_hashes.append(digest)

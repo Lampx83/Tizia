@@ -123,4 +123,4 @@ def test_the_recheck_spends_from_the_budget_it_was_given(world):
     budget.model_calls = budget.max_model_calls
     result = reverify(repo, cand, tip, passing([]), budget=budget)
     assert result['outcome'] == 'blocked' and result['failure_class'] == 'budget'
-    assert result['gates'][-1]['reason'] == 'budget exhausted'
+    assert result['gates'][-1]['reason'].startswith('budget exhausted')

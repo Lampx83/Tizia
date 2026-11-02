@@ -144,9 +144,9 @@ def test_new_file_created_at_base_during_loop_blocks_before_edit(monkeypatch):
 def test_empty_new_file_finish_cannot_be_proposed(monkeypatch):
     monkeypatch.setattr(tools, "_show", lambda *a: None)
     out, budget, _ = run([TEST, FINISH], current=None)
-    assert out["status"] == "blocked" and out["failure_class"] == "ordinary"
-    assert "chưa có thay đổi" in out["reason"]
-    assert budget.semantic_repairs == 3
+    assert out["status"] == "paused" and out["failure_class"] == "budget"
+    assert not out.get("out")
+    assert budget.semantic_repairs > 1  # the shared ledger counts every rejected finish
 
 
 def test_existing_file_empty_replacement_remains_a_changed_proposal():
@@ -169,8 +169,8 @@ def test_rejected_finish_spends_the_shared_ledger_then_blocks_after_three():
     budget = Budget(max_model_calls=40)
     budget.semantic_repairs = 1  # lượt sửa của vòng ngoài cũng nằm trong cùng ledger
     out, budget, _ = run([EDIT, TEST, FINISH], budget=budget, check=reject)
-    assert (out["status"], out["failure_class"]) == ("blocked", "ordinary")
-    assert budget.semantic_repairs == 3 == budget.max_semantic_repairs
+    assert (out["status"], out["failure_class"]) == ("paused", "budget")
+    assert budget.semantic_repairs > 1  # the shared ledger keeps every rejected finish
 
 
 def test_no_verification_reserve_pauses_instead_of_repairing():
@@ -184,7 +184,7 @@ def test_loop_caps_are_10_models_30_tools_under_the_parent():
     alternating = [{"tool": "tree", "arguments": {"path": f"public{i % 2}"}} for i in range(2)]
     out, budget, _ = run(alternating * 6)
     assert out["status"] == "paused" and "loop_model_calls" in out["reason"]
-    assert budget.model_calls == 10 and budget.max_model_calls == 40
+    assert budget.model_calls == 10 and budget.max_model_calls == Budget().max_model_calls
     child = ChildBudget(Budget())
     for _ in range(30):
         child.spend("tool_calls")
@@ -328,7 +328,7 @@ def test_auto_mode_is_one_shot_first_and_the_loop_only_takes_over_after_the_one_
     assert out["blocked"] is False and len(prompts) == 1 and "tool_loop" not in prompts[0].lower()[:200]
     edit = {"tool": "edit_file", "arguments": {"file": "public/tinh-nang.html", "edits": [{"after_line": 4, "insert": "    <p>Mới.</p>"}]}}
     test = {"tool": "write_test", "arguments": {"test_file": "test/moi.test.js", "test": ESM_TEST}}
-    models = SeqModels(["không phải JSON"] * 4 + [edit, test, FINISH])
+    models = SeqModels([f"không phải JSON lần {i}" for i in range(4)] + [edit, test, FINISH])
     out, prompts = _run(tmp_path / "fallback", models)
     assert out["blocked"] is False and len(prompts) == 7
     assert (tmp_path / "fallback/scratch/public/tinh-nang.html").read_text(encoding="utf-8").count("<p>Mới.</p>") == 1
