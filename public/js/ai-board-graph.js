@@ -314,8 +314,27 @@ function edgeSvg(edge, nodes) {
 }
 
 // Three stacked panels: properties, graph, execution log. Chosen node null → the running node, else the failed one.
+// Journal of the current execute run: shows what really ran and where a restart continued.
+function journalPanel(trace) {
+  const projection = projectPipeline(trace);
+  const rows = projection.resume_journal || [];
+  if (!rows.length) return '';
+  const chips = [...rows]
+    .sort((a, b) => Number(a.created_at) - Number(b.created_at))
+    .map(row => {
+      const resume = row.node === 'resume';
+      const label = resume
+        ? (row.outcome === 'resumed' ? `Resumed at ${String(row.state?.from_node || '').replace('_', ' ')}`
+          : `Restarted: ${(row.state?.mismatch || []).join(', ') || 'pin mismatch'}`)
+        : `${String(row.node).replace('_', ' ')}: ${row.outcome}`;
+      return `<li class="${resume ? 'is-replay' : ''}">${esc(label)}</li>`;
+    }).join('');
+  return `<div class="g-caption">Attempt journal</div><ul class="g-journal" aria-label="Attempt journal">${chips}</ul>`;
+}
+
 export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), extras = {}) {
   const nodes = graphNodes(trace);
+  const projection = projectPipeline(trace);
   const selectedId = pick(nodes, chosen);
   const edges = (trace.graph?.edges || []).filter(drawnEdge).map(e => edgeSvg(e, nodes)).join('');
   const present = new Set((trace.graph?.nodes || []).map(n => n.id));
@@ -331,8 +350,11 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
       <text class="g-label" x="-40" y="13">${esc(n.name)}</text>
     </g>`;
   }).join('');
-  const rollback = projectPipeline(trace).runs.at(-1)?.rollback;
+  const rollback = projection.runs.at(-1)?.rollback;
   const rollbackLine = rollback ? `<p class="meta g-loop">Rollback: ${esc(ROLLBACK_LABEL[rollback.outcome] || rollback.outcome)}.</p>` : '';
+  const resumeLine = projection.resume
+    ? `<p class="meta g-resume">Resumed at ${esc(nodes[projection.resume.from]?.name || projection.resume.from)}. Earlier steps are Done and were not run again.</p>`
+    : '';
   const cells = budgetCells(trace, now).map(c => `<div class="g-cell tone-${c.tone}">
       <div class="g-cell-label">${esc(c.label)}</div>
       <div class="g-big">${esc(c.big)}</div>
@@ -355,12 +377,13 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
         <g class="g-edges">${edges}</g>
         <g class="g-nodes">${drawn}</g>
       </svg></div>
-      ${rollbackLine}
+      ${rollbackLine}${resumeLine}
     </div>
     <div class="blk g-log" role="region" aria-label="Execution log">
       <ul class="g-steps" aria-label="Các bước">${steps}</ul>
       <div class="g-pane">
         <div class="g-caption">Execution log</div>
+        ${journalPanel(trace)}
         ${logPanel(chosenNode)}
         ${extras.events || ''}
       </div>

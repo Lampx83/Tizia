@@ -61,6 +61,12 @@ export function projectPipeline(trace = {}) {
   const stages = { plan: queuedStage === 'plan' ? null : planRun, execute: queuedStage ? null : executeRun };
   const selected = new Set(Object.values(stages).filter(Boolean).map(r => r.id));
   const leaseLive = root.live && (root.lease_expires_at == null || Number(root.lease_expires_at) > Date.now());
+  // Journal rows of this ticket: a resumed attempt records where it continued (LF/148/LF/152).
+  const executeJournal = (trace.journal || []).filter(j => String(j.run_id) === String(stages.execute?.id));
+  const resumedRow = executeJournal.find(j => j.node === 'resume' && j.outcome === 'resumed');
+  const resumeFrom = resumedRow ? String(resumedRow.state?.from_node || '') : '';
+  const resumeGate = resumeFrom.startsWith('gate_') ? Number(resumeFrom.slice(5).replace('_', '.')) : null;
+  const resume = resumedRow ? { from: resumeFrom, gate: resumeGate, previous_run_id: resumedRow.state?.previous_run_id ?? null } : null;
   const start = ordered((trace.events || []).filter(e => e.event_type === 'gate_started' && e.run_id === latest?.id))
     .map(e => {
       try { return { ...e, gate: Number(JSON.parse(e.internal_detail).gate) }; } catch { return null; }
@@ -83,12 +89,15 @@ export function projectPipeline(trace = {}) {
     // including a repair that returns to an earlier gate. Completed calls are not starts.
     const active = live && (start ? start.gate === def.gate && start.created_at > (result?.created_at || 0)
       : Number(run.progress?.current) === def.gate);
-    const state = active ? 'run' : result?.status === 'passed' ? 'ok' : result?.status === 'blocked' ? 'bad'
+    // A resumed run continued after gate N: gates before it are Done even without a new gate trace.
+    const replayed = stage === 'execute' && run === stages.execute && resumeGate != null && def.gate < resumeGate;
+    const state = replayed ? 'ok' : active ? 'run' : result?.status === 'passed' ? 'ok' : result?.status === 'blocked' ? 'bad'
       : queuedStage === stage && def.gate === (stage === 'plan' ? 1 : 3) ? 'queued'
       : calls.length ? 'unfinished' : 'wait';
-    return { ...def, stage, run, result: active ? null : result, state, calls: [...groups.values()].map(rows => ({ current: rows.at(-1), previous: rows.slice(0, -1) })), previousResults: active ? gates : gates.slice(0, -1) };
+    return { ...def, stage, run, result: active ? null : result, state, resumed: replayed,
+      calls: [...groups.values()].map(rows => ({ current: rows.at(-1), previous: rows.slice(0, -1) })), previousResults: active ? gates : gates.slice(0, -1) };
   });
-  return { steps, runs, selected, latest, queuedStage };
+  return { steps, runs, selected, latest, queuedStage, resume, resume_journal: executeJournal };
 }
 const EVENT_LABELS = {
   request_created: 'Đã nhận yêu cầu', request_classified: 'Đã phân loại yêu cầu',

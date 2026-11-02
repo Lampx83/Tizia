@@ -62,6 +62,32 @@ test('running fixture gives running, succeeded, and waiting nodes', () => {
   assert.equal(n.plan_stopped.state, 'idle');
 });
 
+// Resumed after a crash: the new run's journal says it continued at gate 4.
+const resumed = () => ({
+  root: root({ live: true }),
+  graph,
+  runs: [execRun(20, [gate(40, 4, 'passed', 500)], [])],
+  events: [started(20, 4, 400)],
+  journal: [
+    { run_id: 20, node: 'resume', outcome: 'resumed', created_at: 300, state: { from_node: 'gate_4', previous_run_id: 19 } },
+    { run_id: 20, node: 'gate_4', outcome: 'passed', created_at: 500, state: {} },
+  ],
+});
+
+test('resumed run marks skipped gates done and shows the resume badge', () => {
+  const n = graphNodes(resumed());
+  assert.equal(n.gate_3.state, 'succeeded');
+  assert.equal(n.gate_4.state, 'succeeded');
+  const html = renderTicketGraph(resumed());
+  assert.match(html, /Resumed at Check code/);
+  assert.match(html, /Attempt journal/);
+  assert.match(html, /Resumed at gate 4/);
+});
+
+test('a run without resume journal keeps the old rendering', () => {
+  assert.doesNotMatch(renderTicketGraph(running()), /Resumed at/);
+});
+
 test('failed fixture marks the blocking gate and plan_stopped as failed', () => {
   const n = graphNodes(failed());
   assert.equal(n.gate_2.state, 'failed');
