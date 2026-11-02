@@ -555,7 +555,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             except (subprocess.TimeoutExpired, RuntimeError) as exc:
                 failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
                 if not probe_id:
-                    raise RuntimeError(failure) from exc
+                    detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                    raise RuntimeError(f"{failure}: {detail}") from exc
                 # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
                 logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
             else:
@@ -569,7 +570,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 try:
                     command([*compose, "exec", "-T", "tizia", "sh", "-lc", item], timeout=120)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
-                    raise RuntimeError(f"feature acceptance failed: {item}") from exc
+                    detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                    raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
                 logs.append(f"Feature acceptance passed: {item}")
 
             env = os.environ.copy()
