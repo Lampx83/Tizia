@@ -323,8 +323,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
         }
       } else if (!['cancelled', 'done'].includes(row.status)) requested.push(clip(row.title, 120));
     }
-    // Trang = slug folder: cờ phát hành mở/ẩn đúng /<slug>.html, module ở js/features/<slug>/.
-    const lines = [`Chức năng: ${clip(folder.title, 120)} · trang: public/${folder.slug}.html · module: public/js/features/${folder.slug}/index.js`];
+    // Không bịa đường dẫn từ slug: yêu cầu tự nêu file, file đã có nằm trong "File sở hữu";
+    // tên slug từng bị model trích như file có thật và làm gate 3 lặp vô ích.
+    const lines = [`Chức năng: ${clip(folder.title, 120)}`];
     if (answers[0]) lines.push(`Mục đích: ${clip(answers[0], 300)}`);
     if (answers[1]) lines.push(`Luồng người dùng: ${clip(answers[1], 300)}`);
     const owned = [...files].slice(-cap.owned_files);
