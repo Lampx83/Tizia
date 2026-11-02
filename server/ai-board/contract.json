@@ -82,7 +82,7 @@
     },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
-      "model_calls": 400, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
+      "model_calls": 400, "plan_model_calls": 24, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
       "wall_clock_s": 900, "semantic_repairs": 24, "child_wall_clock_s": 300,
       "node_wall_clock_s": 1200
     },

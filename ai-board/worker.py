@@ -946,13 +946,18 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
+                budget = Budget(max_model_calls=6, max_units=120)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
-                        role=role, budget=Budget(max_model_calls=6, max_units=120), format=None,
+                        role=role, budget=budget, format=None,
                         options={'num_predict': 1})
                 except Exception as error:
                     ok_at.pop(role, None)
-                    return {'status': 'model_unavailable', 'model': role, 'error': str(error)[:200]}
+                    from runtime import root_allowance as _root
+                    from runtime import budget as _budget
+                    detail = (f"{error} | exhausted={budget.exhausted()} | node={_budget._NODE}"
+                              f" | root={_root.current() is not None}")
+                    return {'status': 'model_unavailable', 'model': role, 'error': detail[:300]}
                 ok_at[role] = clock()
             return None
         # Only what every request needs at intake. Gate 3 models are loaded when Gate 3 runs: probing them here
@@ -1520,7 +1525,8 @@ class HarnessPlanner:
         answered = get_settings().gate25_answered
         # Một lượt lập kế hoạch: gate 1 (tối đa 2 lần, mỗi lần vài lời gọi), gate 2, gate 2.5 (chạy lại khi
         # người gửi đã trả lời). Trần này chỉ chặn vòng lặp vô hạn; trần thật là root allowance của server.
-        budget.max_model_calls = min(budget.max_model_calls, 12 if answered else 10)
+        plan_calls = int(LIMITS['budget'].get('plan_model_calls') or 24)
+        budget.max_model_calls = min(budget.max_model_calls, plan_calls)
         # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
         budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
