@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, QUEUE_STALE_MS, STALE_HINT, estimateTokens, parseMaxTokens, tokenLabel, errorText, toastMs } from '../public/js/admin-skills-state.js';
+import { hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, QUEUE_STALE_MS, STALE_HINT, estimateTokens, parseMaxTokens, tokenLabel, tokenShareText, errorText, toastMs } from '../public/js/admin-skills-state.js';
 
 const NOW = 10_000_000;
 const job = (status, extra = {}) => ({ status, confirmed_at: NOW - 2 * 60000, ...extra });
@@ -81,6 +81,19 @@ test('tokenLabel flags only a count above the cap and formats the label', () => 
   assert.match(within.text, /\/ 1\.200 token$/);
   assert.equal(tokenLabel('plain').cap, null);
   assert.doesNotMatch(tokenLabel('plain').text, /\//);
+});
+
+test('tokenShareText: percent of each node budget plus the gap to the UTF-8 estimate', () => {
+  const budgets = { intake: { max_tokens_per_prompt: 2000 }, plan: { max_tokens_per_prompt: 1000 }, execute: { max_tokens_per_prompt: 4000 }, verdict: { max_tokens_per_prompt: 800 } };
+  assert.equal(tokenShareText(320, budgets), '16% ngân sách nhận yêu cầu · 32% ngân sách lập plan · 8% ngân sách viết code · 40% ngân sách kết luận');
+  // Real Qwen count below the byte upper bound; the gap is stated, never folded into the count.
+  assert.equal(tokenShareText(320, budgets, 900),
+    '16% ngân sách nhận yêu cầu · 32% ngân sách lập plan · 8% ngân sách viết code · 40% ngân sách kết luận · ít hơn 580 token so với ước lượng UTF-8');
+  assert.match(tokenShareText(0, budgets, 4), /0% ngân sách nhận yêu cầu .*ít hơn 4 token/);
+  assert.ok(tokenShareText(1200, budgets, 900).includes('nhiều hơn 300 token so với ước lượng UTF-8'));
+  assert.ok(tokenShareText(900, budgets, 900).includes('khớp ước lượng UTF-8'));
+  assert.equal(tokenShareText(null, budgets, 900), '');
+  assert.equal(tokenShareText(10, {}), '');
 });
 
 test('errorText maps known server codes to Vietnamese and never shows English server text', () => {

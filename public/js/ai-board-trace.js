@@ -137,6 +137,39 @@ export function budgetSummary(totals = {}) {
 export function describeEvent(event = {}) {
   return EVENT_LABELS[event.event_type] || 'Cập nhật xử lý yêu cầu';
 }
+const basename = (value) => String(value ?? '').split(/[\\/]/).pop();
+const evidenceOf = (gate = {}) => {
+  let evidence = gate.evidence;
+  if (typeof evidence === 'string') { try { evidence = JSON.parse(evidence); } catch { return {}; } }
+  return evidence && typeof evidence === 'object' ? evidence : {};
+};
+// Sandbox artifacts this run kept: screenshots and explicit artifact lists. Names only, never bytes.
+export function sandboxArtifacts(run = {}) {
+  const names = [];
+  const add = (item) => {
+    const name = typeof item === 'string' ? item : item?.name || item?.path;
+    if (name) names.push(basename(name));
+  };
+  for (const gate of run.gates || []) {
+    const evidence = evidenceOf(gate);
+    for (const item of [].concat(evidence.screenshots || [], evidence.screenshot || [], evidence.artifacts || [], evidence.sandbox?.artifacts || [])) add(item);
+    for (const receipt of evidence.sandbox_receipts || []) for (const item of receipt?.artifacts || []) add(item);
+  }
+  return [...new Set(names.filter(Boolean))];
+}
+// Admin-only runner block: failure code and kept artifacts per run. Requester payloads never carry these fields.
+export function renderRunnerTrace(trace = {}) {
+  return (trace.runs || []).map((run) => {
+    const failure = run.runner_failure, artifacts = sandboxArtifacts(run);
+    if (!failure && !artifacts.length) return '';
+    const code = failure?.code ? ` với mã <code>${esc(failure.code)}</code>` : '';
+    const where = failure?.gate != null ? `Bước ${esc(failure.gate)}` : 'Sandbox';
+    const reason = failure?.internal_reason || failure?.reason;
+    const stopped = failure ? `<p class="warn">${where}: sandbox dừng${code}.${reason ? ` ${esc(reason)}` : ''}</p>` : '';
+    const kept = artifacts.length ? `<p>Sandbox giữ: ${artifacts.map((name) => `<code>${esc(name)}</code>`).join(' ')}</p>` : '';
+    return `<div class="g-runner meta" data-run="${esc(run.id)}">${stopped}${kept}</div>`;
+  }).filter(Boolean).join('');
+}
 export const TECHNICAL_EVENTS = new Set(['heartbeat', 'lease_released', 'gate_started', 'shadow_precheck_passed']);
 // Receipts describe the checked candidate at that time; they do not assert a release.
 export function renderVerificationClaims(trace = {}) {

@@ -285,3 +285,14 @@ test('reduced motion turns off edge flow and running spin', () => {
   assert.match(css, /\.g-edge\.flow \{[^}]*animation:g-flow/);
 });
 
+test('at 390px the graph scrolls inside its own frame, not the page', () => {
+  assert.match(renderTicketGraph(failed(), null), /<div class="g-frame"><svg class="g-svg"/);
+  const css = fs.readFileSync(new URL('../public/admin-request.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const rule = selector => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
+  assert.match(rule('.g-frame'), /overflow-x:auto/);
+  assert.match(rule('.g-svg'), /min-width:900px/);
+  assert.match(rule('.g-svg'), /width:100%/);
+  // Only the SVG may be wider than a phone; the page shell and the graph section keep fluid widths.
+  for (const selector of ['body', '.ticket-graph', '.g-graph']) assert.doesNotMatch(rule(selector), /min-width/);
+});
+

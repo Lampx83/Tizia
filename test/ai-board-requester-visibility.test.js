@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { requesterProgress } from '../server/ai-board/services/requester-progress.js';
+import { renderRunnerTrace } from '../public/js/ai-board-trace.js';
 import { openBoard } from './support/ai-board-db.js';
 
 async function fixture() {
@@ -71,5 +72,24 @@ test('admin trace shows runner failure and lost worker without requeue', async (
   assert.deepEqual(trace.root.lost_worker, { worker_id: 'w9', lease_expired_at: 1 });
   assert.deepEqual(trace.runs[0].runner_failure, { gate: 5, code: 'sandbox_oom', reason: 'Sandbox không chạy được', internal_reason: 'docker exit 137' });
   assert.equal(trace.root.lease_owner, 'w9');
+  db.close();
+});
+
+test('admin view renders the runner failure code and the sandbox artifacts it kept, requester never sees them', async () => {
+  const { db, store } = await fixture();
+  const { request_id: id, root_ticket_id: rootId } = await newRequest(store, 'trace-002');
+  const runId = await addRun(db, rootId);
+  const evidence = { code: 'sandbox_oom', screenshots: [{ path: '/tmp/ai-verify-shots-1/after.png' }], artifacts: ['result', 'shots'] };
+  await db.prepare(`INSERT INTO ai_gate_traces (run_id, gate, status, public_reason, internal_reason, evidence_json, created_at)
+    VALUES (?, 5, 'blocked', 'Sandbox không chạy được', 'docker exit 137', ?, 1)`).run(runId, JSON.stringify(evidence));
+  const trace = await store.getRequestTrace(id);
+  const html = renderRunnerTrace(trace);
+  assert.match(html, /data-run="\d+"/);
+  assert.match(html, /sandbox dừng với mã <code>sandbox_oom<\/code>/);
+  assert.match(html, /docker exit 137/);
+  for (const name of ['after.png', 'result', 'shots']) assert.match(html, new RegExp(`<code>${name}</code>`));
+  // The requester progress payload stays public-only: no runner code, no artifact names.
+  const progress = JSON.stringify(await requesterProgress(store, id, 1));
+  for (const leaked of ['sandbox_oom', 'after.png', 'docker exit 137']) assert.equal(progress.includes(leaked), false, leaked);
   db.close();
 });
