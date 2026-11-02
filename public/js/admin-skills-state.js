@@ -51,6 +51,18 @@ export const tokenLabel = (text, counted = null) => {
   return { count, cap, over: cap != null && count > cap, text: `${count.toLocaleString('vi-VN')}${cap != null ? ` / ${cap.toLocaleString('vi-VN')}` : ''} token` };
 };
 
+export const NODE_BUDGET_LABEL = { intake: 'nhận yêu cầu', plan: 'lập plan', execute: 'viết code', verdict: 'kết luận' };
+// Share of each node budget plus the gap to the old UTF-8 estimate. Empty until there is a count.
+export const tokenShareText = (count, budgets = {}, estimate = null) => {
+  if (count == null) return '';
+  const shares = Object.entries(budgets || {})
+    .filter(([, budget]) => Number(budget?.max_tokens_per_prompt) > 0)
+    .map(([node, budget]) => `${Math.round((count / Number(budget.max_tokens_per_prompt)) * 100)}% ngân sách ${NODE_BUDGET_LABEL[node] || node}`);
+  const gap = estimate == null ? '' : Math.abs(count - estimate) < 1 ? 'khớp ước lượng UTF-8'
+    : `${count < estimate ? 'ít' : 'nhiều'} hơn ${Math.abs(estimate - count).toLocaleString('vi-VN')} token so với ước lượng UTF-8`;
+  return [...shares, gap].filter(Boolean).join(' · ');
+};
+
 const SERVER_TEXT = {
   version_busy: 'Không từ chối được: phiên bản đang được dùng hoặc đang được viết lại.',
   rewrite_in_progress: 'Model đang viết lại phiên bản này. Chờ viết xong rồi thử lại.',

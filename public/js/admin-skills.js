@@ -1,4 +1,4 @@
-import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel } from './admin-skills-state.js?v=skills-ux2';
+import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel, tokenShareText, estimateTokens } from './admin-skills-state.js?v=skills-ux2';
 import { fmt } from './ai-board-clock.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -41,12 +41,16 @@ const rewriteBody = picked => (picked.instructions ? { confirmed:true, instructi
 const rewriteError = done => done.data?.error === 'rate_limited'
   ? `Đã quá giới hạn viết lại. Thử lại sau ${Math.max(1, Math.ceil(Number(done.data.retry_after_s || 60) / 60))} phút.`
   : errorText(done, 'Chưa xếp hàng viết lại. Thử lại sau ít phút.');
-const bindTokenCount = (textarea, node, api) => {
+const bindTokenCount = (textarea, node, api, { budgets = {}, share = null } = {}) => {
   let counted = null, seq = 0, timer = 0;
   const paint = () => {
-    const t = tokenLabel(textarea.value, counted?.text === textarea.value ? counted.count : null);
+    const estimate = estimateTokens(textarea.value);
+    const real = counted?.text === textarea.value ? counted.count : null;
+    const t = tokenLabel(textarea.value, real);
     node.textContent = t.text;
     node.dataset.over = String(t.over);
+    // The share needs a real count; the delta compares it with the old UTF-8 upper bound.
+    if (share) share.textContent = tokenShareText(real, budgets, real == null ? null : estimate);
     node.title = t.over ? 'Vượt giới hạn token của skill: không lưu được' : counted ? 'Đếm bằng bộ đếm Qwen của model' : 'Đang đếm bằng Qwen; tạm hiện ước lượng UTF-8 (cận trên)';
   };
   const count = async () => {
@@ -105,7 +109,8 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       <label for="skill-file">Đọc từ tệp Markdown (không bắt buộc)</label><input id="skill-file" type="file" accept=".md,.txt,text/plain,text/markdown">
       <fieldset><legend>Loại tác vụ</legend>${Object.entries(TYPE).map(([value,label]) =>
         `<label class="skill-type"><input type="checkbox" name="task_type" value="${value}"${value === 'frontend' ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>
-      <div class="tok-head"><label for="skill-original">Nội dung gốc</label><span class="tok-count" data-token-count></span></div><textarea id="skill-original" rows="12" required spellcheck="false">${esc(sample('frontend-guide'))}</textarea>
+      <div class="tok-head"><label for="skill-original">Nội dung gốc</label><span class="tok-count" data-token-count></span></div>
+      <p class="meta tok-share" data-token-share></p><textarea id="skill-original" rows="12" required spellcheck="false">${esc(sample('frontend-guide'))}</textarea>
       <p class="meta">Dùng đủ các trường trong mẫu, tối đa 7 quy tắc ngắn. Lưu bản nháp chưa gọi model hoặc kích hoạt skill.</p>
       <div class="toolbar skill-form-actions">
         <button class="btn" type="button" data-skill-act="rewrite">Viết lại cho model nội bộ</button>
@@ -182,7 +187,7 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
               ${!version.rejected_at && !isActive && version.rewrite?.status !== 'running' ? `<button class="btn" type="button" data-skill-reject="${version.id}">Từ chối</button>` : ''}
               ${version.approved_by && !version.rejected_at && !isActive ? `<button class="btn" type="button" data-skill-rollback="${version.id}">Khôi phục phiên bản này</button>` : ''}
               <button class="btn" type="button" data-skill-edit="${version.id}">Sửa tay thành phiên bản mới</button></div>
-            <form class="skill-edit" data-edit-form="${version.id}" hidden><div class="tok-head"><label for="edit-text-${version.id}">Nội dung sửa</label><span class="tok-count" data-token-count></span></div><textarea id="edit-text-${version.id}" rows="10" spellcheck="false">${esc(version.rewritten_text ?? version.original_text)}</textarea>
+            <form class="skill-edit" data-edit-form="${version.id}" hidden><div class="tok-head"><label for="edit-text-${version.id}">Nội dung sửa</label><span class="tok-count" data-token-count></span></div><p class="meta tok-share" data-token-share></p><textarea id="edit-text-${version.id}" rows="10" spellcheck="false">${esc(version.rewritten_text ?? version.original_text)}</textarea>
               <div class="toolbar"><button class="btn primary" type="submit">Lưu phiên bản mới</button><button class="btn" type="button" data-edit-cancel>Đóng</button></div></form>` : ''}
           </div>
         </li>`;
@@ -247,7 +252,8 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     for (const cancel of details.querySelectorAll('[data-edit-cancel]')) cancel.onclick = () => {
       cancel.closest('form').hidden = true;
     };
-    for (const formNode of details.querySelectorAll('[data-edit-form]')) bindTokenCount(formNode.querySelector('textarea'), formNode.querySelector('[data-token-count]'), api);
+    for (const formNode of details.querySelectorAll('[data-edit-form]')) bindTokenCount(formNode.querySelector('textarea'), formNode.querySelector('[data-token-count]'), api,
+      { budgets: result.data.stage_budgets, share: formNode.querySelector('[data-token-share]') });
     for (const formNode of details.querySelectorAll('[data-edit-form]')) formNode.onsubmit = async event => {
       event.preventDefault();
       try {
@@ -393,7 +399,8 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
     return draft;
   };
 
-  bindTokenCount(form.querySelector('#skill-original'), form.querySelector('[data-token-count]'), api);
+  bindTokenCount(form.querySelector('#skill-original'), form.querySelector('[data-token-count]'), api,
+    { budgets: result.data.stage_budgets, share: form.querySelector('[data-token-share]') });
   form.onsubmit = async event => {
     event.preventDefault();
     const button = form.querySelector('[type=submit]');
