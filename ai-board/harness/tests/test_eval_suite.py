@@ -664,7 +664,7 @@ def test_tool_loop_budget_and_timing_pins_are_recorded(world, monkeypatch):
     runs = {p.name: json.loads((p / "run.json").read_text(encoding="utf-8")) for p in (root / "suite").iterdir()}
     assert {n.endswith("-loop"): m["tool_loop"] for n, m in runs.items()} == {True: "1", False: ""}
     from runtime import limits
-    assert all(m["budget"]["model_calls"] == limits.budget()["model_calls"] for m in runs.values())
+    assert all(m["budget"]["model_calls"] == limits.budget(env={})["model_calls"] for m in runs.values())
     assert [m["winner_rule"] for n, m in runs.items() if n.endswith("-loop")] == ["arm wins at +4 tasks"] and all(len(m.get("winner_rule_sha", "")) == 16 for n, m in runs.items() if n.endswith("-loop"))
     assert [m["timing_conditions"]["comparable"] for n, m in runs.items() if n.endswith("-loop")] == [True]
 
