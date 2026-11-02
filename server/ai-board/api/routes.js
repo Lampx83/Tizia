@@ -635,6 +635,14 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(await store.resumeAuthorizedPlan(req.params.id, { ...lease, runId: req.body?.run_id }));
   }));
 
+  route.post('/api/ai-board/worker/tickets/:id/journal', authenticate, handle(async (req, res) => {
+    const lease = leaseInput(req.body);
+    res.json(await store.recordAttemptJournal(req.params.id, {
+      ...lease, runId: req.body?.run_id, node: req.body?.node, outcome: req.body?.outcome,
+      state: req.body?.state, ledger: req.body?.ledger,
+    }));
+  }));
+
   route.post('/api/ai-board/worker/tickets/:id/rollback', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     res.json(await store.submitRollback(req.params.id, {

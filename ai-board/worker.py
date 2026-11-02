@@ -188,12 +188,13 @@ class _Execution:
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash):
+                 checkpoint, plan_hash, journal_hook=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
         self.should_stop, self.candidate_opts, self.request_type = should_stop, candidate_opts, request_type
         self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
+        self.journal_hook = journal_hook
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
@@ -235,7 +236,8 @@ class _Execution:
         try:
             self.path = exec_graph.run(self.handlers(), exec_graph.spec()["entries"][self.ENTRY], checkpointer=saver,
                                        thread_id=saver.thread_id if saver else None,
-                                       observe={"repair_check": self.observe_state}, report=self.halt)
+                                       observe={"repair_check": self.observe_state}, report=self.halt,
+                                       journal=self.journal)
         finally:
             self.close_attempt()  # a lease loss or crash inside a node still cleans the attempt up
         return self.result
@@ -248,6 +250,15 @@ class _Execution:
         last = self.gates[-1]
         code = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])["diff"]
         return code, str(last.get("reason")), f"{last.get('gate')}:{self.kind}"
+
+    def journal(self, node: str, outcome: str) -> None:
+        """Node outcome plus a compact attempt snapshot for the server journal (LF/147)."""
+        if not self.journal_hook:
+            return
+        self.journal_hook(node, outcome, {
+            "produced": sorted(self.produced), "base_sha": self.base_sha, "repairs": len(self.repairs),
+            "ledger": self.budget.snapshot(),
+        })
 
     def graph_persistence(self) -> bool:
         from runtime import exec_graph
@@ -602,6 +613,7 @@ def _dependency_graph(plan: dict) -> list[dict]:
 
 def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate,
                    cleanup: Callable, policy: dict | None = None, accepted_policy_hash: str | None = None,
+                   journal=None,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
@@ -628,6 +640,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
+        journal_hook=journal,
         **extra)
     return execution.run()
 
@@ -1255,6 +1268,16 @@ class HttpWorker:
         # Folder: planner + cổng đọc từ đỉnh nhánh chu kỳ; candidate commit nối tiếp chính nhánh đó.
         plan_kwargs = {"source": folder_src["path"]} if folder_src else {}
         brief = (snapshot.get("folder") or {}).get("brief") or {}
+        def journal_hook(node: str, outcome: str, snapshot: dict) -> None:
+            try:
+                self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/journal", {
+                    **lease, "run_id": run["id"], "node": node, "outcome": outcome,
+                    "state": {key: snapshot.get(key) for key in ("produced", "base_sha", "repairs")},
+                    "ledger": snapshot.get("ledger") or {},
+                })
+            except Exception as error:  # noqa: BLE001 - journal is best effort
+                print(f"[worker] journal loi: {str(error)[:160]}")
+
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
             "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
             "folder_brief": brief.get("text")}} if folder_src else {}
@@ -1365,7 +1388,7 @@ class HttpWorker:
                             request_detail=((snapshot.get('request') or {}).get('title', '') + '\n'
                                 + ((snapshot.get('request') or {}).get('clarified_spec')
                                    or (snapshot.get('request') or {}).get('detail') or '')),
-                            should_stop=lost, **run_kwargs, **type_kwargs,
+                            should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook,
                         **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                         ), ticket_id, lease,
                         on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
