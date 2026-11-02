@@ -127,8 +127,8 @@
   .claim-evidence code { white-space:normal; overflow-wrap:anywhere; word-break:break-all; }
   .claim-evidence pre { white-space:pre-wrap; overflow-wrap:anywhere; }
   /* Ticket graph: thin edges, no boxes. Colour: one accent plus the state colours. */
-  .ticket-graph { margin:24px 0 0; display:grid; gap:14px; }
-  .ticket-graph .blk { margin:0; padding:18px; }
+  .ticket-graph { margin:24px 0 0; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+  .ticket-graph .blk { margin:0; padding:18px; min-width:0; }
   .g-caption { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
   .g-summary { display:grid; gap:6px; padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--border); font-size:13px; }
   .g-summary .line1 { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
@@ -212,6 +212,7 @@
   @media (max-width:600px) {
     .g-strip { grid-template-columns:1fr 1fr; }
     .g-big { font-size:22px; }
+    .g-result-row { grid-template-columns:minmax(0,1fr); gap:2px; }
     .g-log { grid-template-columns:minmax(0,1fr); }
     .g-steps { border-right:0; border-bottom:1px solid var(--border); }
     .g-pane { padding:16px; }

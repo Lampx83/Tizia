@@ -320,5 +320,8 @@ test('at 390px the graph scrolls inside its own frame, not the page', () => {
   assert.match(rule('.g-svg'), /width:100%/);
   // Only the SVG may be wider than a phone; the page shell and the graph section keep fluid widths.
   for (const selector of ['body', '.ticket-graph', '.g-graph']) assert.doesNotMatch(rule(selector), /min-width/);
+  assert.match(rule('.ticket-graph'), /grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(rule('.ticket-graph .blk'), /min-width:0/);
+  assert.match(css, /\.g-result-row \{ grid-template-columns:minmax\(0,1fr\); gap:2px; \}/);
 });
 
