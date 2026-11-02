@@ -60,6 +60,14 @@ def test_parse_codegen_invalid_raises(bad):
 
 # ── build_prompt: chỉ 1 subtask, không plan, không subtask khác ─────────────
 
+def test_build_prompt_lists_files_produced_by_earlier_subtasks():
+    subtask = {"title": "Header", "file": "public/index.html", "verify": "node --test test/x.test.js", "size": "small"}
+    prompt = implement.build_prompt(subtask, produced=["public/js/features/faq/index.js", "public/faq.html"])
+    assert "public/js/features/faq/index.js" in prompt and "public/faq.html" in prompt
+    assert "FILE DA TAO" in prompt
+    assert "FILE DA TAO" not in implement.build_prompt(subtask)
+
+
 def test_build_prompt_contains_only_this_subtask():
     subtask = {"title": "Tạo plugin flashcards", "file": "server/contexts/_ai-generated/pharmacy/flashcards/index.js",
                "verify": "curl /api/flashcards trả 200", "size": "small"}
