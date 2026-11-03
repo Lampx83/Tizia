@@ -491,7 +491,7 @@ function renderRequests() {
         <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
-      ${filtered.map(r => `
+      ${filtered.map((r, index) => `
         ${(() => {
           const ticket = ticketByRequest.get(r.id);
           const ticketSummary = ticket
@@ -499,7 +499,7 @@ function renderRequests() {
             : '<span style="opacity:.45">legacy</span>';
           return `
         <tr data-rid="${r.id}">
-          <td>${r.id}</td>
+          <td>${index + 1}</td>
           <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>
