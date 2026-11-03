@@ -59,7 +59,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     gold = json.loads(Path(args.gold).read_text(encoding="utf-8"))
-    names = args.skills or ["default-tdd", "default-code-review"]
+    names = args.skills or ["default-test", "default-review"]
     systems = {name: skill_text(name) for name in names}
     multi, per = run(gold, systems, args.model, args.cap)
     Path(args.multi_out).write_text(json.dumps({"mode": "multi-skill", "runs": multi}, ensure_ascii=False, indent=1),

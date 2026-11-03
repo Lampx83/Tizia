@@ -1,0 +1,5 @@
+{"cases": [
+ {"id": "c1", "prompt": "Viết quy trình 3 bước để sửa một bug nhỏ trong mã nguồn, nêu rõ bước viết test đỏ trước khi sửa.", "expect": ["test", "sửa"]},
+ {"id": "c2", "prompt": "Nêu hai trục khi review một thay đổi: chuẩn của repo và khớp yêu cầu gốc.", "expect": ["chuẩn", "yêu cầu"]},
+ {"id": "c3", "prompt": "Khi nào nên dừng vòng lặp sửa lỗi thay vì thử tiếp?", "expect": ["dừng", "lỗi"]}
+]}
