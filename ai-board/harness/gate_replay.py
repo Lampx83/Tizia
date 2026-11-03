@@ -51,7 +51,8 @@ def _pii(data, case):
 
 def _new_file(data, case):
     from gates import brainstorm
-    return "pass" if all(brainstorm._NEW_OK.match(path) for path in case["files"]) else "block"
+    files = case.get("files") or []
+    return "pass" if files and all(brainstorm._NEW_OK.match(path) for path in files) else "block"
 
 
 def _objection(data, case):

@@ -146,7 +146,10 @@ def _sentence_at(text: str, pos: int) -> str:
 
 
 def _task_text(task: dict) -> str:
-    return json.dumps(task or {}, ensure_ascii=False).casefold()
+    """Text a subtask uses to cover an item; the file path alone must not satisfy a name."""
+    fields = ("title", "description", "verify", "tests", "acceptance")
+    return json.dumps({key: task.get(key) for key in fields if task.get(key) is not None},
+                      ensure_ascii=False).casefold()
 
 
 def requested_missing(plan, text):
@@ -154,19 +157,21 @@ def requested_missing(plan, text):
     files = _plan_files(plan)
     checks = _checks(plan)
     missing = [path for path in requested_paths(text)
-               if not any(f == path or f.endswith("/" + path) or ("/" not in path and f.rsplit("/", 1)[-1] == path) for f in files)
+               if not any(_same_file(f, path) for f in files)
                and not (_TEST_FILE.search(path) and path in checks)]
     haystack = json.dumps(plan or {}, ensure_ascii=False).casefold()
     tasks = [t for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
     for match in _LITERAL.finditer(text or ""):
         literal = match.group(1).strip()
-        # The item and the file named in the same sentence belong together: a plan that only mentions the
-        # name on another subtask has not covered this file (run #16: building name missing from the layout).
+        # A name and the file named in the same sentence belong together; a plan that only mentions the
+        # name on another subtask has not covered this file.
         named = requested_paths(_sentence_at(text, match.start()))
-        task = next((t for t in tasks if len(named) == 1 and _same_file(str(t.get("file") or ""), named[0])), None)
-        if task is not None:
-            if literal.casefold() not in _task_text(task):
-                missing.append(f'chữ "{literal}" trong {named[0]}')
+        bound = [task for task in tasks
+                 if any(_same_file(str(task.get("file") or ""), path) for path in named)]
+        if bound:
+            for task in bound:
+                if literal.casefold() not in _task_text(task):
+                    missing.append(f'chữ "{literal}" trong {str(task.get("file") or "").replace("\\", "/").lstrip("./")}')
             continue
         if literal.casefold() in haystack:
             continue
