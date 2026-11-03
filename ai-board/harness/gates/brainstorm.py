@@ -183,7 +183,7 @@ def check_files(plan: dict, source, sha: str | None) -> None:
             raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
         if st["layer"] == "db":
             if not DB_MIGRATION.match(file):
-                raise ValueError("subtask db phải là migration mới: server/contexts/_ai-generated/<name>/migrations/<file>.sql")
+                raise ValueError("subtask db phải là migration mới: {file} (mẫu server/contexts/_ai-generated/<name>/migrations/<file>.sql)")
             db_files.append(file)
         elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT):
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
