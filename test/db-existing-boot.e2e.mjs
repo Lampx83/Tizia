@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { analyzeMigrations, schemaSnapshot, unexpectedChanges, AI_BOARD_BOOT_TABLES } from '../server/ai-board/db/additive.js';
+import { freePort } from './support/isolation.js';
 
 const need = (k) => { const v = process['env'][k]; if (!v) throw new Error(`${k} required`); return v; };
 const ADMIN_URL = need('EXISTING_BOOT_PG_URL');
@@ -58,10 +59,10 @@ function pgLog(dbName) {
 }
 
 /** Runs `node server/index.js`; resolves at the end-of-boot marker (killed before it listens) or when the process exits. */
-function boot(url, vars = {}) {
+async function boot(url, vars = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ebt-data-'));
   tmpDirs.push(dataDir);
-  const childEnv = { ...process['env'], DATABASE_URL: url, PORT: String(20000 + Math.floor(Math.random() * 20000)), DATA_DIR: dataDir, ...vars };
+  const childEnv = { ...process['env'], DATABASE_URL: url, PORT: String(await freePort()), DATA_DIR: dataDir, ...vars };
   return new Promise((resolve) => {
     const p = spawn(process.execPath, ['server/index.js'], { cwd: ROOT, env: childEnv });
     let out = '';

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     adaptive_budget: bool | None = None
     react_plan: bool | None = None
     sandbox_tool: bool = False
+    skill_select: bool | None = None
     multimodal: bool = False
     verified_loop: bool = False
     context_compaction: bool = False

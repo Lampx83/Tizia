@@ -72,7 +72,7 @@
       "default_enabled": false,
       "model_calls": 6,
       "tool_calls": 12,
-      "max_tokens": 1024,
+      "max_tokens": 4096,
       "observation_chars": 1500,
       "soft_start": 3,
       "soft_step": 1,
@@ -83,7 +83,7 @@
     },
     "brainstorm": {
       "_why": "One-shot plan call (gates/brainstorm.py): a reply cut at max_tokens is an invalid plan, so the cap only bounds the worst case; attempts stay at two.",
-      "max_tokens": 2048
+      "max_tokens": 8192
     },
     "gpu_wait": {
       "_why": "Model preflight failed (GPU busy): the worker waits backoff_s before probing the model again and doubles that wait up to max_s. No claim, no retry and no budget while waiting.",
@@ -150,6 +150,11 @@
         "plan": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000},
         "execute": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000},
         "verdict": {"max_per_prompt": 2, "max_tokens_per_prompt": 3000}
+      },
+      "selection_node": {
+        "_why": "One deterministic selection per role (services/skill_plan.py) with a pin over the chosen skills and the contract. Off keeps today's per-call selection byte-identical.",
+        "flag": "AI_BOARD_SKILL_SELECT",
+        "default_enabled": false
       }
     },
     "context": {

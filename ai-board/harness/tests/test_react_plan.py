@@ -43,13 +43,14 @@ class Scripted:
     """Deps fake: call_model trả lần lượt `replies`; lặp reply cuối khi hết."""
 
     def __init__(self, *replies):
-        self.replies, self.prompts, self.options = list(replies), [], []
+        self.replies, self.prompts, self.options, self.extras = list(replies), [], [], []
         self.models = SimpleNamespace(gate1_model="fake-gate1")
         self.trace = None
 
     def call_model(self, model, prompt, *, gate, budget, **kwargs):
         self.prompts.append(prompt)
         self.options.append(kwargs.get("options"))
+        self.extras.append(kwargs.get("extra"))
         text = self.replies[min(len(self.prompts) - 1, len(self.replies) - 1)]
         if isinstance(text, dict) and "response" in text:  # full body, e.g. done_reason "length"
             return dict(text)
@@ -139,7 +140,7 @@ def test_both_plan_calls_use_the_contract_token_cap(repo, react_on):
     deps = Scripted({"tool": "read_file", "arguments": {"file": "public/a.html"}}, finish([[QUOTE]]))
 
     react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
-    assert deps.options == [{"num_predict": limits.react_plan()["max_tokens"]}] * 2
+    assert deps.extras == [{"max_total_output_tokens": limits.react_plan()["max_tokens"]}] * 2
 
 
 def test_one_shot_plan_uses_the_contract_token_cap(request_item, monkeypatch):
@@ -150,7 +151,7 @@ def test_one_shot_plan_uses_the_contract_token_cap(request_item, monkeypatch):
     out = brainstorm.run(request_item, deps, Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is False
-    assert deps.options == [{"num_predict": limits.brainstorm()["max_tokens"]}]
+    assert deps.extras == [{"max_total_output_tokens": limits.brainstorm()["max_tokens"]}]
 
 
 def test_denied_read_is_refused_and_not_quotable(repo, react_on):

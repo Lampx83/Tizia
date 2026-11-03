@@ -116,6 +116,20 @@ def test_split_reasoning_roles_have_bounded_output_and_shared_trial_spend(split_
     assert restored.tokens == 0 and restored.model_calls == 2
 
 
+def test_explicit_plan_cap_wins_over_the_role_reasoning_budget(split_on, monkeypatch):
+    sent = []
+    def post(self, path, payload, **kwargs):
+        sent.append(payload)
+        return {'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}], 'usage': {}}
+    monkeypatch.setattr(OllamaClient, '_post', post)
+    models = OllamaClient(routing=ModelRouter({'VLLM_URL': 'http://fixture.invalid'}))
+    deps = pipeline.Deps(models=models, notify=None)
+    deps.call_model('m', 'plan', gate=1, role='gate1', budget=Budget(),
+                    extra={'max_total_output_tokens': 4096})
+    assert sent[0]['max_tokens'] == 4096, 'the contract cap bounds plan thinking instead of the 16384 role default'
+    assert sent[0]['chat_template_kwargs'] == {'enable_thinking': True}
+
+
 def test_split_values_block_at_most_five_lines():
     values = prompt_roles.SYSTEM.split("Giá trị kỹ thuật:", 1)[1].strip().splitlines()
     assert len(values) <= 5

@@ -6,7 +6,7 @@ import express from 'express';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { db } from '../server/db.js';
@@ -21,7 +21,7 @@ import { attachOnlineRoutes } from '../server/ai-board/online/routes.js';
 
 const d = db.d;
 const phase = process.argv[2] || 'serve';
-const STATE = process.argv[3] || path.join(tmpdir(), 'tizia-t24-state.json');
+const STATE = process.argv[3] || path.join(mkdtempSync(path.join(tmpdir(), 'tizia-t24-state-')), 'state.json');
 const checks = [];
 const mark = (name) => checks.push(name);
 const now = Date.now();

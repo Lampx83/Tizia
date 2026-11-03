@@ -536,9 +536,10 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                    "(sửa file đích VÀ viết test bằng write_test trước khi finish), tránh đúng lỗi này.\n")
         pins = {**(pins or {}), "repair": sha_of(repair_reason)}
     from runtime import prompt_roles
-    from services import default_skills
+    from services import default_skills, skill_plan
     skill_context = {'file': subtask['file'], 'task_type': subtask.get('task_type')}
-    pins = {**(pins or {}), 'skills': default_skills.pin(role or 'gate3_light', skill_context)
+    pin_skills = (skill_plan.pin if skill_plan.enabled() else default_skills.pin)
+    pins = {**(pins or {}), 'skills': pin_skills(role or 'gate3_light', skill_context)
             if prompt_roles.enabled() else 'off'}
     if prompt_roles.enabled():
         skill_context['expected_pin'] = pins['skills']
