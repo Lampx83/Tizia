@@ -398,7 +398,8 @@ function renderSystem(sys) {
 
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
-let pendingRequestCount = 0;
+let requestBadgeCount = 0;
+let totalRequestCount = 0;
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
@@ -408,15 +409,17 @@ let userCache = [];
 let currentTab = 'dashboard';
 
 async function loadRequests() {
-  const [r, ai] = await Promise.all([
-    api('/api/admin/requests?limit=300'),
+  const [r, ai, c] = await Promise.all([
+    api('/api/admin/requests?limit=10'), // owner: the tab keeps only the 10 newest suggestions
     api('/api/admin/ai-board/queue'),
+    api('/api/admin/requests/count').catch(() => ({ ok: false, data: {} })),
   ]);
   reqCache = r.data.requests || [];
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
+  totalRequestCount = Number(c.data?.requests) || reqCache.length;
   renderRequests();
-  refreshRequestBadge();
+  updateRequestBadge(totalRequestCount);
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
@@ -484,6 +487,7 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
+    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất trong ${Math.max(totalRequestCount, reqCache.length)} tổng.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
@@ -1783,7 +1787,7 @@ const TABS = {
   dashboard:  { label:'Dashboard', load: loadDashboard },
   schools:    { label:'Trường', load: loadSchoolsCampus },
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
-  requests:   { label:'Góp ý', load: loadRequests, badge: () => pendingRequestCount },
+  requests:   { label:'Góp ý', load: loadRequests, badge: () => requestBadgeCount },
   features:   { label:'Chức năng', load: loadFeatureFolders },
   skills:     { label:'Skills & Tools', load: loadSkillsTools },
   users:     { label:'Người dùng', load: loadUsers },
@@ -2060,7 +2064,10 @@ async function loadDashboard() {
   $('#sysblock').innerHTML = renderSystem(sys.data || {});
 
   // Đồng bộ badge "Góp ý" sau khi dashboard load xong (nhẹ, không trùng request)
-  if (ov.data?.requests_pending != null) updateRequestBadge(ov.data.requests_pending);
+  if (ov.data?.requests != null) {
+    totalRequestCount = Number(ov.data.requests) || 0;
+    updateRequestBadge(totalRequestCount);
+  }
 }
 
 // ─────────── Cấu hình hệ thống (Runtime info + Auto-backup config + DB backup) ───────────
@@ -2277,14 +2284,17 @@ function autoRefresh() {
   if (!busy && AUTO_REFRESH_TABS.has(currentTab)) refresh({ silent: true });
 }
 function updateRequestBadge(count) {
-  pendingRequestCount = Number(count) || 0;
+  requestBadgeCount = Number(count) || 0;
   const tb = document.querySelector('.tab[data-k="requests"] .count');
-  if (tb) tb.textContent = pendingRequestCount;
+  if (tb) tb.textContent = requestBadgeCount;
 }
 async function refreshRequestBadge() {
   try {
     const r = await api('/api/admin/requests/count');
-    if (r.ok) updateRequestBadge(r.data.requests_pending);
+    if (r.ok) {
+      totalRequestCount = Number(r.data.requests) || 0;
+      updateRequestBadge(totalRequestCount);
+    }
   } catch {}
 }
 
