@@ -642,8 +642,8 @@ document.addEventListener('click', (e) => {
 async function refresh() {
   try {
   const [thread, decisions, trace] = await Promise.all([
-    api(`/api/requests/${REQUEST_ID}/thread`),
-    api(`/api/requests/${REQUEST_ID}/decisions`),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/thread`),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/decisions`),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`),
   ]);
   if (!thread.ok) {

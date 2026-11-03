@@ -409,7 +409,8 @@ let currentTab = 'dashboard';
 
 async function loadRequests() {
   const [r, ai] = await Promise.all([
-    api('/api/admin/requests?limit=10'), // owner: the tab keeps only the 10 newest suggestions
+    // Owner rule: 10 newest suggestions, read from the board DB so request ids match the board pages.
+    api('/api/admin/ai-board/requests?limit=10'),
     api('/api/admin/ai-board/queue'),
   ]);
   reqCache = r.data.requests || [];
