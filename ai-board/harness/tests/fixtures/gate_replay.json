@@ -1,5 +1,5 @@
 {
- "_source": "ai_gate_traces status model_call, requests 11/13/14/15 (2026-11-01); sha ca32178",
+ "_source": "ai_gate_traces status model_call, requests 11/13/14/15 (2026-11-01); sha ca32178; run114 whole Gate-1 file decision (subtasks + base sha) and grounding trace 646 added 2026-11-03",
  "requests": {
   "11": {
    "title": "Thêm trang Sổ tay Git cho Trường CNTT",
@@ -295,10 +295,21 @@
    "trace": "run114",
    "truth": "pass",
    "truth_source": "run 114 (2026-11-02): file moi plugin-level server/contexts/_ai-generated/faq/index.js bi allowlist cu chan oan; sua c467c2a3",
-   "files": [
-    "server/contexts/_ai-generated/faq/index.js",
-    "server/contexts/_ai-generated/faq/migrations/001-faq.sql"
-   ]
+   "subtasks": [
+    {
+     "title": "Plugin FAQ: route cho câu hỏi thường gặp",
+     "file": "server/contexts/_ai-generated/faq/index.js",
+     "verify": "node --test server/contexts/_ai-generated/faq/index.test.js",
+     "size": "small"
+    },
+    {
+     "title": "Bảng FAQ",
+     "file": "server/contexts/_ai-generated/faq/migrations/001-faq.sql",
+     "verify": "psql -f server/contexts/_ai-generated/faq/migrations/001-faq.sql",
+     "size": "small"
+    }
+   ],
+   "sha": "ca32178"
   },
   {
    "gate": "1.new_file",
@@ -306,9 +317,23 @@
    "trace": "run114-reject",
    "truth": "block",
    "truth_source": "allowlist van phai chan file ngoai plugin/migration",
-   "files": [
-    "server/contexts/_ai-generated/faq/index.py"
-   ]
+   "subtasks": [
+    {
+     "title": "Plugin FAQ viết bằng Python",
+     "file": "server/contexts/_ai-generated/faq/index.py",
+     "verify": "python server/contexts/_ai-generated/faq/index.py",
+     "size": "small"
+    }
+   ],
+   "sha": "ca32178"
+  },
+  {
+   "gate": "2.5.grounding",
+   "fn": "grounding",
+   "trace": 646,
+   "truth": "pass",
+   "validation": "646",
+   "truth_source": "LF/141 muc 2: validator tra grounded=false kem ly do ve file khong nam trong plan (run 16); harness khong kiem chung duoc nen khong duoc chan plan"
   }
  ]
 }

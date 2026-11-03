@@ -5,7 +5,9 @@ from collections import defaultdict
 from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "tests" / "fixtures"
-LOCKED_ENV = {"AI_BOARD_GATE25_FIXES": "quotes,ellipsis"}
+# Flags every replay runs under, so a row means the same thing in any workspace.
+LOCKED_ENV = {"AI_BOARD_GATE25_FIXES": "quotes,ellipsis", "AI_BOARD_REACT_PLAN": "0",
+              "AI_BOARD_GATE3_CONTEXT": "excerpt"}
 
 
 def _load():
@@ -50,9 +52,14 @@ def _pii(data, case):
 
 
 def _new_file(data, case):
+    """Whole Gate 1 file decision (path policy, layer rules, allowlist, git), not only the allowlist regex."""
     from gates import brainstorm
-    files = case.get("files") or []
-    return "pass" if files and all(brainstorm._NEW_OK.match(path) for path in files) else "block"
+    plan = {"subtasks": [dict(task) for task in case["subtasks"]]}
+    try:
+        brainstorm.check_files(plan, brainstorm.ROOT, case.get("sha"))
+    except ValueError:
+        return "block"
+    return "pass"
 
 
 def _objection(data, case):
@@ -94,6 +101,7 @@ def table(rows):
     lines = [f"{'gate':<16}{'correct':>8}{'false_block':>13}{'wrong_pass':>12}{'ungraded':>10}"]
     for gate, count in sorted(totals.items()):
         lines.append(f"{gate:<16}{count['correct']:>8}{count['false_block']:>13}{count['wrong_pass']:>12}{count['ungraded']:>10}")
+    lines.append("# counts only, no rate: n is small; every case names its label source (truth_source)")
     return "\n".join(lines)
 
 
