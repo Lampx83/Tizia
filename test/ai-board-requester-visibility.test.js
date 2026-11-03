@@ -35,8 +35,9 @@ test('requester progress hides admin-only fields and other users see 404', async
   await db.prepare("UPDATE ai_tickets SET public_note='Đang lập kế hoạch', internal_reason='model prompt text' WHERE id=?").run(rootId);
   await addRun(db, rootId);
   const progress = await requesterProgress(store, id, 1);
+  // gpu_waiting only carries the retry time: no model name, no worker, no ticket fields.
   assert.deepEqual(Object.keys(progress).sort(),
-    ['budget', 'can_continue', 'can_edit', 'eta_ms', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
+    ['budget', 'can_continue', 'can_edit', 'eta_ms', 'gpu_waiting', 'live', 'note', 'request_id', 'status', 'step', 'stop_reason']);
   assert.equal(typeof progress.budget.used, 'number');
   assert.equal(progress.budget.limit > 0, true);
   assert.equal(progress.can_continue, false);
