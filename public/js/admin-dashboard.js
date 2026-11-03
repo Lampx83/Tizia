@@ -399,6 +399,7 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let requestBadgeCount = 0;
+let reqTotal = 0;
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
@@ -414,6 +415,7 @@ async function loadRequests() {
     api('/api/admin/ai-board/queue'),
   ]);
   reqCache = r.data.requests || [];
+  reqTotal = Number(r.data.total) || reqCache.length;
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
   renderRequests();
@@ -462,7 +464,7 @@ function renderRequests() {
   const ownerMatch = { all: () => true, mine: (r) => ownerOf(r) != null && ownerOf(r) === myAdminId,
     none: (r) => ownerOf(r) == null, others: (r) => ownerOf(r) != null && ownerOf(r) !== myAdminId };
   const filtered = reqCache.filter(r => (reqFilter === 'all' || r.status === reqFilter) && ownerMatch[ownerFilter](r));
-  updateRequestBadge(filtered.length); // the tab number is the rows actually shown
+  updateRequestBadge(reqTotal); // the tab number is the board DB count
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
@@ -2326,6 +2328,11 @@ async function init() {
     if (t && t !== currentTab) showTab(t);
   });
   await showTab(startTab);
+  // The tab count is the board DB number, fetched as soon as the admin page opens.
+  api('/api/admin/ai-board/requests?limit=10').then(r => {
+    if (!r.ok) return;
+    updateRequestBadge(Number(r.data.total) || (r.data.requests || []).length);
+  }).catch(() => {});
 
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
   setInterval(autoRefresh, 60_000);

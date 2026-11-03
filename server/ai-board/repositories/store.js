@@ -531,6 +531,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [n]);
   }
 
+  async function countAdminRequests() {
+    return Number((await db.get('SELECT COUNT(*) AS n FROM requests')).n) || 0;
+  }
+
   async function listRequestsForOwner(ownerUserId, domain, limit = 50) {
     const rows = await db.all(`
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
@@ -2371,6 +2375,7 @@ function resumeSummary(journal) {
     createSelfRequest,
     listRequestsForOwner,
     listAdminRequests,
+    countAdminRequests,
     setRequestFeature,
     countPendingRoots,
     rejectRequest,

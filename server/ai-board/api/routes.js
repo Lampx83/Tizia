@@ -349,7 +349,7 @@ export function attachAiBoardRequestRoutes(router, {
 
   // One source of truth for the admin suggestion list: the board DB, not the web DB.
   route.get('/api/admin/ai-board/requests', requireAuth, requireAdmin, async (req, res) => {
-    res.json({ requests: await store.listAdminRequests(Number(req.query.limit) || 10) });
+    res.json({ requests: await store.listAdminRequests(Number(req.query.limit) || 10), total: await store.countAdminRequests() });
   });
 
   route.get('/api/admin/ai-board/requests/:requestId/thread', requireAuth, requireAdmin, async (req, res) => {
