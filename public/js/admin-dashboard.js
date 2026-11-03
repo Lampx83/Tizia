@@ -399,6 +399,7 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let requestBadgeCount = 0;
+let reqTotal = 0;
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
@@ -414,6 +415,7 @@ async function loadRequests() {
     api('/api/admin/ai-board/queue'),
   ]);
   reqCache = r.data.requests || [];
+  reqTotal = Number(r.data.total) || reqCache.length;
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
   renderRequests();
@@ -485,7 +487,7 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
-    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất.</p>
+    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất trong ${reqTotal} tổng.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
@@ -2326,6 +2328,11 @@ async function init() {
     if (t && t !== currentTab) showTab(t);
   });
   await showTab(startTab);
+  // The tab count is the board DB number, fetched as soon as the admin page opens.
+  api('/api/admin/ai-board/requests?limit=10').then(r => {
+    if (!r.ok) return;
+    updateRequestBadge(Math.min(10, Number(r.data.total) || (r.data.requests || []).length));
+  }).catch(() => {});
 
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
   setInterval(autoRefresh, 60_000);

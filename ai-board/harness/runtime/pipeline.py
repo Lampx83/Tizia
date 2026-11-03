@@ -141,6 +141,9 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
     if (extra or {}).get('max_total_output_tokens'):
         # A caller cap (contract limits for plan calls) bounds the whole reply, thinking included.
         merged['max_total_output_tokens'] = extra['max_total_output_tokens']
+    if 'force_thinking' in (extra or {}):
+        # An explicit caller choice (plan calls: thinking off) wins over the role default.
+        merged['force_thinking'] = merged['thinking'] = bool(extra['force_thinking'])
     return user, {**merged, 'system': system}, {**options, **role_options}
 
 

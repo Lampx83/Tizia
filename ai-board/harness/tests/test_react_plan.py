@@ -151,7 +151,7 @@ def test_one_shot_plan_uses_the_contract_token_cap(request_item, monkeypatch):
     out = brainstorm.run(request_item, deps, Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is False
-    assert deps.extras == [{"max_total_output_tokens": limits.brainstorm()["max_tokens"]}]
+    assert deps.extras == [{"max_total_output_tokens": limits.brainstorm()["max_tokens"], "force_thinking": False}]
 
 
 def test_denied_read_is_refused_and_not_quotable(repo, react_on):
