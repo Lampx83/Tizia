@@ -285,12 +285,13 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         # field cannot be constrained while it is generated. Paths are instead closed after generation,
         # deterministically: parse_plan + check_files (real file at the pinned sha, or an allowed new
         # path) + grounding_paths.check_references.
-        options = {"num_predict": limits.brainstorm()["max_tokens"]}
-        if get_settings().plan_repair:
-            options.update({"temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.4})
+        # The reply cap is the whole reply (thinking included), so it is the same knob the reasoning roles use.
+        plan_extra = {"max_total_output_tokens": limits.brainstorm()["max_tokens"]}
+        options = ({"temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.4}
+                   if get_settings().plan_repair else None)
         body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                         db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
-                                        skill_context=skill_context, options=options)
+                                        skill_context=skill_context, options=options, extra=plan_extra)
         stage = "plan parse"
         try:
             plan = parse_plan(body.get("response", ""))

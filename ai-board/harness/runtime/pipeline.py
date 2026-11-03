@@ -118,10 +118,17 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
         return prompt, extra, options
     system, user = prompt_roles.split(prompt)
     if role in ('gate1', 'gate3_light', 'gate3_heavy', 'gate4_review'):
-        from services import default_skills
-        selected, selection = default_skills.select_report(role, context)
-        if (context or {}).get('expected_pin') and context['expected_pin'] != default_skills.selection_pin(selected):
+        from services import default_skills, skill_plan
+        if skill_plan.enabled():
+            # The selection node: one deterministic pass per role; gates consume its result instead of re-choosing.
+            node = skill_plan.build(role, context)
+            selected, selection, pin = node.skills, node.report, node.pin
+        else:
+            selected, selection = default_skills.select_report(role, context)
+            pin = default_skills.selection_pin(selected)
+        if (context or {}).get('expected_pin') and context['expected_pin'] != pin:
             raise default_skills.SkillPolicyChanged('selected skills changed; restart under current guidance')
+        selection = {**selection, 'pin': pin}
         system += '\n\n' + default_skills.system_text(selected)
         if role == 'gate4_review':
             system += default_skills.review_axes_block(selected)
@@ -130,7 +137,11 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
             _, user = prompt_roles.split(prompt + '\n\n' + admin)
         extra = {**(extra or {}), '_skill_evidence': [s.evidence() for s in selected], '_skill_selection': selection}
     role_extra, role_options = prompt_roles.call_params(role, routing, structured=isinstance(format, dict))
-    return user, {**(extra or {}), **role_extra, 'system': system}, {**options, **role_options}
+    merged = {**(extra or {}), **role_extra}
+    if (extra or {}).get('max_total_output_tokens'):
+        # A caller cap (contract limits for plan calls) bounds the whole reply, thinking included.
+        merged['max_total_output_tokens'] = extra['max_total_output_tokens']
+    return user, {**merged, 'system': system}, {**options, **role_options}
 
 
 @functools.lru_cache(maxsize=None)
