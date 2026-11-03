@@ -399,7 +399,6 @@ function renderSystem(sys) {
 // ─────────── Tabs (legacy: Góp ý / Users / Schools / AI / Content / Billing) ───────────
 let reqCache = [];
 let requestBadgeCount = 0;
-let totalRequestCount = 0;
 let aiTicketCache = [];
 let intakeRejections = [];
 let reqFilter = 'all';
@@ -409,17 +408,14 @@ let userCache = [];
 let currentTab = 'dashboard';
 
 async function loadRequests() {
-  const [r, ai, c] = await Promise.all([
+  const [r, ai] = await Promise.all([
     api('/api/admin/requests?limit=10'), // owner: the tab keeps only the 10 newest suggestions
     api('/api/admin/ai-board/queue'),
-    api('/api/admin/requests/count').catch(() => ({ ok: false, data: {} })),
   ]);
   reqCache = r.data.requests || [];
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
-  totalRequestCount = Number(c.data?.requests) || reqCache.length;
   renderRequests();
-  updateRequestBadge(totalRequestCount);
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
@@ -465,6 +461,7 @@ function renderRequests() {
   const ownerMatch = { all: () => true, mine: (r) => ownerOf(r) != null && ownerOf(r) === myAdminId,
     none: (r) => ownerOf(r) == null, others: (r) => ownerOf(r) != null && ownerOf(r) !== myAdminId };
   const filtered = reqCache.filter(r => (reqFilter === 'all' || r.status === reqFilter) && ownerMatch[ownerFilter](r));
+  updateRequestBadge(filtered.length); // the tab number is the rows actually shown
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
@@ -487,7 +484,7 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
-    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất trong ${Math.max(totalRequestCount, reqCache.length)} tổng.</p>
+    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
@@ -2063,11 +2060,6 @@ async function loadDashboard() {
   $('#activity-feed').innerHTML = renderFeed(activity.data?.items || []);
   $('#sysblock').innerHTML = renderSystem(sys.data || {});
 
-  // Đồng bộ badge "Góp ý" sau khi dashboard load xong (nhẹ, không trùng request)
-  if (ov.data?.requests != null) {
-    totalRequestCount = Number(ov.data.requests) || 0;
-    updateRequestBadge(totalRequestCount);
-  }
 }
 
 // ─────────── Cấu hình hệ thống (Runtime info + Auto-backup config + DB backup) ───────────
@@ -2288,15 +2280,6 @@ function updateRequestBadge(count) {
   const tb = document.querySelector('.tab[data-k="requests"] .count');
   if (tb) tb.textContent = requestBadgeCount;
 }
-async function refreshRequestBadge() {
-  try {
-    const r = await api('/api/admin/requests/count');
-    if (r.ok) {
-      totalRequestCount = Number(r.data.requests) || 0;
-      updateRequestBadge(totalRequestCount);
-    }
-  } catch {}
-}
 
 async function refresh({ silent = false } = {}) {
   const btn = $('#refreshBtn');
@@ -2343,9 +2326,6 @@ async function init() {
   });
   await showTab(startTab);
 
-  refreshRequestBadge();
-  setInterval(() => { if (!document.hidden) refreshRequestBadge(); }, 20_000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshRequestBadge(); });
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
   setInterval(autoRefresh, 60_000);
 
