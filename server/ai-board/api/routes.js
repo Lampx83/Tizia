@@ -347,6 +347,42 @@ export function attachAiBoardRequestRoutes(router, {
         WHERE category='intake_rejected' ORDER BY id DESC LIMIT 50`) });
   });
 
+  // One source of truth for the admin suggestion list: the board DB, not the web DB.
+  route.get('/api/admin/ai-board/requests', requireAuth, requireAdmin, async (req, res) => {
+    res.json({ requests: await store.listAdminRequests(Number(req.query.limit) || 10) });
+  });
+
+  route.get('/api/admin/ai-board/requests/:requestId/thread', requireAuth, requireAdmin, async (req, res) => {
+    const row = await store.queryGet(`SELECT id, domain, type, title, status, student, detail, attachments, created_at, updated_at
+      FROM requests WHERE id=?`, [Number(req.params.requestId)]);
+    if (!row) return res.status(404).json({ error: 'not_found' });
+    const messages = await store.queryAll(`SELECT id, role, author_name, body, attachments, created_at
+      FROM request_messages WHERE request_id=? ORDER BY created_at, id`, [row.id]);
+    const first = { id: 0, request_id: row.id, role: 'student', author_name: row.student,
+      body: row.detail || row.title, attachments: row.attachments, created_at: row.created_at };
+    res.json({ request: { ...row, votes: 0 }, messages: [first, ...messages] });
+  });
+
+  route.get('/api/admin/ai-board/requests/:requestId/decisions', requireAuth, requireAdmin, async (_req, res) => {
+    res.json({ decisions: [] });
+  });
+
+  // Admin answers a clarification on the board DB, then the root is queued for a fresh plan.
+  route.post('/api/admin/ai-board/requests/:id/clarify', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    const text = String(req.body?.answer || '').trim().slice(0, 4000);
+    if (text.length < 3) return res.status(422).json({ error: 'answer_rejected' });
+    const root = await store.queryGet('SELECT id FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(req.params.id)]);
+    if (!root) return res.status(404).json({ error: 'request_not_found' });
+    const now = Date.now();
+    await store.db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+      VALUES (?, 'admin', 'Quản trị viên', ?, '[]', ?)`, [Number(req.params.id), text, now]);
+    await store.db.run(`UPDATE ai_tickets SET status='queued', phase='needs_replan', public_note=?,
+      lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`,
+    ['Người gửi đã trả lời; lập kế hoạch lại.', now, root.id]);
+    await store.db.run("DELETE FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [root.id]);
+    res.json({ ok: true, status: 'queued', phase: 'needs_replan' });
+  });
+
   route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
     const trace = await store.getRequestTrace(req.params.requestId);
     if (!trace) return res.status(404).json({ error: 'ticket_not_found' });

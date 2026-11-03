@@ -515,6 +515,22 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     throw new WorkerContractError('self requests are disabled', 403, 'self_request_disabled');
   };
 
+  /** Admin suggestion list from the board DB (the admin UI reads one source of truth, not the web DB). */
+  async function listAdminRequests(limit = 10) {
+    const n = Math.min(Math.max(Number(limit) || 10, 1), 50);
+    return await db.all(`
+      SELECT r.id, r.title, r.detail, r.status, r.domain, r.type, r.created_at,
+             r.student AS student, u.role AS requester_role,
+             '' AS execution_mode,
+             0 AS votes,
+             t.public_note AS admin_note, t.status AS ticket_status, t.phase AS ticket_phase
+      FROM requests r
+      LEFT JOIN users u ON u.id = r.owner_user_id
+      LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
+      ORDER BY r.id DESC LIMIT ?
+    `, [n]);
+  }
+
   async function listRequestsForOwner(ownerUserId, domain, limit = 50) {
     const rows = await db.all(`
       SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes,
@@ -2354,6 +2370,7 @@ function resumeSummary(journal) {
     createRequestWithRoot,
     createSelfRequest,
     listRequestsForOwner,
+    listAdminRequests,
     setRequestFeature,
     countPendingRoots,
     rejectRequest,
