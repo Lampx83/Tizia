@@ -9,6 +9,7 @@ async function serve(overrides = {}) {
   const runs = [];
   const store = {
     db: { run: async (...args) => { runs.push(args); } },
+    countAdminRequests: async () => 1,
     listAdminRequests: async () => [{ id: 22, title: 'Thêm bảng FAQ', status: 'pending', ticket_phase: 'needs_replan' }],
     queryGet: async (sql) => (String(sql).includes('FROM requests')
       ? { id: 22, domain: 'it', type: 'ui', title: 'Thêm bảng FAQ', status: 'pending', student: 'localtest', detail: 'x', created_at: 1, updated_at: 2 }

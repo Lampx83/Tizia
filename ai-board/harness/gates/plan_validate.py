@@ -35,6 +35,13 @@ Phức tạp + requester KHÔNG thuộc {role='admin'} hoặc {user_domain_grant
 domain} -> dừng, outcome='complexity_gated'. Request không map được sang
 user thật (guest) -> fail-closed, coi như không được phép (giống nguyên tắc
 guardrail nội dung).
+
+Q0 — elevation (runtime/levels.py, chạy TRƯỚC khi gọi model): target
+protected/core chưa được duyệt -> dừng, outcome='elevation_required', payload
+`elevation_required` = [{path, level, why}] để server lưu và hỏi admin. Ticket
+đã mang `elevation` được duyệt đúng scope thì plan đi tiếp; elevation đã duyệt
+cũng bỏ tín hiệu "file ngoài vùng an toàn" vì chính phê duyệt đó thay nó. Path
+AI Board luôn bị chặn, elevation không mở.
 """
 from __future__ import annotations
 
@@ -48,7 +55,7 @@ import code_index
 import file_context
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
-from runtime import coverage
+from runtime import coverage, levels
 from settings import DEFAULT_GATE25_FIXES, get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
@@ -417,14 +424,16 @@ def is_complex(plan: dict) -> bool:
     return bool(complexity_signals(plan))
 
 
-def complexity_signals(plan: dict) -> list[str]:
-    """Tín hiệu phức tạp đã bật, dạng '<tên>: <chi tiết>' cho admin đọc. Rỗng = đơn giản."""
+def complexity_signals(plan: dict, elevated=frozenset()) -> list[str]:
+    """Tín hiệu phức tạp đã bật, dạng '<tên>: <chi tiết>' cho admin đọc. Rỗng = đơn giản.
+    `elevated`: file đã có elevation duyệt — chính phê duyệt đó thay tín hiệu "ngoài vùng an toàn"."""
     signals = []
     caps = sorted(set(plan.get("capabilities") or []))
     if len(caps) >= 2:
         signals.append(f"capabilities: {', '.join(caps)}")
     subtasks = plan.get("subtasks") or []
-    outside = sorted({st.get("file", "") for st in subtasks if not _SAFE_FILE_PREFIX.match(st.get("file", ""))})
+    outside = sorted({st.get("file", "") for st in subtasks
+                      if not _SAFE_FILE_PREFIX.match(st.get("file", "")) and st.get("file", "") not in elevated})
     if outside:
         signals.append(f"file ngoài vùng an toàn: {', '.join(outside)}")
     if len(subtasks) >= 4:
@@ -606,6 +615,18 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if not plan:
         return {"gate": 2.5, "blocked": True, "reason": "không có plan từ cổng 1"}
 
+    # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
+    # bằng code (path + catalog), không hỏi model — elevation đã duyệt thì plan đi tiếp bình thường.
+    needs = levels.requirements(plan)
+    scope = levels.approved_scope(request, state, plan)
+    blocked_paths = [item for item in needs if item["level"] == levels.SELF]
+    if blocked_paths:
+        return {"gate": 2.5, "blocked": True, "reason": f"path AI Board luôn bị chặn: {blocked_paths[0]['path']}",
+                "signals": levels.signals(blocked_paths)}
+    missing = levels.uncovered(needs, scope, levels.fingerprint(plan))
+    if missing:
+        return levels.blocked_result(2.5, missing, plan)
+
     sha, files, repo_context = source_evidence(request, plan, state) if request.get('grounding_required') else (None, {}, '(legacy dry-run)')
     prompt = build_prompt(request, plan, repo_context)
     trace = getattr(deps, "trace", None)
@@ -770,7 +791,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                     'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
                     'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
 
-    signals = complexity_signals(plan)
+    signals = complexity_signals(plan, frozenset(item["path"] for item in needs))
     if request.get("complexity_by_server"):
         # HTTP worker không có DB: server quyết qua tier (risk high → protected → admin cho phép plan).
         state["complexity_signals"] = signals

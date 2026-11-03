@@ -19,6 +19,8 @@ import { requireStrictCsrf } from '../security/index.js';
 import { getPageviewStats } from '../analytics/index.js';
 import { aiBoardServices } from '../../ai-board/runtime.js';
 import { asyncRoutes } from '../../ai-board/async-routes.js';
+import { BOARD_SPLIT } from '../../board-split.js';
+import { boardRequest } from '../../board-client.js';
 
 // Scrypt hash — đồng bộ format với contexts/identity/auth.js (scrypt$salt$hash)
 function hashPassword(password) {
@@ -71,6 +73,10 @@ export async function attachAdmin(r) {
   await ensureAdminBootstrap();
   // The AI board services are set once at startup (ai-board/services.js); read lazily.
   const board = () => aiBoardServices(db);
+  // Split stack: request rows and board tables live on aiboard-server, so board aggregates read as 0 here.
+  const BOARD_ZEROS = { requests: 0, requests_pending: 0 };
+  const boardCounts = async () => BOARD_SPLIT ? { ...BOARD_ZEROS } : await board().requests.requestCounts();
+  const boardUnavailable = (res) => res.status(502).json({ error: 'board_unavailable', message: 'Ban điều hành AI tạm không phản hồi, thử lại sau.' });
   const route = asyncRoutes(r);
   const applyAdminStatus = async (id, status, note, actorId) => {
     const { store } = board();
@@ -78,7 +84,7 @@ export async function attachAdmin(r) {
   };
 
   route.get('/api/admin/overview', requireAdmin, async (_req, res) => {
-    const base = { ...await Q.overview.get(), ...(await board().requests.requestCounts()) };
+    const base = { ...await Q.overview.get(), ...(await boardCounts()) };
     // số liệu từ context có-thể-chưa-tạo-bảng (analytics/billing/ai_decisions)
     const extra = {};
     if (await tableExists('ai_decisions')) extra.ai_decisions = (await db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get()).c;
@@ -213,15 +219,23 @@ export async function attachAdmin(r) {
 
   // Góp ý — xuyên tenant (giám sát Ban điều hành AI) + can thiệp status
   route.get('/api/admin/requests/count', requireAdmin, async (_req, res) => {
-    res.json(await board().requests.requestCounts());
+    res.json(await boardCounts());
   });
   route.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    if (BOARD_SPLIT) return res.json({ requests: [], total: 0 });
     res.json({ requests: await board().requests.adminListRequests(limit) });
   });
   route.post('/api/admin/requests/:id/status', requireAdmin, requireStrictCsrf, async (req, res) => {
     const status = String(req.body?.status || '');
     if (!['pending', 'reviewing', 'done', 'rejected'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
+    if (BOARD_SPLIT) {
+      let out;
+      try { out = await boardRequest(req.user, 'POST', `/api/requests/${req.params.id}/status`, { status, note: req.body?.note, confirm: String(req.params.id) }); }
+      catch { return boardUnavailable(res); }
+      if (out.status !== 200) return res.status(404).json({ error: out.data?.error || 'request_not_found' });
+      return res.json({ ok: true });
+    }
     if (!await applyAdminStatus(req.params.id, status, req.body?.note, req.user.id)) return res.status(404).json({ error: 'request_not_found' });
     res.json({ ok: true });
   });
@@ -237,12 +251,51 @@ export async function attachAdmin(r) {
   `);
   const ACTION_BY_STATUS = { done: 'approve', rejected: 'reject', reviewing: 'approve' };
 
+  // Split stack: request row, status and thread live on aiboard-server; web keeps the audit row and the bell.
+  async function replyOnBoard(req, res, { id, status, message }) {
+    let thread;
+    try { thread = await boardRequest(req.user, 'GET', `/api/admin/ai-board/requests/${id}/thread`); }
+    catch { return boardUnavailable(res); }
+    if (thread.status === 404) return res.status(404).json({ error: 'request_not_found' });
+    if (thread.status !== 200) return boardUnavailable(res);
+    const reqRow = thread.data?.request || {};
+    let applied;
+    try { applied = await boardRequest(req.user, 'POST', `/api/requests/${id}/status`, { status, note: message, confirm: String(id) }); }
+    catch { return boardUnavailable(res); }
+    if (applied.status !== 200) return res.status(409).json({ error: applied.data?.error || 'status_rejected', message: applied.data?.message });
+
+    await insertHumanDecision.run({
+      request_id: id, action: ACTION_BY_STATUS[status] || 'defer', status,
+      reason: `[admin] ${req.user.username} → ${status}`, public_note: message.slice(0, 500), t: Date.now(),
+    });
+    try { await boardRequest(req.user, 'POST', `/api/requests/${id}/messages`, { body: message }); }
+    catch (e) { console.warn('[admin/reply] thread append failed:', e?.message || e); }
+
+    const titleByStatus = {
+      done:      'Yêu cầu của bạn đã hoàn thành ✓',
+      rejected:  'Phản hồi về yêu cầu của bạn',
+      reviewing: 'Yêu cầu của bạn đang được xử lý',
+      pending: 'Phản hồi về yêu cầu của bạn',
+    };
+    const notif = await createNotification({
+      user_display_name: reqRow.student,
+      request_id: id,
+      kind: 'reply',
+      title: titleByStatus[status] || 'Phản hồi về yêu cầu của bạn',
+      body: `「${reqRow.title}」 — ${message}`,
+      url: `/space.html?domain=${encodeURIComponent(reqRow.domain || '')}#requests`,
+    });
+    res.json({ ok: true, status, notified: !!notif, notification_id: notif?.id || null });
+  }
+
   route.post('/api/admin/requests/:id/reply', requireAdmin, requireStrictCsrf, async (req, res) => {
     const id = Number(req.params.id);
     const status = String(req.body?.status || 'done');
     if (!['pending', 'done', 'rejected', 'reviewing'].includes(status)) return res.status(400).json({ error: 'invalid_status' });
     const message = String(req.body?.message || '').trim();
     if (message.length < 4) return res.status(400).json({ error: 'message_too_short' });
+
+    if (BOARD_SPLIT) return replyOnBoard(req, res, { id, status, message });
 
     const reqRow = await board().requests.getRequestForReply(id);
     if (!reqRow) return res.status(404).json({ error: 'request_not_found' });
@@ -418,7 +471,7 @@ export async function attachAdmin(r) {
       items.push({ kind: 'attempt', t: a.t,
                    label: `${a.player_name} · ${a.version} · ${a.score}đ (${a.correct}/${a.total})` });
     });
-    (await board().requests.recentRequests(limit)).forEach(r => {
+    if (!BOARD_SPLIT) (await board().requests.recentRequests(limit)).forEach(r => {
       items.push({ kind: 'request', t: r.t,
                    label: `${r.student} · ${r.domain} · ${r.title}`.slice(0, 120), meta: { status: r.status } });
     });
@@ -435,7 +488,7 @@ export async function attachAdmin(r) {
 
   // GET /api/admin/overview2 — extend overview với delta 24h (không break /overview cũ)
   route.get('/api/admin/overview2', requireAdmin, async (_req, res) => {
-    const base = { ...await Q.overview.get(), ...(await board().requests.requestCounts()) };
+    const base = { ...await Q.overview.get(), ...(await boardCounts()) };
     const now = Date.now();
     const t24 = now - 86400_000;
     const t48 = now - 2 * 86400_000;
@@ -445,8 +498,8 @@ export async function attachAdmin(r) {
       users_prev_24h: await count(`SELECT COUNT(*) c FROM users WHERE created_at >= ? AND created_at < ?`, t48, t24),
       attempts_24h: await count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ?`, t24),
       attempts_prev_24h: await count(`SELECT COUNT(*) c FROM attempts WHERE created_at >= ? AND created_at < ?`, t48, t24),
-      requests_24h: await board().requests.requestsCreatedBetween(t24),
-      requests_prev_24h: await board().requests.requestsCreatedBetween(t48, t24),
+      requests_24h: BOARD_SPLIT ? 0 : await board().requests.requestsCreatedBetween(t24),
+      requests_prev_24h: BOARD_SPLIT ? 0 : await board().requests.requestsCreatedBetween(t48, t24),
     };
     const extra = {};
     if (await tableExists('ai_decisions')) extra.ai_decisions = await count(`SELECT COUNT(*) c FROM ai_decisions`);
@@ -572,7 +625,7 @@ export async function attachAdmin(r) {
       await db.prepare(`DELETE FROM users WHERE id = ?`).run(uid);
     });
     try {
-      await board().requests.reassignFolderOwner(id, req.user.id);
+      if (!BOARD_SPLIT) await board().requests.reassignFolderOwner(id, req.user.id);
       await tx(id, u.display_name);
       res.json({ ok: true, deleted: u.username });
     }
@@ -585,6 +638,9 @@ export async function attachAdmin(r) {
 
   route.delete('/api/admin/requests/:id', requireAdmin, requireStrictCsrf, async (req, res) => {
     const id = Number(req.params.id);
+    // Split stack: the request row belongs to aiboard-server and the board exposes no delete.
+    if (BOARD_SPLIT) return res.status(409).json({ error: 'request_managed_by_board',
+      message: 'Yêu cầu thuộc Ban điều hành AI (board); không xoá từ web.' });
     try {
       const outcome = await board().requests.deleteRequestUnlessBoardHistory(id);
       if (outcome === 'not_found') return res.status(404).json({ error: 'request_not_found' });

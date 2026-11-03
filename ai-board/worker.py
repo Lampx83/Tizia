@@ -929,6 +929,16 @@ def _plan_rejection(error) -> str | None:
     return body[:400] if "malformed_plan" in body else None
 
 
+def _elevation_payload(result: dict | None) -> dict | None:
+    """Payload elevation_required của một gate bị chặn; None khi gate chặn vì lý do khác."""
+    if not isinstance(result, dict):
+        return None
+    payload = result.get("elevation_required") or result.get("elevation")
+    if isinstance(payload, dict) and (payload or result.get("outcome") == "elevation_required"):
+        return payload
+    return None
+
+
 def _plan_repairable(stopped: dict) -> bool:
     """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
     gate = float(stopped.get("gate") or 0)
@@ -1649,16 +1659,22 @@ class HarnessPlanner:
 
     source = None
 
-    def __init__(self, tracer=None, progress=None, source=None):
+    def __init__(self, tracer=None, progress=None, source=None, client=None, worker_id=None):
         Budget, Deps, run_gate = _load_harness()
         self.Budget = Budget
         self.deps = _real_deps(Deps, tracer, progress)
         self.run_gate = run_gate
         self.source = source  # gate 1 reads repo context here (worker clone), else the harness repo
+        self.client = client  # xin quyền nâng mức qua worker route; None = chỉ báo trong plan_blocked
+        self.worker_id = worker_id
+        self._elevation_asked: set[str] = set()  # mỗi kế hoạch xin một lần, không dội lại server
 
     @staticmethod
     def _request(snapshot: dict) -> dict:
         request = snapshot["request"]
+        # Quyền đã duyệt: server gắn ở snapshot.elevation và bản sao trong request.elevation;
+        # cổng đọc ở context request (runtime/levels.approved_scope).
+        elevation = snapshot.get("elevation") or request.get("elevation")
         return {
             "id": f"req-{request['id']}", "db_id": request["id"],
             "from": request.get("student"), "domain": request.get("domain"),
@@ -1670,6 +1686,7 @@ class HarnessPlanner:
             "plan_repair": snapshot.get("plan_repair"),
             "complexity_by_server": True,
             "grounding_required": request.get('type') != 'self',
+            **({"elevation": elevation} if elevation else {}),
             # Folder: L1 brief, L3 yêu cầu gần nhất, L2 file sở hữu — server tính, có trần.
             **({"folder_brief": brief["text"], "folder_decisions": brief.get("decisions") or "",
                  "folder_recent": brief["recent"], "owned_files": brief["owned_files"]}
@@ -1727,6 +1744,36 @@ class HarnessPlanner:
 
     last_skill = None  # skill cổng 1 của lần gọi gần nhất: worker gửi kèm verdict cùng lease
 
+    def _ask_elevation(self, ticket_id, payload: dict) -> dict | None:
+        """Xin quyền chạm mức trên surface cho đúng kế hoạch này (một lần/plan, không retry).
+        Trả elevation đã duyệt khi server tự cấp (yêu cầu do admin tạo), None khi phải chờ quyết định."""
+        key = f"{ticket_id}:{payload.get('plan_hash') or ','.join(payload.get('paths') or [])}"
+        if not self.client or ticket_id is None or key in self._elevation_asked:
+            return None
+        self._elevation_asked.add(key)
+        body = {**payload, **({"worker_id": self.worker_id} if self.worker_id else {})}
+        try:
+            out = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/elevation", body)
+        except Exception as error:  # noqa: BLE001 — best effort: plan_blocked vẫn mang payload cho admin
+            print(f"[worker] elevation request loi: {str(error)[:160]}")
+            return None
+        return out.get("elevation") if out.get("state") == "approved" else None
+
+    def _blocked(self, gate, result: dict, history: list[dict], source, state: dict, ticket: dict):
+        """PlanBlockedError cho cổng chặn; cổng elevation mang payload + câu chờ admin duyệt."""
+        elevation = _elevation_payload(result)
+        detail = {
+            "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
+            **({"evidence": result["evidence"]} if result.get("evidence") else {}),
+            "public_message": result.get("public_message"),
+            "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+            **_objection_evidence(history), "pins": _plan_pins(source),
+        }
+        if elevation is not None:
+            detail.update(outcome="elevation_required", elevation_required=elevation,
+                          public_message="Cần quản trị viên duyệt quyền cho kế hoạch này.")
+        return PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", detail)
+
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
         self.last_skill = None
         request = self._request(snapshot)
@@ -1754,6 +1801,8 @@ class HarnessPlanner:
         budget.max_units = max(int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT), 600)
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
         state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
+        if request.get('elevation'):
+            state['elevation'] = request['elevation']  # cổng 2.5 đọc cả state
         if source:
             state['checkout_source'] = str(source)
         from runtime import exec_graph
@@ -1792,14 +1841,18 @@ class HarnessPlanner:
 
         stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
         if stopped:
+            # Cổng xin quyền chạm protected/core: báo server ngay; server tự cấp (yêu cầu do admin
+            # tạo) thì lập lại một lượt với quyền đó thay vì bắt admin bấm thêm lần nữa.
+            payload = _elevation_payload(stopped.get("result"))
+            granted = self._ask_elevation(ticket.get("id"), payload) if payload is not None else None
+            if granted:
+                budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 6)
+                request = {**request, "elevation": granted}
+                state["elevation"] = granted
+                stopped, history = _plan_with_repair(run_plan, request, state, budget, run_plan(request))
+        if stopped:
             gate, result = stopped["gate"], stopped["result"]
-            raise PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", {
-                "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
-                **({"evidence": result["evidence"]} if result.get("evidence") else {}),
-                "public_message": result.get("public_message"),
-                "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
-                **_objection_evidence(history), "pins": _plan_pins(source),
-            })
+            raise self._blocked(gate, result, history, source, state, ticket)
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
@@ -1931,7 +1984,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
         from models import OllamaClient
         worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
-        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None)
+        worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None,
+                                       client=worker.client, worker_id=worker.worker_id)
         if engine_url := get_settings().engine_url:
             from api.client import RemotePlanner
             try:

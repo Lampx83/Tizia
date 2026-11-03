@@ -220,6 +220,102 @@ def test_gate_2_5_question_enters_requester_clarification_flow():
     assert [call for call in transport.calls if call[1].endswith('/events')][0][2]['event_type'] == 'shadow_precheck_passed'
 
 
+ELEVATION_PLAN = {'summary_vi': 'Sửa API', 'subtasks': [
+    {'title': 'Thêm API', 'file': 'server/db.js', 'verify': 'node --test test/x.test.js', 'size': 'small'}]}
+
+
+def _elevation_result():
+    """Gate 1 chặn vì kế hoạch chạm server/db.js (mức core) — đúng payload levels.blocked_result trả."""
+    from runtime import levels
+    return levels.blocked_result(1, levels.requirements(ELEVATION_PLAN), ELEVATION_PLAN)
+
+
+class ElevationTransport(FakeTransport):
+    """FakeTransport + worker route xin quyền: ghi lại body và trả state như server."""
+
+    def __init__(self, state='requested'):
+        super().__init__()
+        self.state = state
+
+    def __call__(self, method, path, payload, headers):
+        if not path.endswith('/elevation'):
+            return super().__call__(method, path, payload, headers)
+        self.calls.append((method, path, payload, headers))
+        scope = [{'path': item, 'level': level}
+                 for item, level in zip(payload.get('paths') or [], payload.get('levels') or [])]
+        return {'ok': True, 'state': self.state, 'elevation': {'state': self.state, 'scope': scope}}
+
+
+def _bare_planner(transport):
+    """HarnessPlanner không dựng harness/model: chỉ phần xin quyền + plan_blocked."""
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    planner.client = WorkerClient('http://fixture', 'secret', transport=transport)
+    planner.worker_id = 'w1'
+    planner._elevation_asked = set()
+    return planner
+
+
+def test_the_request_context_carries_the_elevation_grant_to_the_gates():
+    grant = {'state': 'approved', 'scope': [{'path': 'server/db.js', 'level': 'core'}]}
+    base = {'id': 3, 'title': 't', 'detail': 'd'}
+    assert HarnessPlanner._request({'request': base, 'elevation': grant})['elevation'] == grant
+    assert HarnessPlanner._request({'request': {**base, 'elevation': grant}})['elevation'] == grant
+    assert 'elevation' not in HarnessPlanner._request({'request': base})
+
+
+def test_a_gate_that_needs_elevation_asks_the_server_once_with_the_scope():
+    transport = ElevationTransport()
+    planner = _bare_planner(transport)
+    payload = _elevation_result()['elevation_required']
+    assert planner._ask_elevation(7, payload) is None, 'state=requested: the plan waits for the admin'
+    posted = [call for call in transport.calls if call[1].endswith('/elevation')]
+    assert len(posted) == 1
+    method, path, body, headers = posted[0]
+    assert (method, path) == ('POST', '/api/ai-board/worker/tickets/7/elevation')
+    assert headers['x-ai-worker-key'] == 'secret'
+    assert body['paths'] == payload['paths'] == ['server/db.js']
+    assert body['levels'] == payload['levels'] == ['core']
+    assert body['reason'] == payload['reason']
+    assert body['plan_hash'] == payload['plan_hash']
+    assert body['worker_id'] == 'w1'
+    # Cùng một kế hoạch chỉ xin một lần: poll lặp lại không dội request vào server.
+    assert planner._ask_elevation(7, payload) is None
+    assert len([call for call in transport.calls if call[1].endswith('/elevation')]) == 1
+
+
+def test_an_admin_created_request_gets_the_grant_back_to_replan_without_waiting():
+    planner = _bare_planner(ElevationTransport(state='approved'))
+    granted = planner._ask_elevation(7, _elevation_result()['elevation_required'])
+    assert granted['state'] == 'approved'
+    assert granted['scope'] == [{'path': 'server/db.js', 'level': 'core'}]
+
+
+def test_a_plan_blocked_by_elevation_becomes_plan_blocked_with_public_text():
+    import json
+    from worker import poll
+    transport = ElevationTransport()
+    planner = _bare_planner(transport)
+    result = _elevation_result()
+
+    def blocked(_snapshot):
+        raise planner._blocked(1, result, [], None, {'plan': ELEVATION_PLAN}, {'id': 7})
+
+    worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1',
+                        version='test', mode='shadow', planner=blocked)
+    out = poll(worker)
+    assert out['status'] == 'plan_blocked'
+    assert out['outcome'] == 'elevation_required'
+    assert out['public_message'] == 'Cần quản trị viên duyệt quyền cho kế hoạch này.'
+    events = [call[2] for call in transport.calls if call[1].endswith('/events')]
+    plan_blocked = [event for event in events if event['event_type'] == 'plan_blocked']
+    assert len(plan_blocked) == 1
+    assert plan_blocked[0]['public_message'] == 'Cần quản trị viên duyệt quyền cho kế hoạch này.'
+    detail = json.loads(plan_blocked[0]['internal_detail'])
+    assert detail['outcome'] == 'elevation_required'
+    assert detail['elevation_required']['paths'] == ['server/db.js']
+    assert transport.calls[-1][2]['outcome'] == 'waiting', 'the lease comes back so the ticket waits for the admin'
+
+
 def test_long_planning_heartbeats_until_the_gates_finish():
     transport = FakeTransport()
 

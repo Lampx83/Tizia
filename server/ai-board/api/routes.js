@@ -502,6 +502,25 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
   });
+  // Quyền nâng mức của AI Board: duyệt/từ chối từng yêu cầu hoặc cả lô. Duyệt thì vé về hàng đợi lập lại kế hoạch.
+  const elevationReply = ({ approved = 0, rejected = 0, state = null }) => ({
+    ok: true, approved, rejected, ...(state ? { state } : {}),
+  });
+  route.post('/api/admin/ai-board/requests/:id/elevate', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try {
+      const result = await store.decideElevation(req.params.id, {
+        decision: req.body?.decision, reason: req.body?.reason, adminUserId: req.user.id,
+      });
+      res.json({ ...elevationReply({ approved: result.approved ? 1 : 0, rejected: result.rejected ? 1 : 0, state: result.state }), scope: result.scope });
+    } catch (error) { folderError(res, error); }
+  });
+  route.post('/api/admin/ai-board/requests/:id/elevate-batch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try {
+      res.json(elevationReply(await store.decideElevationAll(req.body?.ids, {
+        decision: req.body?.decision, reason: req.body?.reason, adminUserId: req.user.id,
+      })));
+    } catch (error) { folderError(res, error); }
+  });
   // Graph node → gate that restarts it. Gate 2 and earlier re-plan; gate 3 and later redo execution.
   const NODE_GATE = { gate_1: 1, gate_2: 2, gate_2_5: 2.5, gate_3: 3, gate_4: 4, gate_5: 5, gate_5_5: 5.5 };
   route.post('/api/admin/ai-board/requests/:requestId/nodes/:node/rerun', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
@@ -684,6 +703,17 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     res.json(result);
+  }));
+
+  // Kế hoạch xin quyền chạm mức trên 'surface' (protected/core) cho chính lượt này; quản trị viên quyết ở tab yêu cầu.
+  route.post('/api/ai-board/worker/tickets/:id/elevation', authenticate, handle(async (req, res) => {
+    const root = await store.queryGet('SELECT source_request_id FROM ai_tickets WHERE id=? AND parent_id IS NULL',
+      [Number(req.params.id)]);
+    if (!root) return res.status(404).json({ error: 'request_not_found' });
+    res.json(await store.requestElevation(root.source_request_id, {
+      paths: req.body?.paths ?? req.body?.scope ?? req.body?.required, levels: req.body?.levels, reason: req.body?.reason,
+      actorId: req.body?.worker_id,
+    }));
   }));
 
   route.post('/api/ai-board/worker/tickets/:id/resume-plan', authenticate, handle(async (req, res) => {

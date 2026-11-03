@@ -11,6 +11,7 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from gates import brainstorm
+from runtime import levels
 
 
 def feature_plan():
@@ -96,8 +97,11 @@ def test_db_must_be_a_new_generated_context_migration_and_backend_stays_generate
         brainstorm.check_files(brainstorm.parse_plan(json.dumps(db_public)), None, None)
     backend_core = feature_plan()
     backend_core["subtasks"][1]["file"] = "server/contexts/identity/auth.js"
-    with pytest.raises(ValueError, match="server/contexts/_ai-generated"):
+    # Context có sẵn: không còn lỗi cứng "phải trong _ai-generated" — cần elevation admin.
+    with pytest.raises(levels.ElevationRequired) as required:
         brainstorm.check_files(brainstorm.parse_plan(json.dumps(backend_core)), None, None)
+    assert required.value.required[0]["path"] == "server/contexts/identity/auth.js"
+    assert required.value.required[0]["level"] == "protected"
     ai_board = feature_plan()
     ai_board["subtasks"][2]["file"] = "ai-board/worker.py"
     with pytest.raises(ValueError, match="ngoài vùng được phép"):

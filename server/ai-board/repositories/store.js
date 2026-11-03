@@ -3,7 +3,7 @@ import { behaviorMetrics } from '../services/behavior.js';
 import { randomBytes } from 'node:crypto';
 import { runnableOrders, splitGates } from '../security/step-gate.js';
 import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../security/policy.js';
-import { check as checkPath } from '../security/path-policy.js';
+import { check as checkPath, normalizePath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
 import { ROOT_GROUP_LABEL, hitRootGroup, readRootAllowance } from '../services/root-allowance.js';
@@ -518,17 +518,19 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
   /** Admin suggestion list from the board DB (the admin UI reads one source of truth, not the web DB). */
   async function listAdminRequests(limit = 10) {
     const n = Math.min(Math.max(Number(limit) || 10, 1), 50);
-    return await db.all(`
+    const rows = await db.all(`
       SELECT r.id, r.title, r.detail, r.status, r.domain, r.type, r.created_at,
              r.student AS student, u.role AS requester_role,
              '' AS execution_mode,
              0 AS votes,
-             t.public_note AS admin_note, t.status AS ticket_status, t.phase AS ticket_phase
+             t.public_note AS admin_note, t.status AS ticket_status, t.phase AS ticket_phase,
+             t.elevation, t.elevation_scope, t.elevated_by, t.elevated_at, t.elevation_reason
       FROM requests r
       LEFT JOIN users u ON u.id = r.owner_user_id
       LEFT JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL
       ORDER BY r.id DESC LIMIT ?
     `, [n]);
+    return rows.map((row) => ({ ...row, elevation_scope: parseJson(row.elevation_scope) }));
   }
 
   async function countAdminRequests() {
@@ -1228,9 +1230,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       if (!run) resumeJournal.push(run = { run_id: row.run_id, entries: [] });
       run.entries.push({ node: row.node, outcome: row.outcome, state: parseJson(state), ledger: parseJson(ledger), created_at: row.created_at });
     }
+    const elevation = elevationView(ticket); // quyền chạm mức trên 'surface' của chính lượt này
     return {
-      ticket: { ...ticket, lease_token: undefined }, request: { ...request, attachments: parseAttachments(request.attachments) },
+      ticket: { ...ticket, lease_token: undefined },
+      // Cổng elevation đọc request.elevation: state 'approved' kèm scope [{path, level}] mới mở cổng trên surface.
+      request: { ...request, attachments: parseAttachments(request.attachments), elevation },
       thread, capability_policy: CAPABILITY_CATALOG, pull_request: await latestPullRequest(ticket.id),
+      elevation,
       resume_journal: resumeJournal,
       requester_profile: await requesterProfile(request.owner_user_id),
       // Spec chưa đủ rõ: cổng 2.5 / tier xử lý kỹ hơn.
@@ -1358,7 +1364,13 @@ function resumeSummary(journal) {
       busy: ['queued', 'authorized', 'Sandbox đang bận; tự thử lại sau ít phút.'],
     };
     const plannedStatuses = new Set(['planned', 'waiting_authorization', 'human_owned', 'waiting_admin']);
-    const next = input.outcome === 'planned' && current.status === 'planned'
+    let planDetail = null;
+    try { planDetail = JSON.parse(input.internalDetail || 'null'); } catch { /* plain-text reason */ }
+    // Gate xin quyền chạm protected/core: vé chờ quyết định của admin thay vì bị coi là lỗi kiểm tra.
+    const elevationHold = input.outcome === 'waiting' && planDetail?.outcome === 'elevation_required';
+    const next = elevationHold
+      ? ['waiting_authorization', 'plan_blocked', 'Kế hoạch cần quyền chạm phần bảo vệ/lõi; đang chờ quản trị viên duyệt cho AI Board.']
+      : input.outcome === 'planned' && current.status === 'planned'
       && current.phase === 'ticketized' && current.tier === 'surface' && current.lease_mode === 'shadow'
       ? ['queued', 'authorized', 'Kế hoạch đã được kiểm tra; đang chờ thực hiện.']
       : input.outcome === 'planned' && plannedStatuses.has(current.status)
@@ -1389,8 +1401,7 @@ function resumeSummary(journal) {
       busyRequeue ? input.now + CONTRACT.limits.runner_busy.retry_after_ms : null, input.now, Number(ticketId)]);
     if (input.outcome === 'waiting' || input.outcome === 'failed') {
       // The precheck gate that stopped the run gets its own gate row: the admin sees the step and can rerun it.
-      let detail = null;
-      try { detail = JSON.parse(input.internalDetail || 'null'); } catch { /* plain-text reason */ }
+      const detail = planDetail;
       const gate = Number(detail?.gate);
       const run = await db.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1', [Number(ticketId)]);
       if (run && CONTRACT.gates.plan.includes(gate)
@@ -1446,14 +1457,81 @@ function resumeSummary(journal) {
     return await recordPlanBlockTransaction(ticketId, input, error);
   }
 
+  // Quyền nâng mức (elevation): AI Board xin phép chạm mức trên 'surface'. Đây là quyền của worker/kế hoạch,
+  // không phải quyền của người dùng; mỗi lần lập lại kế hoạch phải xin lại. Phạm vi tự sửa của AI Board thì
+  // không ai được cấp, kể cả quản trị viên.
+  const LEVEL_RANK = { surface: 0, protected: 1, core: 2 };
+  const ELEVATION_DECISIONS = new Set(['approve', 'reject']);
+  const AI_BOARD_SCOPE = /^(?:server\/)?ai-board(?:\/|$)/i;
+  // Path không khai báo mức (hoặc mức lạ) → mức chặt nhất: server không tự hạ mức cho worker.
+  const strictestLevel = (value) => (Object.hasOwn(LEVEL_RANK, value) ? value : 'core');
+
+  /** Dòng ai_tickets → dạng đọc được cho cổng/harness: mức cao nhất trong scope quyết định mức được chạm. */
+  function elevationView(row) {
+    const scope = (row && parseJson(row.elevation_scope)) || [];
+    const maxLevel = scope.reduce((top, item) => (LEVEL_RANK[item.level] > LEVEL_RANK[top] ? item.level : top), 'surface');
+    return {
+      state: row?.elevation && row.elevation !== 'none' ? row.elevation : 'none',
+      scope,
+      max_level: maxLevel,
+      levels: [...Object.keys(LEVEL_RANK)].filter((name) => LEVEL_RANK[name] > 0 && LEVEL_RANK[name] <= LEVEL_RANK[maxLevel]),
+      by: row?.elevated_by ?? null,
+      at: row?.elevated_at ?? null,
+      reason: row?.elevation_reason ?? null,
+      self_scope: scope.some((item) => AI_BOARD_SCOPE.test(item.path)), // không ai được cấp
+    };
+  }
+
+  const coversTier = (elevation, tier) => (elevation?.state === 'approved'
+    && LEVEL_RANK[elevation.max_level] >= LEVEL_RANK[tier]);
+  const elevationPending = (elevation) => elevation?.state === 'requested';
+
+  /** {paths, levels} → [{path, level}]; mỗi path một mức, trùng path thì giữ mức chặt hơn. */
+  function elevationScopeOf(paths, levels) {
+    const list = Array.isArray(paths) ? paths : [];
+    const byIndex = Array.isArray(levels) ? levels : null;
+    const merged = new Map();
+    for (const [index, entry] of list.entries()) {
+      const item = typeof entry === 'string'
+        ? { path: entry, level: byIndex ? (byIndex[index] ?? 'core') : levels }
+        : { ...entry };
+      const path = normalizePath(item.path);
+      if (!path) throw new WorkerContractError('elevation path is not a repo path', 422, 'invalid_path');
+      const level = strictestLevel(String(item.level ?? 'core'));
+      if (!merged.has(path) || LEVEL_RANK[level] > LEVEL_RANK[merged.get(path)]) merged.set(path, level);
+    }
+    return [...merged].map(([path, level]) => ({ path, level })).sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  async function elevationRow(requestId) {
+    return await db.get(`SELECT id, source_request_id, elevation, elevation_scope, elevated_by, elevated_at, elevation_reason
+      FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`, [Number(requestId)]);
+  }
+
+  /** Quyền hiện tại của yêu cầu (kể cả 'none'), null khi không có yêu cầu. Cổng/harness đọc hàm này. */
+  async function elevationOf(requestId) {
+    const row = await elevationRow(requestId);
+    return row ? elevationView(row) : null;
+  }
+
   // Trạng thái plan theo cổng: folder chưa duyệt giữ (tier không đổi), core người làm, protected chờ admin, còn lại chạy.
-  function planGate({ tier, authorized, folderHeld }) {
+  // elevation: quyền đã cấp cho yêu cầu; đang xin (requested) thì chờ quyết định thay vì đóng việc cho người.
+  function planGate({ tier, authorized, folderHeld, elevation = null }) {
     if (folderHeld) return { status: 'waiting_authorization', child: 'waiting_authorization', reason: 'folder_not_approved',
       note: 'Chức năng chưa được quản trị viên duyệt; kế hoạch chờ duyệt chức năng.' };
-    if (tier === 'core') return { status: 'human_owned', child: 'human_owned', reason: 'core capability cannot be auto-implemented',
-      note: 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.' };
-    if (tier === 'protected' && !authorized) return { status: 'waiting_authorization', child: 'waiting_authorization',
-      reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
+    const covered = coversTier(elevation, tier);
+    if (tier === 'core' && !covered) {
+      if (elevationPending(elevation)) return { status: 'waiting_authorization', child: 'waiting_authorization',
+        reason: 'elevation_pending', note: 'Kế hoạch chạm phần lõi; đang chờ quản trị viên cấp quyền cho AI Board.' };
+      return { status: 'human_owned', child: 'human_owned', reason: 'core capability cannot be auto-implemented',
+        note: 'Yêu cầu chạm phần lõi và đã được chuyển cho con người xử lý.' };
+    }
+    if (tier === 'protected' && !authorized && !covered) {
+      if (elevationPending(elevation)) return { status: 'waiting_authorization', child: 'waiting_authorization',
+        reason: 'elevation_pending', note: 'Kế hoạch chạm phần bảo vệ; đang chờ quản trị viên cấp quyền cho AI Board.' };
+      return { status: 'waiting_authorization', child: 'waiting_authorization',
+        reason: 'protected capability requires explicit admin authorization', note: 'Kế hoạch đang chờ quản trị viên cho phép trước khi triển khai.' };
+    }
     return { status: 'planned', child: 'queued', reason: null, note: 'Kế hoạch đã được kiểm tra và chia thành các việc theo thứ tự.' };
   }
   const DATA_GATE = { status: 'waiting_authorization', child: 'waiting_data', reason: 'data_step_pending',
@@ -1464,6 +1542,7 @@ function resumeSummary(journal) {
   const submitPlanTransaction = (ticketId, input, checked) => db.tx(async () => {
     const now = input.now;
     const root = await assertLease(ticketId, input.workerId, input.leaseToken, now);
+    const elevation = elevationView(root);
     const request = await db.get('SELECT domain FROM requests WHERE id=?', [root.source_request_id]);
     if (request.domain !== checked.plan.domain) throw new PlanGuardrailError('domain_mismatch', 'request domain changed during plan submission');
     const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), Number(ticketId)]);
@@ -1484,7 +1563,7 @@ function resumeSummary(journal) {
         SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
       `, [Number(ticketId), existing.plan_hash, existing.revision]);
       const existingChildren = await planChildren(ticketId, existing.revision);
-      const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id) });
+      const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id), elevation });
       const plannedStatus = plannedGate.status;
       if (!sameSubmission) {
         const rounds = root.auto_rounds; // resuming an identical valid plan (worker restart) is not a new automatic round
@@ -1554,9 +1633,9 @@ function resumeSummary(journal) {
     `, [Number(ticketId), checked.planHash, revision]);
     const folderHeld = await folderNotApproved(root.source_request_id);
     const stepGates = checked.stepTiers.map((tier, i) => (checked.plan.steps[i].layer === 'data' && !folderHeld
-      ? DATA_GATE : planGate({ tier, authorized, folderHeld })));
+      ? DATA_GATE : planGate({ tier, authorized, folderHeld, elevation })));
     const split = splitGates(stepGates);
-    const gate = split ?? planGate({ tier: checked.tier, authorized, folderHeld });
+    const gate = split ?? planGate({ tier: checked.tier, authorized, folderHeld, elevation });
     const effectiveTier = split ? 'surface' : checked.tier;
     const rootStatus = gate.status;
     const childStatus = gate.child;
@@ -1982,10 +2061,11 @@ function resumeSummary(journal) {
   async function getRequestTrace(requestId) {
     const root = await db.get(`
       SELECT id, status, phase, cumulative_budget, budget_limit, public_note, internal_reason, plan_hash,
-             lease_owner, lease_expires_at
+             lease_owner, lease_expires_at, elevation, elevation_scope, elevated_by, elevated_at, elevation_reason
       FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL
     `, [Number(requestId)]);
     if (!root) return null;
+    root.elevation_detail = elevationView(root); // yêu cầu nâng mức: quản trị viên duyệt ngay trong tab yêu cầu
     root.managed = await db.get(`
       SELECT m.admin_user_id AS managed_by, (SELECT username FROM users WHERE id = m.admin_user_id) AS managed_by_name, m.claimed_at,
              m.last_admin_id, (SELECT username FROM users WHERE id = m.last_admin_id) AS last_admin_name, m.last_action, m.last_action_at
@@ -2131,7 +2211,9 @@ function resumeSummary(journal) {
     if (request?.folder_id) await assertFeatureNotIsolated(db, request.folder_id);
     const plan = await db.get('SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND status=?', [Number(rootTicketId), String(planHash), 'valid']);
     if (!plan) throw new WorkerContractError('plan not found', 404, 'plan_not_found');
-    if (plan.tier === 'core') throw new WorkerContractError('core work remains human-owned', 409, 'core_human_owned');
+    if (plan.tier === 'core' && !coversTier(elevationView(root), 'core')) {
+      throw new WorkerContractError('core work remains human-owned', 409, 'core_human_owned');
+    }
     await db.run(`INSERT INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [Number(rootTicketId), String(planHash), Number(plan.revision), Number(adminUserId), now]);
     if (plan.tier === 'protected') {
       await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note='Kế hoạch đã được cho phép; đang chờ thực hiện.', internal_reason=NULL, updated_at=? WHERE id=?`, [now, Number(rootTicketId)]);
@@ -2158,11 +2240,12 @@ function resumeSummary(journal) {
     const plan = root.plan_hash && await db.get(`
       SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'
     `, [root.id, root.plan_hash, root.plan_revision]);
-    const authorized = plan && (plan.tier === 'surface' || !!await db.get(`
+    const elevated = coversTier(elevationView(root), plan?.tier ?? 'core');
+    const authorized = plan && (plan.tier === 'surface' || elevated || !!await db.get(`
       SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
     `, [root.id, plan.plan_hash, plan.revision]));
     const resumed = root.status === 'planned' && run.plan_hash === plan?.plan_hash;
-    if (!plan || !authorized || plan.tier === 'core' || (root.phase !== 'executing' && !resumed)) {
+    if (!plan || !authorized || (plan.tier === 'core' && !elevated) || (root.phase !== 'executing' && !resumed)) {
       throw new WorkerContractError('no authorized plan waiting for execution', 409, 'not_authorized_execution');
     }
     if (!resumed) {
@@ -2218,7 +2301,8 @@ function resumeSummary(journal) {
   }
 
   // The one writer of the needs_replan transition: drops plan and lease, optionally grants budget.
-  async function requeueForReplan(rootId, { publicNote, internalReason = null, budgetLimit = null }, now) {
+  // A replan must ask for elevation again: only the approval that caused this replan may keep the grant.
+  async function requeueForReplan(rootId, { publicNote, internalReason = null, budgetLimit = null, keepElevation = false }, now) {
     await db.run(`
       UPDATE ai_tickets SET status='queued', phase='needs_replan', public_note=?, internal_reason=?,
         plan_hash=NULL, lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
@@ -2226,6 +2310,7 @@ function resumeSummary(journal) {
         auto_rounds=CASE WHEN CAST(? AS BIGINT) IS NULL THEN auto_rounds WHEN auto_rounds > 0 THEN auto_rounds - 1 ELSE 0 END,
         updated_at=? WHERE id=?
     `, [publicNote, internalReason, budgetLimit, budgetLimit, now, rootId]);
+    if (!keepElevation) await db.run(`UPDATE ai_tickets SET elevation='none', elevation_scope=NULL WHERE id=?`, [rootId]);
   }
 
   async function invalidateCurrentPlan(root, now) {
@@ -2361,12 +2446,123 @@ function resumeSummary(journal) {
     return result;
   }
 
+  // Worker/kế hoạch xin quyền chạm mức trên 'surface' cho lượt này. Yêu cầu do quản trị viên tạo thì cấp luôn,
+  // trừ khi phạm vi chạm chính AI Board (ai-board/**, server/ai-board/**).
+  const requestElevationTransaction = (requestId, input, now) => db.tx(async () => {
+    const root = await lockedRequestRoot(requestId);
+    if (!root) throw new WorkerContractError('request not found', 404, 'request_not_found');
+    if (['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
+      throw new WorkerContractError('request is already closed', 409, 'request_closed');
+    }
+    const scope = elevationScopeOf(input.paths ?? input.scope ?? input.required, input.levels);
+    if (!scope.length) throw new WorkerContractError('elevation needs at least one path', 422, 'elevation_scope_required');
+    const reason = String(input.reason ?? '').trim().slice(0, 1000);
+    if (!reason) throw new WorkerContractError('elevation needs a reason', 422, 'elevation_reason_required');
+    const selfScope = scope.some((item) => AI_BOARD_SCOPE.test(item.path));
+    const owner = await db.get('SELECT q.owner_user_id, u.role FROM requests q LEFT JOIN users u ON u.id=q.owner_user_id WHERE q.id=?',
+      [root.source_request_id]);
+    const auto = !selfScope && owner?.role === 'admin';
+    const state = auto ? 'approved' : 'requested';
+    await db.run(`UPDATE ai_tickets SET elevation=?, elevation_scope=?, elevated_by=?, elevated_at=?, elevation_reason=?,
+      updated_at=? WHERE id=?`, [state, JSON.stringify(scope), auto ? Number(owner.owner_user_id) : null,
+      auto ? now : null, reason, now, root.id]);
+    await db.run(insertEvent, [root.id, `elevation_${state}`, auto ? 'admin' : 'worker',
+      auto ? String(owner.owner_user_id) : (input.actorId ? String(input.actorId) : null), `none->${state}`,
+      auto ? 'Quản trị viên tạo yêu cầu này; AI Board được phép chạm mức đã nêu khi lập kế hoạch.'
+        : 'AI Board xin phép chạm mức bảo vệ/lõi; đang chờ quản trị viên.',
+      JSON.stringify({ scope, reason, self_scope: selfScope, auto }),
+      `elevation-request:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now]);
+    return { ok: true, state, request_id: root.source_request_id, elevation: elevationView(await elevationRow(root.source_request_id)) };
+  });
+
+  async function requestElevation(requestId, input = {}) {
+    return await requestElevationTransaction(Number(requestId), input, Date.now());
+  }
+
+  const ELEVATION_REASON = { approve: 'Quản trị viên đã cấp quyền; kế hoạch sẽ được lập lại với quyền này.',
+    reject: 'Quản trị viên không cấp quyền chạm mức bảo vệ/lõi.' };
+
+  /** Ghi quyết định cho một root đang chờ; null khi không có gì để quyết. Duyệt thì đưa vé về hàng đợi lập lại. */
+  async function applyElevationDecision(root, { decision, reason, adminUserId }, now) {
+    if (root.elevation !== 'requested') return null; // chỉ quyết định trên yêu cầu đang chờ
+    const scope = parseJson(root.elevation_scope) || [];
+    if (decision === 'approve' && scope.some((item) => AI_BOARD_SCOPE.test(item.path))) {
+      throw new WorkerContractError('the AI board cannot be granted its own scope', 409, 'elevation_self_scope_blocked');
+    }
+    const state = decision === 'approve' ? 'approved' : 'rejected';
+    await db.run(`UPDATE ai_tickets SET elevation=?, elevated_by=?, elevated_at=?, elevation_reason=?, updated_at=? WHERE id=?`,
+      [state, adminUserId, now, reason, now, root.id]);
+    await db.run(insertEvent, [root.id, `elevation_${state}`, 'admin', String(adminUserId), `requested->${state}`,
+      ELEVATION_REASON[decision], JSON.stringify({ decision, scope, reason }),
+      `elevation-${state}:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now]);
+    await touchAdmin(root.id, Number(adminUserId), `elevation_${decision}`, now);
+    if (decision === 'approve') {
+      await requeueForReplan(root.id, {
+        publicNote: 'Quản trị viên đã cấp quyền chạm mức bảo vệ/lõi; kế hoạch sẽ được lập lại với quyền đó.',
+        budgetLimit: root.budget_limit, // lượt lập lại do quyết định này không bị trần tự động chặn
+        keepElevation: true,
+      }, now);
+    }
+    return { request_id: root.source_request_id, state, approved: state === 'approved', rejected: state === 'rejected', scope };
+  }
+
+  function assertElevationDecision({ decision, reason }) {
+    if (!ELEVATION_DECISIONS.has(String(decision))) {
+      throw new WorkerContractError('decision must be approve or reject', 422, 'invalid_decision');
+    }
+    const note = String(reason ?? '').trim().slice(0, 1000);
+    if (!note) throw new WorkerContractError('a reason is required to decide an elevation', 422, 'elevation_reason_required');
+    return note;
+  }
+
+  async function decideElevation(requestId, { decision, reason, adminUserId }) {
+    const note = assertElevationDecision({ decision, reason });
+    const now = Date.now();
+    const applied = await db.tx(async () => {
+      const root = await lockedRequestRoot(requestId);
+      if (!root) throw new WorkerContractError('request not found', 404, 'request_not_found');
+      return await applyElevationDecision(root, { decision, reason: note, adminUserId: Number(adminUserId) }, now);
+    });
+    if (!applied) throw new WorkerContractError('nothing is waiting for an elevation decision', 409, 'elevation_not_pending');
+    return applied;
+  }
+
+  /** Duyệt/từ chối nhiều yêu cầu trong MỘT transaction, audit từng vé; id lạ thì không ghi gì. */
+  async function decideElevationAll(requestIds, { decision, reason, adminUserId }) {
+    const note = assertElevationDecision({ decision, reason });
+    const ids = [...new Set((Array.isArray(requestIds) ? requestIds : []).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+    if (!ids.length) throw new WorkerContractError('ids are required', 422, 'ids_required');
+    const now = Date.now();
+    const applied = await db.tx(async () => {
+      const done = [];
+      for (const id of ids) {
+        const root = await lockedRequestRoot(id);
+        if (!root) throw new WorkerContractError(`request ${id} not found`, 404, 'request_not_found');
+        const result = await applyElevationDecision(root, { decision, reason: note, adminUserId: Number(adminUserId) }, now);
+        if (!result) continue; // đã quyết trước đó: không ghi đè, không audit lần hai
+        done.push(result);
+      }
+      return done;
+    });
+    return {
+      approved: applied.filter((row) => row.approved).length,
+      rejected: applied.filter((row) => row.rejected).length,
+      skipped: ids.length - applied.length,
+      results: applied,
+    };
+  }
+
   return {
     db,
     queryGet: (sql, params = []) => db.get(sql, params),
     queryAll: (sql, params = []) => db.all(sql, params),
     rerunGate,
     rerunState,
+    requestElevation,
+    decideElevation,
+    decideElevationAll,
+    elevationOf,
+    elevation_of: elevationOf,
     recordGpuState,
     gpuStatus,
     // A request with a root ticket takes its status from the root (trigger ai_root_request_status): only a legacy request may be reopened directly.
