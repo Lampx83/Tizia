@@ -88,7 +88,8 @@ def non_runnable_layered(plan):
 
 
 _PATH = re.compile(r"(?<![\w/.:-])((?:[\w-]+/)*[\w-]+(?:\.[\w-]+)*\.(?:html|mjs|js|css|json|py|md|sql))(?![\w-])", re.I)
-_LITERAL = re.compile(r"(?:ch[ữu]|nhãn|text|tiêu đề|dòng chữ)\s*:?\s*[\"“‘']([^\"”’']{3,60})[\"”’']", re.I)
+_LITERAL = re.compile(r"(?:ch[ữu]|nhãn|text|tiêu đề|dòng chữ|tên|đặt tên)\s*:?\s*[\"“‘']([^\"”’']{3,60})[\"”’']", re.I)
+_BOUNDARY = re.compile(r"[.!?](?=\s|$)|\n")
 _REFERENCE = re.compile(r"\b(?:giong|nhu|tham khao|theo mau|khong (?:sua|doi|dong)|dung (?:sua|doi)|giu nguyen|same as|like|do not|don't)\b")
 _VERBATIM = "nguyen van nguoi dung"
 
@@ -113,6 +114,11 @@ def requested_paths(text):
     return found
 
 
+def _same_file(path: str, requested: str) -> bool:
+    path = path.replace("\\", "/").lstrip("./")
+    return path == requested or path.endswith("/" + requested) or ("/" not in requested and path.rsplit("/", 1)[-1] == requested)
+
+
 def _plan_files(plan):
     return [str(t.get("file") or "").replace("\\", "/").lstrip("./") for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
 
@@ -127,6 +133,22 @@ def _checks(plan):
                      + [str(t.get("verify") or "") for t in plan.get("subtasks") or [] if isinstance(t, dict)])
 
 
+def _sentence_at(text: str, pos: int) -> str:
+    """Câu chứa vị trí `pos`; dấu '.' trong tên file (a.html) không phải kết câu."""
+    start, end = 0, len(text)
+    for match in _BOUNDARY.finditer(text):
+        if match.end() <= pos:
+            start = match.end()
+        elif match.start() >= pos:
+            end = match.start()
+            break
+    return text[start:end]
+
+
+def _task_text(task: dict) -> str:
+    return json.dumps(task or {}, ensure_ascii=False).casefold()
+
+
 def requested_missing(plan, text):
     """Đường dẫn và chữ trong dấu ngoặc mà người dùng nhắc nhưng plan không có subtask/không nhắc tới. File test nêu tên đủ khi có trong acceptance/verify."""
     files = _plan_files(plan)
@@ -135,9 +157,20 @@ def requested_missing(plan, text):
                if not any(f == path or f.endswith("/" + path) or ("/" not in path and f.rsplit("/", 1)[-1] == path) for f in files)
                and not (_TEST_FILE.search(path) and path in checks)]
     haystack = json.dumps(plan or {}, ensure_ascii=False).casefold()
+    tasks = [t for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
     for match in _LITERAL.finditer(text or ""):
-        if match.group(1).strip().casefold() not in haystack:
-            missing.append(f'chữ "{match.group(1).strip()}"')
+        literal = match.group(1).strip()
+        # The item and the file named in the same sentence belong together: a plan that only mentions the
+        # name on another subtask has not covered this file (run #16: building name missing from the layout).
+        named = requested_paths(_sentence_at(text, match.start()))
+        task = next((t for t in tasks if len(named) == 1 and _same_file(str(t.get("file") or ""), named[0])), None)
+        if task is not None:
+            if literal.casefold() not in _task_text(task):
+                missing.append(f'chữ "{literal}" trong {named[0]}')
+            continue
+        if literal.casefold() in haystack:
+            continue
+        missing.append(f'chữ "{literal}"')
     return list(dict.fromkeys(missing))
 
 

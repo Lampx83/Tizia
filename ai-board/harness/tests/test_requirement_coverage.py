@@ -176,3 +176,37 @@ def test_canonical_plan_has_no_duplicate_acceptance_and_scope_matches_steps():
 def test_repair_note_demands_a_subtask_for_every_named_item():
     from worker import _plan_repair_note
     assert "phải có subtask riêng" in _plan_repair_note("yêu cầu nhắc tên nhưng plan thiếu subtask/hạng mục: x.js")
+
+
+REQUEST_16 = (
+    "Tạo trang mới public/so-tay-git.html liệt kê 8 lệnh Git cơ bản. "
+    "Đăng ký trang trong public/js/domains/it/experiences.js và public/js/domains/it/modules.js. "
+    "Thêm một tòa nhà mặc định tên \"Sổ tay Git\" trong layout mặc định ở public/campus-proto/b-iso-canvas.html. "
+    "Kiểm tra: node --test test/so-tay-git.test.js."
+)
+
+
+def test_item_name_must_appear_in_the_subtask_for_its_file():
+    from runtime import coverage
+    plan = {"subtasks": [
+        {"file": "public/so-tay-git.html", "title": "Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/js/domains/it/experiences.js", "title": "Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/js/domains/it/modules.js", "title": "Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/campus-proto/b-iso-canvas.html", "title": "Cập nhật layout", "verify": "node --test test/so-tay-git.test.js"},
+    ]}
+    assert coverage.requested_missing(plan, REQUEST_16) == [
+        'chữ "Sổ tay Git" trong public/campus-proto/b-iso-canvas.html']
+    plan["subtasks"][3]["title"] = "Thêm tòa nhà Sổ tay Git vào layout"
+    assert coverage.requested_missing(plan, REQUEST_16) == []
+
+
+def test_the_campus_subtask_cannot_borrow_the_name_from_the_page_task():
+    from runtime import coverage
+    plan = {"subtasks": [
+        {"file": "public/so-tay-git.html", "title": "Trang Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/js/domains/it/experiences.js", "title": "Đăng ký Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/js/domains/it/modules.js", "title": "Đăng ký Sổ tay Git", "verify": "node --test test/so-tay-git.test.js"},
+        {"file": "public/campus-proto/b-iso-canvas.html", "title": "Thêm tòa nhà", "verify": "node --test test/so-tay-git.test.js"},
+    ]}
+    assert coverage.requested_missing(plan, coverage.user_text({"detail": REQUEST_16})) == [
+        'chữ "Sổ tay Git" trong public/campus-proto/b-iso-canvas.html']

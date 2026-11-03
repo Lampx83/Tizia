@@ -288,6 +288,27 @@
    "env": {
     "AI_BOARD_GATE25_FIXES": "quotes,ellipsis,advquote"
    }
+  },
+  {
+   "gate": "1.new_file",
+   "fn": "new_file",
+   "trace": "run114",
+   "truth": "pass",
+   "truth_source": "run 114 (2026-11-02): file moi plugin-level server/contexts/_ai-generated/faq/index.js bi allowlist cu chan oan; sua c467c2a3",
+   "files": [
+    "server/contexts/_ai-generated/faq/index.js",
+    "server/contexts/_ai-generated/faq/migrations/001-faq.sql"
+   ]
+  },
+  {
+   "gate": "1.new_file",
+   "fn": "new_file",
+   "trace": "run114-reject",
+   "truth": "block",
+   "truth_source": "allowlist van phai chan file ngoai plugin/migration",
+   "files": [
+    "server/contexts/_ai-generated/faq/index.py"
+   ]
   }
  ]
 }
