@@ -230,17 +230,24 @@ const pick = (nodes, selectedId) => nodes[selectedId] ? selectedId
 const secs = (ms) => (ms == null ? 'Not recorded' : `${(ms / 1000).toFixed(1)} s`);
 const num = (n) => (n == null ? 'Not recorded' : Number(n).toLocaleString('en-US'));
 
-// Server decides (root.rerun_allowed, root.rerun_reason); the button only shows that answer.
+const stepNo = (id) => String(id || '').slice(5).replace('_', '.');
+
+// Server decides (root.rerun_allowed, root.rerun_reason, root.rerun_node); the button only shows that answer.
 function rerunAction(node, root) {
   if (!node.step || node.state === 'idle') return '';
   const stage = gateStage(node.gate);
+  const checkpoint = root?.rerun_node || null;
   const why = node.state === 'running' ? 'This step is running now.'
     : root?.rerun_stage && root.rerun_stage !== stage ? 'This step is in the other stage. Run that stage instead.'
+    : root?.rerun_allowed && stage === 'execute' && checkpoint && node.id !== checkpoint
+      ? `Run again starts at step ${stepNo(checkpoint)}: that is the last saved checkpoint.`
     : root?.rerun_allowed ? '' : root?.rerun_reason || 'This step cannot run again now.';
   const title = why || (stage === 'plan' ? 'Plans again from step 1. The new result updates the steps.'
-    : 'Runs the approved plan again from step 3, then the checks. The new result updates the steps.');
+    : checkpoint ? `Runs again from the checkpoint saved at step ${stepNo(checkpoint)}; earlier steps keep their result.`
+    : 'No checkpoint is saved for this step, so the stage runs again from step 3. The new result updates the steps.');
   const button = `<button type="button" class="btn rerun" data-action="rerun-node" data-node="${esc(node.id)}"${why ? ' disabled' : ''} title="${esc(title)}">Run again</button>`;
-  return `${button}${why ? `<p class="meta">${esc(why)}</p>` : ''}`;
+  const warning = !why && root?.rerun_warning ? `<p class="meta g-warn" role="status">${esc(root.rerun_warning)}</p>` : '';
+  return `${button}${why ? `<p class="meta">${esc(why)}</p>` : ''}${warning}`;
 }
 
 function kv(rows) {

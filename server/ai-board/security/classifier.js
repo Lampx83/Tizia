@@ -4,6 +4,7 @@
 // The intake route suppresses SHADOW actions, and its deterministic guard owns rejection.
 import fs from 'node:fs';
 import { routedClassifyRequest } from '../providers/model-routing.js';
+import { environment } from '../settings.js';
 
 export const CLASSIFIER = JSON.parse(fs.readFileSync(new URL('../classifier-calibration.json', import.meta.url), 'utf8'));
 const MAX_TEXT = 2000;
@@ -79,7 +80,7 @@ export function decideDanger(probs, t = CLASSIFIER.thresholds.danger, scoring = 
 }
 
 /** One classification call. Throws on config/HTTP/logprob problems; callers fall back to the old behaviour. */
-export async function classify(task, text, { env = process.env, fetchImpl = fetch, timeoutMs = TIMEOUT_MS } = {}) {
+export async function classify(task, text, { env = environment(), fetchImpl = fetch, timeoutMs = TIMEOUT_MS } = {}) {
   const payload = {
     prompt: buildPrompt(task, text), stream: false, think: false, logprobs: true, top_logprobs: 20,
     keep_alive: CLASSIFIER.keep_alive, options: { num_predict: 1, temperature: 0, num_ctx: 4096 },

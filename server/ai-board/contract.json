@@ -67,11 +67,12 @@
       "adaptive_why": "Flag on: soft budget = soft_start + soft_step per progress signal (new read range, accepted edit, changed check state), capped at model_calls; stuck stops the subtask as blocked. Off = fixed caps above."
     },
     "react_plan": {
-      "_why": "Gate 2 ReAct planning loop (gates/react_plan.py). Read-only tools only; model_calls and tool_calls are per request. Flag off = one-shot plan as before.",
+      "_why": "Gate 2 ReAct planning loop (gates/react_plan.py). Read-only tools only; model_calls and tool_calls are per request. max_tokens caps one reply: a reply cut at the cap hands the plan back to the one-shot call instead of spending the rest of the loop. Flag off = one-shot plan as before.",
       "flag": "AI_BOARD_REACT_PLAN",
       "default_enabled": false,
       "model_calls": 6,
       "tool_calls": 12,
+      "max_tokens": 1024,
       "observation_chars": 1500,
       "soft_start": 3,
       "soft_step": 1,
@@ -79,6 +80,10 @@
         "same_call_repeats": 2,
         "no_progress_steps": 2
       }
+    },
+    "brainstorm": {
+      "_why": "One-shot plan call (gates/brainstorm.py): a reply cut at max_tokens is an invalid plan, so the cap only bounds the worst case; attempts stay at two.",
+      "max_tokens": 2048
     },
     "budget": {
       "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",

@@ -71,7 +71,9 @@ def run(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None
     while loop.allow():
         body = deps.call_model(model, prompt + protocol + transcript, gate=1, budget=budget, format="json",
                                db_path=db_path, proposal_id=proposal_id, prompt_name="react_plan.md",
-                               skill_context=skill_context)
+                               skill_context=skill_context, options={"num_predict": spec["max_tokens"]})
+        if body.get("done_reason") == "length":
+            return None  # reply cut at the cap: the one-shot plan call takes over instead of more replies
         try:
             name, args = parse_action(body.get("response", ""))
         except ValueError as error:

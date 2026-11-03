@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { environment } from '../settings.js';
 
 const ROLES = new Set(['gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor']);
 const PROVIDERS = new Set(['ollama', 'vllm', 'api']);
@@ -57,7 +58,7 @@ function endpoint(provider, settings) {
 }
 
 /** Reviewed order only: telemetry never silently promotes an unapproved candidate. */
-export function resolveCandidates(role, { catalog, env: settings = process['env'], now = Date.now() } = {}) {
+export function resolveCandidates(role, { catalog, env: settings = environment(), now = Date.now() } = {}) {
   validateCatalog(catalog);
   if (!ROLES.has(role)) fail('unknown role');
   const selected = [];
@@ -89,7 +90,7 @@ const vllmChatBody = (payload, model) => ({
 const vllmLogprobs = (body) => ({ logprobs: Array.isArray(body.choices?.[0]?.logprobs?.content) ? body.choices[0].logprobs.content : null });
 
 /** Invalid responses and non-transient HTTP errors never fail over. */
-export async function routedClassifyRequest(payload, { env: settings = process['env'], fetchImpl = fetch, timeoutMs = 10_000, catalog } = {}) {
+export async function routedClassifyRequest(payload, { env: settings = environment(), fetchImpl = fetch, timeoutMs = 10_000, catalog } = {}) {
   if (!enabled(settings)) return null;
   catalog = catalog || loadCatalog();
   const candidates = resolveCandidates('classifier', { catalog, env: settings });

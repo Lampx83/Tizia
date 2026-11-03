@@ -151,8 +151,11 @@ def select_report(role, context=None):
                        or task not in skill.task_type and 'all' not in skill.task_type)):
                 raise ValueError('approved skill role mismatch')
             skill = replace(skill, version=row['version'], version_id=row['version_id'])
+            # The server counts with the Qwen tokenizer; the harness cannot reproduce that count, so it keeps a
+            # UTF-8 byte upper bound for budgeting and checks the stored count against the skill's own cap.
             bound = len(admin_text(skill).encode('utf-8'))
-            if bound > skill.max_tokens or bound != row.get('token_count'):
+            count = row.get('token_count')
+            if type(count) is not int or not 0 < count <= skill.max_tokens:
                 raise ValueError('approved skill token bound mismatch')
             skill = replace(skill, token_bound=bound)
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,

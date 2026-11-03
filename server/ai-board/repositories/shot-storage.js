@@ -8,6 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, createHmac } from 'node:crypto';
+import { environment } from '../settings.js';
 
 const KEY_RE = /^\d{4}-\d{2}-\d{2}\/\d+-[0-9a-f]{12}\.png$/; // đúng tên saveDraftScreenshots sinh; FAB upload (base36) không khớp
 const URL_PREFIX = '/uploads/requests/';
@@ -138,7 +139,7 @@ export async function purgeExpiredScreenshots(db, backend, { days, now = Date.no
 }
 
 /** Chạy lúc khởi động rồi mỗi 6 h. AI_BOARD_SHOT_RETENTION_DAYS: số ngày giữ ảnh; chưa đặt hoặc 0 = tắt (xoá file là không hoàn tác nên phải chủ động bật). Trả timer hoặc null. */
-export function startShotRetention({ db, backend, env = process.env, log = console }) {
+export function startShotRetention({ db, backend, env = environment(), log = console }) {
   const days = Number(env.AI_BOARD_SHOT_RETENTION_DAYS);
   if (!(days > 0)) return null;
   const sweep = () => purgeExpiredScreenshots(db, backend, { days })

@@ -25,11 +25,11 @@ import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
+import { classifierConfigured, environment, getSettings } from '../settings.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
-  (process['env'].OLLAMA_URL || process['env'].VLLM_URL) && process['env'].AI_BOARD_CLASSIFIER_MODEL
-    ? classifyWithModel(title, detail) : Promise.resolve(null));
+  classifierConfigured() ? classifyWithModel(title, detail) : Promise.resolve(null));
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -51,7 +51,7 @@ export function attachAiBoardRequestRoutes(router, {
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.get('/api/ai-board/capabilities', requireAuth, (req, res) => {
-    res.json({ multimodal: /^(1|true|on|yes)$/i.test(String(process.env.AI_BOARD_MULTIMODAL || '')) });
+    res.json({ multimodal: getSettings().multimodal });
   });
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
@@ -472,9 +472,12 @@ export function attachAiBoardRequestRoutes(router, {
     const gate = NODE_GATE[req.params.node];
     if (gate == null) return res.status(400).json({ error: 'invalid_node', message: 'This node cannot run again.' });
     try {
-      const result = await store.rerunGate(req.params.requestId, gate, req.user.id);
-      // Node checkpoints are not readable by admins yet, so the rerun restarts the whole stage from its first gate.
-      res.json({ ...result, node: req.params.node, resumed_from: 'stage', note: 'Runs the whole stage again from its first step. Node checkpoint resume is not available yet.' });
+      // The store checks the saved checkpoint: a node with one is re-run from there, anything else is refused.
+      const result = await store.rerunGate(req.params.requestId, gate, req.user.id, req.params.node);
+      res.json({ ...result, node: req.params.node,
+        note: result.resumed_from
+          ? `Runs again from the saved checkpoint at ${result.resumed_from}.`
+          : 'No checkpoint for this step: the stage runs again from step 3.' });
     } catch (error) { folderError(res, error); }
   });
 }
@@ -485,7 +488,7 @@ function digest(value) {
 
 export function attachAiBoardWorkerRoutes(router, {
   store,
-  env = process.env,
+  env = environment(),
   leaseMs = LEASE_MS,
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
   shotBackend = undefined, // backend lưu ảnh (shot-storage.js); mặc định local trong uploadsDir
