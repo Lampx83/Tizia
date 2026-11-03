@@ -17,3 +17,8 @@ test('the suggestions badge is the number of rows actually displayed', () => {
   assert.doesNotMatch(source, /refreshRequestBadge/);
   assert.doesNotMatch(source, /requests_pending\)\)/);
 });
+
+test('the row number is the displayed position, not the deleted request id', () => {
+  assert.match(source, /<td>\$\{index \+ 1\}<\/td>/);
+  assert.doesNotMatch(source, /<td>\$\{r\.id\}<\/td>/);
+});
