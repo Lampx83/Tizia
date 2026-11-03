@@ -53,8 +53,11 @@ function callsOf(step) {
 
 function modelCall(call) {
   const purpose = describeModelCall(call);
+  const prompt = String(call.prompt_name || '').split(/[\\/]/).pop() || '';
   return {
     title: PURPOSE_EN[purpose.id] || (purpose.id === 'unlabelled' ? 'AI call without label' : `AI call: ${purpose.id}`),
+    prompt,
+    call_id: call.call_id || '',
     result: CALL_LABEL[call.result] || 'No result yet',
     error: call.error || '',
     model: call.model || '',
@@ -287,12 +290,13 @@ function logPanel(node) {
   if (!node.step) return `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
   const total = (node.tokens?.in || 0) + (node.tokens?.out || 0);
   const tokens = `<h4>Token</h4><p>vào ${esc(num(node.tokens?.in))} · ra ${esc(num(node.tokens?.out))} · tổng ${esc(num(total))}</p>`;
-  const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map(m => `<li><b>${esc(m.title)}</b> · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
+  const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map((m, i) => `<li><b>#${i + 1} ${esc(m.title)}</b>${m.prompt ? ` <code>${esc(m.prompt)}</code>` : ''}${m.call_id ? ` <span class="meta">${esc(m.call_id)}</span>` : ''} · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
   const tools = node.tools.length ? `<h4>Tool calls</h4><ol class="g-list">${node.tools.map(t => `<li><b>${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(CALL_LABEL[t.result] || 'No result yet')} · ${esc(secs(t.ms))}</li>`).join('')}</ol>` : '';
   const sandbox = node.sandbox.length ? `<h4>Sandbox runs</h4><ol class="g-list">${node.sandbox.map(r => `<li><code>${esc((r.argv || []).join(' '))}</code> · exit ${esc(r.rc ?? 'none')} · ${esc(secs(r.duration_ms))}${r.error ? ` · ${esc(r.error)}` : ''}</li>`).join('')}</ol>` : '';
   const skills = node.skills.length ? `<h4>Skills</h4><p>${node.skills.map(s => esc(s)).join(', ')}</p>` : '';
   const earlier = node.earlier.length ? `<h4>Earlier attempts</h4><ol class="g-list">${node.earlier.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
-  const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Raw record</summary><pre class="mono">${esc(JSON.stringify({ result: node.step.result || null, calls: callsOf(node.step) }, null, 2))}</pre></details>`;
+  const rawCalls = callsOf(node.step).map((call, i) => ({ n: i + 1, call: describeModelCall(call).title, call_id: call.call_id || null, prompt: call.prompt_name || null, gate: call.gate ?? null, iteration: call.iteration ?? null, result: call.result || null, ms: call.metrics?.wall_ms ?? null, tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null, evidence: call }));
+  const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Raw record</summary><pre class="mono">${esc(JSON.stringify({ result: node.step.result || null, calls: rawCalls }, null, 2))}</pre></details>`;
   return `${tokens}${models}${tools}${sandbox}${skills}${earlier}${raw}`;
 }
 
