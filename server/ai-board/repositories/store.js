@@ -707,6 +707,30 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `)).map((w) => (w.status === 'running' && now - w.last_seen_at > leaseMs ? { ...w, status: 'stale' } : w));
   }
 
+  // GPU busy is board state, not ticket state: a worker fails its model preflight before claiming, so no ticket is
+  // touched and no budget is spent. The worker retries by itself after retry_at (LF/100).
+  async function recordGpuState(workerId, { model = null, error = null, retryAt = null, version = 'unknown', mode = 'active', now = Date.now() } = {}) {
+    const waiting = retryAt != null && Number(retryAt) > now;
+    await db.run(`INSERT INTO ai_workers(worker_id, version, mode, status, current_ticket_id, last_seen_at, updated_at,
+        gpu_busy_model, gpu_retry_at, gpu_error)
+      VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+      ON CONFLICT(worker_id) DO UPDATE SET version=excluded.version, mode=excluded.mode,
+        status=CASE WHEN ? THEN 'waiting_gpu' WHEN ai_workers.status='waiting_gpu' THEN 'idle' ELSE ai_workers.status END,
+        last_seen_at=excluded.last_seen_at, updated_at=excluded.updated_at,
+        gpu_busy_model=excluded.gpu_busy_model, gpu_retry_at=excluded.gpu_retry_at, gpu_error=excluded.gpu_error`,
+    [workerId, String(version).slice(0, 80), String(mode), waiting ? 'waiting_gpu' : 'idle', now, now,
+      waiting ? model : null, waiting ? Number(retryAt) : null, waiting ? error : null, waiting]);
+    return { waiting, retry_at: waiting ? Number(retryAt) : null };
+  }
+
+  /** The GPU wait that currently keeps queued requests idle, or null: {model, retry_at}. */
+  async function gpuStatus(now = Date.now()) {
+    const row = await db.get(`SELECT worker_id, gpu_busy_model, gpu_retry_at FROM ai_workers
+      WHERE status='waiting_gpu' AND last_seen_at > ? ORDER BY last_seen_at DESC LIMIT 1`, [now - 120_000]);
+    if (!row) return null;
+    return { worker_id: row.worker_id, model: row.gpu_busy_model, retry_at: Number(row.gpu_retry_at) || null };
+  }
+
   async function lockRootFolder(ticketId) {
     // All improvement writes lock folder before root, including HSM, approval and archive.
     const request = await db.get(`SELECT q.folder_id FROM requests q JOIN ai_tickets t ON t.source_request_id=q.id WHERE t.id=?`, [Number(ticketId)]);
@@ -2044,6 +2068,7 @@ function resumeSummary(journal) {
     root.rerun_reason = rerun.reason;
     root.rerun_warning = rerun.warning || null; // non-blocking: same objection and same pins as the attempt before
     root.rerun_node = rerun.node || null; // the node a re-run starts at: the last saved checkpoint
+    root.gpu_waiting = root.status === 'queued' ? await gpuStatus() : null; // queued work waits for the model to load
     // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
     let allowance = await readRootAllowance(db, root.id);
     if (allowance && !hitRootGroup(allowance)) {
@@ -2322,6 +2347,8 @@ function resumeSummary(journal) {
     queryAll: (sql, params = []) => db.all(sql, params),
     rerunGate,
     rerunState,
+    recordGpuState,
+    gpuStatus,
     // A request with a root ticket takes its status from the root (trigger ai_root_request_status): only a legacy request may be reopened directly.
     hasRoot: async (requestId) => !!await db.get('SELECT 1 FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(requestId)]),
     createRequestWithRoot,

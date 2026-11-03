@@ -362,6 +362,11 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
   const resumeLine = projection.resume
     ? `<p class="meta g-resume">Resumed at ${esc(nodes[projection.resume.from]?.name || projection.resume.from)}. Earlier steps are Done and were not run again.</p>`
     : '';
+  const gpu = trace.root?.gpu_waiting;
+  const gpuAt = gpu?.retry_at
+    ? ` after ${new Date(gpu.retry_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}` : '';
+  const gpuLine = gpu
+    ? `<p class="meta g-warn" role="status">Waiting for the GPU; the worker retries by itself${esc(gpuAt)}.</p>` : '';
   const cells = budgetCells(trace, now).map(c => `<div class="g-cell tone-${c.tone}">
       <div class="g-cell-label">${esc(c.label)}</div>
       <div class="g-big">${esc(c.big)}</div>
@@ -384,7 +389,7 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
         <g class="g-edges">${edges}</g>
         <g class="g-nodes">${drawn}</g>
       </svg></div>
-      ${rollbackLine}${resumeLine}
+      ${rollbackLine}${resumeLine}${gpuLine}
     </div>
     <div class="blk g-log" role="region" aria-label="Execution log">
       <ul class="g-steps" aria-label="Các bước">${steps}</ul>

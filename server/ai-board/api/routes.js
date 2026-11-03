@@ -578,6 +578,17 @@ export function attachAiBoardWorkerRoutes(router, {
       hsm_contract:publicContract(), root_allowance_protocol: 1 });
   }));
 
+  // Model preflight failed: the worker holds no lease, so this only records why queued work waits and when it retries.
+  route.post('/api/ai-board/worker/gpu-state', authenticate, handle(async (req, res) => {
+    const body = req.body || {};
+    res.json(await store.recordGpuState(String(body.worker_id || '').trim(), {
+      model: body.model ? String(body.model).slice(0, 120) : null,
+      error: body.error ? String(body.error).slice(0, 300) : null,
+      retryAt: body.retry_at == null ? null : Number(body.retry_at),
+      version: body.version || 'unknown', mode: body.mode || 'active',
+    }));
+  }));
+
   route.post('/api/ai-board/worker/tickets/:id/heartbeat', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     res.json({ ok: true, ...await store.heartbeat(req.params.id, lease.workerId, lease.leaseToken, { leaseMs }) });

@@ -1172,7 +1172,20 @@ class HttpWorker:
     preview_publisher: Any = None  # optional local private preview; never changes the release verdict
     folder_base_ref: str = "HEAD"  # nhánh folder gộp ref này mỗi lượt: clone riêng → origin/<base>, checkout dev → HEAD
     model_check: Callable[[], dict | None] | None = None  # model_preflight(): lỗi → không claim
+    clock: Callable[[], float] = time.monotonic  # injectable for the GPU wait backoff
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
+    _gpu_retry_at: float = dataclasses.field(default=0.0, init=False, repr=False)
+    _gpu_backoff_s: float = dataclasses.field(default=0.0, init=False, repr=False)
+
+    def _report_gpu(self, blocked: dict | None, retry_at: int | None = None) -> None:
+        """Best-effort board state: queued work waits for the model and retries by itself (LF/100)."""
+        try:
+            self.client.post("/api/ai-board/worker/gpu-state", {
+                "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
+                "model": (blocked or {}).get("model"), "error": (blocked or {}).get("error"), "retry_at": retry_at,
+            })
+        except Exception as error:  # noqa: BLE001 — trạng thái GPU là best-effort
+            print(f"[worker] báo trạng thái GPU lỗi: {str(error)[:160]}")
 
     def gate_started(self, gate: float) -> None:
         """Deps.progress: báo server cổng vừa bắt đầu trong run đang giữ lease. Lỗi gửi không làm hỏng cổng."""
@@ -1226,10 +1239,23 @@ class HttpWorker:
         from runtime.budget import start_node
         start_node(None)
         root_allowance.reset()
+        # Not-before backoff: after a failed probe, wait before touching the GPU again (LF/100).
+        now = self.clock()
+        if now < self._gpu_retry_at:
+            return {"status": "waiting_gpu", "retry_in_s": round(self._gpu_retry_at - now, 1)}
         if self.model_check and (blocked := self.model_check()):
             # Gateway không load nổi model (GPU tranh chấp): claim lúc này chỉ đẩy request vào 500 → precheck_blocked.
-            print(f"[worker] model {blocked['model']} chưa load được, chờ GPU, không claim: {blocked['error']}")
-            return {**blocked, "status": "waiting_gpu"}
+            from runtime import limits
+            spec = limits.gpu_wait()
+            self._gpu_backoff_s = (spec["backoff_s"] if not self._gpu_backoff_s
+                                   else min(self._gpu_backoff_s * 2, spec["max_s"]))
+            self._gpu_retry_at = now + self._gpu_backoff_s
+            print(f"[worker] model {blocked['model']} chưa load được, chờ GPU {self._gpu_backoff_s:.0f}s, không claim: {blocked['error']}")
+            self._report_gpu(blocked, retry_at=int((time.time() + self._gpu_backoff_s) * 1000))
+            return {**blocked, "status": "waiting_gpu", "retry_in_s": self._gpu_backoff_s}
+        if self._gpu_backoff_s:
+            self._gpu_backoff_s, self._gpu_retry_at = 0.0, 0.0
+            self._report_gpu(None)
 
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,

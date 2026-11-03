@@ -13,6 +13,8 @@ export async function requesterProgress(store, requestId, ownerUserId, isAdmin =
   `, [Number(requestId), Number(ownerUserId)]);
   if (!row) return null;
   const live = row.ticket_status === 'running' && !!row.lease_owner && Number(row.lease_expires_at) > Date.now();
+  // Queue waiting on the shared GPU: the worker retries by itself, so this is a wait state, not an error (LF/100).
+  const gpu = row.ticket_status === 'queued' && store.gpuStatus ? await store.gpuStatus() : null;
   const phase = PHASES[row.phase];
   const stopped = !!phase?.terminal && row.phase !== 'done';
   return {
@@ -28,6 +30,7 @@ export async function requesterProgress(store, requestId, ownerUserId, isAdmin =
     eta_ms: live ? await etaMs(store, row.root_id) : null,
     budget: row.root_id ? { used: Number(row.cumulative_budget) || 0, limit: Number(row.budget_limit) || null } : null,
     stop_reason: stopped ? row.public_note ?? null : null,
+    gpu_waiting: gpu ? { retry_at: gpu.retry_at } : null,
   };
 }
 

@@ -96,6 +96,12 @@ def brainstorm() -> dict:
     return dict(_parsed()["limits"]["brainstorm"])
 
 
+def gpu_wait() -> dict:
+    """Backoff after a failed model preflight: {backoff_s, max_s} from limits.gpu_wait (LF/100)."""
+    spec = _parsed()["limits"]["gpu_wait"]
+    return {"backoff_s": float(spec["backoff_s"]), "max_s": float(spec["max_s"])}
+
+
 def budget(env=None) -> dict:
     """Mặc định Budget + ChildBudget; BUDGET_MAX_<KEY> override từng khoá (trừ child_*)."""
     env = os.environ if env is None else env

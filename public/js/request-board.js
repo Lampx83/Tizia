@@ -34,11 +34,17 @@ async function paintProgress(el) {
   if (!p) { el.hidden = true; return; }
   el.textContent = progressLine(p);
   el.hidden = false;
-  if (p.live) setTimeout(() => paintProgress(el), PROGRESS_POLL_MS);
+  if (p.live || p.gpu_waiting) setTimeout(() => paintProgress(el), PROGRESS_POLL_MS);
 }
 
 function progressLine(p) {
   const parts = [p.step ? `Step: ${p.step}` : null];
+  if (p.gpu_waiting) {
+    const at = p.gpu_waiting.retry_at
+      ? new Date(p.gpu_waiting.retry_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
+      : null;
+    parts.push(at ? `Đang chờ GPU, sẽ tự chạy lại sau ${at}` : 'Đang chờ GPU, sẽ tự chạy lại');
+  }
   if (p.live && p.eta_ms != null) parts.push(`about ${Math.max(1, Math.round(p.eta_ms / 60000))} min left`);
   if (p.budget) parts.push(`Budget: ${p.budget.used} / ${p.budget.limit}`);
   if (p.stop_reason) parts.push(`Stopped: ${p.stop_reason}`);

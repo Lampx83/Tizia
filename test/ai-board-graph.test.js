@@ -179,6 +179,14 @@ test('run again: disabled with the server reason when another stage or a live le
   assert.match(renderTicketGraph(leased, 'gate_2'), /A worker is running this request now/);
 });
 
+test('a GPU wait shows as a note, not an error', () => {
+  const waiting = failed();
+  waiting.root.gpu_waiting = { retry_at: Date.UTC(2026, 10, 3, 10, 30) };
+  const page = renderTicketGraph(waiting, 'gate_2');
+  assert.match(page, /class="meta g-warn" role="status">Waiting for the GPU/);
+  assert.match(page, /retries by itself after 17:30/); // 10:30 UTC = 17:30 Vietnam time
+});
+
 test('run again: only the node with the saved checkpoint keeps the button', () => {
   const exec = {
     root: root({ status: 'blocked', rerun_stage: 'execute', rerun_allowed: true, rerun_node: 'gate_5' }),

@@ -29,6 +29,7 @@ def worker_with(ollama, clock):
     transport = FakeTransport()
     worker = HttpWorker(WorkerClient('http://fixture', 'secret', transport=transport), worker_id='w1', mode='shadow')
     worker.model_check = model_preflight(ollama, clock=clock)
+    worker.clock = clock
     return worker, transport
 
 
@@ -47,7 +48,10 @@ def test_busy_gpu_resumes_claiming_once_the_model_loads_again():
     assert worker.run_once()['status'] == 'waiting_gpu'
     assert not any(call[1].endswith('/claim') for call in transport.calls)
     ollama.broken = set()
-    now[0] = 1.0
+    now[0] = 1.0  # still inside the not-before backoff: no model probe and no claim yet
+    assert worker.run_once()['status'] == 'waiting_gpu'
+    assert not any(call[1].endswith('/claim') for call in transport.calls)
+    now[0] = 61.0
     assert worker.run_once()['status'] != 'waiting_gpu'
     assert any(call[1].endswith('/claim') for call in transport.calls)
 
@@ -76,8 +80,12 @@ def test_success_is_cached_for_60s_and_failure_is_retried_every_poll():
     ollama.broken = {'g1'}
     now[0] = 200.0
     assert worker.run_once()['status'] == 'waiting_gpu'
-    assert worker.run_once()['status'] == 'waiting_gpu'  # lỗi không được cache
-    assert [call[0] for call in ollama.calls[-2:]] == ['g1', 'g1']
+    before = len(ollama.calls)
+    assert worker.run_once()['status'] == 'waiting_gpu'  # backoff: no probe, no claim
+    assert len(ollama.calls) == before
+    now[0] = 260.0
+    assert worker.run_once()['status'] == 'waiting_gpu'
+    assert ollama.calls[-1][0] == 'g1'
 
 
 def test_non_http_error_is_also_model_unavailable():
@@ -98,3 +106,31 @@ def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypat
     ollama = type('Models', (), {'routing': routing, 'gate1_model': 'm'})()
     assert model_preflight(ollama)() is None
     assert roles == ['gate1']
+
+
+def test_gpu_wait_reports_board_state_and_clears_it_after_a_successful_probe():
+    now = [0.0]
+    ollama = FakeOllama(broken={'g1'})
+    worker, transport = worker_with(ollama, lambda: now[0])
+    out = worker.run_once()
+    assert out['status'] == 'waiting_gpu' and out['retry_in_s'] == 60.0
+    report = [call for call in transport.calls if call[1].endswith('/gpu-state')]
+    assert len(report) == 1 and report[0][2]['retry_at'] and report[0][2]['model'] == 'g1'
+    assert not any(call[1].endswith('/claim') for call in transport.calls)
+
+    ollama.broken = set()
+    now[0] = 61.0
+    worker.run_once()
+    clears = [call for call in transport.calls if call[1].endswith('/gpu-state')]
+    assert len(clears) == 2 and clears[-1][2]['retry_at'] is None
+
+
+def test_gpu_wait_doubles_up_to_the_contract_ceiling():
+    now = [0.0]
+    ollama = FakeOllama(broken={'g1'})
+    worker, _ = worker_with(ollama, lambda: now[0])
+    waits = []
+    for step in range(5):
+        waits.append(worker.run_once()['retry_in_s'])
+        now[0] += waits[-1]
+    assert waits == [60.0, 120.0, 240.0, 300.0, 300.0]
