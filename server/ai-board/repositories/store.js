@@ -1170,12 +1170,14 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       FROM request_messages WHERE request_id=? ORDER BY created_at, id
     `, [ticket.source_request_id])).map((row) => ({ ...row, attachments: parseAttachments(row.attachments) }));
     // Run bi kill (chua co verdict) giu journal lai: worker dung no de chay tiep thay vi sinh lai code.
+    // An admin node rerun (resume_node) may also continue from the latest run that already stopped.
     const journalRows = await db.all(`
       SELECT r.id AS run_id, j.node, j.outcome, j.state_delta, j.ledger, j.created_at
       FROM ai_runs r JOIN ai_attempt_journal j ON j.run_id = r.id
-      WHERE r.ticket_id=? AND r.outcome IS NULL
+      WHERE r.ticket_id=? AND (r.outcome IS NULL
+        OR (r.id = (SELECT MAX(id) FROM ai_runs WHERE ticket_id=?) AND CAST(? AS TEXT) IS NOT NULL))
       ORDER BY r.id DESC, j.created_at, j.id
-    `, [ticket.id]);
+    `, [ticket.id, ticket.id, ticket.resume_node || null]);
     const resumeJournal = [];
     for (const { state_delta: state, ledger, ...row } of journalRows) {
       let run = resumeJournal.find((item) => String(item.run_id) === String(row.run_id));
@@ -1219,6 +1221,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       INSERT INTO ai_runs(ticket_id, attempt, trigger, outcome, worker_id, idempotency_key, created_at, updated_at)
       VALUES (?, ?, ?, NULL, ?, ?, ?, ?)
     `, [Number(ticketId), attempt, input.trigger, input.workerId, input.idempotencyKey, input.now, input.now]);
+    // The node rerun directive is one-shot: the attempt that just started owns the checkpoint decision now.
+    await db.run('UPDATE ai_tickets SET resume_node=NULL WHERE id=?', [Number(ticketId)]);
     return await db.get('SELECT * FROM ai_runs WHERE id=?', [info]);
   });
 
@@ -2039,6 +2043,7 @@ function resumeSummary(journal) {
     root.rerun_allowed = !!rerun.stage;
     root.rerun_reason = rerun.reason;
     root.rerun_warning = rerun.warning || null; // non-blocking: same objection and same pins as the attempt before
+    root.rerun_node = rerun.node || null; // the node a re-run starts at: the last saved checkpoint
     // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
     let allowance = await readRootAllowance(db, root.id);
     if (allowance && !hitRootGroup(allowance)) {
@@ -2235,17 +2240,37 @@ function resumeSummary(journal) {
       + 'probably stop the same way.';
   }
 
-  /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason, warning}. */
-  async function rerunState(root) {
-    if (!root || root.parent_id != null) return { stage: null, reason: 'Only the main request can run again.' };
-    if (root.lease_owner) return { stage: null, reason: 'A worker is running this request now. Wait until it stops.' };
-    if (await latestCandidate(root.id)) return { stage: null, reason: 'A change already exists for this request.' };
-    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return { stage: 'plan', reason: '', warning: await rerunWarning(root) };
-    if (EXEC_BLOCKED_PHASES.includes(root.phase)) return { stage: 'execute', reason: '' };
-    return { stage: null, reason: 'The request is not stopped at a step that can run again.' };
+  // A saved checkpoint covers one node: the journal's last passed node (gate_3, gate_4) is where an attempt resumes.
+  const RESUME_AFTER = { gate_3: { node: 'gate_4', gate: 4 }, gate_4: { node: 'gate_5', gate: 5 } };
+
+  /** The node an attempt can start at from the latest run's checkpoint, or null: {node, run_id, gate}. */
+  async function resumePoint(root) {
+    const run = await db.get('SELECT id FROM ai_runs WHERE ticket_id=? ORDER BY id DESC LIMIT 1', [root.id]);
+    if (!run) return null;
+    const last = await db.get(`SELECT node, outcome, state_delta FROM ai_attempt_journal
+      WHERE run_id=? AND node LIKE 'gate\\_%' ESCAPE '\\' ORDER BY created_at DESC, id DESC LIMIT 1`, [run.id]);
+    const next = last && last.outcome === 'passed' && RESUME_AFTER[last.node];
+    if (!next || (parseJson(last.state_delta) || {}).resumable === false) return null;
+    return { ...next, run_id: run.id };
   }
 
-  const rerunGateTransaction = (requestId, gate, adminUserId, now) => db.tx(async () => {
+  /** Which stage an admin may rerun now: {stage, reason, warning, node, budget_exhausted}. */
+  async function rerunState(root) {
+    if (!root || root.parent_id != null) return { stage: null, reason: 'Only the main request can run again.', node: null };
+    if (root.lease_owner) return { stage: null, reason: 'A worker is running this request now. Wait until it stops.', node: null };
+    if (await latestCandidate(root.id)) return { stage: null, reason: 'A change already exists for this request.', node: null };
+    if (PLAN_BLOCKED_PHASES.includes(root.phase)) {
+      return { stage: 'plan', reason: '', node: null, warning: await rerunWarning(root) };
+    }
+    if (EXEC_BLOCKED_PHASES.includes(root.phase)) {
+      const point = await resumePoint(root);
+      return { stage: 'execute', reason: '', node: point?.node || null, checkpoint_run: point?.run_id ?? null,
+        budget_exhausted: Number(root.cumulative_budget) >= Number(root.budget_limit) };
+    }
+    return { stage: null, reason: 'The request is not stopped at a step that can run again.', node: null };
+  }
+
+  const rerunGateTransaction = (requestId, gate, adminUserId, now, node = null) => db.tx(async () => {
     const stage = gateStage(gate);
     if (!stage) throw new WorkerContractError('unknown gate', 400, 'invalid_gate');
     const root = await lockedRequestRoot(requestId);
@@ -2260,17 +2285,33 @@ function resumeSummary(journal) {
       await requeueForReplan(root.id, { publicNote: 'Quản trị viên chạy lại việc lập kế hoạch.', budgetLimit: root.budget_limit }, now);
       await db.run(insertEvent, [root.id, 'gate_rerun', 'admin', String(adminUserId), `${root.status}->queued`,
         'Quản trị viên chạy lại việc lập kế hoạch.', `admin rerun of gate ${gate}; planning restarts at gate 1`, key, now]);
-      return { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1 };
+      return { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1, resumed_from: null };
     }
-    await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note=?,
-        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`, ['Quản trị viên chạy lại các bước kiểm tra trước PR.', now, root.id]);
+    if (allowed.budget_exhausted) {
+      throw new WorkerContractError('Ngân sách của yêu cầu đã hết; hãy gia hạn trước khi chạy lại.', 409, 'budget_exhausted');
+    }
+    if (node) {
+      if (!allowed.node) {
+        throw new WorkerContractError('Bước này chưa có checkpoint đã lưu; chạy lại cả giai đoạn từ bước 3.', 409, 'not_resumable');
+      }
+      if (node !== allowed.node) {
+        throw new WorkerContractError(`Chỉ chạy lại được từ ${allowed.node}: đó là checkpoint đã lưu gần nhất.`, 409, 'not_resumable');
+      }
+    }
+    const fromGate = allowed.node ? Number(String(allowed.node).slice(5).replace('_', '.')) : 3;
+    await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', public_note=?, resume_node=?,
+        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`,
+      ['Quản trị viên chạy lại các bước kiểm tra trước PR.', allowed.node, now, root.id]);
     await db.run(insertEvent, [root.id, 'gate_rerun', 'admin', String(adminUserId), `${root.status}->queued`,
-      'Quản trị viên chạy lại các bước kiểm tra trước PR.', `admin rerun of gate ${gate}; pre-PR gates restart at gate 3`, key, now]);
-    return { ok: true, status: 'queued', phase: 'authorized', from_gate: 3 };
+      'Quản trị viên chạy lại các bước kiểm tra trước PR.',
+      allowed.node ? `admin rerun of ${allowed.node} from checkpoint run ${allowed.checkpoint_run}`
+        : `admin rerun of gate ${gate}; no checkpoint, pre-PR gates restart at gate 3`, key, now]);
+    return { ok: true, status: 'queued', phase: 'authorized', from_gate: fromGate, resumed_from: allowed.node };
   });
 
-  async function rerunGate(requestId, gate, adminUserId) {
-    const result = await rerunGateTransaction(Number(requestId), Number(gate), Number(adminUserId), Date.now());
+  async function rerunGate(requestId, gate, adminUserId, node = null) {
+    const result = await rerunGateTransaction(Number(requestId), Number(gate), Number(adminUserId), Date.now(),
+      node ? String(node) : null);
     await recordAdminAction({ requestId }, adminUserId, 'rerun_gate');
     return result;
   }

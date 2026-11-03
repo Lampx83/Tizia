@@ -179,6 +179,22 @@ test('run again: disabled with the server reason when another stage or a live le
   assert.match(renderTicketGraph(leased, 'gate_2'), /A worker is running this request now/);
 });
 
+test('run again: only the node with the saved checkpoint keeps the button', () => {
+  const exec = {
+    root: root({ status: 'blocked', rerun_stage: 'execute', rerun_allowed: true, rerun_node: 'gate_5' }),
+    graph,
+    runs: [execRun(30, [gate(31, 3, 'passed', 10), gate(32, 4, 'passed', 11),
+      gate(33, 5, 'blocked', 12, { public_reason: 'The app fails to start.' })])],
+    events: [],
+  };
+  const g5 = renderTicketGraph(exec, 'gate_5');
+  assert.doesNotMatch(runButton(g5), /disabled/);
+  assert.match(g5, /checkpoint saved at step 5/);
+  const g3 = renderTicketGraph(exec, 'gate_3');
+  assert.match(runButton(g3), /disabled/);
+  assert.match(g3, /Run again starts at step 5: that is the last saved checkpoint\./);
+});
+
 test('run again: the repeat-objection warning shows above the enabled button only', () => {
   const warn = failed();
   warn.root.rerun_warning = 'Two attempts already stopped at step 2.5 for the same reason "plan_ungrounded".';

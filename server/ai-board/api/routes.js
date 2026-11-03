@@ -472,9 +472,12 @@ export function attachAiBoardRequestRoutes(router, {
     const gate = NODE_GATE[req.params.node];
     if (gate == null) return res.status(400).json({ error: 'invalid_node', message: 'This node cannot run again.' });
     try {
-      const result = await store.rerunGate(req.params.requestId, gate, req.user.id);
-      // Node checkpoints are not readable by admins yet, so the rerun restarts the whole stage from its first gate.
-      res.json({ ...result, node: req.params.node, resumed_from: 'stage', note: 'Runs the whole stage again from its first step. Node checkpoint resume is not available yet.' });
+      // The store checks the saved checkpoint: a node with one is re-run from there, anything else is refused.
+      const result = await store.rerunGate(req.params.requestId, gate, req.user.id, req.params.node);
+      res.json({ ...result, node: req.params.node,
+        note: result.resumed_from
+          ? `Runs again from the saved checkpoint at ${result.resumed_from}.`
+          : 'No checkpoint for this step: the stage runs again from step 3.' });
     } catch (error) { folderError(res, error); }
   });
 }

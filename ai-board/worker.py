@@ -205,7 +205,7 @@ class _Execution:
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash, journal_hook=None, resume=None, policy_hash=None):
+                 checkpoint, plan_hash, journal_hook=None, resume=None, policy_hash=None, resume_node=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
@@ -213,6 +213,7 @@ class _Execution:
         self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
         self.journal_hook = journal_hook
         self.resume = resume or []
+        self.resume_node = resume_node
         self.resume_seed: dict | None = None
         self.policy_hash = policy_hash
         self.grounded = (plan.get("grounding") or {}).get("sha")
@@ -324,6 +325,8 @@ class _Execution:
             if not produced or not base:
                 continue
             from_gate = 4 if done.get("node") == "gate_3" else 5
+            if self.resume_node and self.resume_node != f"gate_{from_gate}":
+                continue  # admin asked for another node: this journal is not its checkpoint
             scratch = Path(tempfile.mkdtemp(prefix="ai-board-change-"))
             seed = {"plan": _execution_plan(self.plan), "produced": dict(produced),
                     "base_sha": base, "scratch_repo": str(scratch), "checkout_source": str(self.checkout_source),
@@ -767,7 +770,8 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    request_detail: str | None = None, memory_path=None,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
-                   checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None) -> dict:
+                   checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None,
+                   resume_node: str | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most repair_cap() times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -791,7 +795,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
         candidate_opts=candidate_opts, request_type=request_type, eval_tasks=eval_tasks, preview_capture=preview_capture,
         checkpoint=checkpoint if checkpoint is not None or reverify else _worker_checkpoint(ticket_id, plan, plan_hash), plan_hash=plan_hash,
         journal_hook=journal, resume=None if reverify else resume, policy_hash=accepted_policy_hash,
-        **extra)
+        resume_node=resume_node, **extra)
     return execution.run()
 
 
@@ -1554,6 +1558,7 @@ class HttpWorker:
                                 + ((snapshot.get('request') or {}).get('clarified_spec')
                                    or (snapshot.get('request') or {}).get('detail') or '')),
                             should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook, resume=resume,
+                            resume_node=(snapshot.get('ticket') or {}).get('resume_node'),
                         **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                         ), ticket_id, lease,
                         on_lease_lost=lambda lost_result: self.candidates.discard((lost_result or {}).get("candidate")),
