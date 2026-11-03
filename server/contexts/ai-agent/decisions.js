@@ -16,6 +16,7 @@
 import { db, createNotification } from '../../db.js';
 import { aiBoardServices } from '../../ai-board/runtime.js';
 import { acknowledgementNote } from './ack-text.js';
+import { BOARD_SPLIT } from '../../board-split.js';
 
 // ── Schema (audit trail) — Routine ghi quyết định vào đây, dashboard đọc ra ──
 await db.exec(`
@@ -62,7 +63,8 @@ export async function acknowledgeNewRequest({ requestId, domain, title, student 
   const note = acknowledgementNote(executionMode);
   // Giữ 'pending' + lưu note tạm hiển thị cho HS (admin_note). listRequests sắp
   // theo votes/created_at nên updated_at đổi không ảnh hưởng thứ tự.
-  await aiBoardServices(db).requests.setRequestStatus(requestId, 'pending', note);
+  // Split stack: the request row and its admin_note live on aiboard-server.
+  if (!BOARD_SPLIT) await aiBoardServices(db).requests.setRequestStatus(requestId, 'pending', note);
   try {
     await createNotification({
       user_display_name: student,

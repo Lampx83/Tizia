@@ -564,6 +564,42 @@ async function ackDataStep(btn) {
   $('#data-step-result')?.focus();
 }
 
+// Quyền chạm phần bảo vệ/lõi: kế hoạch đang xin, admin quyết ngay trong trang yêu cầu.
+const ELEVATION_LEVEL_LABEL = { protected: 'bảo vệ', core: 'lõi', surface: 'bề mặt' };
+function elevationBlock(t) {
+  const e = t.root?.elevation_detail;
+  if (!e || e.state !== 'requested') return '';
+  const items = (e.scope || []).map((i) => `<li>${code(i.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[i.level] || i.level)}</span></li>`).join('');
+  return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt">
+    <div class="g-caption">Kế hoạch xin quyền chạm phần bảo vệ/lõi</div>
+    ${e.reason ? `<div class="meta">${esc(e.reason)}</div>` : ''}
+    <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>
+    <div class="row"><button class="btn ok" data-action="elevate" data-decision="approve">Duyệt quyền</button>
+      <button class="btn danger-outline" data-action="elevate" data-decision="reject">Từ chối</button></div>
+    <span class="meta" role="status" tabindex="-1" id="elevation-result">${esc(ui.elevationMsg || '')}</span></div>`;
+}
+
+async function decideElevation(btn) {
+  const approve = btn.dataset.decision === 'approve';
+  const yes = await askConfirm({
+    title: approve ? 'Duyệt quyền cho kế hoạch này?' : 'Từ chối quyền cho kế hoạch này?',
+    message: 'AI Board xin chạm vùng bảo vệ/lõi. Duyệt thì kế hoạch được lập lại với quyền đó; từ chối thì yêu cầu dừng.',
+    ok: approve ? 'Duyệt quyền' : 'Từ chối', danger: !approve,
+  });
+  if (!yes) return;
+  btn.disabled = true;
+  try {
+    await post(`/api/admin/ai-board/requests/${REQUEST_ID}/elevate`, { decision: btn.dataset.decision,
+      reason: approve ? 'Quản trị viên duyệt quyền qua trang yêu cầu.' : 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' });
+    ui.elevationMsg = approve ? 'Đã duyệt; kế hoạch sẽ được lập lại với quyền đó.' : 'Đã từ chối; yêu cầu dừng.';
+  } catch (e) {
+    ui.elevationMsg = `Không ghi nhận được: ${errText(e)}`;
+    btn.disabled = false;
+  }
+  await refresh();
+  $('#elevation-result')?.focus();
+}
+
 function renderAiBoard(t, messages = []) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
@@ -579,6 +615,7 @@ function renderAiBoard(t, messages = []) {
       ${managedLine(root.managed)}
       ${renderWrites(t)}
       ${dataSteps(t)}
+      ${elevationBlock(t)}
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
     </div>`;
   const events = minimalEvents(t.events || []);
@@ -723,6 +760,7 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; ui.focus = '[data-action="authorize-ask"]'; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'ack-data') return ackDataStep(btn);
+  else if (action === 'elevate') return decideElevation(btn);
   else if (action === 'retry-transient') return retryTransient(btn);
   else if (action === 'continue-partial') {
     btn.disabled = true;

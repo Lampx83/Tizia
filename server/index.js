@@ -78,6 +78,7 @@ import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
 import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { createNotification } from './db.js';
+import { BOARD_SPLIT } from './board-split.js';
 import { log, initErrorTracking, installProcessGuards, requestContext, requestLogger, expressErrorHandler } from './observability.js';
 // Payment context — chỉ nạp khi PAYMENT_ENABLED=1 (dynamic import bên dưới) để bảng
 // payment + route KHÔNG xuất hiện ở deployment chưa bật thanh toán.
@@ -406,16 +407,19 @@ attachAiBoardWorkerRoutes(r, {
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
 attachAiBoardShots(r, { db: aiBoard.db, requireAuth, requireAdmin });
-const scopedCrud = attachScopedCrudRoutes(r, { db: aiBoard.db, requireAuth, requireStrictCsrf, sessionToken: (req) => req.user.token });
 // Online egress control. Nothing registered (DB) or configured (env) = every operation denied.
-const onlineRegistry = createOnlineRegistry(aiBoard.db, { backendScripts: backendScriptsEnabled() });
-const onlineAdapters = adaptersFromEnv();
-const onlineReleaseGate = createReleaseGate(aiBoard.db);
-const onlineBroker = createBroker({ crud: scopedCrud, operations: onlineRegistry.operations, adapters: onlineAdapters, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit });
-attachOnlineRoutes(r, { requireAuth, requireAdmin, requireStrictCsrf, sessionToken: (req) => req.user.token, broker: onlineBroker, registry: onlineRegistry,
-  adapterNames: Object.keys(onlineAdapters), releaseAllowed: onlineReleaseGate,
-  backend: createBackendRunner({ registry: onlineRegistry, runner: backendScriptsEnabled() ? runnerFromEnv() : null, enabled: backendScriptsEnabled(), broker: onlineBroker, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit }) });
-setInterval(() => onlineRegistry.prune().catch(() => {}), 3600000).unref();
+// Split stack: these routes are proxied to aiboard-server, so the web must not mount the board store here.
+if (!BOARD_SPLIT) {
+  const scopedCrud = attachScopedCrudRoutes(r, { db: aiBoard.db, requireAuth, requireStrictCsrf, sessionToken: (req) => req.user.token });
+  const onlineRegistry = createOnlineRegistry(aiBoard.db, { backendScripts: backendScriptsEnabled() });
+  const onlineAdapters = adaptersFromEnv();
+  const onlineReleaseGate = createReleaseGate(aiBoard.db);
+  const onlineBroker = createBroker({ crud: scopedCrud, operations: onlineRegistry.operations, adapters: onlineAdapters, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit });
+  attachOnlineRoutes(r, { requireAuth, requireAdmin, requireStrictCsrf, sessionToken: (req) => req.user.token, broker: onlineBroker, registry: onlineRegistry,
+    adapterNames: Object.keys(onlineAdapters), releaseAllowed: onlineReleaseGate,
+    backend: createBackendRunner({ registry: onlineRegistry, runner: backendScriptsEnabled() ? runnerFromEnv() : null, enabled: backendScriptsEnabled(), broker: onlineBroker, releaseAllowed: onlineReleaseGate, audit: onlineRegistry.audit }) });
+  setInterval(() => onlineRegistry.prune().catch(() => {}), 3600000).unref();
+}
 
 
 r.post('/api/attempts', requireAuth, requireEnrolled, async (req, res) => {

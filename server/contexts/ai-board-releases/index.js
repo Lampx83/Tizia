@@ -8,6 +8,7 @@
 import * as asyncReleases from '../../ai-board/releases-async.js';
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 import { WorkerContractError } from '../../ai-board/repositories/store-contract.js';
+import { BOARD_SPLIT } from '../../board-split.js';
 
 const { RELEASE_STATUSES, canSee } = asyncReleases;
 
@@ -23,7 +24,8 @@ export function attachAiBoardReleases(router, { db, requireAuth, requireAdmin, r
   const { getRelease, listReleases, setReleaseStatus } = releases;
   const route = asyncRoutes(router);
   // Page gate: chỉ slug đã đăng ký release; trang thường đi tiếp như cũ.
-  router.use(async (req, res, next) => {
+  // Split stack: bảng release nằm trên DB của board, web không đọc được → không gate ở đây.
+  if (!BOARD_SPLIT) router.use(async (req, res, next) => {
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') return next();
       const m = PAGE.exec(req.path);

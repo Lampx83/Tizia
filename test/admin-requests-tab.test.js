@@ -6,9 +6,9 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../public/js/admin-dashboard.js', import.meta.url), 'utf8');
 
 test('the suggestions tab fetches only the 10 newest requests', () => {
-  assert.match(source, /\/api\/admin\/requests\?limit=10/);
+  assert.match(source, /\/api\/admin\/ai-board\/requests\?limit=10/);
   assert.doesNotMatch(source, /\/api\/admin\/requests\?limit=300/);
-  assert.match(source, /góp ý gần nhất/);
+  assert.match(source, /aria-label="Danh sách yêu cầu"/, 'the tab still shows the request table');
 });
 
 test('the suggestions badge is the number of rows actually displayed', () => {

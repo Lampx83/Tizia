@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createAppDb } from './db-core.js';
 import { applyMigrations } from './ai-board/db/index.js';
 import { resolveBootMode, assertRequiredSchema, ensureAiBoardAdditive } from './db-existing-schema.js';
+import { BOARD_SPLIT } from './board-split.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR
@@ -25,11 +26,7 @@ export const db = opened.db;
 export { DATA_DIR };
 if (EXISTING_SCHEMA) await assertRequiredSchema(db.d);
 
-// AI Board tables created at boot even in existing-schema mode; skipped when present (CREATE IF NOT EXISTS still needs schema/owner rights).
-async function createAiBoardTable(name, ddl) {
-  if (EXISTING_SCHEMA && await db.tableExists(name)) return;
-  await db.execAllowed(ddl);
-}
+// AI Board tables are created by aiboard-server on its own database; web only proxies to it (split stack).
 
 // Step 1: create tables (without indexes that reference v5 columns)
 await db.exec(`
@@ -158,8 +155,11 @@ try { await db.exec(`ALTER TABLE users ADD COLUMN enrolled_domain TEXT`); } catc
 try { await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_enrolled_domain ON users(enrolled_domain)`); } catch {}
 
 // D0 AI Board: một nguồn migration có số thứ tự, dùng chung với test store.
-if (EXISTING_SCHEMA) await ensureAiBoardAdditive(db.d);
-else await applyMigrations(db.d);
+// Split stack (docs/local/aiboard-stacks.md): board schema thuộc aiboard-server, web proxy sang đó.
+if (!BOARD_SPLIT) {
+  if (EXISTING_SCHEMA) await ensureAiBoardAdditive(db.d);
+  else await applyMigrations(db.d);
+}
 
 // Trục 4: family plan. family_links cho phép 1 PH link n con HS
 // (parent_user_id phải là role='teacher' hoặc 'student' tuổi >=18 — kiểm ở app
@@ -2025,52 +2025,3 @@ const _getSystemOwnerStmt = db.prepare(
 export async function getSystemOwnerId() {
   return (await _getSystemOwnerStmt.get())?.id || null;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SKILL PROPOSALS — lineage của mỗi skill AI board đề xuất, ghi lại mỗi lần đi
-// qua 1 cổng của harness 7-cổng (xem .scratch/ai-board-plugin-registry/spec.md).
-// Chỉ để đo/truy vết — không có code nào khác phụ thuộc bảng này để chạy.
-// ─────────────────────────────────────────────────────────────────────────────
-await createAiBoardTable('skill_proposals', `
-  CREATE TABLE IF NOT EXISTS skill_proposals (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    origin        TEXT    NOT NULL,   -- 'core-skill' | 'domain-synthesized'
-    domain        TEXT,
-    gate_reached  REAL    NOT NULL,   -- 1..7, có cổng 5.5 (risk-triage)
-    outcome       TEXT,
-    request_ids   TEXT,               -- JSON array
-    template_key  TEXT,               -- đếm N=10 rollback-sạch liên tiếp
-    budget_json   TEXT,
-    pr_url        TEXT,
-    created_at    INTEGER NOT NULL,
-    updated_at    INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_skill_proposals_template ON skill_proposals(template_key, created_at DESC);
-`);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GATE TRACE. 1 dòng mỗi lần harness gọi Ollama THẬT ở bất kỳ cổng
-// nào (1, 2.5, 3, validator) — prompt/response thật, cộng 4 field
-// prompt_eval_count/eval_count/prompt_eval_duration/eval_duration Ollama trả
-// về (bằng chứng cache-hit, xem spec.md "kỷ luật cache" rule 5). Join với
-// skill_proposals qua skill_proposal_id. Chỉ để đo/truy vết — không có code
-// nào khác phụ thuộc bảng này để chạy. Harness ghi qua sqlite3 thô, DDL này
-// là nguồn sự thật (ai-board/harness/gate_trace.py chỉ mirror cho test).
-// ─────────────────────────────────────────────────────────────────────────────
-await createAiBoardTable('gate_trace', `
-  CREATE TABLE IF NOT EXISTS gate_trace (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    skill_proposal_id    INTEGER NOT NULL,
-    gate                 REAL    NOT NULL,
-    model                TEXT,
-    prompt               TEXT,
-    raw_response         TEXT,
-    prompt_eval_count    INTEGER,
-    eval_count           INTEGER,
-    prompt_eval_duration INTEGER,
-    eval_duration        INTEGER,
-    created_at           INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_gate_trace_proposal
-    ON gate_trace(skill_proposal_id, created_at);
-`);

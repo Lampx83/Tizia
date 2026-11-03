@@ -458,6 +458,63 @@ function ownerCell(ticket) {
   return `<b>${esc(ticket.managed_by_name || '#' + ticket.managed_by)}</b>${ticket.managed_by === myAdminId ? ' <span class="pill">tôi</span>' : ''}${last}`;
 }
 
+// Quyền chạm phần bảo vệ/lõi: AI Board xin theo từng file; admin quyết ngay trong tab này.
+const ELEVATION_LEVEL_LABEL = { protected: 'bảo vệ', core: 'lõi', surface: 'bề mặt' };
+const elevationScopeText = (r) => (r.elevation_scope || [])
+  .map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`).join('<br>') || '-';
+const ELEVATION_REASON = { approve: 'Quản trị viên duyệt quyền chạm phần bảo vệ/lõi qua tab Góp ý.',
+  reject: 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' };
+
+// Danh sách yêu cầu đang chờ duyệt quyền (state 'requested'), theo đúng bộ lọc đang hiện.
+function elevationPanel(rows) {
+  const pending = rows.filter(r => r.elevation === 'requested');
+  if (!pending.length) return '';
+  return `<section class="elevation-panel" id="elevation-panel" role="region" aria-label="Quyền chờ duyệt"
+    style="border:1px solid var(--border-strong,rgba(255,255,255,.2));border-radius:10px;padding:12px 14px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b>Quyền chờ duyệt (${pending.length})</b>
+      <span style="font-size:12px;opacity:.7">AI Board xin chạm vùng bảo vệ/lõi; duyệt thì kế hoạch được lập lại với quyền đó.</span>
+      <div style="flex:1"></div>
+      <button class="btn primary" data-act="elevate-all" data-ids="${pending.map(r => r.id).join(',')}">Duyệt tất cả</button>
+    </div>
+    <ul style="margin:10px 0 0;padding-left:18px">
+      ${pending.map(r => `<li data-elevation="${r.id}" style="margin:8px 0">
+        <b>#${r.id}</b> ${esc(r.title)} · <span style="opacity:.7">${esc(r.student || '')}</span>
+        <div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
+        ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}
+        <div class="actions" style="margin-top:6px">
+          <button class="btn primary" data-act="elevate" data-rid="${r.id}" data-decision="approve">Duyệt</button>
+          <button class="btn danger" data-act="elevate" data-rid="${r.id}" data-decision="reject">Từ chối</button>
+        </div></li>`).join('')}
+    </ul>
+  </section>`;
+}
+
+// Duyệt/từ chối một yêu cầu hoặc cả lô đang hiện; xong tải lại danh sách để thấy trạng thái mới.
+async function decideElevation(ids, decision) {
+  const list = (ids || []).map(Number).filter(id => Number.isInteger(id) && id > 0);
+  if (!list.length) return;
+  const approve = decision === 'approve';
+  const one = list.length === 1 ? reqCache.find(r => r.id === list[0]) : null;
+  const yes = await askConfirm({
+    title: approve
+      ? (one ? `Duyệt quyền cho yêu cầu #${one.id}?` : `Duyệt quyền cho ${list.length} yêu cầu?`)
+      : (one ? `Từ chối quyền cho yêu cầu #${one.id}?` : `Từ chối quyền cho ${list.length} yêu cầu?`),
+    message: 'AI Board xin chạm vùng bảo vệ/lõi. Duyệt thì kế hoạch được lập lại với quyền đó; từ chối thì yêu cầu dừng.',
+    ok: approve ? (list.length > 1 ? 'Duyệt tất cả' : 'Duyệt') : 'Từ chối', danger: !approve,
+  });
+  if (!yes) return;
+  const path = list.length === 1
+    ? `/api/admin/ai-board/requests/${list[0]}/elevate`
+    : '/api/admin/ai-board/requests/0/elevate-batch';
+  const body = { decision, reason: ELEVATION_REASON[decision], ...(list.length === 1 ? {} : { ids: list }) };
+  const r = await api(path, { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) return toast(`Không ghi nhận được: ${r.data?.message || r.data?.error || r.status}`, 'err');
+  const n = Number(r.data?.approved || 0) + Number(r.data?.rejected || 0);
+  toast(approve ? `Đã duyệt ${n} yêu cầu; kế hoạch sẽ được lập lại với quyền đó.` : `Đã từ chối ${n} yêu cầu.`);
+  await loadRequests();
+}
+
 function renderRequests() {
   const ticketByRequest = new Map(aiTicketCache.map(ticket => [ticket.source_request_id, ticket]));
   const ownerOf = (r) => ticketByRequest.get(r.id)?.managed_by ?? null;
@@ -468,6 +525,7 @@ function renderRequests() {
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
+    ${elevationPanel(filtered)}
     <div class="toolbar">
       <span style="font-size:12px;opacity:.6">Lọc:</span>
       <select id="reqFilter">
@@ -487,7 +545,6 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
-    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất trong ${reqTotal} tổng.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
@@ -538,6 +595,8 @@ function renderRequests() {
   host.querySelectorAll('[data-act]').forEach(b => {
     b.addEventListener('click', () => {
       const id = Number(b.dataset.rid);
+      if (b.dataset.act === 'elevate') return decideElevation([id], b.dataset.decision);
+      if (b.dataset.act === 'elevate-all') return decideElevation(String(b.dataset.ids || '').split(','), 'approve');
       if (b.dataset.act === 'reply') openReplyModal(id);
       else if (b.dataset.act === 'delreq') {
         const r = reqCache.find(x => x.id === id);
@@ -561,7 +620,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=lifecycle`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=elevation1`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();

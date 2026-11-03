@@ -10,6 +10,11 @@ Schema plan (hợp đồng với cổng 2, 2.5, 3 và worker.HarnessPlanner._can
   ]
 }
 
+Plan chạm path protected/core (mức tính ở runtime/levels.py) KHÔNG bị lỗi cứng: cổng trả
+`elevation_required` + `elevation_required.required = [{path, level, why}]` để server lưu và
+hỏi admin; ticket đã mang `elevation` được duyệt đúng scope thì plan đi tiếp. Path AI Board
+(ai-board/**, server/ai-board/**) thì luôn ValueError — elevation không mở vùng đó.
+
 Prompt = context.manual() (AIBOARD.md) + prompts/brainstorm.md; phần {context} lấy từ
 context.build_context(gate 1): harness chọn skill theo request, chạy tool của skill
 (outline/tree/grep/graph/lessons ở 1 sha) rồi mới dựng prompt — model thấy css/js liên kết
@@ -28,7 +33,7 @@ import context
 import functional
 from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
-from runtime import limits
+from runtime import levels, limits
 from runtime.plan_merge import merge_same_file
 from settings import get_settings
 
@@ -165,12 +170,18 @@ def parse_plan(text: str) -> dict:
     return plan
 
 
-def check_files(plan: dict, source, sha: str | None) -> None:
+def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
     """Mỗi subtask.file phải có ở `sha` hoặc là đường mới được phép; không 2 subtask cùng file.
     Ghi lại file đã chuẩn hoá (posix, bỏ ./) và layer (suy ra nếu thiếu). Raise ValueError nêu file sai.
-    sha None → chỉ kiểm trùng/đường dẫn, không kiểm tồn tại."""
+    sha None → chỉ kiểm trùng/đường dẫn, không kiểm tồn tại.
+    Target protected/core chưa được `approved` phủ → raise ElevationRequired (gate trả elevation_required).
+    Vùng AI Board thì luôn raise ValueError, elevation không mở."""
     import path_policy
+    scope = levels.scope_entries(approved) if approved else []
+    plan_hash = levels.fingerprint(plan)
     seen: list[str] = []
+    granted: set[str] = set()
+    pending: list[str] = []
     db_files: list[str] = []
     for st in plan["subtasks"]:
         file = st["file"] = posixpath.normpath(st["file"].strip().replace("\\", "/").lstrip("./"))
@@ -179,16 +190,25 @@ def check_files(plan: dict, source, sha: str | None) -> None:
         seen.append(file)
         st["layer"] = st.get("layer") or infer_layer(file)
         denied = path_policy.check(file, "write")
-        if not denied["allow"]:
-            raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
+        decision = levels.write_check(file, scope, plan_hash)
+        if not decision["allow"]:
+            if decision["level"] in (levels.SELF, levels.SURFACE):
+                raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
+            # Hoãn: path chưa có trong repo thì trả lỗi sửa được (model chọn lại) trước khi xin elevation.
+            pending.append(file)
+        elif decision["level"] != levels.SURFACE:
+            granted.add(file)
         if st["layer"] == "db":
-            if not DB_MIGRATION.match(file):
+            if not DB_MIGRATION.match(file) and file not in granted and file not in pending:
                 raise ValueError("subtask db phải là migration mới: {file} (mẫu server/contexts/_ai-generated/<name>/migrations/<file>.sql)")
-            db_files.append(file)
-        elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT):
+            if DB_MIGRATION.match(file):
+                db_files.append(file)
+        elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT) and file not in granted and file not in pending:
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
-    must_exist = [f for f in seen if not _NEW_OK.match(f)]
+    must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
     if sha is None:
+        if pending:
+            raise levels.ElevationRequired(levels.requirements(plan), plan)
         return
     try:  # 1 tiến trình git cho mọi file
         found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *must_exist)
@@ -202,6 +222,8 @@ def check_files(plan: dict, source, sha: str | None) -> None:
         raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
     if existing_migrations:
         raise ValueError(f"migration '{sorted(existing_migrations)[0]}' đã tồn tại — migration phải additive (file mới)")
+    if pending:
+        raise levels.ElevationRequired(levels.requirements(plan), plan)
 
 
 SEARCH_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "search_terms.md").read_text(encoding="utf-8")
@@ -303,7 +325,16 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
             judge(stage, True, plan.get("summary_vi", ""))
             stage = "files exist"
-            check_files(plan, source, commit)
+            scope = levels.approved_scope(request, None, plan)
+            check_files(plan, source, commit, scope)
+            # Script/verify target cũng tính: chạy script trong vùng protected/core cần đúng mức đó.
+            needs = levels.requirements(plan)
+            boarded = [item for item in needs if item["level"] == levels.SELF]
+            if boarded:
+                raise ValueError(f"file '{boarded[0]['path']}' nằm ngoài vùng được phép: vùng AI Board luôn bị chặn")
+            missing = levels.uncovered(needs, scope, levels.fingerprint(plan))
+            if missing:
+                raise levels.ElevationRequired(missing, plan)
             grounding_paths.check_references(plan, source, commit, request)
             judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
             stage = "renderer match"
@@ -334,6 +365,13 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
                                    f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
+        except levels.ElevationRequired as e:
+            judge(stage, False, str(e))
+            # Plan giữ nguyên trong kết quả: server lưu lại rồi hỏi admin duyệt đúng scope này.
+            return {**levels.blocked_result(1, e.required, plan), "plan": plan, "skill": ctx["skill"],
+                    "context_chars": ctx["chars"], "repo_context": ctx["text"],
+                    "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match"),
+                    **({"react_quotes": react["quotes"]} if react else {})}
         except ValueError as e:
             judge(stage, False, str(e))
             reason = str(e)
