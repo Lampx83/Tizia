@@ -32,7 +32,7 @@ test('node rerun is admin only; the owner gets 403 and the store is never called
 });
 
 test('node rerun maps each node to its gate: 1-2.5 re-plan, 3-5.5 redo execution', async () => {
-  const srv = await serve('admin', async (_id, gate) => ({ ok: true, from_gate: gate }));
+  const srv = await serve('admin', async (_id, gate) => ({ ok: true, from_gate: gate, resumed_from: null }));
   try {
     const map = { gate_1: 1, gate_2: 2, gate_2_5: 2.5, gate_3: 3, gate_4: 4, gate_5: 5, gate_5_5: 5.5 };
     for (const [node, gate] of Object.entries(map)) {
@@ -40,11 +40,20 @@ test('node rerun maps each node to its gate: 1-2.5 re-plan, 3-5.5 redo execution
       assert.equal(response.status, 200, node);
       const body = await response.json();
       assert.equal(body.node, node);
-      assert.equal(body.resumed_from, 'stage');
-      assert.match(body.note, /whole stage again/);
+      assert.equal(body.resumed_from, null); // no checkpoint in this stub: the store answers with the plan
+      assert.match(body.note, /stage runs again from step 3/);
     }
     assert.deepEqual(srv.calls.map(c => c[1]), Object.values(map));
-    assert.deepEqual(srv.calls[0], ['7', 1, 9]);
+    assert.deepEqual(srv.calls[0], ['7', 1, 9, 'gate_1']);
+  } finally { await srv.close(); }
+});
+
+test('node rerun reports the checkpoint it resumed from', async () => {
+  const srv = await serve('admin', async () => ({ ok: true, resumed_from: 'gate_5' }));
+  try {
+    const body = await (await srv.post('gate_5')).json();
+    assert.equal(body.resumed_from, 'gate_5');
+    assert.match(body.note, /saved checkpoint at gate_5/);
   } finally { await srv.close(); }
 });
 

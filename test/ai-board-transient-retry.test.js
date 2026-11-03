@@ -166,7 +166,7 @@ test('rerunning a failed pre-PR gate requeues the approved plan from gate 3, wha
     await db.prepare('UPDATE ai_tickets SET lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?').run(ticket.id); // worker released it
     assert.equal((await rootOf(db, ticket.id)).phase, phase);
     const request = (await db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(ticket.id)).id;
-    assert.deepEqual({ ...await store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'authorized', from_gate: 3 });
+    assert.deepEqual({ ...await store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'authorized', from_gate: 3, resumed_from: null });
     const after = await rootOf(db, ticket.id);
     assert.deepEqual([after.status, after.phase, after.lease_owner], ['queued', 'authorized', null]);
     assert.ok(after.plan_hash, 'the approved plan is kept');
@@ -182,7 +182,7 @@ test('rerunning a failed planning gate drops the plan and replans from gate 1 wi
     await db.prepare("UPDATE ai_tickets SET status='waiting', phase='precheck_blocked', lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL WHERE id=?").run(ticket.id);
     const request = (await db.prepare('SELECT source_request_id AS id FROM ai_tickets WHERE id=?').get(ticket.id)).id;
     const before = (await rootOf(db, ticket.id)).auto_rounds;
-    assert.deepEqual({ ...await store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1 });
+    assert.deepEqual({ ...await store.rerunGate(request, gate, 9) }, { ok: true, status: 'queued', phase: 'needs_replan', from_gate: 1, resumed_from: null });
     const after = await rootOf(db, ticket.id);
     assert.deepEqual([after.status, after.phase, after.plan_hash], ['queued', 'needs_replan', null]);
     assert.equal(after.auto_rounds, Math.max(before - 1, 0), 'an admin rerun does not eat an automatic round');
