@@ -210,3 +210,20 @@ def test_the_campus_subtask_cannot_borrow_the_name_from_the_page_task():
     ]}
     assert coverage.requested_missing(plan, coverage.user_text({"detail": REQUEST_16})) == [
         'chữ "Sổ tay Git" trong public/campus-proto/b-iso-canvas.html']
+
+
+def test_every_file_named_in_the_sentence_must_carry_the_item():
+    from runtime import coverage
+    text = 'Thêm tên "Sổ tay Git" trong public/a.html và public/b.html.'
+    plan = {"subtasks": [
+        {"file": "public/a.html", "title": "Sổ tay Git", "verify": "node --test test/t.test.js"},
+        {"file": "public/b.html", "title": "Cập nhật", "verify": "node --test test/t.test.js"},
+    ]}
+    assert coverage.requested_missing(plan, text) == ['chữ "Sổ tay Git" trong public/b.html']
+
+
+def test_a_file_path_alone_does_not_cover_the_name():
+    from runtime import coverage
+    text = 'Tạo trang tên "Sổ tay Git" ở public/so-tay-git.html.'
+    plan = {"subtasks": [{"file": "public/so-tay-git.html", "title": "Trang mới", "verify": "node --test test/t.test.js"}]}
+    assert coverage.requested_missing(plan, text) == ['chữ "Sổ tay Git" trong public/so-tay-git.html']

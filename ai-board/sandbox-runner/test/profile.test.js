@@ -5,7 +5,7 @@ import YAML from 'yaml';
 
 import { assertProfile, loadPolicy } from '../src/policy.js';
 
-const DEV_HASH = 'd51f030e8a4957031e41c5d30bdc986a7682e5b6a8632d50a1b6f4f669914bc7';
+const DEV_HASH = '4cb441cf706d3b8947ec9e6faa4b20a03327085d95c139c309eaea2178ec7487';
 const policyFile = (name) => new URL(`../${name}`, import.meta.url);
 const readPolicy = (name) => loadPolicy(readFileSync(policyFile(name), 'utf8'));
 const compose = (name) => YAML.parse(readFileSync(new URL(`../../../${name}`, import.meta.url), 'utf8'));
