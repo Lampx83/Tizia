@@ -1,4 +1,4 @@
-// GET /api/admin/requests/count: admin only; requests_pending = rows with status 'pending' (badge số tab Góp ý).
+// GET /api/admin/requests/count: admin only; requests_pending = rows with status 'pending' (KPI "Góp ý chờ").
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
