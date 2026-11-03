@@ -301,6 +301,17 @@ class Mismatch(ValueError):
         self.evidence = {'why': message, **evidence}
 
 
+def _named_new_files(plan, files, request):
+    """New files named in the request, or inside a requested folder (>=2 segments): explicit targets."""
+    text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
+    added = [st["file"] for st in plan.get("subtasks") or [] if st.get("file") not in files]
+
+    def named(path):
+        parts = path.split("/")
+        return path in text or any("/".join(parts[:i]) + "/" in text for i in range(2, len(parts)))
+
+    return [path for path in added if named(path)]
+
 def filled_grounding(validation: dict, plan: dict, files: dict, asserted: bool = False) -> list:
     """Grounding records for every subtask. A new file has no source line to quote, so the harness can state
     its before/after/verify from the subtask itself; an existing file still needs the validator's own record."""
@@ -728,7 +739,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 state['oracle_conflict'] = 'plan không sửa renderer oracle gợi ý: ' + ', '.join(sorted(required))
                 judge('oracle advisory', True, state['oracle_conflict'])
             if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
-                raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
+                if _named_new_files(plan, files, request):
+                    state['renderer_advisory'] = 'plan adds requested new files; renderer constraint is advisory'
+                    judge('renderer advisory', True, state['renderer_advisory'])
+                else:
+                    raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
             contradicted = literal_contradicts(request, state.get('best_match'), files,
                                                state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
             if anchored and not contradicted:
