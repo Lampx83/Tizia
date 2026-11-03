@@ -19,7 +19,8 @@ const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
-const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null };
+const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null,
+  elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '' };
 let view = null;
 
 async function api(path, options = {}) {
@@ -566,32 +567,122 @@ async function ackDataStep(btn) {
 
 // Quyền chạm phần bảo vệ/lõi: kế hoạch đang xin, admin quyết ngay trong trang yêu cầu.
 const ELEVATION_LEVEL_LABEL = { protected: 'bảo vệ', core: 'lõi', surface: 'bề mặt' };
+const ELEVATION_RISK = {
+  high: { tone: 'bad', label: 'Cao' }, medium: { tone: 'warn', label: 'Trung bình' },
+  low: { tone: 'ok', label: 'Thấp' }, unknown: { tone: 'idle', label: 'Chưa đánh giá được' },
+};
+const ELEVATION_REC_LABEL = { approve: 'có thể duyệt', review: 'cần xem thêm', reject: 'không nên duyệt' };
+const elevationPathTag = (row) => (row.named_in_request
+  ? '<span class="pill">có trong yêu cầu</span>'
+  : row.in_plan ? '<span class="pill">chỉ có trong kế hoạch</span>' : '<span class="pill warn">không có trong yêu cầu/plan</span>');
+
+// Ngữ cảnh duyệt: tải một lần khi trang thấy yêu cầu đang chờ; lỗi thì hiện đường thử lại.
+async function ensureElevationContext(trace) {
+  if (ui.elevationContextLoading) return false;
+  if (trace?.root?.elevation_detail?.state !== 'requested') return false;
+  if (ui.elevationContext) return false;
+  ui.elevationContextLoading = true;
+  try {
+    // Lần đầu có thể phải gọi model đánh giá rủi ro: chờ lâu hơn timeout mặc định của trang.
+    const r = await api(`/api/admin/ai-board/requests/${REQUEST_ID}/elevation-context`,
+      { signal: AbortSignal.timeout(45000) });
+    ui.elevationContext = r.ok && r.data?.context ? r.data.context : { error: r.data?.message || r.data?.error || `HTTP ${r.status}` };
+  } catch (error) {
+    ui.elevationContext = { error: errText(error) };
+  } finally {
+    ui.elevationContextLoading = false;
+  }
+  return true;
+}
+
+// Thẻ duyệt: duyệt cái gì · vì sao · rủi ro · bằng chứng. Duyệt cần lý do admin gõ + xác nhận lần hai.
+function elevationContextCard(ctx) {
+  if (ctx?.error) {
+    return `<div class="err">Không tải được ngữ cảnh duyệt: ${esc(ctx.error)}
+      <button class="btn" data-action="elevation-retry">Thử lại</button></div>`;
+  }
+  if (!ctx) return '<div class="meta" role="status">Đang tải ngữ cảnh duyệt…</div>';
+  const risk = ctx.risk || { level: 'unknown', reasons: [], recommendation: 'review', questions: [] };
+  const badge = ELEVATION_RISK[risk.level] || ELEVATION_RISK.unknown;
+  const scope = ctx.elevation?.scope || [];
+  const steps = ctx.plan?.steps || [];
+  const evidence = ctx.evidence || {};
+  return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
+    <div class="g-caption">Duyệt cái gì</div>
+    <ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+    ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
+    : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
+    <div class="g-caption">Vì sao</div>
+    <div>${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
+    ${ctx.request?.excerpt ? `<blockquote class="meta" style="white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</blockquote>` : ''}
+    <div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}${ctx.flags?.plan_missing ? ' Không có bước kế hoạch để đối chiếu.' : ''}</div>
+    <div class="g-caption">Rủi ro</div>
+    <div>${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
+    ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'rủi ro cao; đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
+    ${risk.reasons?.length ? `<ul>${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
+    ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <div class="g-caption">Bằng chứng</div>
+    <div class="meta">plan ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · revision ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · revision ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>
+  </div>`;
+}
+
 function elevationBlock(t) {
   const e = t.root?.elevation_detail;
   if (!e || e.state !== 'requested') return '';
+  const ctx = ui.elevationContext;
+  const blocked = !ctx || ctx.error || ctx.flags?.self_scope;
   const items = (e.scope || []).map((i) => `<li>${code(i.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[i.level] || i.level)}</span></li>`).join('');
-  return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt">
-    <div class="g-caption">Kế hoạch xin quyền chạm phần bảo vệ/lõi</div>
+  // Có ngữ cảnh thì thẻ đã chứa phạm vi + lý do: không lặp lại danh sách cũ ở trên.
+  const summary = ctx && !ctx.error ? '' : `<div class="g-caption">Kế hoạch xin quyền chạm phần bảo vệ/lõi</div>
     ${e.reason ? `<div class="meta">${esc(e.reason)}</div>` : ''}
-    <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>
-    <div class="row"><button class="btn ok" data-action="elevate" data-decision="approve">Duyệt quyền</button>
+    <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>`;
+  return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt">
+    ${summary}
+    ${elevationContextCard(ctx)}
+    <div class="row">
+      <input id="elevation-reason" data-elevation-reason maxlength="1000" placeholder="Lý do duyệt (bắt buộc)" aria-label="Lý do duyệt"
+        value="${esc(ui.elevationReason || '')}" style="flex:1;min-width:220px">
+      <button class="btn ok" ${blocked ? 'disabled ' : ''}data-action="elevate" data-decision="approve">Duyệt quyền</button>
       <button class="btn danger-outline" data-action="elevate" data-decision="reject">Từ chối</button></div>
     <span class="meta" role="status" tabindex="-1" id="elevation-result">${esc(ui.elevationMsg || '')}</span></div>`;
 }
 
 async function decideElevation(btn) {
   const approve = btn.dataset.decision === 'approve';
+  const ctx = ui.elevationContext;
+  const reason = (ui.elevationReason || '').trim();
+  if (approve && reason.length < 3) {
+    ui.elevationMsg = 'Ghi lý do duyệt trước khi duyệt.';
+    render();
+    $('#elevation-reason')?.focus();
+    return;
+  }
+  if (approve && (!ctx || ctx.error || ctx.flags?.self_scope)) {
+    ui.elevationMsg = ctx?.error ? 'Chưa tải được ngữ cảnh duyệt; tải lại trang trước khi duyệt.' : 'Phạm vi này không được cấp.';
+    render();
+    return;
+  }
+  const risk = ctx?.risk;
+  const lines = approve ? (ctx?.elevation?.scope || []).map((row) => `${row.path} · mức ${ELEVATION_LEVEL_LABEL[row.level] || row.level}`) : [];
   const yes = await askConfirm({
     title: approve ? 'Duyệt quyền cho kế hoạch này?' : 'Từ chối quyền cho kế hoạch này?',
-    message: 'AI Board xin chạm vùng bảo vệ/lõi. Duyệt thì kế hoạch được lập lại với quyền đó; từ chối thì yêu cầu dừng.',
-    ok: approve ? 'Duyệt quyền' : 'Từ chối', danger: !approve,
+    message: approve
+      ? (risk?.level === 'high'
+        ? 'CẢNH BÁO rủi ro cao: đọc kỹ phạm vi và các bước ở trên. Duyệt thì kế hoạch được lập lại với quyền đó và lý do của bạn được lưu vào vết kiểm toán.'
+        : risk?.level === 'unknown'
+          ? 'Hệ thống chưa đánh giá được rủi ro; tự đọc phạm vi và các bước trước khi duyệt. Lý do của bạn được lưu vào vết kiểm toán.'
+          : 'Duyệt thì kế hoạch được lập lại với quyền đó. Lý do bạn ghi được lưu vào vết kiểm toán.')
+      : 'AI Board xin chạm vùng bảo vệ/lõi. Từ chối thì yêu cầu dừng.',
+    lines, ok: approve ? 'Duyệt quyền' : 'Từ chối', danger: !approve,
   });
   if (!yes) return;
   btn.disabled = true;
   try {
     await post(`/api/admin/ai-board/requests/${REQUEST_ID}/elevate`, { decision: btn.dataset.decision,
-      reason: approve ? 'Quản trị viên duyệt quyền qua trang yêu cầu.' : 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' });
+      reason: reason || (approve ? '' : 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.') });
     ui.elevationMsg = approve ? 'Đã duyệt; kế hoạch sẽ được lập lại với quyền đó.' : 'Đã từ chối; yêu cầu dừng.';
+    ui.elevationContext = null;
+    ui.elevationReason = '';
   } catch (e) {
     ui.elevationMsg = `Không ghi nhận được: ${errText(e)}`;
     btn.disabled = false;
@@ -703,6 +794,8 @@ async function refresh() {
   if (ui.traceError) ui.flash = ui.traceError;
   if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
   render();
+  // Ngữ cảnh duyệt elevation tải sau (có thể một lần gọi model): vẽ trước để trang không đứng chờ.
+  ensureElevationContext(view.trace).then(changed => { if (changed) render(); }).catch(() => {});
   return true;
   } catch (e) {
     stopLiveTrace();
@@ -746,9 +839,13 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
+// Lý do duyệt do admin gõ: giữ qua các lần vẽ lại (patchHtml) và gửi kèm quyết định.
+document.addEventListener('input', (e) => {
+  const input = e.target.closest('[data-elevation-reason]');
+  if (input) ui.elevationReason = input.value;
+});
 document.addEventListener('click', e => {
-  const node = e.target.closest('#app [data-node]');
-  if (node && !e.target.closest('[data-action]') && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
+  const node = e.target.closest('#app [data-node]');  if (node && !e.target.closest('[data-action]') && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
   const btn = e.target.closest('[data-action]');
   if (!btn || btn.disabled) return;
   const action = btn.dataset.action;
@@ -761,6 +858,10 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'ack-data') return ackDataStep(btn);
   else if (action === 'elevate') return decideElevation(btn);
+  else if (action === 'elevation-retry') {
+    ui.elevationContext = null;
+    ensureElevationContext(view?.trace).then(changed => { if (changed) render(); });
+  }
   else if (action === 'retry-transient') return retryTransient(btn);
   else if (action === 'continue-partial') {
     btn.disabled = true;

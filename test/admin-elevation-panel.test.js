@@ -17,16 +17,17 @@ test('the requests tab lists only pending elevations with path, level and the re
   assert.doesNotMatch(dashboard, /elevation === 'approved'.*data-act="elevate"/, 'only requested ones get buttons');
 });
 
-test('"Duyệt tất cả" batches exactly the pending ids on screen', () => {
-  assert.match(dashboard, /data-act="elevate-all" data-ids="\$\{pending\.map\(r => r\.id\)\.join\(','\)\}"/);
+test('"Duyệt tất cả" batches only reviewed, unflagged pending ids on screen', () => {
+  assert.match(dashboard, /const eligible = pending\.filter\(elevationBatchEligible\)/);
+  assert.match(dashboard, /data-act="elevate-all" data-ids="\$\{eligible\.map\(r => r\.id\)\.join\(','\)\}"/);
   assert.match(dashboard, /String\(b\.dataset\.ids \|\| ''\)\.split\(','\)/, 'ids come from the rendered button');
   assert.match(dashboard, /\/api\/admin\/ai-board\/requests\/0\/elevate-batch/);
   assert.match(dashboard, /list\.length === 1[\s\S]{0,120}\/elevate`/);
 });
 
 test('every decision goes through askConfirm, posts a reason and reloads the list', () => {
-  assert.match(dashboard, /await askConfirm\(\{[\s\S]{0,400}title: approve/);
-  assert.match(dashboard, /reason: ELEVATION_REASON\[decision\]/, 'the server requires a reason');
+  assert.match(dashboard, /await askConfirm\(\{[\s\S]{0,900}title: approve/);
+  assert.match(dashboard, /reason: \(approve \? typed : typed \|\| ELEVATION_REASON\[decision\]\)/, 'the server requires a reason');
   assert.match(dashboard, /await loadRequests\(\);/, 'refresh after the action');
   assert.match(dashboard, /if \(!r\.ok\) return toast\(/, 'failures surface through the existing toast');
 });

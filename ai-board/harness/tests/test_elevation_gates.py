@@ -4,7 +4,7 @@ import pytest
 
 from budget import Budget
 from conftest import FakeModels, deps_with
-from gates import brainstorm, plan_validate
+from gates import brainstorm, plan_validate, scope_check
 from runtime import levels
 
 
@@ -177,3 +177,88 @@ def test_complexity_signals_unchanged_without_elevation(level):
     plan = protected_plan()
     assert plan_validate.complexity_signals(plan) == ["file ngoài vùng an toàn: server/contexts/content/index.js"]
     assert plan_validate.complexity_signals(plan, {"server/contexts/content/index.js"}) == []
+
+
+# ── cổng 2 ──────────────────────────────────────────────────────────────────
+
+CATALOG = {
+    "public.ui": {"tier": "surface", "allow": ["public/"], "deny": []},
+    "generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"], "deny": []},
+    "content.write": {"tier": "protected", "allow": ["server/contexts/content/", "public/"], "deny": []},
+    "core.server": {"tier": "core", "allow": ["server/", "scripts/"], "deny": []},
+}
+
+
+def capability_plan(cap, file):
+    return {"summary_vi": "x", "capabilities": [cap],
+            "subtasks": [{"title": "a", "file": file, "verify": "v", "size": "small"}]}
+
+
+def gate_two(plan, **extra):
+    return scope_check.run({"plan": plan, "catalog": CATALOG}, request_for(plan, **extra))
+
+
+def test_gate_2_blocks_a_core_capability_without_elevation():
+    out = gate_two(capability_plan("core.server", "server/db.js"))
+
+    assert out["blocked"] is True
+    assert "core.server" in out["reason"]
+
+
+def test_gate_2_lets_a_core_capability_through_with_an_approved_core_scope():
+    plan = capability_plan("core.server", "server/db.js")
+    out = gate_two(plan, elevation=approved("server/db.js", "core"))
+
+    assert out["blocked"] is False, out
+
+
+def test_gate_2_accepts_a_folder_scope_for_its_children():
+    plan = capability_plan("core.server", "server/db.js")
+    out = gate_two(plan, elevation={"status": "approved", "scope": [{"path": "server/", "level": "core"}]})
+
+    assert out["blocked"] is False, out
+
+
+def test_gate_2_lets_a_protected_capability_through_with_the_matching_scope():
+    plan = capability_plan("content.write", "server/contexts/content/index.js")
+    assert gate_two(plan)["blocked"] is True
+    assert gate_two(plan, elevation=approved("server/contexts/content/index.js", "protected"))["blocked"] is False
+
+
+def test_gate_2_blocks_when_the_approved_scope_covers_another_path():
+    plan = capability_plan("core.server", "server/db.js")
+    out = gate_two(plan, elevation=approved("server/contexts/content/index.js", "protected"))
+
+    assert out["blocked"] is True
+
+
+def test_gate_2_blocks_a_pending_or_denied_elevation():
+    plan = capability_plan("core.server", "server/db.js")
+    for elevation in ({"status": "requested", "scope": [{"path": "server/db.js", "level": "core"}]},
+                      {"status": "rejected", "scope": [{"path": "server/db.js", "level": "core"}]}):
+        assert gate_two(plan, elevation=elevation)["blocked"] is True, elevation
+
+
+def test_gate_2_blocks_ai_board_paths_even_with_an_approved_scope():
+    plan = capability_plan("core.server", "ai-board/worker.py")
+    out = gate_two(plan, elevation=approved("ai-board/worker.py", "self"))
+
+    assert out["blocked"] is True
+
+
+def test_gate_2_reads_the_elevation_from_state_too():
+    plan = capability_plan("core.server", "server/db.js")
+    state = {"plan": plan, "catalog": CATALOG, "elevation": approved("server/db.js", "core")}
+    assert scope_check.run(state)["blocked"] is False
+
+    state = {"plan": plan, "catalog": CATALOG}
+    assert scope_check.run(state)["blocked"] is True
+
+
+def test_gate_2_still_blocks_a_surface_plugin_importing_core():
+    # Elevation cho server/db.js không mở đường cho capability core.server trên file surface.
+    plan = capability_plan("core.server", "server/contexts/_ai-generated/faq/index.js")
+    out = gate_two(plan, elevation=approved("server/db.js", "core"))
+
+    assert out["blocked"] is True
+

@@ -26,6 +26,7 @@ import { createRootAllowanceService } from '../services/root-allowance.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
 import { classifierConfigured, environment, getSettings } from '../settings.js';
+import { assessElevationRisk, applyRiskFloor } from '../services/elevation-risk.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -44,6 +45,7 @@ export function attachAiBoardRequestRoutes(router, {
   needsProfile = () => false, // (user) → true while the onboarding is unanswered (admin never)
   onClarify = null, // ({requestId, domain, title, student}) when a new request waits for clarification (bell)
   aux = asyncAux, // helper modules (aux-async.js)
+  assessElevation = assessElevationRisk, // (context) → risk; test seam cho model giả
 }) {
   const route = asyncRoutes(router);
   if(store.db) attachLessonReviewRoutes(router,{db:store.db,requireAuth,requireStrictCsrf});
@@ -502,6 +504,37 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
   });
+  // Ngữ cảnh duyệt elevation: nội dung yêu cầu, scope + plan steps, cờ tất định và đánh giá rủi ro
+  // (một lần gọi model cho mỗi plan_hash+scope, có cache). Chỉ đọc; không tự duyệt gì.
+  route.get('/api/admin/ai-board/requests/:id/elevation-context', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const context = store.elevationContext ? await store.elevationContext(req.params.id) : null;
+      if (!context) return res.status(404).json({ error: 'request_not_found' });
+      let risk = null;
+      if (context.elevation.state === 'requested') {
+        try {
+          risk = applyRiskFloor(await assessElevation({ db: store.db, context }), context.flags);
+        } catch {
+          risk = applyRiskFloor({ level: 'unknown', reasons: ['Không đánh giá được rủi ro; cần người xem.'],
+            recommendation: 'review', questions: [], source: 'unknown', cached: false }, context.flags);
+        }
+      }
+      res.json({ ok: true, context: { ...context, risk } });
+    } catch (error) { folderError(res, error); }
+  });
+  // Ngữ cảnh cho cả lô (không gọi model): danh sách nhỏ để tab yêu cầu biết trước cờ, chi tiết vẫn theo từng yêu cầu.
+  route.get('/api/admin/ai-board/elevation-context', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const ids = [...new Set(String(req.query.ids || '').split(',').map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0))].slice(0, 20);
+      const contexts = {};
+      for (const id of ids) {
+        const context = store.elevationContext ? await store.elevationContext(id) : null;
+        if (context) contexts[id] = context;
+      }
+      res.json({ ok: true, contexts });
+    } catch (error) { folderError(res, error); }
+  });
   // Quyền nâng mức của AI Board: duyệt/từ chối từng yêu cầu hoặc cả lô. Duyệt thì vé về hàng đợi lập lại kế hoạch.
   const elevationReply = ({ approved = 0, rejected = 0, state = null }) => ({
     ok: true, approved, rejected, ...(state ? { state } : {}),
@@ -712,6 +745,7 @@ export function attachAiBoardWorkerRoutes(router, {
     if (!root) return res.status(404).json({ error: 'request_not_found' });
     res.json(await store.requestElevation(root.source_request_id, {
       paths: req.body?.paths ?? req.body?.scope ?? req.body?.required, levels: req.body?.levels, reason: req.body?.reason,
+      plan_hash: req.body?.plan_hash, plan_revision: req.body?.plan_revision, plan: req.body?.plan,
       actorId: req.body?.worker_id,
     }));
   }));

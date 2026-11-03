@@ -1,6 +1,7 @@
 // Async AI board store on the db contract (db/index.js). Parity tests in test/ai-board-async-*.test.js compare final board state per feature.
 import { behaviorMetrics } from '../services/behavior.js';
 import { randomBytes } from 'node:crypto';
+import { AI_BOARD_SCOPE, buildElevationContext, normalizePlanSummary } from '../elevation-context.js';
 import { runnableOrders, splitGates } from '../security/step-gate.js';
 import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../security/policy.js';
 import { check as checkPath, normalizePath } from '../security/path-policy.js';
@@ -1462,7 +1463,7 @@ function resumeSummary(journal) {
   // không ai được cấp, kể cả quản trị viên.
   const LEVEL_RANK = { surface: 0, protected: 1, core: 2 };
   const ELEVATION_DECISIONS = new Set(['approve', 'reject']);
-  const AI_BOARD_SCOPE = /^(?:server\/)?ai-board(?:\/|$)/i;
+  // AI_BOARD_SCOPE (../elevation-context.js) là cùng vùng tự sửa mà context duyệt dùng để cảnh báo.
   // Path không khai báo mức (hoặc mức lạ) → mức chặt nhất: server không tự hạ mức cho worker.
   const strictestLevel = (value) => (Object.hasOwn(LEVEL_RANK, value) ? value : 'core');
 
@@ -1512,6 +1513,37 @@ function resumeSummary(journal) {
   async function elevationOf(requestId) {
     const row = await elevationRow(requestId);
     return row ? elevationView(row) : null;
+  }
+
+  /**
+   * Dữ liệu để admin duyệt có căn cứ: nội dung yêu cầu, scope đang xin, snapshot lúc worker xin (plan_hash,
+   * plan steps) và plan hiện tại nếu có. null khi yêu cầu/ticket không tồn tại.
+   */
+  async function elevationContext(requestId) {
+    const request = await db.get(`SELECT q.id, q.title, q.detail, q.clarified_spec, q.created_at, q.owner_user_id,
+      u.role AS owner_role FROM requests q LEFT JOIN users u ON u.id = q.owner_user_id WHERE q.id=?`, [Number(requestId)]);
+    if (!request) return null;
+    const root = await db.get(`SELECT id, status, phase, plan_hash, plan_revision, elevation, elevation_scope,
+      elevated_by, elevated_at, elevation_reason FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL`,
+    [Number(requestId)]);
+    if (!root) return null;
+    const askedRow = await db.get(`SELECT actor_type, actor_id, internal_detail, created_at FROM ai_events
+      WHERE ticket_id=? AND event_type='elevation_requested' ORDER BY id DESC LIMIT 1`, [root.id]);
+    const asked = askedRow ? { actor_type: askedRow.actor_type, actor_id: askedRow.actor_id,
+      created_at: askedRow.created_at, detail: parseJson(askedRow.internal_detail) ?? {} } : null;
+    const current = root.plan_hash ? await db.get(`SELECT plan_hash, revision, tier, plan_json FROM ai_plans
+      WHERE root_ticket_id=? AND plan_hash=? ORDER BY revision DESC LIMIT 1`, [root.id, root.plan_hash]) : null;
+    const askPlan = normalizePlanSummary(asked?.detail?.plan);
+    const livePlan = normalizePlanSummary(parseJson(current?.plan_json));
+    const chosen = askPlan || livePlan;
+    const plan = chosen ? {
+      source: askPlan ? 'request_time' : 'current',
+      plan_hash: asked?.detail?.plan_hash ?? current?.plan_hash ?? null,
+      revision: asked?.detail?.plan_revision ?? current?.revision ?? null,
+      tier: askPlan ? null : current?.tier ?? null, // tier của plan đang lưu không nói gì về bản worker xin
+      goal: chosen.goal, steps: chosen.steps,
+    } : null;
+    return buildElevationContext({ request, root, asked, scope: elevationView(root).scope, plan });
   }
 
   // Trạng thái plan theo cổng: folder chưa duyệt giữ (tier không đổi), core người làm, protected chờ admin, còn lại chạy.
@@ -2458,6 +2490,10 @@ function resumeSummary(journal) {
     if (!scope.length) throw new WorkerContractError('elevation needs at least one path', 422, 'elevation_scope_required');
     const reason = String(input.reason ?? '').trim().slice(0, 1000);
     if (!reason) throw new WorkerContractError('elevation needs a reason', 422, 'elevation_reason_required');
+    // Snapshot lúc xin: admin cần biết worker xin cho kế hoạch nào và gồm bước nào, không chỉ path.
+    const planSummary = normalizePlanSummary(input.plan);
+    const planHash = input.plan_hash ? String(input.plan_hash).slice(0, 100) : null;
+    const planRevision = Number.isInteger(Number(input.plan_revision)) ? Number(input.plan_revision) : null;
     const selfScope = scope.some((item) => AI_BOARD_SCOPE.test(item.path));
     const owner = await db.get('SELECT q.owner_user_id, u.role FROM requests q LEFT JOIN users u ON u.id=q.owner_user_id WHERE q.id=?',
       [root.source_request_id]);
@@ -2470,7 +2506,8 @@ function resumeSummary(journal) {
       auto ? String(owner.owner_user_id) : (input.actorId ? String(input.actorId) : null), `none->${state}`,
       auto ? 'Quản trị viên tạo yêu cầu này; AI Board được phép chạm mức đã nêu khi lập kế hoạch.'
         : 'AI Board xin phép chạm mức bảo vệ/lõi; đang chờ quản trị viên.',
-      JSON.stringify({ scope, reason, self_scope: selfScope, auto }),
+      JSON.stringify({ scope, reason, self_scope: selfScope, auto, plan_hash: planHash, plan_revision: planRevision,
+        ...(planSummary ? { plan: planSummary } : {}) }),
       `elevation-request:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now]);
     return { ok: true, state, request_id: root.source_request_id, elevation: elevationView(await elevationRow(root.source_request_id)) };
   });
@@ -2563,6 +2600,7 @@ function resumeSummary(journal) {
     decideElevationAll,
     elevationOf,
     elevation_of: elevationOf,
+    elevationContext,
     recordGpuState,
     gpuStatus,
     // A request with a root ticket takes its status from the root (trigger ai_root_request_status): only a legacy request may be reopened directly.

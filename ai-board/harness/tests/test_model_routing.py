@@ -21,6 +21,19 @@ def catalog():
                 for name, provider in [('a', 'ollama'), ('b', 'vllm')]}}
 
 
+def shipped_catalog():
+    from providers.routing import CATALOG
+    return json.loads(CATALOG.read_text(encoding='utf-8'))
+
+
+def test_shipped_catalog_is_valid_for_the_harness():
+    """Server and harness read the same file: a role the server adds must be known here too (live worker boot)."""
+    config = shipped_catalog()
+    validate_catalog(config)
+    assert 'elevation_risk' in config['roles']
+    assert any('elevation_risk' in candidate['approved_roles'] for candidate in config['candidates'].values())
+
+
 def client(config=None, clock=lambda: 0):
     settings = {'OLLAMA_URL': 'http://primary', 'OLLAMA_SECKEY': 'primary-key',
                 'VLLM_URL': 'http://secondary', 'VLLM_SECKEY': 'secondary-key'}
