@@ -464,7 +464,7 @@ function renderRequests() {
   const ownerMatch = { all: () => true, mine: (r) => ownerOf(r) != null && ownerOf(r) === myAdminId,
     none: (r) => ownerOf(r) == null, others: (r) => ownerOf(r) != null && ownerOf(r) !== myAdminId };
   const filtered = reqCache.filter(r => (reqFilter === 'all' || r.status === reqFilter) && ownerMatch[ownerFilter](r));
-  updateRequestBadge(reqTotal); // the tab number is the board DB count
+  updateRequestBadge(filtered.length); // the tab number is the rows actually shown
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
@@ -487,7 +487,7 @@ function renderRequests() {
       <div class="spacer"></div>
       <button class="btn" id="reqRefresh">Tải lại</button>
     </div>
-    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất.</p>
+    <p class="meta" role="status">Hiển thị ${filtered.length}/${reqCache.length} góp ý gần nhất trong ${reqTotal} tổng.</p>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
         <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
@@ -2331,7 +2331,7 @@ async function init() {
   // The tab count is the board DB number, fetched as soon as the admin page opens.
   api('/api/admin/ai-board/requests?limit=10').then(r => {
     if (!r.ok) return;
-    updateRequestBadge(Number(r.data.total) || (r.data.requests || []).length);
+    updateRequestBadge(Math.min(10, Number(r.data.total) || (r.data.requests || []).length));
   }).catch(() => {});
 
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
