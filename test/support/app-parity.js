@@ -2,20 +2,13 @@
 // Volatile timestamps, tokens and codes are normalised before comparing.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import path from 'node:path';
-import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { freePort, profileTempDir } from './isolation.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-const freePort = () => new Promise((resolve, reject) => {
-  const s = net.createServer();
-  s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
-  s.on('error', reject);
-});
 
 async function waitHealthy(base, child, log) {
   for (let i = 0; i < 120; i++) {
@@ -29,7 +22,7 @@ async function waitHealthy(base, child, log) {
 /** backend: 'sqlite' | 'postgres'. Returns { base, backend, logs, stop, promoteAdmin } */
 export async function startApp(backend, extraEnv = {}) {
   if (!backend.startsWith('postgres') || !process.env.TEST_PG_URL) throw new Error('PG fixture URL required');
-  const dataDir = mkdtempSync(path.join(tmpdir(), `tizia-parity-${backend}-`));
+  const dataDir = profileTempDir(`parity-${backend}`);
   const port = await freePort();
   const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'test', ...extraEnv };
   delete env.DATABASE_URL;

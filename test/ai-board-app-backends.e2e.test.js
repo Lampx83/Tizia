@@ -8,6 +8,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { PG_URL } from './support/ai-board-db.js';
+import { freePort } from './support/isolation.js';
 
 const WORKER_KEY = 'e2e-worker-key-0123456789abcdef';
 
@@ -44,7 +45,7 @@ test(`[${mode}] the whole app runs the AI board (requester, worker, admin)`, { t
     url.searchParams.set('options', `-c search_path=${schema}`);
   }
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aib-e2e-'));
-  const port = 20000 + Math.floor(Math.random() * 20000);
+  const port = await freePort();
   const child = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, NODE_ENV: 'development', AI_BOARD_WORKER_KEY: WORKER_KEY,
       DATABASE_URL: url.toString() },

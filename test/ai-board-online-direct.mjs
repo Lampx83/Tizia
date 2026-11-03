@@ -6,11 +6,14 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
+import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { db } from '../server/db.js';
 
 const d = db.d;
-const PORT = 18043, TARGET = 18103;
+// Two profiles run at once on distinct ports: T24_PORT / T24_TARGET_PORT override the defaults.
+const PORT = Number(process.env.T24_PORT || 18043), TARGET = Number(process.env.T24_TARGET_PORT || 18103);
+const DATA_DIR = process.env.T24_DATA_DIR || mkdtempSync(path.join(tmpdir(), 't24d-data-'));
 const CRED = 'Bearer FIXTURE-DIRECT-CRED';
 const root = `http://127.0.0.1:${PORT}`;
 const checks = [];
@@ -28,7 +31,7 @@ const targetServer = http.createServer((req, res) => {
 
 let server;
 async function start(flag) {
-  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', CSRF_ENFORCE: '1', T24_CRED: CRED, DATA_DIR: path.join(tmpdir(), 't24d-data'), // DATA_DIR: portal-apps path code is not Windows-safe without it
+  const env = { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', CSRF_ENFORCE: '1', T24_CRED: CRED, DATA_DIR, // DATA_DIR: portal-apps path code is not Windows-safe without it
     AI_BOARD_ONLINE_ADAPTERS: JSON.stringify({ ok: { url: `http://127.0.0.1:${TARGET}/send`, credential_var: 'T24_CRED' } }) };
   delete env.AI_BOARD_ONLINE_BACKEND_SCRIPTS; delete env.ONLINE_RUNNER_URL; delete env.ONLINE_RUNNER_TOKEN_FILE;
   if (flag) env.AI_BOARD_ONLINE_BACKEND_SCRIPTS = 'true';
