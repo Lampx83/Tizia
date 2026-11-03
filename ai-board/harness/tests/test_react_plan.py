@@ -43,13 +43,16 @@ class Scripted:
     """Deps fake: call_model trả lần lượt `replies`; lặp reply cuối khi hết."""
 
     def __init__(self, *replies):
-        self.replies, self.prompts = list(replies), []
+        self.replies, self.prompts, self.options = list(replies), [], []
         self.models = SimpleNamespace(gate1_model="fake-gate1")
         self.trace = None
 
     def call_model(self, model, prompt, *, gate, budget, **kwargs):
         self.prompts.append(prompt)
+        self.options.append(kwargs.get("options"))
         text = self.replies[min(len(self.prompts) - 1, len(self.replies) - 1)]
+        if isinstance(text, dict) and "response" in text:  # full body, e.g. done_reason "length"
+            return dict(text)
         return {"response": text if isinstance(text, str) else json.dumps(text, ensure_ascii=False)}
 
 
@@ -120,6 +123,34 @@ def test_model_call_cap_stops_loop(repo, react_on):
 
     assert react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha) is None
     assert len(deps.prompts) <= 6
+
+
+def test_reply_cut_at_the_token_cap_falls_back_after_one_call(repo, react_on):
+    root, sha = repo
+    deps = Scripted({"response": '{"tool": "read_file", "argu', "done_reason": "length"})
+
+    assert react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha) is None
+    assert len(deps.prompts) == 1  # the remaining replies of the plan phase stay unspent
+
+
+def test_both_plan_calls_use_the_contract_token_cap(repo, react_on):
+    from runtime import limits
+    root, sha = repo
+    deps = Scripted({"tool": "read_file", "arguments": {"file": "public/a.html"}}, finish([[QUOTE]]))
+
+    react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+    assert deps.options == [{"num_predict": limits.react_plan()["max_tokens"]}] * 2
+
+
+def test_one_shot_plan_uses_the_contract_token_cap(request_item, monkeypatch):
+    from runtime import limits
+    monkeypatch.delenv("AI_BOARD_REACT_PLAN", raising=False)
+    deps = Scripted(plan_with(["features"]))
+
+    out = brainstorm.run(request_item, deps, Budget(max_wall_clock_s=999))
+
+    assert out["blocked"] is False
+    assert deps.options == [{"num_predict": limits.brainstorm()["max_tokens"]}]
 
 
 def test_denied_read_is_refused_and_not_quotable(repo, react_on):

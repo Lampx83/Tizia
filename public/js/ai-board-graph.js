@@ -240,7 +240,8 @@ function rerunAction(node, root) {
   const title = why || (stage === 'plan' ? 'Plans again from step 1. The new result updates the steps.'
     : 'Runs the approved plan again from step 3, then the checks. The new result updates the steps.');
   const button = `<button type="button" class="btn rerun" data-action="rerun-node" data-node="${esc(node.id)}"${why ? ' disabled' : ''} title="${esc(title)}">Run again</button>`;
-  return `${button}${why ? `<p class="meta">${esc(why)}</p>` : ''}`;
+  const warning = !why && root?.rerun_warning ? `<p class="meta g-warn" role="status">${esc(root.rerun_warning)}</p>` : '';
+  return `${button}${why ? `<p class="meta">${esc(why)}</p>` : ''}${warning}`;
 }
 
 function kv(rows) {

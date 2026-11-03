@@ -179,6 +179,20 @@ test('run again: disabled with the server reason when another stage or a live le
   assert.match(renderTicketGraph(leased, 'gate_2'), /A worker is running this request now/);
 });
 
+test('run again: the repeat-objection warning shows above the enabled button only', () => {
+  const warn = failed();
+  warn.root.rerun_warning = 'Two attempts already stopped at step 2.5 for the same reason "plan_ungrounded".';
+  const page = renderTicketGraph(warn, 'gate_2');
+  assert.match(page, /class="meta g-warn"/);
+  assert.match(page, /Two attempts already stopped at step 2\.5/);
+  const blocked = failed();
+  blocked.root.rerun_allowed = false;
+  blocked.root.rerun_stage = null;
+  blocked.root.rerun_reason = 'The request is not stopped at a step that can run again.';
+  blocked.root.rerun_warning = 'should not render while the button is disabled';
+  assert.doesNotMatch(renderTicketGraph(blocked, 'gate_2'), /class="meta g-warn"/);
+});
+
 test('run again: a running node is disabled; reason text from the server is escaped', () => {
   const html = renderTicketGraph(running(), 'gate_4');
   assert.match(runButton(html), /disabled/);

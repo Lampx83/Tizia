@@ -82,12 +82,18 @@ def react_plan(env=None) -> dict:
         "enabled": spec["default_enabled"] if flag is None else flag,
         "model_calls": spec["model_calls"],
         "tool_calls": spec["tool_calls"],
+        "max_tokens": spec["max_tokens"],
         "observation_chars": spec["observation_chars"],
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],
         "no_progress_steps": spec["stuck"]["no_progress_steps"],
     }
+
+
+def brainstorm() -> dict:
+    """Cap of one one-shot plan reply (gates/brainstorm.py), from limits.brainstorm."""
+    return dict(_parsed()["limits"]["brainstorm"])
 
 
 def budget(env=None) -> dict:

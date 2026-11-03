@@ -934,6 +934,17 @@ def _plan_repairable(stopped: dict) -> bool:
     return gate == 2.5 and reason == "plan_ungrounded"
 
 
+def _plan_pins(source) -> dict:
+    """Pins a blocked plan attempt ran under; the server warns when a rerun would repeat them (LF/143)."""
+    from runtime import exec_graph, limits
+    import code_index
+    try:
+        base = code_index.git(source, "rev-parse", "HEAD").decode("utf-8", "replace").strip()
+    except OSError:
+        base = None
+    return {"base": base or None, "config": limits.config_sha256(), "graph": exec_graph.digest()}
+
+
 def _objection_evidence(history: list[dict]) -> dict:
     """Bằng chứng cả hai lượt phản đối cho admin; repeat_objection khi các lượt gần nhất cùng chữ ký."""
     threshold = int((CONTRACT.get("evidence_gates") or {}).get("repeat_objection_threshold", 2))
@@ -1756,7 +1767,7 @@ class HarnessPlanner:
                 **({"evidence": result["evidence"]} if result.get("evidence") else {}),
                 "public_message": result.get("public_message"),
                 "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
-                **_objection_evidence(history),
+                **_objection_evidence(history), "pins": _plan_pins(source),
             })
         signals = list(state.get("complexity_signals") or [])
         if snapshot.get("clarification_incomplete"):

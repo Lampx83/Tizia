@@ -2038,6 +2038,7 @@ function resumeSummary(journal) {
     root.rerun_stage = rerun.stage; // 'plan' | 'execute' | null: which failed stage the admin may rerun now
     root.rerun_allowed = !!rerun.stage;
     root.rerun_reason = rerun.reason;
+    root.rerun_warning = rerun.warning || null; // non-blocking: same objection and same pins as the attempt before
     // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
     let allowance = await readRootAllowance(db, root.id);
     if (allowance && !hitRootGroup(allowance)) {
@@ -2204,12 +2205,42 @@ function resumeSummary(journal) {
   const EXEC_BLOCKED_PHASES = ['transient_blocked', 'pre_pr_blocked', 'root_allowance_exhausted'];
   const gateStage = (gate) => ([1, 2, 2.5].includes(gate) ? 'plan' : [3, 4, 5, 5.5].includes(gate) ? 'execute' : null);
 
-  /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason}. */
+  const OBJECTION_PATH = /(?<![\w/.-])((?:public|server|test|scripts|ai-board)\/[\w./-]*[\w-]\.\w+)/g;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  /** Same shape as the harness runtime/objection_repeat.signature: gate + reason class + quoted paths. */
+  function objectionSignature(detail) {
+    const history = Array.isArray(detail?.objection_history) ? detail.objection_history : [];
+    const last = history.at(-1);
+    if (last) return { gate: Number(last.gate) || 0, reason_class: String(last.reason_class || ''),
+      paths: [...new Set(last.paths || [])].sort() };
+    const reason = String(detail?.reason || '');
+    return { gate: Number(detail?.gate) || 0, reason_class: reason.split(':')[0].trim(),
+      paths: [...new Set(reason.match(OBJECTION_PATH) || [])].sort() };
+  }
+
+  /** Non-blocking warning: the last two blocked plan attempts stopped the same way under the same pins (LF/143). */
+  async function rerunWarning(root) {
+    const rows = await db.all(`SELECT internal_detail FROM ai_events
+      WHERE ticket_id=? AND event_type='plan_blocked' ORDER BY id DESC LIMIT 2`, [root.id]);
+    if (rows.length < 2) return null;
+    const details = rows.map((row) => parseJson(row.internal_detail) || {});
+    if (!same(objectionSignature(details[0]), objectionSignature(details[1]))) return null;
+    const [last, before] = details.map((detail) => detail.pins);
+    if (!last || !before || !same(last, before)) return null; // no pin record: do not claim the run is unchanged
+    const sig = objectionSignature(details[0]);
+    const where = sig.paths.length ? ` (${sig.paths.join(', ')})` : '';
+    return `Two attempts already stopped at step ${sig.gate} for the same reason "${sig.reason_class}"${where} `
+      + 'with the same commit, config and graph. Running again without changing the request or the plan will '
+      + 'probably stop the same way.';
+  }
+
+  /** Which stage an admin may rerun now, with a plain reason when none: {stage: 'plan' | 'execute' | null, reason, warning}. */
   async function rerunState(root) {
     if (!root || root.parent_id != null) return { stage: null, reason: 'Only the main request can run again.' };
     if (root.lease_owner) return { stage: null, reason: 'A worker is running this request now. Wait until it stops.' };
     if (await latestCandidate(root.id)) return { stage: null, reason: 'A change already exists for this request.' };
-    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return { stage: 'plan', reason: '' };
+    if (PLAN_BLOCKED_PHASES.includes(root.phase)) return { stage: 'plan', reason: '', warning: await rerunWarning(root) };
     if (EXEC_BLOCKED_PHASES.includes(root.phase)) return { stage: 'execute', reason: '' };
     return { stage: null, reason: 'The request is not stopped at a step that can run again.' };
   }
