@@ -310,7 +310,19 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
             feature = request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
-            if added and feature:
+            # A request that names the new path literally is an explicit target: the renderer module is not the place
+            # to edit, so best-match is advisory exactly as for a feature request.
+            request_text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
+
+            def in_request(path: str) -> bool:
+                # The exact path, or a directory of it with at least two segments, is named in the request:
+                # a plan that renames a requested new file inside the requested folder is still that feature.
+                parts = path.split('/')
+                prefixes = ("/".join(parts[:i]) + "/" for i in range(2, len(parts)))
+                return path in request_text or any(prefix in request_text for prefix in prefixes)
+
+            named = {path for path in added if in_request(path)}
+            if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
                 # recommendation instead of blocking the plan (path/layer rules still apply). An edit request
                 # that names a file absent from the base still has to pick the best-matching file.

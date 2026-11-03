@@ -21,13 +21,13 @@ def _real_retrieval(monkeypatch):
     monkeypatch.delenv("AI_BOARD_BEST_MATCH", raising=False)
 
 
-def _gate1(plans, tmp_path, trace=None, source=None):
+def _gate1(plans, tmp_path, trace=None, source=None, request=None):
     deps = deps_with(_SeqModels(plans))
     batches = []
     if trace:
         trace.begin(1, batches.append)
         deps = dataclasses.replace(deps, trace=trace)
-    out = brainstorm.run(COUNTER_REQUEST, deps, Budget(max_wall_clock_s=999), source=source or _crowded_repo(tmp_path), sha="HEAD")
+    out = brainstorm.run(request or COUNTER_REQUEST, deps, Budget(max_wall_clock_s=999), source=source or _crowded_repo(tmp_path), sha="HEAD")
     if trace:
         trace.flush()
     return out, deps.models, batches
@@ -54,6 +54,22 @@ def test_gate1_advisory_accepts_first_plan_and_records_mismatch_in_trace(monkeyp
     assert out["best_match"] == WIDGET
     checks = {e["check"]: e for e in batches[0][0]["evaluation"]}
     assert checks["best_match"]["ok"] and best_match.REASON_CODE in checks["best_match"]["detail"] and WIDGET in checks["best_match"]["detail"]
+
+
+def test_gate1_new_file_named_in_the_request_is_an_explicit_target(tmp_path):
+    src = _crowded_repo(tmp_path)
+    plugin = "server/contexts/_ai-generated/panel/index.js"
+    named = {**COUNTER_REQUEST, "body": COUNTER_REQUEST["body"] + f" Tạo file mới {plugin} để hiển thị bảng."}
+    out, models, _ = _gate1([_plan_for(plugin)] * 2, tmp_path, source=src, request=named)
+    assert out["blocked"] is False and out["plan"]["subtasks"][0]["file"] == plugin and len(models.calls) == 1
+
+    out, models, _ = _gate1([_plan_for(plugin)] * 2, tmp_path, source=src)  # not named in the request
+    assert out["blocked"] and len(models.calls) == 2
+
+    # A plan that renames the requested new file inside the requested folder is still that feature.
+    renamed = "server/contexts/_ai-generated/panel/widget/index.js"
+    out, models, _ = _gate1([_plan_for(renamed)] * 2, tmp_path, source=src, request=named)
+    assert out["blocked"] is False and out["plan"]["subtasks"][0]["file"] == renamed and len(models.calls) == 1
 
 
 def test_gate1_advisory_still_blocks_missing_file_and_renderer_constraint(monkeypatch, tmp_path):
