@@ -10,6 +10,7 @@ import { tokenCounter } from './token-count.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
+const REFERENCE_SKILLS = new Set(['default-security-audit']); // harness-locked rubric, not a task-type skill
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ai-board/harness/skills');
 export const REWRITE_BOUND = { model_calls: 4, tokens: 40000 };
 const STALE_RUNNING_MS = 20 * 60 * 1000;
@@ -73,7 +74,8 @@ export function lintSkill(text, { source = 'admin', version = null, name = null 
 
 function defaults() {
   const locked = JSON.parse(fs.readFileSync(path.join(ROOT, 'skills.lock.json'), 'utf8'));
-  return fs.readdirSync(ROOT).filter(name => name.startsWith('default-')).sort().map(name => {
+  // Rubric tham chiếu (soát elevation) không chọn theo task type; vẫn phải khớp khoá hash của nó.
+  return fs.readdirSync(ROOT).filter(name => name.startsWith('default-') && !REFERENCE_SKILLS.has(name)).sort().map(name => {
     const text = fs.readFileSync(path.join(ROOT, name, 'SKILL.md'), 'utf8');
     const lint = lintSkill(text, { source: 'default', name });
     if (!lint.ok || lint.hash !== locked[name]) throw bad('Default skill hash/schema mismatch', 'skill_catalog_invalid', 503);

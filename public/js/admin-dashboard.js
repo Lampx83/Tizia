@@ -416,6 +416,9 @@ async function loadRequests() {
   ]);
   reqCache = r.data.requests || [];
   reqTotal = Number(r.data.total) || reqCache.length;
+  for (const rid of [...elevationContexts.keys()]) {
+    if (!reqCache.some(row => row.id === rid && row.elevation === 'requested')) elevationContexts.delete(rid);
+  }
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
   renderRequests();
@@ -460,58 +463,199 @@ function ownerCell(ticket) {
 
 // Quyền chạm phần bảo vệ/lõi: AI Board xin theo từng file; admin quyết ngay trong tab này.
 const ELEVATION_LEVEL_LABEL = { protected: 'bảo vệ', core: 'lõi', surface: 'bề mặt' };
-const elevationScopeText = (r) => (r.elevation_scope || [])
-  .map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`).join('<br>') || '-';
+const ELEVATION_RISK = {
+  high: { tone: 'ai-bad', label: 'Cao' }, medium: { tone: 'ai-warn', label: 'Trung bình' },
+  low: { tone: 'ai-ok', label: 'Thấp' }, unknown: { tone: '', label: 'Chưa đánh giá được' },
+};
+const ELEVATION_REC_LABEL = { approve: 'có thể duyệt', review: 'cần xem thêm', reject: 'không nên duyệt' };
 const ELEVATION_REASON = { approve: 'Quản trị viên duyệt quyền chạm phần bảo vệ/lõi qua tab Góp ý.',
   reject: 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' };
+const elevationScopeText = (r) => (r.elevation_scope || [])
+  .map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`).join('<br>') || '-';
+
+// Ngữ cảnh duyệt đã tải (rid → {data|error|loading}) và lý do admin đã gõ, sống qua các lần vẽ lại.
+const elevationContexts = new Map();
+const elevationReasons = new Map();
+const elevationCtx = (rid) => elevationContexts.get(Number(rid))?.data || null;
+// Một yêu cầu: chỉ vùng AI Board tự sửa là chặn cứng (server cũng trả 409). Rủi ro cao vẫn duyệt được nhưng
+// phải qua cảnh báo + lý do + xác nhận; admin là người quyết.
+const elevationBlockReason = (ctx) => {
+  if (!ctx) return '';
+  return ctx.flags?.self_scope ? 'chạm vùng AI Board tự sửa — luôn chặn' : '';
+};
+// Duyệt lô chỉ gồm yêu cầu đã xem ngữ cảnh, không high risk, không ngoài yêu cầu.
+const elevationBatchBlockReason = (ctx) => {
+  if (!ctx) return 'chưa xem chi tiết';
+  if (ctx.elevation?.state !== 'requested') return 'không còn chờ duyệt';
+  if (ctx.flags?.self_scope) return 'chạm vùng AI Board tự sửa';
+  if (ctx.flags?.outside_request) return 'path ngoài yêu cầu/plan';
+  if (ctx.flags?.scope_changed_since_request) return 'phạm vi đổi sau khi xin';
+  if (ctx.risk?.level === 'high') return 'rủi ro cao';
+  if (ctx.risk?.level === 'unknown') return 'chưa có đánh giá rủi ro';
+  return '';
+};
+// Duyệt lô chỉ gồm yêu cầu đã xem ngữ cảnh và không có cờ chặn/rủi ro cao/chưa rõ.
+const elevationBatchEligible = (r) => {
+  const ctx = elevationCtx(r.id);
+  if (!ctx || ctx.elevation?.state !== 'requested') return false;
+  return !elevationBatchBlockReason(ctx);
+};
+
+// Ngữ cảnh một yêu cầu: tải theo yêu cầu, không tải cả loạt để tab mở nhanh.
+async function loadElevationContext(rid) {
+  const id = Number(rid);
+  if (!Number.isInteger(id) || id <= 0) return;
+  elevationContexts.set(id, { loading: true });
+  renderRequests();
+  const r = await api(`/api/admin/ai-board/requests/${id}/elevation-context`);
+  elevationContexts.set(id, r.ok && r.data?.context
+    ? { data: r.data.context }
+    : { error: r.data?.message || r.data?.error || `HTTP ${r.status}` });
+  renderRequests();
+}
+
+const elevationPathTag = (row) => (row.named_in_request
+  ? '<span class="pill ai-ok">có trong yêu cầu</span>'
+  : row.in_plan
+    ? '<span class="pill ai-warn">chỉ có trong kế hoạch</span>'
+    : '<span class="pill ai-bad">không có trong yêu cầu/plan</span>');
+
+// Nhãn rủi ro ở dòng danh sách: cùng màu với thẻ để admin quét nhanh trước khi mở.
+const elevationRiskPill = (r) => {
+  const ctx = elevationCtx(r.id);
+  if (!ctx) return '<span class="pill">chưa xem</span>';
+  const risk = ELEVATION_RISK[ctx.risk?.level] || ELEVATION_RISK.unknown;
+  return `<span class="pill ${risk.tone}">${esc(risk.label)}</span>`;
+};
+
+// Thẻ duyệt: duyệt cái gì · vì sao · rủi ro · bằng chứng. Duyệt cần lý do admin gõ và một lần xác nhận nữa.
+function elevationCard(r) {
+  const entry = elevationContexts.get(r.id);
+  if (!entry) return `<button class="btn" data-act="elevation-context" data-rid="${r.id}">Xem chi tiết để duyệt</button>`;
+  if (entry.loading) return '<span class="meta" role="status">Đang tải ngữ cảnh duyệt…</span>';
+  if (entry.error) {
+    return `<div class="err">Không tải được ngữ cảnh: ${esc(entry.error)}</div>
+      <button class="btn" data-act="elevation-context" data-rid="${r.id}">Thử lại</button>`;
+  }
+  const ctx = entry.data;
+  const risk = ctx.risk || { level: 'unknown', reasons: [], recommendation: 'review', questions: [] };
+  const badge = ELEVATION_RISK[risk.level] || ELEVATION_RISK.unknown;
+  const scope = ctx.elevation?.scope || [];
+  const steps = ctx.plan?.steps || [];
+  const blocked = elevationBlockReason(ctx);
+  const evidence = ctx.evidence || {};
+  return `<div data-elevation-card="${r.id}" style="margin-top:8px;padding:10px 12px;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:8px">
+    <div><b>Duyệt cái gì</b>
+      <ul style="margin:4px 0 8px;padding-left:18px">${scope.map(row => `<li><code>${esc(row.path)}</code> · mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)} ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol style="margin:4px 0 8px;padding-left:18px">${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · <code>${esc(step.paths.join(', '))}</code>` : ''}${step.tier ? ` · mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}` : ''}</li>`).join('')}</ol>`
+    : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
+    </div>
+    <div style="margin-top:6px"><b>Vì sao</b>
+      <div style="font-size:12.5px;opacity:.9">${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
+      ${ctx.request?.excerpt ? `<div style="font-size:12px;opacity:.75;margin-top:4px;white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</div>` : ''}
+      <div style="font-size:12px;margin-top:4px">${ctx.request?.title ? `Yêu cầu: ${esc(ctx.request.title)} · ` : ''}${ctx.flags?.outside_request ? '<span class="pill ai-bad">có path ngoài yêu cầu</span>' : '<span class="pill ai-ok">path khớp yêu cầu/plan</span>'}${ctx.flags?.scope_changed_since_request ? ' <span class="pill ai-bad">phạm vi đổi sau khi xin</span>' : ''}</div>
+    </div>
+    <div style="margin-top:6px"><b>Rủi ro</b> <span class="pill ${badge.tone}">${esc(badge.label)}</span> <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span>
+      ${risk.level === 'high' || ctx.flags?.self_scope ? `<div role="alert" style="margin-top:6px;padding:8px 10px;border-left:3px solid var(--bad,#ef4444);background:rgba(239,68,68,.08)"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'rủi ro cao; đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
+      ${risk.reasons?.length ? `<ul style="margin:4px 0;padding-left:18px">${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
+      ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul style="margin:2px 0;padding-left:18px">${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    </div>
+    <div style="margin-top:6px;font-size:12px;opacity:.75"><b>Bằng chứng</b> · plan <code>${esc(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}</code>${evidence.revision_request != null ? ` · revision ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · revision ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="/admin-request.html?id=${r.id}" target="_top">mở trace</a></div>
+    <div class="actions" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <input data-elevation-reason="${r.id}" maxlength="1000" placeholder="Lý do duyệt (bắt buộc)" aria-label="Lý do duyệt yêu cầu #${r.id}"
+        style="flex:1;min-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.16));background:var(--bg3,#16213d);color:inherit">
+      <button class="btn primary" ${blocked ? 'disabled ' : ''}title="${esc(blocked || 'Duyệt yêu cầu này')}" data-act="elevate" data-rid="${r.id}" data-decision="approve">Duyệt</button>
+      <button class="btn danger" data-act="elevate" data-rid="${r.id}" data-decision="reject">Từ chối</button>
+    </div>
+  </div>`;
+}
 
 // Danh sách yêu cầu đang chờ duyệt quyền (state 'requested'), theo đúng bộ lọc đang hiện.
 function elevationPanel(rows) {
   const pending = rows.filter(r => r.elevation === 'requested');
   if (!pending.length) return '';
+  const eligible = pending.filter(elevationBatchEligible);
+  const batchHint = eligible.length
+    ? `Duyệt ${eligible.length} yêu cầu đã xem chi tiết, không có cờ chặn`
+    : 'Chưa có yêu cầu nào đủ điều kiện duyệt lô (phải xem chi tiết trước)';
   return `<section class="elevation-panel" id="elevation-panel" role="region" aria-label="Quyền chờ duyệt"
     style="border:1px solid var(--border-strong,rgba(255,255,255,.2));border-radius:10px;padding:12px 14px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <b>Quyền chờ duyệt (${pending.length})</b>
-      <span style="font-size:12px;opacity:.7">AI Board xin chạm vùng bảo vệ/lõi; duyệt thì kế hoạch được lập lại với quyền đó.</span>
+      <span style="font-size:12px;opacity:.7">AI Board xin chạm vùng bảo vệ/lõi. Xem chi tiết từng yêu cầu trước khi duyệt.</span>
       <div style="flex:1"></div>
-      <button class="btn primary" data-act="elevate-all" data-ids="${pending.map(r => r.id).join(',')}">Duyệt tất cả</button>
+      <input data-elevation-reason="all" maxlength="1000" placeholder="Lý do duyệt cả lô (bắt buộc)" aria-label="Lý do duyệt cả lô"
+        style="min-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.16));background:var(--bg3,#16213d);color:inherit">
+      <button class="btn primary" data-act="elevate-all" data-ids="${eligible.map(r => r.id).join(',')}"${eligible.length ? '' : ' disabled'} title="${esc(batchHint)}">Duyệt tất cả (${eligible.length})</button>
     </div>
     <ul style="margin:10px 0 0;padding-left:18px">
       ${pending.map(r => `<li data-elevation="${r.id}" style="margin:8px 0">
         <b>#${r.id}</b> ${esc(r.title)} · <span style="opacity:.7">${esc(r.student || '')}</span>
         <div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
         ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}
-        <div class="actions" style="margin-top:6px">
-          <button class="btn primary" data-act="elevate" data-rid="${r.id}" data-decision="approve">Duyệt</button>
+        <div style="margin-top:6px;font-size:12px">${elevationRiskPill(r)}</div>
+        ${elevationCard(r)}
+        ${elevationCtx(r.id) ? '' : `<div class="actions" style="margin-top:6px">
           <button class="btn danger" data-act="elevate" data-rid="${r.id}" data-decision="reject">Từ chối</button>
-        </div></li>`).join('')}
+        </div>`}</li>`).join('')}
     </ul>
   </section>`;
 }
 
-// Duyệt/từ chối một yêu cầu hoặc cả lô đang hiện; xong tải lại danh sách để thấy trạng thái mới.
+// Duyệt/từ chối một yêu cầu hoặc cả lô đã đủ điều kiện; duyệt bắt buộc lý do admin gõ + xác nhận lần hai.
 async function decideElevation(ids, decision) {
   const list = (ids || []).map(Number).filter(id => Number.isInteger(id) && id > 0);
   if (!list.length) return;
   const approve = decision === 'approve';
+  const reasonKey = list.length === 1 ? String(list[0]) : 'all';
+  const typed = (elevationReasons.get(reasonKey) || '').trim();
+  if (approve && typed.length < 3) {
+    toast('Ghi lý do duyệt trước khi duyệt.', 'err');
+    document.querySelector(`[data-elevation-reason="${reasonKey}"]`)?.focus();
+    return;
+  }
+  const contexts = list.map(id => elevationCtx(id));
+  if (approve && list.length > 1) {
+    const missing = list.find((id) => !elevationCtx(id));
+    if (missing) return toast(`Xem chi tiết yêu cầu #${missing} trước khi duyệt.`, 'err');
+    const blocked = list.filter((id) => elevationBatchBlockReason(elevationCtx(id)));
+    if (blocked.length) return toast(`Không duyệt lô: #${blocked.join(', #')} chưa đủ điều kiện.`, 'err');
+  }
+  if (approve && list.length === 1 && elevationBlockReason(contexts[0])) {
+    return toast(`Không duyệt được: ${elevationBlockReason(contexts[0])}.`, 'err');
+  }
   const one = list.length === 1 ? reqCache.find(r => r.id === list[0]) : null;
+  const lines = approve ? contexts.map((ctx, index) => {
+    const rows = (ctx.elevation?.scope || [])
+      .map((row) => `${row.path} (${ELEVATION_LEVEL_LABEL[row.level] || row.level})`).join(', ');
+    return `#${list[index]} · ${ELEVATION_RISK[ctx.risk?.level]?.label || 'chưa rõ'} · ${rows}`.slice(0, 240);
+  }) : [];
+  const highRisk = contexts.some((ctx) => ctx?.risk?.level === 'high');
   const yes = await askConfirm({
     title: approve
       ? (one ? `Duyệt quyền cho yêu cầu #${one.id}?` : `Duyệt quyền cho ${list.length} yêu cầu?`)
       : (one ? `Từ chối quyền cho yêu cầu #${one.id}?` : `Từ chối quyền cho ${list.length} yêu cầu?`),
-    message: 'AI Board xin chạm vùng bảo vệ/lõi. Duyệt thì kế hoạch được lập lại với quyền đó; từ chối thì yêu cầu dừng.',
+    message: approve
+      ? (highRisk
+        ? 'CẢNH BÁO rủi ro cao: đọc kỹ phạm vi và các bước kế hoạch ở trên. Duyệt thì kế hoạch được lập lại với quyền đó và lý do của bạn được lưu vào vết kiểm toán.'
+        : contexts.some((ctx) => ctx?.risk?.level === 'unknown')
+          ? 'Hệ thống chưa đánh giá được rủi ro; tự đọc phạm vi và các bước trước khi duyệt. Lý do của bạn được lưu vào vết kiểm toán.'
+          : 'Duyệt thì kế hoạch được lập lại với quyền đó. Lý do bạn ghi được lưu vào vết kiểm toán.')
+      : 'AI Board xin chạm vùng bảo vệ/lõi. Từ chối thì yêu cầu dừng.',
+    lines: approve ? lines : [],
     ok: approve ? (list.length > 1 ? 'Duyệt tất cả' : 'Duyệt') : 'Từ chối', danger: !approve,
   });
   if (!yes) return;
   const path = list.length === 1
     ? `/api/admin/ai-board/requests/${list[0]}/elevate`
     : '/api/admin/ai-board/requests/0/elevate-batch';
-  const body = { decision, reason: ELEVATION_REASON[decision], ...(list.length === 1 ? {} : { ids: list }) };
+  const body = { decision, reason: (approve ? typed : typed || ELEVATION_REASON[decision]), ...(list.length === 1 ? {} : { ids: list }) };
   const r = await api(path, { method: 'POST', body: JSON.stringify(body) });
   if (!r.ok) return toast(`Không ghi nhận được: ${r.data?.message || r.data?.error || r.status}`, 'err');
   const n = Number(r.data?.approved || 0) + Number(r.data?.rejected || 0);
   toast(approve ? `Đã duyệt ${n} yêu cầu; kế hoạch sẽ được lập lại với quyền đó.` : `Đã từ chối ${n} yêu cầu.`);
+  elevationReasons.clear();
+  for (const id of list) elevationContexts.delete(id);
   await loadRequests();
 }
 
@@ -592,9 +736,15 @@ function renderRequests() {
   $('#ownerFilter').addEventListener('change', e => { ownerFilter = e.target.value; renderRequests(); });
   $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });
   $('#reqRefresh').addEventListener('click', loadRequests);
+  host.querySelectorAll('[data-elevation-reason]').forEach(inp => {
+    const key = inp.dataset.elevationReason;
+    inp.value = elevationReasons.get(key) || '';
+    inp.addEventListener('input', () => elevationReasons.set(key, inp.value));
+  });
   host.querySelectorAll('[data-act]').forEach(b => {
     b.addEventListener('click', () => {
       const id = Number(b.dataset.rid);
+      if (b.dataset.act === 'elevation-context') return loadElevationContext(id);
       if (b.dataset.act === 'elevate') return decideElevation([id], b.dataset.decision);
       if (b.dataset.act === 'elevate-all') return decideElevation(String(b.dataset.ids || '').split(','), 'approve');
       if (b.dataset.act === 'reply') openReplyModal(id);
@@ -620,7 +770,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=elevation1`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=elevation2`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();

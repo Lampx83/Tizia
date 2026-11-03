@@ -15,6 +15,8 @@ REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
 VARIANTS = {'review-two-axes': REVIEW_AXES}
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
+# Rubric tham chiếu (soát elevation) có hash trong lock nhưng không thuộc catalog chọn theo task_type.
+REFERENCE_ONLY = {'default-security-audit'}
 OPTIONAL_FIELDS = {'topic'}  # trùng topic thì chỉ 1 skill được chọn (skill_selection.choose)
 FORBIDDEN = re.compile(r'(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)', re.I)
 
@@ -93,6 +95,8 @@ def catalog():
     locked = json.loads((ROOT / 'skills.lock.json').read_text(encoding='utf-8'))
     result = []
     for path in sorted(ROOT.glob('default-*/SKILL.md')):
+        if path.parent.name in REFERENCE_ONLY:
+            continue
         skill = parse(path.read_bytes().decode('utf-8'))
         if skill.name != path.parent.name or skill.source != 'default' or locked.get(skill.name) != skill.digest:
             raise ValueError('default skill identity/hash mismatch')

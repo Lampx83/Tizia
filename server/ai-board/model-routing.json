@@ -36,6 +36,9 @@
     ],
     "compactor": [
       "vllm-heavy-coder"
+    ],
+    "elevation_risk": [
+      "vllm-heavy-coder"
     ]
   },
   "candidates": {
@@ -51,7 +54,8 @@
         "gate4_review",
         "calibration",
         "eval_judge",
-        "compactor"
+        "compactor",
+        "elevation_risk"
       ],
       "capabilities": [
         "json"
@@ -129,6 +133,11 @@
       "thinking": false,
       "temperature": 0,
       "num_predict": 4096
+    },
+    "elevation_risk": {
+      "thinking": false,
+      "temperature": 0,
+      "num_predict": 600
     }
   },
   "reasoning": {
@@ -139,7 +148,8 @@
     "gate4_review": false,
     "classifier": false,
     "calibration": true,
-    "eval_judge": true
+    "eval_judge": true,
+    "elevation_risk": false
   },
   "reasoning_extra_tokens": 8192
 }

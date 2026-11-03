@@ -379,7 +379,7 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
     </div>`).join('');
   const chosenNode = nodes[selectedId];
   const steps = shown.map(n => `<li><button type="button" class="g-step st-${n.state}${n.id === selectedId ? ' is-selected' : ''}" data-node="${esc(n.id)}" aria-pressed="${n.id === selectedId}">${icon(n.state)}<span class="g-step-name">${esc(n.name)}</span><span class="g-step-state">${esc(STATE_LABEL[n.state])}</span></button></li>`).join('');
-  return `<section class="ticket-graph">
+  return `<section class="ticket-graph" id="ticket-trace">
     <div class="blk g-props" role="region" aria-live="polite" aria-label="Properties">
       <div class="g-caption">Properties</div>
       ${extras.summary || ''}${propsPanel(chosenNode, trace.root)}

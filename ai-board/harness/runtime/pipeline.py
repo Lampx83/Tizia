@@ -390,7 +390,7 @@ def _stub_gate(number: float):
 # gate → fn(request, deps, budget, state, db_path=, proposal_id=). Số ngoài bảng → UnknownGateError.
 _GATE_FNS = {
     1: _intake_and_plan,
-    2: lambda request, deps, budget, state, **_: scope_check.run(state),
+    2: lambda request, deps, budget, state, **_: scope_check.run(state, request),
     2.5: plan_validate.run,
     3: lambda request, deps, budget, state, **trace: implement.run(state, deps, budget, **trace),
     4: lambda request, deps, budget, state, **trace: static_check.run_gate(state, deps, budget, **trace),

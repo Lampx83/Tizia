@@ -939,6 +939,28 @@ def _elevation_payload(result: dict | None) -> dict | None:
     return None
 
 
+def _elevation_plan_summary(plan) -> dict | None:
+    """Các bước kế hoạch gửi kèm yêu cầu nâng mức: admin thấy 'duyệt cái gì', không chỉ path."""
+    if not isinstance(plan, dict):
+        return None
+    steps = []
+    for index, step in enumerate((plan.get("steps") or [])[:20], start=1):
+        if not isinstance(step, dict):
+            continue
+        paths = [str(path)[:200] for path in (step.get("allowed_scope") or [])]
+        if isinstance(step.get("file"), str):
+            paths.append(step["file"][:200])
+        steps.append({
+            "order": step.get("order") or index,
+            "title": str(step.get("title") or "")[:160],
+            "paths": list(dict.fromkeys(paths))[:8],
+            "capability": step.get("capability") or None,
+        })
+    if not steps:
+        return None
+    return {"goal": str(plan.get("goal") or "")[:300], "steps": steps}
+
+
 def _plan_repairable(stopped: dict) -> bool:
     """Lỗi plan do model sinh sai (không phải nguồn/kỹ năng): đáng một lượt lập lại."""
     gate = float(stopped.get("gate") or 0)
@@ -1744,14 +1766,16 @@ class HarnessPlanner:
 
     last_skill = None  # skill cổng 1 của lần gọi gần nhất: worker gửi kèm verdict cùng lease
 
-    def _ask_elevation(self, ticket_id, payload: dict) -> dict | None:
+    def _ask_elevation(self, ticket_id, payload: dict, plan=None) -> dict | None:
         """Xin quyền chạm mức trên surface cho đúng kế hoạch này (một lần/plan, không retry).
         Trả elevation đã duyệt khi server tự cấp (yêu cầu do admin tạo), None khi phải chờ quyết định."""
         key = f"{ticket_id}:{payload.get('plan_hash') or ','.join(payload.get('paths') or [])}"
         if not self.client or ticket_id is None or key in self._elevation_asked:
             return None
         self._elevation_asked.add(key)
-        body = {**payload, **({"worker_id": self.worker_id} if self.worker_id else {})}
+        summary = _elevation_plan_summary(plan)
+        body = {**payload, **({"worker_id": self.worker_id} if self.worker_id else {}),
+                **({"plan": summary} if summary else {})}
         try:
             out = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/elevation", body)
         except Exception as error:  # noqa: BLE001 — best effort: plan_blocked vẫn mang payload cho admin
@@ -1844,7 +1868,7 @@ class HarnessPlanner:
             # Cổng xin quyền chạm protected/core: báo server ngay; server tự cấp (yêu cầu do admin
             # tạo) thì lập lại một lượt với quyền đó thay vì bắt admin bấm thêm lần nữa.
             payload = _elevation_payload(stopped.get("result"))
-            granted = self._ask_elevation(ticket.get("id"), payload) if payload is not None else None
+            granted = self._ask_elevation(ticket.get("id"), payload, state.get("plan")) if payload is not None else None
             if granted:
                 budget.max_model_calls = max(budget.max_model_calls, budget.model_calls + 6)
                 request = {**request, "elevation": granted}
