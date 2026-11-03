@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { getSettings } from '../settings.js';
 import { fileURLToPath } from 'node:url';
 // Optional: the worker image lints skills without npm dependencies and must fall back to UTF-8 counting.
 let Tokenizer = null;
@@ -20,7 +21,7 @@ function load(file) {
 
 /** Qwen tokenizer.json từ env AI_BOARD_QWEN_TOKENIZER; thiếu/lỗi thì UTF-8 bytes (cận trên). */
 export function tokenCounter() {
-  const configured = process.env[ENV];
+  const configured = getSettings().tokenizerFile;
   const file = configured && fs.existsSync(configured) ? configured : SHIPPED;
   const tokenizer = fs.existsSync(file) ? load(file) : null;
   if (!tokenizer) return utf8;

@@ -25,11 +25,11 @@ import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
+import { classifierConfigured, environment, getSettings } from '../settings.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
-  (process['env'].OLLAMA_URL || process['env'].VLLM_URL) && process['env'].AI_BOARD_CLASSIFIER_MODEL
-    ? classifyWithModel(title, detail) : Promise.resolve(null));
+  classifierConfigured() ? classifyWithModel(title, detail) : Promise.resolve(null));
 
 export function attachAiBoardRequestRoutes(router, {
   store,
@@ -51,7 +51,7 @@ export function attachAiBoardRequestRoutes(router, {
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.get('/api/ai-board/capabilities', requireAuth, (req, res) => {
-    res.json({ multimodal: /^(1|true|on|yes)$/i.test(String(process.env.AI_BOARD_MULTIMODAL || '')) });
+    res.json({ multimodal: getSettings().multimodal });
   });
   route.post('/api/requests', requireAuth, requireEnrolled, async (req, res, next) => {
     const body = req.body || {};
@@ -485,7 +485,7 @@ function digest(value) {
 
 export function attachAiBoardWorkerRoutes(router, {
   store,
-  env = process.env,
+  env = environment(),
   leaseMs = LEASE_MS,
   uploadsDir = null, // thư mục /uploads/requests (ảnh bản nháp); thiếu → route ảnh trả 503
   shotBackend = undefined, // backend lưu ảnh (shot-storage.js); mặc định local trong uploadsDir
