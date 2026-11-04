@@ -116,8 +116,9 @@ CREATE TABLE IF NOT EXISTS request_messages (
 """
 
 
-def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)') -> str:
-    """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi."""
+def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)', repair: str | None = None) -> str:
+    """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi.
+    `repair`: harness note naming the defect of the previous pass, empty on the first pass."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     return context.manual() + PROMPT.format(
         domain=request.get("domain") or "(core)",
@@ -126,6 +127,7 @@ def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)') 
         thread=thread,
         plan_json=json.dumps(plan, ensure_ascii=False),
         repo_context=repo_context,
+        repair=repair or "",
     )
 
 
@@ -318,6 +320,42 @@ def _named_new_files(plan, files, request):
         return path in text or any("/".join(parts[:i]) + "/" in text for i in range(2, len(parts)))
 
     return [path for path in added if named(path)]
+
+
+def _same_target(target: str, expected: str) -> bool:
+    """Two paths name the same file; the requester may type only the file name (rule of runtime/coverage)."""
+    target = str(target or "").replace("\\", "/").lstrip("./")
+    expected = str(expected or "").replace("\\", "/").lstrip("./")
+    if not target or not expected:
+        return False
+    return (target == expected or target.endswith("/" + expected)
+            or ("/" not in expected and target.rsplit("/", 1)[-1] == expected))
+
+
+def request_targets(plan: dict, request: dict, state: dict, files: dict | None = None) -> list[str]:
+    """Plan files the request is about: paths the requester typed, new paths it named, else gate 1's best match.
+    Empty when the plan misses one of them (the plan did not pick that target)."""
+    typed = coverage.requested_paths("\n".join(str(request.get(key) or "") for key in ("subject", "body", "detail")))
+    expected = list(dict.fromkeys([*typed, *_named_new_files(plan, files or {}, request)]))
+    if not expected and state.get("best_match"):
+        expected = [str(state["best_match"])]
+    targets = [str(task.get("file") or "") for task in plan.get("subtasks") or [] if isinstance(task, dict)]
+    hit = [path for path in expected if any(_same_target(target, path) for target in targets)]
+    return hit if expected and len(hit) == len(expected) else []
+
+
+def final_hit(plan: dict, request: dict, state: dict, files: dict | None = None) -> bool:
+    """The plan names exactly the file the request is about: a grounding block on it is the validator's fault, not the plan's."""
+    return bool(request_targets(plan, request, state, files))
+
+
+_REPAIR_PROMPT = """SOÁT LẠI MỘT ĐIỂM ĐÃ BỊ CHẶN (vẫn là plan trên, không phải yêu cầu mới)
+- Lỗi của lần soát trước: {defect}
+- File đúng mà plan đã nhắm: {target} — giữ nguyên file này và mọi subtask, không đổi target.
+- Chỉ sửa đúng lỗi trên: mỗi subtask cần "quote" là một dòng NGUYÊN VĂN chép từ REPO DATA của chính file đó,
+  kèm before/after/verify. Trả lại đúng JSON theo schema.
+"""
+
 
 def filled_grounding(validation: dict, plan: dict, files: dict, asserted: bool = False) -> list:
     """Grounding records for every subtask. A new file has no source line to quote, so the harness can state
@@ -657,8 +695,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                      "required": ["file", "snippet"]}}},
                                  "required": ["claim", "evidence"]}},
               "required": ["clear", "question", "grounded", "reason", "grounding", "objection"]}
-    def validate(req, think=False):
-        ask = lambda options: deps.call_model(deps.models.gate1_model, prompt if req is request else build_prompt(req, plan, repo_context),
+    def validate(req, think=False, repair=None):
+        built = build_prompt(req, plan, repo_context, repair) if repair or req is not request else prompt
+        ask = lambda options: deps.call_model(deps.models.gate1_model, built,
                                               gate=2.5, budget=budget, format=schema, db_path=db_path, proposal_id=proposal_id,
                                               prompt_name="plan_validate.md", options=options,
                                               **({"extra": {"force_thinking": True}} if think else {}))
@@ -779,7 +818,27 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 best_match.enforce(state.get('best_match'), targets,
                                    f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
                                    contradicted=contradicted)
-            state['grounding'] = checked_grounding(validation, plan, sha, files)
+            # Only the validator's own grounding verdict is retried: every harness rule above blocks on its own evidence.
+            attempts = 0
+            while True:
+                try:
+                    state['grounding'] = checked_grounding(validation, plan, sha, files)
+                    break
+                except ValueError as error:
+                    named_targets = request_targets(plan, request, state, files)
+                    # One bounded pass per plan revision, and only when the plan already names the request's target:
+                    # an evidence-backed veto or a second identical failure blocks exactly as before.
+                    if (attempts or not named_targets or not budget.can_afford() or state.get('reasoning')
+                            or evidence.verified(validation.get('objection'), files)):
+                        raise
+                    attempts = 1
+                    state['validator_retry'] = f"repairable_retry: {str(error)[:160]} -> {', '.join(named_targets)[:120]}"
+                    judge('repairable retry', True, state['validator_retry'])
+                    validation, stop = validate(request, repair=_REPAIR_PROMPT.format(
+                        defect=str(error)[:300], target=', '.join(named_targets)))
+                    if stop:
+                        return stop
+                    validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
             unverified = [r['file'] for r in validation['grounding'] if r.get('unverified')]
             if unverified:
@@ -789,15 +848,18 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             judge("source grounding", False, str(error))
             return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
                     'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
-                    'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
+                    'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
+                    **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
 
     signals = complexity_signals(plan, frozenset(item["path"] for item in needs))
     if request.get("complexity_by_server"):
         # HTTP worker không có DB: server quyết qua tier (risk high → protected → admin cho phép plan).
         state["complexity_signals"] = signals
-        return {"gate": 2.5, "blocked": False, "reason": None, "signals": signals}
+        return {"gate": 2.5, "blocked": False, "reason": None, "signals": signals,
+                **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
     if signals and not (db_path is not None and is_authorized_for_complex(db_path, request)):
         return {"gate": 2.5, "blocked": True, "reason": "complexity_gated", "outcome": "complexity_gated",
                 "signals": signals}
 
-    return {"gate": 2.5, "blocked": False, "reason": None}
+    return {"gate": 2.5, "blocked": False, "reason": None,
+            **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}

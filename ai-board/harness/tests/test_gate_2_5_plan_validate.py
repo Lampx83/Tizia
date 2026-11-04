@@ -3,6 +3,7 @@ phức tạp (Q2) trước khi cổng 3 tiêu ngân sách."""
 import json
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -508,3 +509,138 @@ def test_validator_claiming_a_loaded_file_is_missing_is_a_retrieval_fault_not_an
     assert note.startswith('lỗi truy xuất') and 'modules.js' in note
     other = plan_validate.objection_advisory(validation, {'public/other.js': 'x'})
     assert other and not other.startswith('lỗi truy xuất')
+
+
+# ── repairable retry: plan đã nhắm đúng file mà yêu cầu nói tới ─────────────
+
+TARGET = "public/trang.html"
+QUOTE = "<h1>Trang</h1>"
+WRONG = {"clear": True, "question": None, "grounded": True, "reason": "ok", "grounding": [
+    {"target": TARGET, "file": TARGET, "quote": "<h1>Không có trong file</h1>",
+     "before": "a", "after": "b", "verify": "c"}]}
+RIGHT = {**WRONG, "grounding": [{**WRONG["grounding"][0], "quote": QUOTE}]}
+
+
+def _target_repo(tmp_path):
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    page = tmp_path / Path(TARGET)
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(f'{QUOTE}\n', encoding='utf8')
+    subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                    'commit', '-qm', 'base'], check=True)
+
+
+def _target_plan(file=TARGET):
+    return {"capabilities": [], "subtasks": [{"title": "Đổi chữ", "file": file, "verify": "trang có chữ mới",
+                                              "size": "small", "layer": "frontend", "depends_on": []}]}
+
+
+def _named_request(target=TARGET):
+    return {"subject": "Sửa trang", "body": f"đổi chữ trong {target}", "grounding_required": True,
+            "complexity_by_server": True}
+
+
+class _ValidationQueue(FakeModels):
+    """Cổng 2.5 trả lần lượt từng validation; các lời gọi khác giữ reply mặc định."""
+
+    def __init__(self, plan, *validations):
+        super().__init__(plan, validation=validations[0])
+        self.queue = list(validations[1:])
+        self.seen = 0
+
+    def generate(self, model, prompt, **kw):
+        if "PLAN CẦN SOÁT" in prompt:
+            if self.seen and self.queue:
+                self.validation = self.queue.pop(0)
+            self.seen += 1
+        return super().generate(model, prompt, **kw)
+
+
+def _validator_prompts(models):
+    return [call["prompt"] for call in models.calls if "PLAN CẦN SOÁT" in call["prompt"]]
+
+
+def test_a_grounding_block_on_the_named_target_gets_one_clean_second_pass(tmp_path):
+    _target_repo(tmp_path)
+    plan = _target_plan()
+    models = _ValidationQueue(plan, WRONG, RIGHT)
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    request = _named_request()
+
+    out = plan_validate.run(request, deps_with(models), Budget(), state)
+
+    assert plan_validate.final_hit(plan, request, state) is True
+    assert out["blocked"] is False, out
+    prompts = _validator_prompts(models)
+    assert len(prompts) == 2
+    assert "SOÁT LẠI MỘT ĐIỂM ĐÃ BỊ CHẶN" in prompts[1] and TARGET in prompts[1]
+    assert "không tìm thấy trích dẫn" in prompts[1]  # the exact defect
+    assert state["grounding"]["evidence"][0]["quote"] == QUOTE
+    assert out["retry"].startswith("repairable_retry") and state["validator_retry"] == out["retry"]
+
+
+def test_a_second_identical_failure_blocks_exactly_as_before(tmp_path):
+    _target_repo(tmp_path)
+    plan = _target_plan()
+    models = _ValidationQueue(plan, WRONG, WRONG)
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(_named_request(), deps_with(models), Budget(), state)
+
+    assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
+    assert len(_validator_prompts(models)) == 2  # exactly one extra pass, never a third
+    assert TARGET in out["signals"][0]
+    assert out["retry"].startswith("repairable_retry")  # the admin sees why the plan was retried
+
+
+def test_a_grounding_block_without_final_hit_is_unchanged(tmp_path):
+    _target_repo(tmp_path)
+    plan = _target_plan()
+    models = _ValidationQueue(plan, WRONG)
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    request = _named_request("public/khac.html")
+    out = plan_validate.run(request, deps_with(models), Budget(), state)
+
+    assert plan_validate.final_hit(plan, request, state) is False
+    assert len(_validator_prompts(models)) == 1
+    assert set(out) == {"gate", "blocked", "reason", "outcome", "signals", "evidence", "public_message"}
+    assert "validator_retry" not in state
+
+
+def test_an_ai_board_path_still_blocks_on_the_first_verdict(tmp_path):
+    target = "ai-board/harness/gates/plan_validate.py"
+    plan = _target_plan(target)
+    models = _ValidationQueue(plan, RIGHT)
+
+    out = plan_validate.run(_named_request(target), deps_with(models), Budget(),
+                            {"plan": plan, "checkout_source": str(tmp_path)})
+
+    assert out["blocked"] is True and out["reason"].startswith("path AI Board luôn bị chặn")
+    assert models.calls == []  # no validator pass, so no retry either
+
+
+def test_a_core_path_still_asks_for_elevation_on_the_first_verdict(tmp_path):
+    plan = _target_plan("server/index.js")
+    models = _ValidationQueue(plan, RIGHT)
+
+    out = plan_validate.run(_named_request("server/index.js"), deps_with(models), Budget(),
+                            {"plan": plan, "checkout_source": str(tmp_path)})
+
+    assert out["blocked"] is True and out["outcome"] == "elevation_required"
+    assert models.calls == []
+
+
+def test_a_verified_objection_is_not_retried_even_when_the_target_is_right(tmp_path):
+    _target_repo(tmp_path)
+    plan = _target_plan()
+    veto = {"clear": True, "question": None, "grounded": False, "reason": "trang đã có chữ này", "grounding": [],
+            "objection": {"claim": "trang đã có", "evidence": [{"file": TARGET, "snippet": QUOTE}]}}
+    models = _ValidationQueue(plan, veto)
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+
+    out = plan_validate.run(_named_request(), deps_with(models), Budget(), state)
+
+    assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
+    assert len(_validator_prompts(models)) == 1 and "validator_retry" not in state

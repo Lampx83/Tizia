@@ -38,6 +38,11 @@ def _quoted(raw):
     return out
 
 
+def quoted(raw: str) -> list[str]:
+    """Quoted strings in text (the _QUOTED notion above): any quote style, 2-120 chars."""
+    return [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw or "")]
+
+
 def request_text(state):
     text = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
     text = unicodedata.normalize('NFD', text.lower())

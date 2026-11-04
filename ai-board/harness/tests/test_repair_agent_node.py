@@ -102,6 +102,58 @@ def test_a_valid_repair_is_one_heavy_call_applied_to_the_produced_files():
     assert deps.trace.spans[-1]["name"] == "repair_agent.proposal"
 
 
+def visual_result(tmp_path, monkeypatch, *, shots=1, max_images=None):
+    """Full gate-5 result with captured shots in the run's own capture dir; limits narrow the image cap."""
+    from runtime import repair_agent as agent
+    (tmp_path / (agent.SHOT_DIR + "x")).mkdir()
+    records = []
+    for index in range(shots):
+        path = tmp_path / (agent.SHOT_DIR + "x") / f"after-{index}-1280.png"
+        path.write_bytes(b"png-" + bytes(str(index), "ascii"))
+        records.append({"phase": "after", "page": f"/page{index}.html", "width": 1280, "path": str(path)})
+    monkeypatch.setattr(agent.tempfile, "gettempdir", lambda: str(tmp_path))
+    if max_images is not None:
+        original = worker.repair_agent_limits
+        monkeypatch.setattr(worker, "repair_agent_limits", lambda env=None: {**original(env), "max_images": max_images})
+    return {"gate": 5, "blocked": True, "failure_class": "ordinary",
+            "reason": "giao diện tệ hơn bản trước — /page0.html 1280px: tương phản 2.1 < 3.0",
+            "evidence": {"text": "Cổng ảnh: tương phản kém", "screenshots": records}}
+
+
+def test_a_visual_failure_sends_the_screenshots_as_image_parts_and_records_only_counts(tmp_path, monkeypatch):
+    deps = Deps(proposal())
+    run = execution(deps)
+    run.last_result = visual_result(tmp_path, monkeypatch, shots=2)
+    assert run.repair_agent() == "passed"
+    images = deps.calls[0]["extra"]["images"]
+    assert [image["mime"] for image in images] == ["image/png", "image/png"]
+    assert all(image["b64"] for image in images)
+    assert run.agent_evidence[-1]["images"] == [
+        {"page": "/page0.html", "width": 1280, "phase": "after"},
+        {"page": "/page1.html", "width": 1280, "phase": "after"}]
+    assert "b64" not in json.dumps(run.agent_evidence)
+    assert "Ảnh đính kèm: 2 ảnh chụp AFTER của trang /page0.html, /page1.html." in deps.calls[0]["prompt"]
+    from runtime import repair_agent as agent
+    assert len(deps.calls[0]["prompt"]) <= len(agent.PROMPT) + 6000 - 2 * agent.IMAGE_CHARS
+
+
+def test_a_non_visual_failure_sends_no_images(tmp_path, monkeypatch):
+    deps = Deps(proposal())
+    run = execution(deps)
+    run.last_result = visual_result(tmp_path, monkeypatch, shots=2)
+    run.last_result["reason"] = "node --check lỗi"
+    assert run.repair_agent() == "passed"
+    assert "extra" not in deps.calls[0] and "images" not in json.dumps(run.agent_evidence)
+
+
+def test_the_contract_image_cap_bounds_what_the_agent_sends(tmp_path, monkeypatch):
+    deps = Deps(proposal())
+    run = execution(deps)
+    run.last_result = visual_result(tmp_path, monkeypatch, shots=2, max_images=1)
+    assert run.repair_agent() == "passed"
+    assert len(deps.calls[0]["extra"]["images"]) == 1 and len(run.agent_evidence[-1]["images"]) == 1
+
+
 def test_an_invalid_reply_is_recorded_and_rejected_without_a_write():
     deps = Deps("xin lỗi, tôi không biết")
     run = execution(deps)

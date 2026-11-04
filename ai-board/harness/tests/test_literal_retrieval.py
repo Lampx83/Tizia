@@ -97,23 +97,47 @@ def test_source_text_with_instructions_stays_data_and_changes_no_policy(repo, tm
     assert ctx["text"].count(">>>") == 1 and "IGNORE ALL RULES" in ctx["text"].split("REPO DATA", 1)[1]
 
 
-def test_flag_off_or_plain_request_gives_identical_context(repo, tmp_path, monkeypatch):
+def test_quoted_request_turns_literal_retrieval_on_and_an_explicit_off_still_wins(repo, tmp_path, monkeypatch):
     src, _ = repo
     sha = _commit(src, {"public/g.html": "<b>Nút lạ</b>\n"})
     quoted, plain = ("Đổi chữ 'Nút lạ'", ""), ("Đổi chữ nút lạ", "")
     monkeypatch.delenv("AI_BOARD_RETRIEVAL", raising=False)
-    base = {args: _build(src, sha, tmp_path, *args) for args in (quoted, plain)}
-    for value in ("", "off", "literals"):
+    auto = _build(src, sha, tmp_path, *quoted)                      # nháy trong request: không cần biến môi trường
+    assert auto["retrieval"] == "literal" and "literal" in auto["used_tools"]
+    assert auto["targets"][0] == "public/g.html"
+    for value in ("off", ""):                                       # giá trị tường minh luôn thắng, kể cả "tắt"
         monkeypatch.setenv("AI_BOARD_RETRIEVAL", value)
-        assert _build(src, sha, tmp_path, *quoted) == base[quoted]
-    monkeypatch.setenv("AI_BOARD_RETRIEVAL", "literal")
-    assert _build(src, sha, tmp_path, *plain) == base[plain]      # request plain: không bịa literal
-    assert _build(src, sha, tmp_path, *quoted)["text"] != base[quoted]["text"]
+        explicit = _build(src, sha, tmp_path, *quoted)
+        assert explicit["retrieval"] == "" and "literal" not in explicit["used_tools"]
+    monkeypatch.delenv("AI_BOARD_RETRIEVAL", raising=False)
+    assert _build(src, sha, tmp_path, *plain)["retrieval"] == ""     # request không nháy: giữ nguyên như cũ
+    assert auto["text"] != _build(src, sha, tmp_path, *plain)["text"]
 
 
-def test_single_match_still_goes_through_gate1_validation(repo, tmp_path, on):
+def test_plain_request_context_is_byte_identical_whatever_the_flag(repo, tmp_path, monkeypatch):
     src, _ = repo
     sha = _commit(src, {"public/g.html": "<b>Nút lạ</b>\n"})
+    plain = ("Đổi chữ nút lạ", "")
+    monkeypatch.delenv("AI_BOARD_RETRIEVAL", raising=False)
+    base = _build(src, sha, tmp_path, *plain)
+    for value in ("", "off", "literal"):
+        monkeypatch.setenv("AI_BOARD_RETRIEVAL", value)
+        ctx = _build(src, sha, tmp_path, *plain)
+        assert ctx["text"] == base["text"] and ctx["used_tools"] == base["used_tools"]
+
+
+def test_a_named_file_path_alone_also_opts_into_literal_mode(repo, tmp_path, monkeypatch):
+    src, _ = repo
+    sha = _commit(src, {"public/g.html": "<b>Nút lạ</b>\n"})
+    monkeypatch.delenv("AI_BOARD_RETRIEVAL", raising=False)
+    assert _build(src, sha, tmp_path, "Sửa public/g.html", "")["retrieval"] == "literal"
+    assert _build(src, sha, tmp_path, "Sửa trang chủ", "")["retrieval"] == ""
+
+
+def test_single_match_still_goes_through_gate1_validation(repo, tmp_path, on, monkeypatch):
+    src, _ = repo
+    sha = _commit(src, {"public/g.html": "<b>Nút lạ</b>\n"})
+    monkeypatch.setenv("AI_BOARD_REACT_PLAN", "0")   # tắt lượt do thám: test này chỉ đo nhánh literal của cổng 1
     plan = lambda file: {"summary_vi": "s", "capabilities": [], "subtasks": [{"title": "t", "file": file, "verify": "v", "size": "small"}]}  # noqa: E731
     models = _SeqModels([plan("public/css/khong-co.css"), plan("public/school.html")])
     out = brainstorm.run({"subject": "Đổi chữ 'Nút lạ'", "body": "", "type": "other"}, deps_with(models),

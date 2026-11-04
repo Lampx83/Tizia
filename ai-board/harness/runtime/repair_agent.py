@@ -1,12 +1,15 @@
 """Repair agent: one heavy-model proposal for a failure the deterministic ladder can only hand to the admin.
 
 Pure helpers only: build the fenced context, parse the reply, check it against scope/levels/permissions,
-apply the accepted edits. The caller owns the model call, the budget and the attempt cap.
+apply the accepted edits, pick the screenshots worth showing. The caller owns the model call, the budget and
+the attempt cap.
 """
 from __future__ import annotations
 
+import base64
 import json
 import posixpath
+import tempfile
 from pathlib import Path
 
 import path_policy
@@ -16,6 +19,12 @@ PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "repair_agent.md"
 PROPOSAL_CHARS = 800
 DIAGNOSIS_CHARS = PROPOSAL_CHARS
 MAX_CHANGES = 4
+MAX_IMAGES = 2
+IMAGE_B64 = 1_500_000     # trần base64 mỗi ảnh; ~1.1 MB nhị phân, đủ 1 ảnh 1280px full-page
+# Mỗi ảnh trừ IMAGE_CHARS khỏi context_chars: text ≤6000 ký tự ≈1.5K token, ảnh ~3.3K token/ảnh, cả hai vẫn dưới cửa sổ 32K.
+IMAGE_CHARS = 1000
+SHOT_DIR = "ai-verify-shots-"  # thư mục ảnh tạm do cổng 5 / sandbox tạo (tempfile.mkdtemp)
+IMAGE_MIMES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
 TRUNCATED = "…(cắt)"
 SECTIONS = ("rules", "capability", "request", "spec", "failure", "tried", "plan", "target")
 
@@ -32,6 +41,57 @@ def prompt(context_text: str) -> str:
 def applies(action) -> bool:
     """Only a ladder that would stop and ask the admin reaches the agent."""
     return str(action or "") == progress.STOP_ADMIN
+
+
+def visual(result: dict) -> bool:
+    """Gate 5 blocked because the new UI is worse than the base (reason prefix of gates/verify.py)."""
+    return "giao diện tệ hơn" in str(result.get("reason") or "")
+
+
+def images(result: dict, *, max_images: int = MAX_IMAGES, temp_root=None, read=None) -> list[dict]:
+    """Ảnh đính kèm cho lời gọi: {'mime','b64','page','width','phase'}, tối đa 1 ảnh/trang đã đổi.
+
+    [] khi lỗi không phải hiển thị. Cổng 5 chỉ chụp trang đã đổi nên mọi ảnh AFTER đều đúng trang; ảnh BEFORE là
+    code cũ nên bỏ. Chỉ đọc file trong thư mục chụp của chính run (SHOT_DIR dưới temp), phần còn lại bị loại.
+    """
+    if not visual(result):
+        return []
+    evidence = result.get("evidence") or {}
+    root = Path(temp_root or tempfile.gettempdir()).resolve()
+    primary = str(evidence.get("screenshot") or "")
+    read = read or (lambda path, size: Path(path).open("rb").read(size))
+
+    def rank(shot: dict) -> tuple:
+        return (bool(primary) and str(Path(shot["path"]).resolve()) != str(Path(primary).resolve()),
+                bool(shot.get("focus")), shot.get("width") != 1280)
+
+    best: dict[str, dict] = {}
+    for shot in evidence.get("screenshots") or []:
+        if not isinstance(shot, dict) or shot.get("phase") != "after" or not shot.get("path"):
+            continue
+        path = Path(shot["path"]).resolve()
+        if path.parent.parent != root or not path.parent.name.startswith(SHOT_DIR) or not path.is_file():
+            continue
+        mime = IMAGE_MIMES.get(path.suffix.lower().lstrip("."))
+        if mime is None:
+            continue
+        shot = {**shot, "path": str(path), "mime": mime}
+        page = str(shot.get("page") or "")
+        if page not in best or rank(shot) < rank(best[page]):
+            best[page] = shot
+
+    out = []
+    for shot in sorted(best.values(), key=rank)[:max_images]:
+        try:
+            raw = read(shot["path"], IMAGE_B64 * 3 // 4 + 1)  # trần đọc: quá cỡ thì không vừa base64
+        except OSError:
+            continue
+        b64 = base64.b64encode(raw).decode()
+        if len(b64) > IMAGE_B64:
+            continue
+        out.append({"mime": shot["mime"], "b64": b64, "page": shot["page"],
+                    "width": shot.get("width"), "phase": shot["phase"]})
+    return out
 
 
 def context(parts: dict[str, str], *, limit: int) -> str:

@@ -57,6 +57,31 @@ def read_body(response, limit_s: float) -> bytes:
 # token vừa đủ; bớt ~1.5 GiB KV so với 16K trên GPU dùng chung đã sát trần 75% (42,500 MiB).
 NUM_CTX = 8192
 
+# Ảnh chỉ đi được trên route chat của vLLM; trần 2 ảnh × 1.5 MB base64 giữ 1 lời gọi trong ngân sách context.
+MAX_IMAGES = 2
+MAX_IMAGE_B64 = 1_500_000
+IMAGE_MIMES = frozenset({'image/png', 'image/jpeg', 'image/webp', 'image/gif'})
+
+
+def image_parts(items) -> list[dict]:
+    """OpenAI image parts từ [{'mime','b64'}] hoặc [{'data_url'}]. Raise ValueError khi quá trần hoặc mime không phải ảnh."""
+    if len(items) > MAX_IMAGES:
+        raise ValueError(f'at most {MAX_IMAGES} images per call')
+    parts = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError('image item must be an object')
+        mime, b64 = str(item.get('mime') or ''), str(item.get('b64') or '')
+        if not mime and item.get('data_url'):
+            mime, _, b64 = str(item['data_url']).partition(';base64,')
+            mime = mime.removeprefix('data:')
+        if mime not in IMAGE_MIMES or not b64:
+            raise ValueError('image part needs an image mime and base64 data')
+        if len(b64) > MAX_IMAGE_B64:
+            raise ValueError('image part too large')
+        parts.append({'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{b64}'}})
+    return parts
+
 
 @dataclass
 class OllamaClient:
@@ -127,7 +152,12 @@ class OllamaClient:
                            extra=extra, _single_attempt=_single_attempt, **options)
         if self.protocol == 'vllm':
             ModelRouter.validate_endpoint(self.base_url)
-            messages = [{'role': 'user', 'content': prompt}]
+            images = image_parts((extra or {}).get('images') or ())
+            content = prompt
+            if images:  # text part first, image parts after it (OpenAI chat shape)
+                content = ([{'type': 'text', 'text': prompt}, *images] if isinstance(prompt, str)
+                           else [*prompt, *images])
+            messages = [{'role': 'user', 'content': content}]
             if extra and extra.get('system'):
                 messages.insert(0, {'role': 'system', 'content': extra['system']})
             payload = {'model': model, 'messages': messages, 'stream': False}
@@ -175,6 +205,7 @@ class OllamaClient:
                     '_provider': self.route_label, **({'tool_calls': tool_calls} if tool_calls else {})}
         if not isinstance(prompt, str):  # content parts (vision) exist only on the vLLM chat route
             raise ValueError('content parts need the vLLM protocol')
+        images = len((extra or {}).get('images') or ())  # /api/generate has no vision part: skip, but say so
         payload = {
             "model": model,
             "prompt": prompt,
@@ -184,10 +215,12 @@ class OllamaClient:
         if format:
             payload["format"] = format
         payload.update({k: v for k, v in (extra or {}).items()
-                        if k not in ('thinking', 'force_thinking', 'max_total_output_tokens', '_skill_evidence', '_skill_selection')})
+                        if k not in ('thinking', 'force_thinking', 'max_total_output_tokens', 'images',
+                                     '_skill_evidence', '_skill_selection')})
         if extra and 'thinking' in extra:
             payload['think'] = bool(extra['thinking'])
-        return self._post("/api/generate", payload, retry=False) if _single_attempt else self._post("/api/generate", payload)
+        body = self._post("/api/generate", payload, retry=False) if _single_attempt else self._post("/api/generate", payload)
+        return {**body, '_images_skipped': images} if images else body
 
     def generate_for(self, role: str, model: str, prompt: str, **options) -> dict:
         """Legacy calls keep provider selection tied to the gate role, not a shared tag."""

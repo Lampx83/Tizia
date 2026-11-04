@@ -613,16 +613,16 @@ def test_hybrid_arm_shows_the_whole_file_only_when_it_fits_the_context_window():
         ablation.apply("default")
 
 
-def test_gate3_context_defaults_to_excerpt_and_env_opts_into_whole_file(monkeypatch):
+def test_gate3_context_sends_a_small_file_whole_and_env_can_pin_the_excerpt(monkeypatch):
     from gates import implement
     sub = {"file": "a.js", "title": "t", "verify": "v"}
     small, big = "x\ny\nz", "line\n" * 20_000
     state = {"checkout_source": ".", "base_sha": "x"}
     monkeypatch.delenv("AI_BOARD_GATE3_CONTEXT", raising=False)
-    assert "toàn bộ file" not in implement.gate3_context(sub, state, small, [], ["x"])[0]
-    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "hybrid")
-    assert "L3| z" in implement.gate3_context(sub, {}, small, [], ["x"])[0]
+    assert "L3| z" in implement.gate3_context(sub, {}, small, [], ["x"])[0]      # vừa ngưỡng: cả file
     assert "toàn bộ file" not in (implement.gate3_context(sub, state, big, [], ["line"])[0] or "")
+    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "excerpt")                     # replay pin: luôn trích
+    assert "toàn bộ file" not in implement.gate3_context(sub, state, small, [], ["x"])[0]
 
 
 def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restores_it():

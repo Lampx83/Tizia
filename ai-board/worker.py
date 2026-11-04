@@ -228,6 +228,7 @@ class _Execution:
         self.progress_window = None
         self.agent_attempts = 0
         self.agent_evidence: list[dict] = []
+        self.agent_images: list[dict] = []
         self.reuse_next = None
         self.halt: dict = {}
         self.stop_note: str | None = None
@@ -675,7 +676,8 @@ class _Execution:
 
     def _agent_note(self, record: dict) -> None:
         """One bounded agent record; the trace keeps the same fields as a span so the admin panel can show them."""
-        self.agent_evidence.append({**record, "attempt": self.agent_attempts})
+        self.agent_evidence.append({**record, "attempt": self.agent_attempts,
+                                    **({"images": list(self.agent_images)} if self.agent_images else {})})
         trace = getattr(self.deps, "trace", None)
         if trace is None or not hasattr(trace, "add_span"):
             return
@@ -694,6 +696,7 @@ class _Execution:
         from runtime import levels, repair_agent as agent, tool_loop
         spec = repair_agent_limits()
         self.agent_attempts += 1
+        self.agent_images = []
         if self.agent_attempts > int(spec["attempts"]):
             self._agent_note({"outcome": "stopped", "reason": f"hết {spec['attempts']} lượt"})
             self.stop_note = f"repair agent: hết {spec['attempts']} lượt"
@@ -716,6 +719,11 @@ class _Execution:
             self._agent_note({"outcome": "stopped", "reason": "hết lượt sửa nội dung"})
             self.stop_note = "repair agent: hết lượt sửa nội dung"
             return "blocked"
+        # Ảnh là content part, không phải text: trừ IMAGE_CHARS mỗi ảnh khỏi context_chars (6000 → 4000 với 2 ảnh).
+        shots = agent.images(self.last_result or last, max_images=int(spec.get("max_images") or agent.MAX_IMAGES))
+        self.agent_images = [{"page": shot["page"], "width": shot["width"], "phase": shot["phase"]} for shot in shots]
+        limit = max(1000, int(spec["context_chars"]) - len(shots) * agent.IMAGE_CHARS)
+        extra = {"images": [{"mime": shot["mime"], "b64": shot["b64"]} for shot in shots]} if shots else None
         context = agent.context({
             "rules": (f"tools: {', '.join(sorted(agent.allowed_tools(tool_loop.MANIFEST)))}; "
                       "không shell, không mạng, không Docker; chỉ sửa file trong scope, mỗi thay đổi là một khối search/replace "
@@ -723,15 +731,18 @@ class _Execution:
             "capability": ", ".join(str(item) for item in self.plan.get("capabilities") or []),
             "request": str(self.request_detail or ""),
             "spec": str(self.plan.get("goal") or ""),
-            "failure": f"cổng {last['gate']}: {last.get('reason')}\n" + str((last.get("evidence") or {}).get("text") or ""),
+            "failure": f"cổng {last['gate']}: {last.get('reason')}\n" + str((last.get("evidence") or {}).get("text") or "")
+                       + (f"\nẢnh đính kèm: {len(shots)} ảnh chụp AFTER của trang "
+                          + ", ".join(sorted({str(shot['page']) for shot in shots})) + "." if shots else ""),
             "tried": "\n".join(window.tried),
             "plan": json.dumps(_execution_plan(self.plan), ensure_ascii=False)[:2000],
             "target": "\n".join(sorted(code)),
-        }, limit=int(spec["context_chars"]))
+        }, limit=limit)
         try:
             body = self.deps.call_model(routing.first(spec["role"])["model"], agent.prompt(context), gate=3, budget=self.budget,
                                         role=spec["role"], format="json", prompt_name="repair_agent.md",
-                                        options={"temperature": spec["temperature"], "num_predict": spec["max_tokens"]})
+                                        options={"temperature": spec["temperature"], "num_predict": spec["max_tokens"]},
+                                        **({"extra": extra} if extra else {}))
             proposal = agent.parse(body.get("response"))
         except agent.ProposalError as error:
             self._agent_note({"outcome": "rejected", "reason": str(error)[:300]})
@@ -1987,6 +1998,7 @@ class HarnessPlanner:
         detail = {
             "gate": gate, "reason": result.get("reason"), "signals": list(result.get("signals") or []),
             **({"evidence": result["evidence"]} if result.get("evidence") else {}),
+            **({"retry": result["retry"]} if result.get("retry") else {}),
             "public_message": result.get("public_message"),
             "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
             **_objection_evidence(history), "pins": _plan_pins(source),
@@ -2034,7 +2046,8 @@ class HarnessPlanner:
         def run_plan(req):
             """Một lượt cổng 1 → 2.5 trên `req`; trả {gate, result} của cổng chặn (rỗng nếu qua)."""
             stopped.clear()
-            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill", "attachments"):
+            for key in ("plan", "complexity_signals", "intake", "grounding", "assumption", "skill", "attachments",
+                        "validator_retry"):
                 state.pop(key, None)
 
             def plan_gate(gate):

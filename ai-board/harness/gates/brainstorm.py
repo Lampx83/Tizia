@@ -300,10 +300,16 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             # Lượt sửa plan: hint riêng, không nằm trong thread để validator không đọc nhầm.
             ask = f"{ask}\n\n{request['plan_repair']}"
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
-        react = None
+        react, evidence = None, ""
         if not attempt and react_plan.enabled():
             react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
                                    db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
+        elif not attempt and react_plan.exploration_enabled() and react_plan.warranted(request, ctx):
+            # Hard request (see react_plan.warranted): one bounded read-only pass puts real source lines in front of
+            # the planner; a pass that fails or reads nothing leaves `ask` byte-identical to the one-shot prompt.
+            evidence = react_plan.explore(prompt, deps, budget, model=deps.models.gate1_model, source=source,
+                                          sha=commit, db_path=db_path, proposal_id=proposal_id,
+                                          skill_context=skill_context)
         # Plain JSON, not guided_json (LF/131): the vLLM gateway offers no guided_json/enum, so a path
         # field cannot be constrained while it is generated. Paths are instead closed after generation,
         # deterministically: parse_plan + check_files (real file at the pinned sha, or an allowed new
@@ -313,7 +319,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         plan_extra = {"max_total_output_tokens": cap, "force_thinking": False}
         options = ({"temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.4}
                    if get_settings().plan_repair else None)
-        body = react or deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
+        body = react or deps.call_model(deps.models.gate1_model, ask + evidence, gate=1, budget=budget,
                                         db_path=db_path, proposal_id=proposal_id, prompt_name="brainstorm.md",
                                         skill_context=skill_context, options=options,
                                         extra=plan_extra)

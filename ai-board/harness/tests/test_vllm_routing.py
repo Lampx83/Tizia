@@ -1,4 +1,5 @@
 """Public local HTTP fixtures only: no GPU or external model endpoints."""
+import base64
 import json
 import threading
 import time
@@ -212,6 +213,51 @@ def test_one_call_can_force_thinking_without_changing_its_role():
     forced, plain = calls[0][2], calls[1][2]
     assert forced['chat_template_kwargs'] == {'enable_thinking': True} and forced['max_tokens'] == 100 + models.routing.reasoning_tokens()
     assert plain['chat_template_kwargs'] == {'enable_thinking': False} and plain['max_tokens'] == 100
+
+
+@pytest.mark.parametrize('routing', ['false', 'true'])
+def test_image_extra_becomes_content_parts_after_the_text_part(routing):
+    """Repair agent passes screenshots through `extra`; vLLM wants OpenAI image parts, never an unknown body field."""
+    b64 = base64.b64encode(b'not-really-a-png').decode()
+    with gateway() as (url, calls):
+        models = OllamaClient.from_env({'VLLM_URL': url, 'VLLM_SECKEY': 'k', 'GATE3_MODEL_HEAVY': 'heavy',
+                                        'AI_BOARD_MODEL_ROUTING': routing})
+        Deps(models=models, notify=None).call_model('heavy', 'p', gate=3, role='gate3_heavy', budget=Budget(),
+            extra={'images': [{'mime': 'image/png', 'b64': b64}]})
+    payload = calls[0][2]
+    assert payload['messages'][0]['content'] == [
+        {'type': 'text', 'text': 'p'},
+        {'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{b64}'}}]
+    assert 'images' not in payload
+
+
+def test_image_extra_accepts_a_data_url():
+    b64 = base64.b64encode(b'x').decode()
+    with gateway() as (url, calls):
+        OllamaClient(base_url=url, protocol='vllm').generate(
+            'heavy', 'p', extra={'images': [{'data_url': f'data:image/jpeg;base64,{b64}'}]})
+    assert calls[0][2]['messages'][0]['content'][1]['image_url']['url'] == f'data:image/jpeg;base64,{b64}'
+
+
+def test_image_extra_over_the_cap_or_not_an_image_is_rejected_before_the_request():
+    b64 = base64.b64encode(b'x').decode()
+    with gateway() as (url, calls):
+        models = OllamaClient(base_url=url, protocol='vllm')
+        with pytest.raises(ValueError, match='at most'):
+            models.generate('heavy', 'p', extra={'images': [{'mime': 'image/png', 'b64': b64}] * 3})
+        with pytest.raises(ValueError, match='image part'):
+            models.generate('heavy', 'p', extra={'images': [{'mime': 'text/plain', 'b64': b64}]})
+        with pytest.raises(ValueError, match='image part'):
+            models.generate('heavy', 'p', extra={'images': [{'mime': 'image/png', 'b64': 'x' * 1_500_001}]})
+        assert calls == []
+
+
+def test_ollama_protocol_ignores_images_and_says_so():
+    b64 = base64.b64encode(b'x').decode()
+    with gateway(response={'response': 'ok'}) as (url, calls):
+        body = OllamaClient(base_url=url).generate('m', 'p', extra={'images': [{'mime': 'image/png', 'b64': b64}]})
+    assert body['response'] == 'ok' and body['_images_skipped'] == 1
+    assert 'images' not in calls[0][2] and b64 not in json.dumps(calls[0][2])
 
 
 @pytest.mark.parametrize('mode', ['legacy_ollama', 'legacy_vllm', 'routed_vllm'])

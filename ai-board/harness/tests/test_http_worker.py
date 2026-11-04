@@ -1995,6 +1995,18 @@ def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
     assert len(snap["thread"]) == 1
 
 
+def test_plan_blocked_detail_carries_the_repairable_retry_evidence():
+    planner = HarnessPlanner.__new__(HarnessPlanner)
+    result = {"gate": 2.5, "blocked": True, "reason": "plan_ungrounded", "outcome": "plan_ungrounded",
+              "signals": ["public/trang.html: không tìm thấy trích dẫn hành vi trong code nguồn"],
+              "evidence": {"why": "x"}, "retry": "repairable_retry: thiếu trích dẫn -> public/trang.html"}
+    error = planner._blocked(2.5, result, [], None, {"plan": {"subtasks": []}}, {"id": 7})
+    assert error.detail["retry"] == "repairable_retry: thiếu trích dẫn -> public/trang.html"
+    plain = planner._blocked(2.5, {key: value for key, value in result.items() if key != "retry"},
+                             [], None, {"plan": {"subtasks": []}}, {"id": 7})
+    assert "retry" not in plain.detail
+
+
 def test_plan_repairable_only_for_model_plan_errors():
     assert _plan_repairable({"gate": 1, "result": {"reason": "plan không hợp lệ: 2 subtask cùng sửa x"}})
     assert not _plan_repairable({"gate": 1, "result": {"reason": "intake_human_review: tất định: privileged_area"}})

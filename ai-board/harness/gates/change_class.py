@@ -50,3 +50,11 @@ def classify(diffs: list[dict]) -> dict:
         if _SCHEMA_FILE.search(path) or path.startswith(_SERVER) and any(_ROUTE.search(line) for line in added):
             reasons.append({"kind": "api_schema", "path": path})
     return {"class": "one_way" if reasons else "two_way", "reasons": reasons}
+
+
+def structural(path: str | None) -> bool:
+    """Planned target sits on a one-way surface (auth/payment/migration/schema): a ±RADIUS line excerpt is too narrow."""
+    path = str(path or "").replace("\\", "/")
+    if not path or _TEST.search(path):
+        return False
+    return any(pattern.search(path) for pattern in (_MIGRATION, _AUTH, _PAYMENT, _SCHEMA_FILE))

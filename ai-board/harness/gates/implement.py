@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 import path_policy
-from gates import gate3_guards
+from gates import change_class, gate3_guards
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
@@ -117,14 +117,16 @@ def build_prompt(subtask: dict, repair_reason: str | None = None, context: str |
     return prompt + REPAIR_SUFFIX.format(reason=repair_reason[:500]) if repair_reason else prompt
 
 
-def file_prompt_context(subtask: dict, content: str, siblings: list[str], words: list[str]) -> str:
+def file_prompt_context(subtask: dict, content: str, siblings: list[str], words: list[str],
+                        radius: int | None = None) -> str:
     """Trích dòng liên quan + danh sách file cùng thư mục (cây codebase thu gọn)."""
     folder = posixpath.dirname(subtask["file"]) or "."
     return (f"(file {len(content.splitlines())} dòng; cùng thư mục {folder}/: {', '.join(siblings[:40]) or '—'})\n"
-            + file_context.excerpt(content, words, filename=subtask["file"]))
+            + file_context.excerpt(content, words, filename=subtask["file"], radius=radius))
 
 
-WHOLE_FILE_MAX_CHARS = 60_000
+WHOLE_FILE_MAX_CHARS = 60_000  # bản đánh số vừa ngưỡng này thì gửi cả file rẻ hơn một vòng sửa
+STRUCTURAL_RADIUS = 10  # bề mặt một chiều (auth/payment/migration/schema): excerpt mặc định ±3 dòng quá hẹp
 
 _EXEMPLAR_MAX_CHARS = 6_000
 _DEP_MAX_CHARS = 6_000
@@ -217,41 +219,73 @@ def numbered(content: str) -> str:
     return "\n".join(f"L{n}| {line}" for n, line in enumerate(content.splitlines(), 1))
 
 
+def repo_context_for(subtask: dict, state: dict):
+    """build_context cho 1 subtask (skill + tool trên base sha); None khi state không có checkout_source."""
+    if not state.get("checkout_source"):
+        return None
+    return repo_context.build_context(
+        3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
+            "folder_brief": state.get("folder_brief"),
+            # Folder chức năng: trang/module mới chọn skill new-feature (có dòng script module được phép).
+            "type": "feature" if state.get("folder_brief") else None},
+        subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
+
+
+def capped_whole_file(current: str, budget: int) -> str:
+    """Cả file đánh số trong `budget` ký tự; vượt thì giữ dòng ĐẦU + marker cắt (khối repo data không bao giờ bị cắt)."""
+    out, used = [], 0
+    for line in numbered(current).split("\n"):
+        if used + len(line) + 1 > budget:
+            out.append(f"(bớt: chỉ trích {len(out)} dòng đầu của file)")
+            break
+        out.append(line)
+        used += len(line) + 1
+    return "\n".join(out)
+
+
 def whole_file_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
-    """(context, lessons, ctx) with the whole numbered file; file MỚI → mẫu file thật (như excerpt)."""
+    """(context, lessons, ctx) với cả file đánh số VÀ khối REPO DATA như nhánh excerpt — hints định vị vẫn cần,
+    nên file bị cắt theo ngưỡng chứ không cắt khối kia."""
     if current is None:
         return _new_file_context(subtask, state, siblings), [], None
-    return f"(file {len(current.splitlines())} dòng; toàn bộ file)\n{numbered(current)}", [], None
+    lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
+    ctx = repo_context_for(subtask, state)
+    header = f"(file {len(current.splitlines())} dòng; toàn bộ file)\n"
+    if not ctx:
+        return header + capped_whole_file(current, WHOLE_FILE_MAX_CHARS), lessons, None
+    if _EXCERPT_LINE.search(ctx["text"]):
+        lessons = []  # skill đã kèm tool lessons
+    room = max(WHOLE_FILE_MAX_CHARS - len(ctx["text"]), 0)
+    return f"{header}{capped_whole_file(current, room)}\n\n{ctx['text']}", lessons, ctx
 
 
 def gate3_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
-    """Excerpt by default; AI_BOARD_GATE3_CONTEXT=hybrid sends the whole file when it is <= WHOLE_FILE_MAX_CHARS."""
-    if (current is None or len(current) <= WHOLE_FILE_MAX_CHARS) and get_settings().gate3_context == "hybrid":
+    """File đích vừa ngưỡng thì gửi TOÀN BỘ file đánh số — case khó hỏng vì model chỉ thấy một đoạn,
+    không vì prompt ngắn, nên gửi cả file rẻ hơn một vòng sửa. File lớn: excerpt như cũ, riêng bề mặt
+    một chiều thì nới bán kính thay vì gửi cả file. AI_BOARD_GATE3_CONTEXT=excerpt tắt hẳn (replay pin)."""
+    if current is None or get_settings().gate3_context == "excerpt":
+        return excerpt_context(subtask, state, current, siblings, words)
+    if len(current) <= WHOLE_FILE_MAX_CHARS:
         return whole_file_context(subtask, state, current, siblings, words)
-    return excerpt_context(subtask, state, current, siblings, words)
+    radius = STRUCTURAL_RADIUS if change_class.structural(subtask["file"]) else None
+    return excerpt_context(subtask, state, current, siblings, words, radius=radius)
 
 
-def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str]) -> tuple:
+def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: list[str], words: list[str],
+                    radius: int | None = None) -> tuple:
     """(context, lessons, ctx): trích file model thấy ở cổng 3 + bài học + kết quả build_context. Bộ đo recall dùng chung."""
     if current is None:
         # File MỚI: mẫu file thật cùng thể loại + siblings (LF/107 tiêu chí 8a); lessons vẫn giữ.
         return (_new_file_context(subtask, state, siblings),
                 memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else [],
                 None)
-    context = file_prompt_context(subtask, current, siblings, words)
+    context = file_prompt_context(subtask, current, siblings, words, radius=radius)
     lessons = memory.recall(state["memory_path"], subtask["file"], words) if state.get("memory_path") else []
-    ctx = None
-    if current is not None:
+    ctx = repo_context_for(subtask, state)
+    if ctx and _EXCERPT_LINE.search(ctx["text"]):
         # Skill chọn tool (grep `Lnn|`, dàn ý, bài học) trên base sha. Không có trích dòng → giữ excerpt cũ.
-        ctx = repo_context.build_context(
-            3, {"subject": subtask["title"], "body": state.get("request_detail") or subtask["verify"],
-                "folder_brief": state.get("folder_brief"),
-                # Folder chức năng: trang/module mới chọn skill new-feature (có dòng script module được phép).
-                "type": "feature" if state.get("folder_brief") else None},
-            subtask, state["checkout_source"], state["base_sha"], memory_path=state.get("memory_path"))
-        if _EXCERPT_LINE.search(ctx["text"]):
-            context = context.split("\n", 1)[0] + "\n" + ctx["text"]
-            lessons = []  # skill đã kèm tool lessons
+        context = context.split("\n", 1)[0] + "\n" + ctx["text"]
+        lessons = []  # skill đã kèm tool lessons
     return context, lessons, ctx
 
 
@@ -601,6 +635,26 @@ def _progress_entry(out: dict, model: str) -> dict:
             **({"verification": out["verification"]} if out.get("verification") else {})}
 
 
+def empty_context_stop(subtask: dict, ctx: dict | None = None) -> dict | None:
+    """Bề mặt rỗng (file đích trống, `targets` rỗng, `used_tools` rỗng) → blocked + needs_review, KHÔNG gọi model.
+
+    Gọi model trên ngữ cảnh rỗng chỉ đốt một vòng GPU rồi hỏng; người soát phải xem plan/retrieval trước.
+    `ctx` None = file mới, không có gì để phân giải → đường cũ, không chặn.
+    `critical` là lớp sẵn có mà repair_class xếp `stop_admin` — không replan, không tốn gate 1."""
+    if not str(subtask.get("file") or "").strip():
+        reason = "plan không có file đích"
+    elif ctx is None:
+        return None
+    elif not ctx.get("targets"):
+        reason = "không phân giải được file đích nào từ yêu cầu"
+    elif not ctx.get("used_tools"):
+        reason = "không đọc được dữ liệu repo cho file đích"
+    else:
+        return None
+    return {"gate": 3, "blocked": True, "failure_class": "critical", "needs_review": True,
+            "reason": f"subtask '{subtask.get('title')}': {reason} — dừng để người soát, chưa gọi model"}
+
+
 def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, current: str | None, repo: Path,
                   known: set, db_path, proposal_id) -> tuple:
     """Một subtask: gọi model (loop/retry) tới khi ra code hợp lệ. → ("ok", out, model, receipts) | ("blocked", gate result).
@@ -615,12 +669,16 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if not budget.tick():
         return "blocked", {"gate": 3, "blocked": True, "failure_class": "budget",
                            "reason": f"budget cạn trước subtask '{subtask.get('title')}'"}
+    if stop := empty_context_stop(subtask):
+        return "blocked", stop
     check_file_path(subtask["file"])
     model = model_for(subtask, deps.models)
     role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
     words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
     siblings = _siblings(state.get("checkout_source"), state.get("base_sha") or "", subtask["file"])
     context, lessons, ctx = gate3_context(subtask, state, current, siblings, words)
+    if stop := empty_context_stop(subtask, ctx):
+        return "blocked", stop
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)

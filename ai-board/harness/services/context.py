@@ -18,12 +18,12 @@ from functools import lru_cache
 from pathlib import Path
 
 from repositories import code_index
-from runtime import limits
+from runtime import coverage, limits
 from services import file_context, skill_selection
 import tools
 from verification import functional
 from services.file_context import keywords
-from settings import get_settings
+from settings import get_settings, retrieval_choice
 
 HERE = Path(__file__).resolve().parent.parent
 _MANUAL = (HERE / "prompts" / "AIBOARD.md").read_text(encoding="utf-8").strip() + "\n\n"
@@ -171,6 +171,16 @@ def _commit(source, sha: str) -> str | None:
         return None
 
 
+def retrieval_mode(request_text: str, env=None) -> str:
+    """Gate-1 retrieval mode ('' = off, 'literal', 'model'): an explicit AI_BOARD_RETRIEVAL always wins; unset turns
+    literal retrieval on for a request that quotes text or names a file, because such a request has an anchor to grep."""
+    chosen = retrieval_choice(env)
+    if chosen:
+        return "" if chosen == "off" else chosen
+    text = request_text or ""
+    return "literal" if functional.quoted(text) or coverage.requested_paths(text) else ""
+
+
 def _mentioned_files(text: str, source, sha: str) -> list[str]:
     """Đường dẫn/tên file nhắc trong request → file thật ở sha (tên trần khớp theo basename, public/ trước)."""
     refs = list(dict.fromkeys(r.lstrip("./") for r in _PATH_REF.findall(text or "")))
@@ -233,6 +243,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     skill = pick_skill(f"{request_text} {sub_text}", request.get("type"), file, exists)
 
     parts, used, targets, best = [], [], [], []
+    mode = ""  # gate-1 retrieval mode actually resolved for this request ('' = off, 'literal', 'model')
     log = []  # every tool the harness ran for the model: what, with which inputs, how much came back
     if commit:
         targets = [file] if file else _mentioned_files(request_text, source, commit)
@@ -259,9 +270,10 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                          f"{', '.join(render)}. Sửa ở file đó, không thêm phần tử mới vào trang.")
             used.append("locate")
         literal = {}
-        if gate == 1 and not file and get_settings().retrieval:
+        mode = retrieval_mode(request_text) if gate == 1 and not file else ""
+        if mode:
             quoted = file_context.literals(request.get("subject"), request.get("body"), thread)
-            if get_settings().retrieval == "model":  # strings the model chose to search for (brainstorm asked once)
+            if mode == "model":  # strings the model chose to search for (brainstorm asked once)
                 quoted = list(dict.fromkeys([*quoted, *(request.get("_search_terms") or [])]))
             if quoted:
                 literal = tools.literal_candidates(source, commit, quoted, pages)
@@ -328,6 +340,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     return {"skill": skill.name, "text": text, "used_tools": list(dict.fromkeys(used)), "chars": len(text),
             "sha": commit, "tiers": {"brief": len(brief), "recent": len(recent), "repo": len(data)},
             "targets": targets,  # file cổng này nhắm tới (bộ đo chấm "đúng file")
+            "retrieval": mode,
             "best_match": best[0][0] if best else None, "tool_log": log, "selection": selection}
 
 
@@ -343,7 +356,7 @@ def report(trace, ctx: dict, subject: str = "") -> None:
         return
     trace.note("knows", "skill", f"skill {ctx['skill']} · repo {str(ctx.get('sha') or '?')[:7]} · {ctx['chars']} chars",
                {"tiers": ctx.get("tiers"), "targets": ctx.get("targets"), "best_match": ctx.get("best_match"),
-                "skills": ctx.get("selection")})
+                "retrieval": ctx.get("retrieval") or "off", "skills": ctx.get("selection")})
     for entry in ctx.get("tool_log") or []:
         trace.note("tool", entry["tool"], f"{entry['result']} ({entry['chars']} chars)" if entry["chars"] else entry["result"],
                    entry["params"])

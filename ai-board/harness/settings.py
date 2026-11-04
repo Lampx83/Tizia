@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     tool_loop: Literal["", "1", "auto"] = ""
     best_match: Literal["enforce", "advisory"] = "enforce"
     retrieval: Literal["", "literal", "model"] = ""
-    gate3_context: Literal["excerpt", "hybrid"] = "excerpt"
+    gate3_context: Literal["excerpt", "hybrid"] = "hybrid"  # hybrid: cả file khi vừa ngưỡng; excerpt: luôn trích (replay pin)
     verify_network: Literal["published", "internal"] = "published"
     worker_mode: Literal["off", "shadow", "active"] = "off"
 
@@ -139,6 +139,15 @@ def _build(snapshot: tuple) -> Settings:
 
 def _env_names() -> tuple[str, ...]:
     return tuple(f"{PREFIX}{name}".upper() for name in Settings.model_fields)
+
+
+def retrieval_choice(env: Mapping[str, str] | None = None) -> str:
+    """Raw AI_BOARD_RETRIEVAL: mode it names, "off" when it is set to anything else, "" when unset (request decides)."""
+    src = os.environ if env is None else env
+    if "AI_BOARD_RETRIEVAL" not in src:
+        return ""
+    value = str(src["AI_BOARD_RETRIEVAL"] or "").strip().lower()
+    return value if value in ("literal", "model") else "off"
 
 
 def get_settings(env: Mapping[str, str] | None = None) -> Settings:
