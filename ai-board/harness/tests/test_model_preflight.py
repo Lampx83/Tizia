@@ -108,6 +108,17 @@ def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypat
     assert roles == ['gate1']
 
 
+def test_probe_is_skipped_while_the_endpoint_cools_down(monkeypatch):
+    import main
+    calls = []
+    monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, **k: calls.append(1) or {})
+    routing = type('Router', (), {'candidates': staticmethod(lambda role, exclude=(): [])})()
+    ollama = type('Models', (), {'routing': routing, 'gate1_model': 'm'})()
+    verdict = model_preflight(ollama)()
+    assert verdict['status'] == 'model_unavailable' and 'cooldown' in verdict['error']
+    assert calls == []  # không đẩy thêm 1 request vào endpoint vừa lỗi
+
+
 def test_gpu_wait_reports_board_state_and_clears_it_after_a_successful_probe():
     now = [0.0]
     ollama = FakeOllama(broken={'g1'})

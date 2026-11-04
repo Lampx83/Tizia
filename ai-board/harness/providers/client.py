@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import select
 import time
 import urllib.error
 import urllib.request
@@ -20,6 +21,37 @@ _sleep = time.sleep
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+def _socket_of(response):
+    """Socket dưới HTTPResponse (fp → SocketIO → _sock), None nếu không lấy được."""
+    return getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+
+
+def read_body(response, limit_s: float) -> bytes:
+    """Đọc hết body trong trần `limit_s` giây THẬT. Timeout của socket chỉ chặn từng lần đọc, nên gateway giữ kết
+    nối mà không gửi tiếp (hoặc trả nhỏ giọt) làm lần đọc không bao giờ hết hạn; ở đây mỗi khối chờ `select` theo
+    hạn chung nên worker trả lỗi thay vì treo."""
+    sock = _socket_of(response)
+    limit_s = max(float(limit_s), 0.001)
+    if sock is None:
+        return response.read()
+    deadline = time.monotonic() + limit_s
+    chunks = []
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError(f'model response not finished within {limit_s:.0f}s')
+        try:
+            ready, _, _ = select.select([sock], [], [], left)
+        except (OSError, ValueError):
+            ready = [sock]  # socket đã đóng: để lần đọc dưới trả EOF/lỗi thật, không che mất nguyên nhân
+        if not ready:
+            raise TimeoutError(f'model response not finished within {limit_s:.0f}s')
+        chunk = response.read(65536)
+        if not chunk:
+            return b''.join(chunks)
+        chunks.append(chunk)
 
 # num_ctx khai tường minh (spec: 1 model nóng, ctx là giới hạn cứng). 8K: prompt ≤ ~4.5K + output ≤ 3K
 # token vừa đủ; bớt ~1.5 GiB KV so với 16K trên GPU dùng chung đã sát trần 75% (42,500 MiB).
@@ -272,7 +304,7 @@ class OllamaClient:
                 timeout = self.remaining_s()  # Metadata and durable admission may have consumed the deadline.
                 send = urllib.request.build_opener(_NoRedirect()).open if self.protocol == 'vllm' else urllib.request.urlopen
                 with send(req, timeout=timeout) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
+                    body = json.loads(read_body(resp, timeout).decode("utf-8"))
                     return body
             except urllib.error.HTTPError as error:
                 if error.code not in RETRY_STATUS or pause is None:

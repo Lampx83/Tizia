@@ -1343,6 +1343,10 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
                     continue
+                if not ollama.routing.candidates(role):
+                    # Endpoint đang cooldown sau lỗi trước: probe lúc này chỉ treo thêm hoặc đẩy intake sang 500.
+                    return {'status': 'model_unavailable', 'model': role,
+                            'error': f'{role}: endpoint đang cooldown, không probe'}
                 budget = Budget(max_model_calls=6, max_units=600, max_wall_clock_s=600.0)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
@@ -2194,7 +2198,9 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
         from models import OllamaClient
-        worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=120.0))  # a hung model must not stall a poll for 5 min
+        # 45s: probe 1 token bình thường 0,1s; quá 45s là endpoint treo, fail nhanh để endpoint vào cooldown
+        # thay vì giữ worker suốt 3 lần thử của một call.
+        worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=45.0))
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None,
                                        client=worker.client, worker_id=worker.worker_id)
         if engine_url := get_settings().engine_url:
