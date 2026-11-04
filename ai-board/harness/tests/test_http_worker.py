@@ -2012,6 +2012,8 @@ def test_plan_repairable_only_for_model_plan_errors():
     assert not _plan_repairable({"gate": 1, "result": {"reason": "intake_human_review: tất định: privileged_area"}})
     assert not _plan_repairable({"gate": 2.5, "result": {"reason": "plan không hợp lệ: x"}})
     assert _plan_repairable({"gate": 2.5, "result": {"reason": "plan_ungrounded"}})
+    # plan 4-6 bước không kiểm chứng được: lỗi của model, một lượt lập lại như plan_ungrounded
+    assert _plan_repairable({"gate": 2.5, "result": {"reason": "plan_unfit: bước 3 'public/x.html': verify phải là lệnh chạy được"}})
     assert not _plan_repairable({"gate": 2.5, "result": {"reason": "needs_clarification"}})
     assert not _plan_repairable({})
 

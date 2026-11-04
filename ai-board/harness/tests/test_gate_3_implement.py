@@ -18,7 +18,7 @@ def test_revoked_authority_prevents_candidate_file_writes(tmp_path):
 
 from budget import Budget
 from conftest import FakeModels, deps_with, plan_with
-from gates import implement
+from gates import implement, subtask_contract
 
 
 # ── model_for: routing lộ ra thành hàm, không chôn trong if/else của run() ──
@@ -97,7 +97,8 @@ def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     """'Fresh context per subtask' là cơ chế (build_prompt chỉ nhận 1 subtask),
     không phải quy ước — test này khẳng định bằng cách soi prompt thật đã gửi.
     NGOẠI LỆ owner đã duyệt (LF/107 tiêu chí 8b): subtask sau nhận NỘI DUNG file
-    mới của subtask trước (chuỗi phụ thuộc mặc định), không nhận tiêu đề/lời sủa khác."""
+    mới của subtask trước (chuỗi phụ thuộc mặc định), không nhận tiêu đề/lời sủa khác.
+    Hợp đồng giữa các bước chỉ nêu ĐƯỜNG DẪN + tên interface mà plan đã có (không tiêu đề, không code)."""
     codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop test\n"}
     models = FakeModels(plan_with(["features"]), codegen=codegen)
     deps = deps_with(models)
@@ -110,9 +111,11 @@ def test_run_second_subtask_prompt_excludes_first_subtasks_content(tmp_path):
     first_prompt, second_prompt = models.calls[0]["prompt"], models.calls[1]["prompt"]
     first_title, second_title = plan["subtasks"][0]["title"], plan["subtasks"][1]["title"]
     first_file, second_file = plan["subtasks"][0]["file"], plan["subtasks"][1]["file"]
+    block = subtask_contract.block(plan)
 
     assert first_title in first_prompt and second_title not in first_prompt
-    assert first_file in first_prompt and second_file not in first_prompt
+    assert first_file in first_prompt
+    assert second_file not in first_prompt.replace(block, "")  # đường dẫn bước khác chỉ có trong hợp đồng
     assert second_title in second_prompt and first_title not in second_prompt
     assert second_file in second_prompt
     # file MỚI của subtask 1 nằm trong repo scratch → inject vào prompt của subtask 2 (tiêu chí 8b)
@@ -338,7 +341,8 @@ def test_large_existing_file_is_shown_as_an_excerpt_and_edited_in_place(tmp_path
     assert 'L5001| <footer id="chan-trang">Bản quyền</footer>' in context
     assert "5002 dòng" in context and "flashcards.html" in context
     assert len(context) < 8000 < 60_000 < len(BIG_PAGE)  # over the whole-file limit: excerpt
-    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0])  # new file: prefix only
+    assert new_file_prompt.startswith(implement.build_prompt(plan["subtasks"][0]))  # new file: prefix only
+    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0], contract=subtask_contract.block(plan))
     written = _written(tmp_path, "public/flashcards.html")
     assert written == BIG_PAGE.replace('<footer id="chan-trang">', '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">')
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
@@ -532,3 +536,67 @@ def test_restore_refuses_a_partial_production(tmp_path):
                                    "test": "import test from 'node:test';"}}}
     with pytest.raises(ValueError, match="gate 3"):
         implement.restore(state)
+
+
+# ── hợp đồng giữa các bước: suy ra từ plan, có mặt trong MỌI prompt cổng 3 ──
+
+FEATURE_PLAN = {"summary_vi": "Thêm API thuật ngữ và hai trang dùng nó.", "capabilities": ["features"], "subtasks": [
+    {"title": "Migration mới lưu thuật ngữ", "size": "large", "layer": "db", "depends_on": [],
+     "file": "server/contexts/_ai-generated/cntt/migrations/001-thuat-ngu.sql",
+     "verify": "psql \"$DATABASE_URL\" -c 'select 1 from glossary'"},
+    {"title": "API thuật ngữ trong context cntt", "size": "large", "layer": "backend", "depends_on": [1],
+     "file": "server/contexts/_ai-generated/cntt/glossary/index.js",
+     "verify": "curl -s localhost:8041/api/glossary | grep -q items"},
+    {"title": "Module gọi API cho hai trang", "size": "small", "layer": "frontend", "depends_on": [2],
+     "file": "public/js/features/thuat-ngu/glossary-client.js",
+     "verify": "curl -s localhost:8041/so-tay-thuat-ngu.html | grep -q glossary-client.js"},
+    {"title": "Trang sổ tay thuật ngữ", "size": "small", "layer": "frontend", "depends_on": [3],
+     "file": "public/so-tay-thuat-ngu.html", "verify": "curl -s localhost:8041/so-tay-thuat-ngu.html | grep -q '<h1>'"},
+]}
+
+
+def test_contract_is_derived_from_a_db_route_page_plan_and_bounded():
+    block = subtask_contract.block(FEATURE_PLAN)
+
+    assert block.startswith("HỢP ĐỒNG GIỮA CÁC BƯỚC") and "suy ra từ plan" in block
+    # route/verify của bước API, bảng của migration, và MỌI file trong plan đều có tên
+    assert "/api/glossary" in block and "bảng glossary" in block
+    for subtask in FEATURE_PLAN["subtasks"]:
+        assert subtask["file"] in block
+    assert "[db]" in block and "[backend]" in block and "[frontend]" in block
+    assert len(block) <= subtask_contract.MAX_BLOCK_CHARS <= 600
+    # plan 12 bước vẫn bị cắt: khối hợp đồng không được phình prompt
+    wide = {"subtasks": [{"title": f"Bước {i}", "file": f"public/js/features/{'y' * 30}/step-{i}.js",
+                          "verify": f"curl -s localhost:8041/api/step-{i} | grep -q items"} for i in range(12)]}
+    assert len(subtask_contract.block(wide)) <= 600
+    assert subtask_contract.block({"subtasks": FEATURE_PLAN["subtasks"][:1]}) == ""
+
+
+def test_every_gate_3_prompt_of_a_multi_subtask_plan_carries_the_contract(tmp_path):
+    codegen = {"code": "// noop\n", "test_file": "test/noop.test.js", "test": "import test from 'node:test';\n// noop\n"}
+    plan = {**FEATURE_PLAN, "subtasks": FEATURE_PLAN["subtasks"][:2]}  # 2 bước: dưới trần DAG của cổng 3
+    models = FakeModels(plan, codegen=codegen)
+
+    implement.run({"plan": plan}, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    block = subtask_contract.block(plan)
+    assert block and len(models.calls) == 2
+    assert all(block in call["prompt"] for call in models.calls)
+    # bước 2 thấy route mà bước 1 hứa, dù nó không đọc được file của bước 1
+    assert "/api/glossary" in models.calls[1]["prompt"]
+
+
+def test_single_subtask_plan_prompt_is_byte_identical_to_today(tmp_path):
+    subtask = {"title": "Đổi chữ nút #start", "file": "public/vi-du.html",
+               "verify": "node --test test/vi-du.test.js", "size": "small"}
+    plan = {"summary_vi": "x", "capabilities": [], "subtasks": [subtask]}
+    codegen = {"code": "<h1>Bắt đầu</h1>\n", "test_file": "test/vi-du.test.js",
+               "test": "import test from 'node:test';\n// public/vi-du.html\n"}
+    models = FakeModels(plan, codegen=codegen)
+
+    implement.run({"plan": plan}, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+
+    expected = implement.repo_context.manual() + implement.PROMPT.format(
+        title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
+    assert models.calls[0]["prompt"] == expected
+    assert subtask_contract.block(plan) == ""

@@ -1,9 +1,10 @@
 """Cổng 4 (static_check.py) — node --check + lint import +
 minimalism guard (vượt ước lượng/file ngoài plan -> flag, không block)."""
+import json
 import subprocess
 from pathlib import Path
 
-from gates import static_check
+from gates import static_check, subtask_contract
 import pytest
 
 
@@ -418,3 +419,103 @@ def test_content_review_root_allowance_exhaustion_is_budget_not_outage():
     assert result['blocked'] is True
     assert result['failure_class'] == 'budget'
     assert result['reason'] == 'root_allowance_exhausted'
+
+
+# ── hợp đồng giữa các bước: thiếu định nghĩa route/bảng/export → block ordinary ──
+
+API = "server/contexts/_ai-generated/faq/index.js"
+PAGE = "public/faq.html"
+SQL = "server/contexts/_ai-generated/faq/migrations/001-faq.sql"
+
+
+def _contract_plan(page_verify="node --test test/faq.test.js",
+                   api_verify="curl -s localhost:8041/api/faq | grep -q items"):
+    return _plan([{"title": "API FAQ", "file": API, "verify": api_verify, "size": "large", "layer": "backend"},
+                  {"title": "Trang FAQ", "file": PAGE, "verify": page_verify, "size": "small", "layer": "frontend"}])
+
+
+def _contract_state(tmp_path: Path, contents: dict, plan=None) -> dict:
+    plan = plan or _contract_plan()
+    for rel, code in contents.items():
+        _write(tmp_path, rel, code)
+    diffs = [{"title": step["title"], "file": step["file"], "diff": "+\n"} for step in plan["subtasks"]]
+    return {"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)}
+
+
+def test_gate_4_blocks_when_a_page_uses_a_route_the_backend_never_defines(tmp_path):
+    state = _contract_state(tmp_path, {API: "export const plugin = { name: 'faq' };\n",
+                                       PAGE: "<script>fetch('/api/faq')</script>\n"})
+
+    out = static_check.run(state)
+
+    assert out["blocked"] is True and out["failure_class"] == "ordinary"
+    assert PAGE in out["reason"] and API in out["reason"] and "/api/faq" in out["reason"]
+    assert out["cross_check"]["count"] == 1
+    assert out["needs_careful_review"] is True
+
+
+def test_gate_4_passes_when_the_other_file_really_defines_the_route(tmp_path):
+    state = _contract_state(tmp_path, {API: "router.get('/api/faq', (req, res) => res.json({ items: [] }));\n",
+                                       PAGE: "<script>fetch('/api/faq')</script>\n"})
+
+    out = static_check.run(state)
+
+    assert out["blocked"] is False
+    assert out["cross_check"] == {"count": 0, "findings": []}
+
+
+def test_gate_4_does_not_block_an_ambiguous_contract_name(tmp_path):
+    # cả hai bước cùng nêu /api/faq → không biết file nào phải định nghĩa → không chặn
+    plan = _contract_plan(page_verify="curl -s localhost:8041/api/faq | grep -q items")
+    state = _contract_state(tmp_path, {API: "export const plugin = {};\n", PAGE: "fetch('/api/faq');\n"}, plan)
+
+    assert static_check.run(state)["blocked"] is False
+
+
+def test_gate_4_does_not_block_when_the_owner_file_is_unreadable(tmp_path):
+    plan = _contract_plan()
+    _write(tmp_path, PAGE, "fetch('/api/faq');\n")  # file API không có trong scratch: không đủ chắc để chặn
+    state = {"plan": plan, "diffs": [{"title": "p", "file": PAGE, "diff": "+\n"}], "scratch_repo": str(tmp_path)}
+
+    assert static_check.run(state)["blocked"] is False
+
+
+def test_gate_4_blocks_an_import_the_other_file_does_not_export(tmp_path):
+    client = "public/js/features/faq/faq-client.js"
+    plan = _plan([{"title": "API FAQ", "file": API, "verify": "curl -s localhost:8041/api/faq | grep -q items",
+                   "size": "large", "layer": "backend"},
+                  {"title": "Module FAQ", "file": client, "verify": "node --test test/faq.test.js",
+                   "size": "small", "layer": "frontend"}])
+    state = _contract_state(tmp_path, {
+        API: "export const plugin = { name: 'faq' };\n",
+        client: "import { loadFaq } from '../../../../server/contexts/_ai-generated/faq/index.js';\nexport const go = loadFaq;\n",
+    }, plan)
+
+    out = static_check.run(state)
+
+    assert out["blocked"] is True and "loadFaq" in out["reason"] and client in out["reason"] and API in out["reason"]
+
+
+def test_gate_4_blocks_sql_using_a_table_the_migration_never_creates(tmp_path):
+    plan = _plan([{"title": "Migration FAQ", "file": SQL, "verify": "psql \"$DATABASE_URL\" -c 'select 1 from faq_entries'",
+                   "size": "large", "layer": "db"},
+                  {"title": "API FAQ", "file": API, "verify": "curl -s localhost:8041/api/faq | grep -q items",
+                   "size": "large", "layer": "backend"}])
+    state = _contract_state(tmp_path, {SQL: "create table if not exists something_else (id int);\n",
+                                       API: "export const list = () => db.query('select id from faq_entries');\n"}, plan)
+
+    out = static_check.run(state)
+
+    assert out["blocked"] is True and "faq_entries" in out["reason"] and SQL in out["reason"]
+
+
+def test_gate_4_evidence_records_the_contract_without_any_diff(tmp_path):
+    state = _contract_state(tmp_path, {API: "export const plugin = {};\n", PAGE: "fetch('/api/faq');\n"})
+
+    out = static_check.run(state)
+
+    assert out["blocked"] is True
+    assert out["contract"]["owners"]["/api/faq"] == [1]
+    assert [step["file"] for step in out["contract"]["steps"]] == [API, PAGE]
+    assert len(json.dumps(out["contract"], ensure_ascii=False)) <= subtask_contract.MAX_EVIDENCE_CHARS
+    assert "fetch('/api/faq')" not in json.dumps(out, ensure_ascii=False)  # evidence không mang nội dung diff

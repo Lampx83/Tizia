@@ -644,3 +644,72 @@ def test_a_verified_objection_is_not_retried_even_when_the_target_is_right(tmp_p
 
     assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
     assert len(_validator_prompts(models)) == 1 and "validator_retry" not in state
+
+
+# ── plan 4-6 bước: mọi subtask phải có verify chạy được + depends_on (DAG) ──
+
+def _steps(count, *, depends=True, verify="curl -s localhost:8041/api/x | grep -q items"):
+    """`count` subtask hợp lệ; depends=False để thử plan thiếu hẳn depends_on."""
+    steps = []
+    for index in range(1, count + 1):
+        step = {"title": f"Bước {index}", "file": f"public/step-{index}.html", "verify": verify, "size": "small"}
+        if depends:
+            step["depends_on"] = [] if index == 1 else [index - 1]
+        steps.append(step)
+    return steps
+
+
+def _plan_with_steps(count, **kwargs):
+    return {"summary_vi": "x", "capabilities": [], "subtasks": _steps(count, **kwargs)}
+
+
+def test_a_six_subtask_plan_with_runnable_verifies_passes_validation():
+    plan = _plan_with_steps(6)
+    models = FakeModels(plan)
+    request = {"subject": "Thêm 6 trang", "body": "sáu trang độc lập", "complexity_by_server": True}
+
+    assert plan_validate.unfit_issues(plan) == []
+    out = plan_validate.run(request, deps_with(models), Budget(), {"plan": plan})
+
+    assert out["blocked"] is False
+    assert models.calls  # plan hợp lệ vẫn đi tiếp tới validator
+
+
+def test_a_five_subtask_plan_with_one_sentence_verify_is_plan_unfit():
+    plan = _plan_with_steps(5)
+    plan["subtasks"][2]["verify"] = "trang hiển thị danh sách thuật ngữ"
+    models = FakeModels(plan)
+
+    out = plan_validate.run({"subject": "x", "complexity_by_server": True}, deps_with(models), Budget(), {"plan": plan})
+
+    assert out["blocked"] is True and out["outcome"] == "plan_unfit"
+    assert out["reason"].startswith("plan_unfit: bước 3") and "lệnh chạy được" in out["reason"]
+    assert out["signals"] == [f"bước 3 'public/step-3.html': verify phải là lệnh chạy được "
+                              f"(node --test/curl/pytest/...): trang hiển thị danh sách thuật ngữ"]
+    assert models.calls == []  # chặn tất định, chưa tiêu lời gọi model nào
+    from worker import _plan_repairable
+    assert _plan_repairable({"gate": 2.5, "result": {"reason": out["reason"]}})  # sửa được: một lượt lập lại plan
+
+
+def test_a_four_subtask_plan_without_depends_on_is_plan_unfit():
+    plan = _plan_with_steps(4, depends=False)
+    models = FakeModels(plan)
+
+    out = plan_validate.run({"subject": "x", "complexity_by_server": True}, deps_with(models), Budget(), {"plan": plan})
+
+    assert out["blocked"] is True and out["outcome"] == "plan_unfit"
+    assert all("thiếu depends_on" in issue for issue in out["signals"]) and len(out["signals"]) == 4
+    assert models.calls == []
+
+
+def test_a_three_subtask_plan_behaves_exactly_as_today():
+    """Ngưỡng là > 3: plan 3 bước (kể cả verify là câu mô tả, không depends_on) không bị luật mới đụng tới."""
+    plan = _plan_with_steps(3, depends=False)
+    plan["subtasks"][1]["verify"] = "trang hiển thị danh sách thuật ngữ"
+    models = FakeModels(plan)
+
+    assert plan_validate.unfit_issues(plan) == []
+    out = plan_validate.run({"subject": "x"}, deps_with(models), Budget(), {"plan": plan})
+
+    assert out["blocked"] is False
+    assert models.calls

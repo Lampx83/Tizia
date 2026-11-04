@@ -5,10 +5,11 @@ ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3):
 sẵn ở base thì không tính, nếu không thì không sửa được module nào vốn đã import
 db/admin), và
 so kích thước diff với ước lượng size khai trong plan (`small`/`large`, xem
-gates/brainstorm.py). Import cấm / lỗi cú pháp → BLOCK thật (không có gì chạy
-được thì không có gì để review). Vượt ~2x ước lượng hoặc chạm file ngoài plan
-→ KHÔNG block, chỉ gắn cờ `needs_careful_review=True` (cổng 5.5 đọc
-cờ này khi có) — "flagged, not silently passed", không phải "rejected".
+gates/brainstorm.py), và kiểm chéo hợp đồng giữa các bước (route/bảng/export mà bước
+này dùng nhưng file của bước kia không định nghĩa — gates/subtask_contract.py). Import cấm
+/ lỗi cú pháp → BLOCK thật (không có gì chạy được thì không có gì để review). Vượt ~2x
+ước lượng hoặc chạm file ngoài plan → KHÔNG block, chỉ gắn cờ `needs_careful_review=True`
+(cổng 5.5 đọc cờ này khi có) — "flagged, not silently passed", không phải "rejected".
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from pathlib import Path
 import candidate
 import classifier
 import functional
-from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage
+from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import server_hsm
 from runtime import levels
 from runtime.budget import BudgetExhausted
@@ -309,13 +310,24 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "ordinary"}
 
+    # Hợp đồng giữa các bước: file này dùng route/bảng/tên của file kia thì file kia phải định
+    # nghĩa. Chặn sửa được (ordinary), không bao giờ cho qua im lặng; mơ hồ thì không chặn.
+    findings = subtask_contract.cross_check(state)
+    report = {"contract": subtask_contract.evidence(plan),
+              "cross_check": subtask_contract.findings_evidence(findings)}
+    if findings:
+        reason = "; ".join(subtask_contract.describe(finding) for finding in findings)[:600]
+        return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                "issues": [*issues, reason], "failure_class": "ordinary", **report}
+
     if deps is not None and budget is not None and getattr(deps, "models", None) is not None:
         review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
         if review and review["blocked"]:
             return {"gate": 4, "blocked": True, "reason": review["reason"], "needs_careful_review": True,
                     "issues": [*issues, review["reason"]], "failure_class": review["failure_class"],
-                    "content_labels": review["labels"]}
-    return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review, "issues": issues}
+                    "content_labels": review["labels"], **report}
+    return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review,
+            "issues": issues, **report}
 
 
 def _base_public_contacts(state: dict) -> set[str]:

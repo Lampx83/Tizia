@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import context as repo_context
 import file_context
 import path_policy
-from gates import change_class, gate3_guards
+from gates import change_class, gate3_guards, subtask_contract
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
@@ -99,10 +99,12 @@ REPAIR_SUFFIX = (
     "Sửa đúng lỗi đó; giữ nguyên file và phạm vi."
 )
 PRODUCED_SUFFIX = ("\n\nFILE DA TAO O CAC BUOC TRUOC (dung dung duong dan nay khi tham chieu; khong bia ten file moi):\n{files}")
+CONTRACT_SUFFIX = "\n\n{contract}"
 
 
 def build_prompt(subtask: dict, repair_reason: str | None = None, context: str | None = None,
-                 lessons: list[str] | None = None, produced: list[str] | None = None) -> str:
+                 lessons: list[str] | None = None, produced: list[str] | None = None,
+                 contract: str | None = None) -> str:
     """Prompt CHỈ từ 1 subtask — không plan, không subtask khác. Đây là cơ chế
     (không phải quy ước) đảm bảo context mới hoàn toàn mỗi lần gọi. Ngữ cảnh
     file, bài học cũ, lý do repair nối SAU prefix đã khoá, prefix giữ nguyên byte."""
@@ -114,6 +116,8 @@ def build_prompt(subtask: dict, repair_reason: str | None = None, context: str |
         prompt += LESSONS_SUFFIX.format(lessons="\n".join(lessons))
     if produced:
         prompt += PRODUCED_SUFFIX.format(files="\n".join(f"- {path}" for path in produced))
+    if contract:  # plan nhiều bước: tên các bước khác đã hứa (gates/subtask_contract.py), suy ra từ plan
+        prompt += CONTRACT_SUFFIX.format(contract=contract)
     return prompt + REPAIR_SUFFIX.format(reason=repair_reason[:500]) if repair_reason else prompt
 
 
@@ -682,8 +686,9 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
+    contract = subtask_contract.block(state.get("plan") or {})
     prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons,
-                             produced=sorted((state.get("produced") or {}).keys()))
+                             produced=sorted((state.get("produced") or {}).keys()), contract=contract)
     feedback = ""
     routing = getattr(deps.models, 'routing', None)
     failed_candidates = set()
@@ -691,6 +696,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     receipts: list = []
     if trace:
         _note_inputs(trace, subtask, model, state, current, context, siblings, words, lessons, ctx)
+        if contract:
+            trace.note("knows", "contract", contract[:500])
     out = None
 
     def check_candidate(candidate: dict) -> None:
@@ -706,7 +713,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             check=check_candidate,
             role=role, db_path=db_path, proposal_id=proposal_id, child=child,
             store=_checkpoint_store(state, db_path, proposal_id, child),
-            pins={"role": role}, repair_reason=state.get("repair_reason"), context=context)
+            pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
+            contract=contract)
         if looped.get("stale_reset") and trace:
             trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
         receipts.extend(looped.get("sandbox_receipts", []))

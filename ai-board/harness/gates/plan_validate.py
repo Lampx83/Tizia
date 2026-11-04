@@ -582,6 +582,34 @@ def _validator_options() -> dict | None:
 
 LOW_RISK_FILES = (".html", ".css")
 
+# Plan > 3 bước: mọi subtask phải có verify là lệnh chạy được + depends_on (DAG). Plan 1-3 bước
+# giữ nguyên luật cũ (cổng 1 đã kiểm cả plan có layer/acceptance).
+MAX_STEPS_WITHOUT_RUNNABLE = 3
+PLAN_UNFIT = "plan_unfit"
+
+
+def _runnable(verify: str) -> bool:
+    """Cùng định nghĩa 'lệnh chạy được' với cổng 1 (gates/brainstorm.RUNNABLE)."""
+    from gates.brainstorm import RUNNABLE
+    return bool(RUNNABLE.match(verify.strip()))
+
+
+def unfit_issues(plan: dict) -> list[str]:
+    """Plan >3 bước chỉ nhận bước thực thi được: mỗi subtask một verify chạy được và một depends_on."""
+    subtasks = [task for task in plan.get("subtasks") or [] if isinstance(task, dict)]
+    if len(subtasks) <= MAX_STEPS_WITHOUT_RUNNABLE:
+        return []
+    issues = []
+    for index, task in enumerate(subtasks, 1):
+        file = str(task.get("file") or "")
+        verify = str(task.get("verify") or "").strip()
+        if not _runnable(verify):
+            issues.append(f"bước {index} '{file}': verify phải là lệnh chạy được (node --test/curl/pytest/...): "
+                          f"{verify[:80] or '(không có)'}")
+        if not isinstance(task.get("depends_on"), list):
+            issues.append(f"bước {index} '{file}': thiếu depends_on — plan {len(subtasks)} bước cần DAG")
+    return issues
+
 
 def _assumable(plan: dict, validation: dict, request: dict) -> bool:
     """One subtask on a static page/stylesheet, the validator found a verbatim grounding for it, and the request is not a feature or a guard case."""
@@ -652,6 +680,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     plan = state.get("plan")
     if not plan:
         return {"gate": 2.5, "blocked": True, "reason": "không có plan từ cổng 1"}
+
+    # Plan 4-6 bước: bước nào cũng phải kiểm chứng được bằng lệnh chạy thật, và depends_on phải có.
+    # Lỗi này sửa được (một lượt lập lại plan), nên trả outcome plan_unfit chứ không phải câu hỏi cho người gửi.
+    if issues := unfit_issues(plan):
+        return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
+                "signals": issues,
+                "public_message": "Kế hoạch chia quá nhiều bước mà bước nào cũng phải kiểm chứng bằng lệnh chạy được; "
+                                  "đang chờ quản trị viên xem lại."}
 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.

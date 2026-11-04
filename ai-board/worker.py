@@ -1172,7 +1172,7 @@ def _plan_repairable(stopped: dict) -> bool:
     reason = str((stopped.get("result") or {}).get("reason") or "")
     if gate == 1 and reason.startswith("plan không hợp lệ"):
         return True
-    return gate == 2.5 and reason == "plan_ungrounded"
+    return gate == 2.5 and (reason == "plan_ungrounded" or reason.startswith("plan_unfit"))
 
 
 def _plan_pins(source) -> dict:
