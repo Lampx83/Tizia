@@ -29,6 +29,9 @@ from runtime.budget import BudgetExhausted
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
                        if x not in ("privileged_area", "money", "personal_data", "copyright", "off_topic"))
+# prompt_injection trên chữ hiển thị do guard.scan quyết định (tất định); nhãn cùng tên của model chỉ là
+# tín hiệu cho người soát — model từng gán nhãn này cho câu vô nghĩa/ghi chú giao diện (đo 2026-11-04).
+ADVISORY_LABELS = ("prompt_injection",)
 MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
 
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho
@@ -195,6 +198,8 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
     if not parts:
         return None
     labels = ["classifier_error"]
+    blocking = labels        # nhãn còn được phép chặn (advisory bị loại)
+    advisory: list[str] = []
     why = "hết budget, không gọi được bộ soát nội dung"
     outage = False  # the model could not be reached: nothing was judged, so this is retryable rather than a violation
     trace = getattr(deps, "trace", None)
@@ -221,9 +226,14 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
                 labels, why = intake_guard.parse_labels(body.get("response", ""), CONTENT_LABELS), ""
             except Exception as e:  # trả lời không phải phán quyết hợp lệ — vẫn là chặn nghiêm trọng
                 why = f"bộ soát nội dung lỗi: {str(e)[:200]}"
+            else:
+                advisory = [x for x in labels if x in ADVISORY_LABELS]
+                blocking = [x for x in labels if x not in ADVISORY_LABELS] or ["ok"]
     if trace and called:  # before the classifier call, which records its own model call
-        trace.attach_last("evaluation", {"check": "content guard", "ok": labels == ["ok"],
-                                         "detail": ", ".join(labels) + (f" ({why})" if why else "")})
+        shown = [x for x in labels if x not in advisory] or ["ok"]
+        trace.attach_last("evaluation", {"check": "content guard", "ok": blocking == ["ok"],
+                                         "detail": ", ".join(shown) + (f" (advisory: {', '.join(advisory)})" if advisory else "")
+                                         + (f" ({why})" if why else "")})
     # Logprob classifier beside the JSON guard: may only add a "needs a human" block.
     if (getattr(deps.models, "classifier_model", "") or getattr(deps.models, "routing", None)) and classifier.task_mode("danger") != "off":
         if not budget.tick():
@@ -234,13 +244,14 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
             return {"blocked": True, "labels": labels, "reason": str(error), "failure_class": error.failure_class}
     scored = classifier.danger("\n".join(parts), deps, budget, gate=4, db_path=db_path, proposal_id=proposal_id)
     if scored and scored["escalate"]:
-        labels = [x for x in labels if x != "ok"] + [f"model_{key}" for key in scored["labels"]]
+        blocking = [x for x in blocking if x != "ok"] + [f"model_{key}" for key in scored["labels"]]
     extra = {"classifier": scored} if scored else {}
-    if labels == ["ok"]:
-        return {"blocked": False, "labels": labels, **extra}
-    reason = f"content_guard: {', '.join(labels)}" + (f" ({why})" if why else "") + " — cần người soát"
-    failure_class = "budget" if not called else "transient" if outage and labels == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
-    return {"blocked": True, "labels": labels, "reason": reason, "failure_class": failure_class, **extra}
+    extra["advisory"] = advisory
+    if blocking == ["ok"]:
+        return {"blocked": False, "labels": blocking, **extra}
+    reason = f"content_guard: {', '.join(blocking)}" + (f" ({why})" if why else "") + " — cần người soát"
+    failure_class = "budget" if not called else "transient" if outage and blocking == ["classifier_error"] else guard.SEVERITY_CLASS["high"]
+    return {"blocked": True, "labels": blocking, "reason": reason, "failure_class": failure_class, **extra}
 
 
 def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path=None,
@@ -320,14 +331,17 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                 "issues": [*issues, reason], "failure_class": "ordinary", **report}
 
+    advisory: list[str] = []
     if deps is not None and budget is not None and getattr(deps, "models", None) is not None:
         review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
         if review and review["blocked"]:
             return {"gate": 4, "blocked": True, "reason": review["reason"], "needs_careful_review": True,
                     "issues": [*issues, review["reason"]], "failure_class": review["failure_class"],
                     "content_labels": review["labels"], **report}
-    return {"gate": 4, "blocked": False, "reason": None, "needs_careful_review": needs_careful_review,
-            "issues": issues, **report}
+        advisory = (review or {}).get("advisory") or []
+    return {"gate": 4, "blocked": False, "reason": None,
+            "needs_careful_review": needs_careful_review or bool(advisory),
+            "issues": issues, "content_advisory": advisory, **report}
 
 
 def _base_public_contacts(state: dict) -> set[str]:
@@ -376,6 +390,12 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
         if review and review["blocked"]:
             found = [{"check": "content_guard", "failure_class": review["failure_class"],
                       "detail": review["reason"][:300]}]
+        elif review and review.get("advisory"):
+            # Nhãn advisory (prompt_injection) không chặn: quyết định thuộc guard.scan tất định ở trên.
+            out["content_advisory"] = review["advisory"]
+            state["guard_flags"] = [*state["guard_flags"], {
+                "check": "injection", "severity": "medium",
+                "detail": f"bộ soát chữ nghi điều khiển AI ({', '.join(review['advisory'])}) — người soát"}]
     change = change_class.classify(diffs)
     state["change_class"] = change["class"]
     out["change_class"] = change["class"]

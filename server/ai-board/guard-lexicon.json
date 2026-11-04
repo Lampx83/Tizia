@@ -79,6 +79,7 @@
   "labels": {
     "prompt_injection": {
       "intake": "critical", "diff": "critical",
+      "_diff_why": "Cổng 4 KHÔNG chặn theo danh sách term này (term phục vụ intake). Chữ hiển thị chỉ bị chặn khi guard.py control_attempts khớp mẫu điều khiển AI: override chỉ dẫn, roleplay/jailbreak, đòi khoá bí mật, đòi nhãn ok/tự duyệt, payload base64 chứa lệnh — tất định, không gọi model. Đo 2026-11-04: câu ngắn/vô nghĩa, tiếng Việt không dấu, nhãn nút 'Bỏ qua hướng dẫn', 'show password', câu trích lời người dùng bị model/intake gán nhầm prompt_injection.",
       "terms": [
         "(doc|read|in ra|print|show|reveal) (file |tep |noi dung |the )?(\\x2eenv|api key|secret key|private key)",
         "ignore (all )?(the |your )?(previous|prior|above|earlier) (instructions|rules|prompts?)",

@@ -7,10 +7,15 @@ Guardrail phạm vi thay đổi (spec .scratch/ai-board-guardrails/spec.md §B):
 tương phản WCAG, chủ đề nhạy cảm trong chữ hiển thị, link/script/network ra ngoài, ảnh mới,
 form thu dữ liệu cá nhân, đáp án nội dung học. Mỗi finding có `severity`; `failure_class`
 suy ra từ SEVERITY_CLASS. Tín hiệu không chặn nằm ở `flags` (low/medium/high, high → review_required).
+
+`prompt_injection` và `personal_form` xét THAY ĐỔI, không xét cả trang: prompt_injection chỉ theo
+control_attempts (mẫu điều khiển AI, tất định, không gọi model); personal_form chỉ khi diff thêm
+field cá nhân chưa có ở base của trang, hoặc đẩy dữ liệu sang endpoint mới.
 """
 from __future__ import annotations
 
 import ast
+import base64
 import html
 import json
 import re
@@ -96,6 +101,58 @@ _PERSONAL_INPUT = re.compile(
     r"""|\b(?:name|id|autocomplete|placeholder|aria-label)\s*=\s*["'][^"']{0,120}(?:e-?mail|phone|\btel\b|sđt|số điện thoại"""
     r"""|so dien thoai|passw|mật khẩu|mat khau|cccd|cmnd|căn cước|address|địa chỉ|dia chi|birth|ngày sinh|ngay sinh"""
     r"""|họ tên|họ và tên|ho ten|full.?name|credit.?card|card.?number|số thẻ|cvv|bank|ngân hàng))""", re.I)
+# Một thẻ thu dữ liệu + danh tính field để so với bản base: cùng (type, name/id/placeholder, required)
+# ở base = field có sẵn, không phải lần thu mới (thụt lề lại cả khối form không tính là thu thêm).
+_TAG_INPUT = re.compile(r"<(?:input|textarea|select)\b[^>]{0,400}>", re.I)
+_TAG_ATTR = re.compile(r"""(?<![\w-])(type|name|id|autocomplete|placeholder|aria-label)\s*=\s*["']([^"']*)["']""", re.I)
+_TAG_REQUIRED = re.compile(r"(?<![\w-])required(?![\w-])", re.I)
+_FORM_ACTION = re.compile(r"""<form\b[^>]{0,400}?\baction\s*=\s*["']([^"'#\s]+)["']""", re.I)
+_SITE_SURFACES: dict[tuple, tuple[frozenset, frozenset]] = {}
+
+
+def _field_key(tag: str) -> str:
+    """Khoá nhận diện 1 field thu dữ liệu: type | name/id/placeholder | required."""
+    attrs = {name.lower(): " ".join(value.lower().split()) for name, value in _TAG_ATTR.findall(tag)}
+    ident = (attrs.get("name") or attrs.get("id") or attrs.get("autocomplete") or attrs.get("placeholder")
+             or attrs.get("aria-label") or "")
+    return "|".join((attrs.get("type", "text"), ident, "required" if _TAG_REQUIRED.search(tag) else ""))
+
+
+def _personal_tags(body: str, skip=()):
+    """Thẻ input/textarea/select thu dữ liệu cá nhân trong khối chữ; bỏ thẻ bắt đầu trong chuỗi `skip`."""
+    return [tag for tag in _TAG_INPUT.finditer(body)
+            if _PERSONAL_INPUT.search(tag.group()) and not any(a < tag.start() < b for a, b in skip)]
+
+
+def personal_field_keys(body: str, skip=()) -> frozenset[str]:
+    """Khoá các field cá nhân trong 1 khối HTML."""
+    return frozenset(_field_key(tag.group()) for tag in _personal_tags(body, skip))
+
+
+def site_personal_surfaces(checkout: str | Path | None, skip: frozenset[str] = frozenset()):
+    """(field key, form action) mà public/*.html đang có đã thu. Bỏ file `skip` (chính các file mới của diff)."""
+    root = Path(checkout) / "public" if checkout else None
+    if root is None or not root.is_dir():
+        return frozenset(), frozenset()
+    pages = [p for p in sorted(root.glob("*.html")) if f"public/{p.name}" not in skip]
+    try:  # cache theo (thư mục, số file, mtime mới nhất) — candidate khác nhau trong cùng process không dùng cache cũ
+        fingerprint = (str(Path(checkout).resolve()), len(pages), max((p.stat().st_mtime_ns for p in pages), default=0))
+    except OSError:
+        fingerprint = (str(Path(checkout).resolve()), len(pages), 0)
+    if fingerprint not in _SITE_SURFACES:
+        fields, actions = set(), set()
+        for page in pages:
+            try:
+                body = page.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            fields |= personal_field_keys(body)
+            actions |= set(_FORM_ACTION.findall(body))
+        _SITE_SURFACES.clear()  # 1 mục là đủ: checkout của 1 lần chạy cổng
+        _SITE_SURFACES[fingerprint] = (frozenset(fields), frozenset(actions))
+    return _SITE_SURFACES[fingerprint]
+
+
 _CONTENT_DATA = re.compile(r"^public/(?:js/(?:scenarios|domains)/.+\.(?:js|json)|.+\.json)$")
 _ANSWER_KEY = re.compile(r"""(?:^|[\s{,"'])(?:answer|correct|ans|correctIndex|answerIndex)["']?\s*:""")
 _SOVEREIGNTY_MAP = re.compile(r"(?:^|/)(?:ban-do-vn|ban-do-viet-nam|vietnam-map|vn-map)[^/]*$|(?:^|/)maps?/.*(?:vn|vietnam)", re.I)
@@ -258,9 +315,89 @@ _OWN_DOMAIN = re.compile(r"@(?:[\w-]+\.)*tizia\.vn$", re.I)
 _INJECTION = [re.compile(p, re.I) for p in (
     r"<\s*script\b", r"javascript\s*:", r"\son[a-z]+\s*=", r"\beval\s*\(", r"new\s+Function\s*\(",
     r"child_process", r"document\.write\s*\(",
-    r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions", r"system\s+prompt",
-    r"bỏ\s+qua\s+(?:mọi|tất\s+cả|các)\s+(?:chỉ\s+dẫn|hướng\s+dẫn)",
 )]
+# prompt_injection trên CHỮ HIỂN THỊ (cổng 4): chỉ mẫu ĐIỀU KHIỂN bộ soát/AI — đổi hướng dẫn, đổi vai,
+# đòi khoá bí mật, đòi nhãn/tự duyệt, mã hoá giấu lệnh. Chữ trang học thường (câu vô nghĩa, tiếng Việt
+# không dấu, ghi chú chỉ nhắc "hệ thống"/"prompt") không khớp. So trên bản fold (bỏ dấu) nên term ASCII
+# bắt cả chữ có dấu. Tất định, không gọi model.
+_PI_ATTEMPTS = [(name, re.compile(p, re.I)) for name, p in (
+    ("override", r"\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:of\s+)?(?:the\s+|your\s+)?"
+                 r"(?:previous|prior|above|earlier|system)\s+(?:instructions?|prompts?|rules?)"),
+    # "bỏ qua hướng dẫn" một mình là nhãn nút bỏ qua hướng dẫn dùng thật
+    # (public/js/onboarding-60s.js) → chỉ tính khi có lượng từ hoặc mốc "trước/ở trên".
+    ("override", r"\bbo\s+qua\s+(?:moi|tat\s+ca|cac|toan\s+bo)\s+(?:chi\s+dan|huong\s+dan|quy\s+tac|lenh)\b"),
+    ("override", r"\bbo\s+qua\s+(?:chi\s+dan|huong\s+dan|quy\s+tac|lenh)\s+(?:truoc|o\s+tren|phia\s+tren)\b"),
+    ("roleplay", r"\b(?:tu\s+gio|from\s+now\s+on|bay\s+gio)\b[^.\n]{0,60}?\b(?:khong\s+(?:gioi\s+han|co\s+quy\s+tac)"
+                 r"|no\s+(?:rules|restrictions|limits)|without\s+(?:rules|restrictions|limits|filters)"
+                 r"|unrestricted|jailbroken)\b"),
+    ("roleplay", r"\b(?:dan\s+mode|developer\s+mode|jailbreak(?:ed)?|do\s+anything\s+now|che\s+do\s+nha\s+phat\s+trien)\b"),
+    ("roleplay", r"<\|im_start\|>|\[\s*/?\s*inst\s*\]|<<\s*sys\s*>>|###\s*(?:system|instruction)"),
+    ("secret", r"\b(?:reveal|show|print|leak|repeat|output|dump|doc|in\s+ra|tiet\s+lo)\b"
+               r"[^.\n]{0,40}?\b(?:system\s+prompt|loi\s+nhac\s+he\s+thong|prompt\s+he\s+thong)\b"),
+    ("secret", r"\b(?:reveal|show|print|leak|dump|in\s+ra|tiet\s+lo)\b"
+               r"[^.\n]{0,30}?(?<![\w-])(?:api\s*[_-]?\s*key|secret\s*key|private\s*key|token|\.env)\b"),
+    # "đọc mật khẩu" trong bài học (ví dụ phishing) là chữ dạy học, không phải lệnh → chỉ tính động từ lộ.
+    ("secret", r"\b(?:reveal|leak|print|dump|in\s+ra|tiet\s+lo)\b"
+               r"[^.\n]{0,30}?(?<![\w-])(?:mat\s+khau|password)\b"),
+    ("secret", r"\b(?:doc|read|cat|open|mo)\s+(?:file\s+|tep\s+)?(?:\.env\b|~?/\.ssh|id_rsa|/etc/passwd)"),
+    ("label", r"\b(?:gan|tra\s+ve|tra|chon|cho)\s+nhan\s+\"?ok\b"),
+    ("label", r"\"?labels?\"?\s*:\s*\[?\s*\"ok\""),
+    ("label", r"\b(?:return|assign|output|give)\s+(?:the\s+)?label\s+\"?ok\b"),
+    ("label", r"\"?blocked\"?\s*:\s*false\b|\bfailure_class\b|\ballowed_scope\b"),
+)]
+# Trích dẫn lời người khác sau dấu hai chấm / từ dẫn ("Yêu cầu của bạn: “…”") là chữ hiển thị, không phải lệnh.
+_QUOTE_SPAN = re.compile(r"""["“]([^"”\n]{1,200})["”]""")
+_QUOTE_CUE = re.compile(r"(?:[:;]|\b(?:viet|noi|gui|vi\s+du|example|sample|user|hoc\s+sinh|nguoi\s+dung|khach|quote)\b)[^\n]{0,12}$")
+_BASE64_BLOB = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+def _quoted(spans, start: int) -> bool:
+    """Vị trí nằm trong cặp ngoặc kép có từ dẫn ngay trước (trích lời, không phải lệnh cho AI)."""
+    return any(a <= start < b and cue for a, b, cue in spans)
+
+
+def _decoded_attempts(text: str) -> list[str]:
+    """Lệnh giấu trong base64 (payload mã hoá). Ký tự vô hình một mình không tính: trang thật đã có
+    (đo 2026-11-04: 15/644 file public/ có 2–3 ký tự zero-width vô hại)."""
+    for match in list(_BASE64_BLOB.finditer(text[:8000]))[:20]:
+        blob = match.group()
+        try:
+            raw = base64.b64decode(blob + "=" * (-len(blob) % 4), validate=True)
+        except (ValueError, TypeError):
+            continue
+        decoded = raw.decode("utf-8", "ignore")
+        printable = sum(ch.isprintable() or ch.isspace() for ch in decoded)
+        if len(decoded) >= 8 and printable >= 0.95 * len(decoded) and _pattern_hits(fold(decoded)):
+            return ["encoded"]
+    return []
+
+
+def _pattern_hits(folded: str, spans=()) -> tuple[list[str], list[str]]:
+    """(mẫu ngoài trích dẫn, mẫu chỉ có trong trích dẫn sau từ dẫn)."""
+    hits, quoted = [], []
+    for name, pattern in _PI_ATTEMPTS:
+        where = [_quoted(spans, match.start()) for match in pattern.finditer(folded)]
+        if where and not all(where):
+            hits.append(name)
+        elif where:
+            quoted.append(name)
+    return hits, quoted
+
+
+def _control_scan(text: str | None) -> tuple[list[str], list[str]]:
+    if not text:
+        return [], []
+    spans = [(m.start(1), m.end(1), bool(_QUOTE_CUE.search(fold(text[max(0, m.start() - 24):m.start(1)]))))
+             for m in _QUOTE_SPAN.finditer(text)]
+    hits, quoted = _pattern_hits(fold(text), spans)
+    return list(dict.fromkeys(hits + _decoded_attempts(text))), quoted
+
+
+def control_attempts(text: str | None) -> list[str]:
+    """Loại mẫu điều khiển AI/bộ soát trong chữ hiển thị: override, roleplay, secret, label, encoded.
+    Bỏ lượt trùng lặp; rỗng = không có dấu hiệu điều khiển."""
+    return _control_scan(text)[0]
+
 # Ngoại lệ hẹp duy nhất cho "<script": trang chức năng mới nạp module của chính nó,
 # đúng 1 dạng dòng, đường dẫn nội bộ public/js/features/<slug>/<tên>.js, không nội dung inline.
 _FEATURE_MODULE = re.compile(
@@ -329,8 +466,11 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
 
     ui_changed = visible_changed = False
     colors, theme_colors = [], []
-    for path, deleted, added, removed, existing, binary in _sections(diff_text):
+    sections = _sections(diff_text)
+    new_paths = frozenset(path for path, _, _, _, existing, _ in sections if not existing)
+    for path, deleted, added, removed, existing, binary in sections:
         is_test = bool(_TEST_PATH.search(path))
+        base_actions = {a for line in removed for a in _FORM_ACTION.findall(line)}
         ui_changed |= path.startswith("public/")
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
@@ -386,8 +526,29 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
                 for host in {m.group(1).lower() for m in _URL.finditer(line)} - strong:
                     if not host_allowed(host):
                         add("external_link", "medium", f"{path}: link tới domain ngoài allowlist ({host})")
-            if path.startswith("public/") and live(_PERSONAL_INPUT.finditer(line)):
-                add("personal_form", "high", f"{path}: form thu dữ liệu cá nhân cần người duyệt")
+        if path.startswith("public/") and not is_test and not deleted:
+            # personal_form xét THAY ĐỔI, không xét cả trang: field phải mới so với bản base của chính
+            # trang (hoặc form đẩy dữ liệu sang endpoint mới). Field có sẵn bị thụt lề/viết lại cùng giá
+            # trị KHÔNG phải lần thu mới; thêm required là mở rộng thu → vẫn chặn.
+            body = "\n".join(added)
+            string_spans = [m.span() for m in _STRING.finditer(body)] if _CONTENT_DATA.match(path) else []
+            added_fields = personal_field_keys(body, string_spans)
+            personal_base = personal_field_keys("\n".join(removed))
+            added_actions = set() if _CONTENT_DATA.match(path) else set(_FORM_ACTION.findall(body))
+            fresh_fields, fresh_actions = added_fields - personal_base, added_actions - base_actions
+            collected = bool(added_fields or personal_base)
+            if fresh_fields or (collected and fresh_actions):
+                # Trang MỚI: field/endpoint mà site đã thu ở trang khác là lặp lại bề mặt có sẵn (ví dụ
+                # trang đăng nhập được chép sang tên khác) → chỉ gắn cờ, không chặn.
+                site_fields, site_actions = (frozenset(), frozenset()) if existing \
+                    else site_personal_surfaces(checkout, new_paths)
+                fresh_fields -= site_fields
+                fresh_actions -= site_actions
+                if fresh_fields or (collected and fresh_actions):
+                    what = "field mới" if fresh_fields else "endpoint mới nhận dữ liệu"
+                    add("personal_form", "high", f"{path}: form thu dữ liệu cá nhân cần người duyệt ({what})")
+                else:
+                    flag("personal_form", "medium", f"{path}: trang mới lặp lại form thu dữ liệu đã có trên site — người soát")
         if path.endswith(".py") and not deleted and checkout:
             file = Path(checkout) / path
             try:
@@ -413,6 +574,11 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
                                                f"{path}: tương phản chữ/nền {ratio}:1 dưới WCAG AA {need}:1")
         text = visible_text(path, added)
         visible_changed |= bool(text.strip())
+        control, quoted_control = _control_scan(text)
+        if control:
+            add("injection", "critical", f"{path}: chữ hiển thị có mẫu điều khiển AI ({', '.join(control)})")
+        if quoted_control:
+            flag("injection", "high", f"{path}: mẫu điều khiển nằm trong trích dẫn ({', '.join(quoted_control)}) — người soát")
         for label in topic_hits(text):
             spec = LEXICON["labels"][label]
             severity = spec.get("diff")
@@ -421,7 +587,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             if label == "harassment_profanity":
                 add("content", severity, f"{path}: ngôn từ không phù hợp")  # trùng detail _UNSAFE → gộp
             elif label == "prompt_injection":
-                add("injection", severity, f"{path}: dòng thêm có script/handler/prompt injection")
+                continue  # cổng 4 chỉ chặn theo control_attempts (tất định), không theo lexicon intake
             elif spec.get("diff_flag"):
                 flag("sensitive_topic", severity, f"{path}: chữ hiển thị chạm chủ đề cần soát ({label})")
             else:
