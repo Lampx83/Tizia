@@ -17,9 +17,12 @@ def test_generated_tests_and_http_cannot_replace_independent_behavior(tmp_path, 
     from test_gate_5_verify import checkout, state, FakeRunner
     monkeypatch.setattr(verify, 'probe_http', lambda _: (200, b'// x\n'))
     out = verify.run(state(checkout(tmp_path)), runner=FakeRunner())
-    assert out['blocked'] and out['failure_class'] == 'plan'
+    # No harness oracle: the run never passes by itself, it waits for an admin.
+    assert out['blocked'] is False
     assert out['evidence']['smoke_passed'] and out['evidence']['http_observed']
-    assert not out['evidence']['functional']['passed']
+    functional_result = out['evidence']['functional']
+    assert not functional_result['probe_id'] and not functional_result['oracle_passed']
+    assert functional_result['needs_review'] and functional_result['passed']
 
 
 # ---- text-visible-v1: expectation comes from the words the requester quoted, never from the candidate ----

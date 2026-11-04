@@ -42,6 +42,13 @@ def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_
     return bool(stated and generated_ok and smoke_ok and result.get("probe_id") and result.get("observations"))
 
 
+def no_oracle_review(generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
+    """No harness oracle exists: green evidence keeps the change for an admin, never an automatic pass.
+    The plan's acceptance commands cannot be unfinished here: a failing one already raised."""
+    return bool(generated_ok and smoke_ok and not result.get("probe_id")
+                and result.get("reason") == functional.NO_ORACLE)
+
+
 def _internal() -> bool:
     """AI_BOARD_VERIFY_NETWORK=internal: worker runs Docker-in-Docker, so the candidate gets a network
     with no egress and is reached on its container IP. Default publishes to 127.0.0.1 (local Docker Desktop)."""
@@ -612,11 +619,16 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if not functional_result.get('passed'):
-                if not oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
+                if oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
+                    functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
+                    logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
+                                + str(functional_result.get('reason')))
+                elif no_oracle_review(generated_ok, smoke_ok, functional_result):
+                    functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
+                    logs.append('Không có oracle hành vi cho yêu cầu này; generated tests, smoke và acceptance của plan đều xanh: '
+                                'needs_review, admin xem xét, không tự đạt: ' + str(functional_result.get('reason')))
+                else:
                     raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
-                functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
-                logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
-                            + str(functional_result.get('reason')))
             kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)

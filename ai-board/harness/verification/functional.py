@@ -4,6 +4,7 @@ import re
 import unicodedata
 
 
+NO_ORACLE = 'No trusted behavioral oracle for this request'
 QUEUE_PROBE = 'queue-worker-availability-v1'
 TEXT_PROBE = 'text-visible-v1'
 COPY_PROBE = 'copy-response-v1'
@@ -351,7 +352,7 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
     if probe_id == SEARCH_PROBE:
         return run_search(base, fixture)
     if probe_id != QUEUE_PROBE:
-        return {'probe_id': None, 'passed': False, 'reason': 'No trusted behavioral oracle for this request'}
+        return {'probe_id': None, 'passed': False, 'reason': NO_ORACLE}
     if fixture is None:
         return {'probe_id': probe_id, 'passed': False, 'reason': 'Requester API and mounted UI fixture unavailable'}
     from playwright.sync_api import sync_playwright

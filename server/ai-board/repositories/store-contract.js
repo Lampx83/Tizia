@@ -96,6 +96,8 @@ const ORACLE_COVERAGE = {
   'copy-response-v1': ['clipboard'],
   'search-activity-v1': ['filtering'],
 };
+// Requests the harness has no oracle for: green smoke/generated evidence keeps the change for an admin, never a pass.
+const NO_ORACLE = 'No trusted behavioral oracle for this request';
 const FAILURE_CLASSES = new Set(CONTRACT.failure_classes);
 
 /** Trần lượt sửa của một verdict: contract, nâng theo cờ repair_replan khi bật (LF/74). */
@@ -291,6 +293,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
       if (item.functional) clean.functional = {
         probe_id: String(item.functional.probe_id || '').slice(0, 80), passed: item.functional.passed === true,
         reason: String(item.functional.reason || '').slice(0, 500),
+        oracle_passed: item.functional.oracle_passed !== false, needs_review: item.functional.needs_review === true,
         coverage: Object.fromEntries(Object.entries(item.functional.coverage || {}).slice(0, 8)
           .map(([key, flag]) => [String(key).slice(0, 40), flag === true])),
         observations: Object.fromEntries(Object.entries(item.functional.observations || {}).slice(0, 10)
@@ -315,11 +318,14 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (Number(value.gate_reached) !== last.gate) throw new WorkerContractError('pre-PR gate mismatch');
   const gate5 = gates.find((gate) => gate.gate === 5);
   const gate55 = gates.find((gate) => gate.gate === 5.5);
+  const functional = gate5?.functional || {};
+  const covered = functional.passed === true && Object.hasOwn(ORACLE_COVERAGE, functional.probe_id)
+    && ORACLE_COVERAGE[functional.probe_id].every((flag) => functional.coverage[flag] === true);
+  // Harness said it has no oracle for this request and kept the change for review: real evidence, no automatic pass.
+  const noOracle = functional.passed === true && functional.oracle_passed === false && functional.needs_review === true
+    && !functional.probe_id && functional.reason === NO_ORACLE;
   const observed = selfRequest ? gate5?.runner === 'eval' && gate5.eval?.accepted === true
-    : gate5?.smoke_passed === true && gate5?.http_observed === true
-      && gate5.functional?.passed === true
-      && Object.hasOwn(ORACLE_COVERAGE, gate5.functional.probe_id)
-      && ORACLE_COVERAGE[gate5.functional.probe_id].every((flag) => gate5.functional.coverage[flag] === true);
+    : gate5?.smoke_passed === true && gate5?.http_observed === true && (covered || noOracle);
   const passed = last.gate === 5.5 && !gates.some((gate) => gate.blocked) && observed;
   const passing = ['ready_for_pr', 'needs_review'].includes(value.outcome);
   if (passing && !passed) {
@@ -329,9 +335,11 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (passing && !selfRequest && gate5.runner !== 'docker') {
     throw new WorkerContractError('passing verdict requires gate 5 on real docker');
   }
+  if (value.outcome === 'ready_for_pr' && noOracle)
+    throw new WorkerContractError('a request without a trusted oracle cannot pass automatically');
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
     throw new WorkerContractError('ready verdict requires low or medium risk');
-  if (value.outcome === 'needs_review' && !['high', 'critical'].includes(gate55?.risk_level))
+  if (value.outcome === 'needs_review' && !noOracle && !['high', 'critical'].includes(gate55?.risk_level))
     throw new WorkerContractError('review verdict requires high or critical risk');
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);

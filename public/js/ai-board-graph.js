@@ -7,7 +7,7 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&am
 
 const NODES = {
   gate_1: { name: 'Check request', purpose: 'Check the request text. Write a plan.', at: [60, 70] },
-  gate_2: { name: 'Check allowed files', purpose: 'Check that the plan only changes allowed files.', at: [230, 70] },
+  gate_2: { name: 'Check scope', purpose: 'Check that the plan only changes allowed files.', at: [230, 70] },
   gate_2_5: { name: 'Check plan', purpose: 'Compare the plan with the current code.', at: [400, 70] },
   plan_ready: { name: 'Plan ready', purpose: 'The plan passed. An admin can allow the work.', at: [570, 70] },
   plan_stopped: { name: 'Plan stopped', purpose: 'A plan check failed. Work stops here.', at: [400, 170] },
@@ -34,6 +34,9 @@ const PURPOSE_EN = {
 };
 const PIN_LABEL = { candidate: 'change', plan: 'plan', base: 'base commit', harness: 'checker code', prompt: 'content check prompt',
   tool: 'toolset', model: 'model', oracle: 'permission list' };
+const REPAIR_ACTION = { repair_code: 'Sửa code', change_file: 'Đổi tệp', replan: 'Lập lại kế hoạch', retry: 'Thử lại',
+  stop_admin: 'Chờ quản trị viên', resplit: 'Chia lại việc', select_skill: 'Đổi kỹ năng', change_role: 'Đổi vai',
+  split: 'Tách kế hoạch', request_elevation: 'Xin quyền' };
 // Drawn: the main path, the repair and verdict branches, and blocked edges into plan_stopped. Other blocked edges would clutter the graph.
 const drawnEdge = (edge) => ['passed', 'repair', 'done', 'agent'].includes(edge.on) || edge.to === 'plan_stopped';
 // Edges that loop back in the drawing. They run under the row so they do not cross nodes.
@@ -103,6 +106,72 @@ const evidenceOf = (step) => {
 const sandboxOf = (step) => (Array.isArray(evidenceOf(step).sandbox_receipts) ? evidenceOf(step).sandbox_receipts : []);
 const skillsOf = (step) => (evidenceOf(step).skills || []).map(s => (typeof s === 'string' ? s : s?.name)).filter(Boolean);
 
+const actionLabel = (action) => REPAIR_ACTION[action] || String(action || '');
+
+// Repair rounds from the attempt journal: gate, reason, failure class, action chosen, and where the loop stopped.
+// A row repeats the whole cumulative list, so the same round can appear twice; keep each gate+reason once.
+function repairDetail(trace = {}) {
+  const rows = [...(trace.journal || [])]
+    .filter(row => row.node === 'repair' || row.node === 'repair_check')
+    .sort((a, b) => Number(a.created_at) - Number(b.created_at));
+  const chosen = new Map();
+  for (const row of rows) {
+    for (const gate of row.state?.gates || []) {
+      if (gate.repair_class || gate.repair_action) {
+        chosen.set(Number(gate.gate), { cls: String(gate.repair_class || ''), action: String(gate.repair_action || '') });
+      }
+    }
+  }
+  const rounds = [];
+  const seen = new Set();
+  for (const row of rows) {
+    for (const repair of row.state?.repairs || []) {
+      if (!repair || typeof repair !== 'object') continue;
+      const gate = Number(repair.gate);
+      const reason = String(repair.reason || '');
+      if (seen.has(`${gate}:${reason}`)) continue;
+      seen.add(`${gate}:${reason}`);
+      rounds.push({ gate, reason: reason.slice(0, 400), ...(chosen.get(gate) || {}) });
+    }
+  }
+  const decisions = (trace.runs || []).flatMap(run => (run.spans || [])
+    .filter(span => span.name === 'progress.decision')
+    .map(span => ({ node: String(span.attributes?.['tizia.progress.node'] || ''), cls: String(span.attributes?.['tizia.progress.failure_class'] || ''),
+      action: String(span.attributes?.['tizia.strategy.action'] || '') })));
+  const check = [...rows].reverse().find(row => row.node === 'repair_check');
+  const state = check?.state?.repair_state || {};
+  const detail = {
+    rounds, decisions,
+    classes: [...new Set(rounds.map(r => r.cls).filter(Boolean))],
+    actions: [...new Set(rounds.map(r => r.action).filter(Boolean))],
+    reason: String(state.repair_reason || rounds[0]?.reason || '').slice(0, 400),
+    stop: String(state.stop_note || '').slice(0, 300),
+  };
+  return detail.rounds.length || detail.reason || detail.stop || detail.decisions.length ? detail : null;
+}
+
+// Loop stop of the latest run: verdict.loop_guard, else the reason prefix the server writes on a blocked root.
+export function stopReason(trace = {}) {
+  const guarded = [...(trace.runs || [])]
+    .sort((a, b) => Number(a.created_at) - Number(b.created_at))
+    .filter(run => typeof run?.loop_guard?.reason === 'string' && run.loop_guard.reason).at(-1);
+  if (guarded) {
+    return { reason: guarded.loop_guard.reason, node: String(guarded.loop_guard.node || ''),
+      detail: String(guarded.loop_guard.detail || '') };
+  }
+  const hit = String(trace.root?.internal_reason || '').match(/^loop stop ([a-z0-9_-]{1,40}):\s*([^|]*)/i);
+  return hit ? { reason: hit[1], node: '', detail: hit[2].trim() } : null;
+}
+
+// Chip text: the reason once, then the detail without the repeated reason word.
+function stopText(stop) {
+  let detail = String(stop.detail || '').trim();
+  const head = String(stop.reason || '').toLowerCase();
+  if (head && detail.toLowerCase().startsWith(head)) detail = detail.slice(head.length).replace(/^[:\s]+/, '');
+  detail = detail.replace(/^in\s+/i, '').trim();
+  return detail ? `${stop.reason} — ${detail}` : stop.reason;
+}
+
 function gateDetail(step, trace) {
   const calls = callsOf(step);
   const totals = stepTotals(step);
@@ -135,6 +204,7 @@ export function graphNodes(trace = {}) {
   const execute = projection.steps.filter(s => s.stage === 'execute');
   const planBad = projection.steps.some(s => s.stage === 'plan' && s.state === 'bad');
   const out = {};
+  const repair = repairDetail(trace);
   for (const [id, def] of Object.entries(NODES)) {
     const gate = gateOf(id);
     let state = 'idle';
@@ -147,6 +217,11 @@ export function graphNodes(trace = {}) {
     else if (id === 'plan_ready') state = steps.get(2.5)?.state === 'ok' ? 'succeeded' : 'idle';
     else if (id === 'attempt_open') state = execute.some(s => s.result || s.calls.length || s.state === 'run') ? 'succeeded' : 'idle';
     else state = seen.has(id) ? 'succeeded' : 'idle';
+    // A repair round in the journal proves the node ran, even when no gate_started event survived.
+    if (id === 'repair' && repair) {
+      detail = { repair };
+      if (state === 'idle') state = 'succeeded';
+    }
     out[id] = { id, gate, ...def, state, ...detail };
   }
   return out;
@@ -275,6 +350,18 @@ function kv(rows) {
   return `<dl class="kv g-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`;
 }
 
+// Repair properties: rounds, class and action from the journal, plus the reason and the stop note.
+function repairProps(repair) {
+  if (!repair) return '';
+  const rows = [];
+  if (repair.rounds.length) rows.push(['Repair rounds', esc(String(repair.rounds.length))]);
+  if (repair.classes.length) rows.push(['Failure class', esc(repair.classes.join(', '))]);
+  if (repair.actions.length) rows.push(['Action', esc(repair.actions.map(actionLabel).join(', '))]);
+  const reason = repair.reason ? `<div class="g-repair"><b>Vì sao sửa</b><p>${esc(repair.reason)}</p></div>` : '';
+  const stop = repair.stop ? `<p class="meta">Dừng: ${esc(repair.stop)}</p>` : '';
+  return rows.length || reason || stop ? `${rows.length ? kv(rows) : ''}${reason}${stop}` : '';
+}
+
 // Properties: what the node is doing now, its numbers and its error. Actions sit here too.
 function propsPanel(node, root) {
   if (!node) return '<p class="meta g-empty">Select a node to see what it does.</p>';
@@ -283,7 +370,7 @@ function propsPanel(node, root) {
   if (!node.step) {
     const text = node.state === 'succeeded' ? 'This step was reached in the current run.'
       : node.state === 'failed' ? 'This step failed in the current run.' : 'This step was not reached yet.';
-    return `${head}${purpose}<p>${esc(text)}</p>`;
+    return `${head}${purpose}${repairProps(node.repair) || `<p>${esc(text)}</p>`}`;
   }
   const status = { running: node.current, failed: 'Stopped at this step.', succeeded: 'Finished.', stopped: node.note, idle: node.note }[node.state];
   const typical = node.typical.ms == null ? 'No estimate. No earlier run timed this step.'
@@ -302,10 +389,19 @@ function propsPanel(node, root) {
   return `${head}${purpose}${kv(rows)}${error}${proof}${action ? `<div class="g-slot">${action}</div>` : ''}`;
 }
 
+// Repair log: each round the journal recorded, the strategy changes and where the loop stopped.
+function repairLog(repair = {}) {
+  const list = repair.rounds || [], decisions = repair.decisions || [];
+  const rounds = list.length ? `<h4>Repair rounds</h4><ol class="g-list">${list.map((r, i) => `<li><b>Lần ${i + 1}</b>${r.gate ? ` · cổng ${esc(r.gate)}` : ''}${r.cls ? ` · <code>${esc(r.cls)}</code>` : ''}${r.action ? ` · ${esc(actionLabel(r.action))}` : ''}<div class="meta">${esc(r.reason || 'không ghi lý do')}</div></li>`).join('')}</ol>` : '';
+  const changes = decisions.length ? `<h4>Strategy changes</h4><ul class="g-list">${decisions.map(d => `<li>${esc(d.node.replace(/_/g, ' ') || 'bước sửa')}${d.action ? ` → ${esc(actionLabel(d.action))}` : ''}${d.cls ? ` <span class="meta">${esc(d.cls)}</span>` : ''}</li>`).join('')}</ul>` : '';
+  const stop = repair.stop ? `<h4>Stop</h4><p>${esc(repair.stop)}</p>` : '';
+  return `${rounds}${changes}${stop}`;
+}
+
 // Execution log: AI calls, tool calls, sandbox runs, skills, earlier attempts and the raw record, in mono.
 function logPanel(node) {
   if (!node) return '<p class="meta g-empty">Chọn một bước để xem nhật ký.</p>';
-  if (!node.step) return `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
+  if (!node.step) return repairLog(node.repair || {}) || `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
   const total = (node.tokens?.in || 0) + (node.tokens?.out || 0);
   const tokens = `<h4>Token</h4><p>vào ${esc(num(node.tokens?.in))} · ra ${esc(num(node.tokens?.out))} · tổng ${esc(num(total))}</p>`;
   const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map((m, i) => `<li><b>#${i + 1} ${esc(m.title)}</b>${m.prompt ? ` <code>${esc(m.prompt)}</code>` : ''}${m.call_id ? ` <span class="meta">${esc(m.call_id)}</span>` : ''} · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
@@ -342,7 +438,7 @@ function edgeSvg(edge, nodes) {
   const back = BACKWARD.has(`${edge.from}>${edge.to}`);
   const flowing = to.state === 'running' && from.state === 'succeeded' && edge.on !== 'blocked';
   const done = from.state === 'succeeded' && (to.state === 'succeeded' || to.state === 'running');
-  const cls = ['g-edge', flowing ? 'flow' : '', done ? 'done' : '', edge.on === 'blocked' ? 'stop' : ''].filter(Boolean).join(' ');
+  const cls = ['g-edge', back ? 'loop' : '', flowing ? 'flow' : '', done ? 'done' : '', edge.on === 'blocked' ? 'stop' : ''].filter(Boolean).join(' ');
   return `<path class="${cls}" d="${edgePath(edge.from, edge.to, back)}" data-edge="${esc(edge.from)}>${esc(edge.to)}"/>`;
 }
 
@@ -400,6 +496,10 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
       ${c.bar ? `<div class="g-bar" aria-hidden="true"><i style="width:${Math.round(c.ratio * 100)}%"></i></div>` : ''}
     </div>`).join('');
   const chosenNode = nodes[selectedId];
+  const stop = stopReason(trace);
+  const stopLine = stop
+    ? `<p class="g-stop" role="status"><span class="g-caption">Stop reason</span><span class="g-stop-chip">${esc(stopText(stop))}</span>${stop.node ? `<span class="meta">${esc(nodes[stop.node]?.name || stop.node.replace(/_/g, ' '))}</span>` : ''}</p>`
+    : '';
   const steps = shown.map(n => `<li><button type="button" class="g-step st-${n.state}${n.id === selectedId ? ' is-selected' : ''}" data-node="${esc(n.id)}" aria-pressed="${n.id === selectedId}">${icon(n.state)}<span class="g-step-name">${esc(n.name)}</span><span class="g-step-state">${esc(STATE_LABEL[n.state])}</span></button></li>`).join('');
   return `<section class="ticket-graph" id="ticket-trace">
     <div class="blk g-props" role="region" aria-live="polite" aria-label="Properties">
@@ -409,6 +509,7 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
     <div class="blk g-graph" aria-label="Graph">
       <div class="g-caption">Graph</div>
       <div class="g-strip" role="group" aria-label="Budget">${cells}</div>
+      ${stopLine}
       <p class="g-legend meta">${Object.keys(ICON).map(s => `<span class="g-state st-${s}">${icon(s)}${esc(STATE_LABEL[s])}</span>`).join('')}</p>
       <div class="g-frame"><svg class="g-svg" viewBox="-20 0 1040 540" role="group" aria-label="Ticket processing graph">
         <defs>${ARROW_DEFS}</defs>

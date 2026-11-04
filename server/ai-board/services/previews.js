@@ -112,7 +112,8 @@ export function createPreviews({ repository, runtime, servingOrigin, previewOrig
       const id = opaque();
       const p = { id, request_id: requestId, run_id: runId, candidate_sha: candidateSha, archive_sha: archiveSha,
         runtime_id: `preview-${id}`, state: 'creating', expires_at: now() + 15 * 60_000,
-        oracle_scope: ['ready_for_pr', 'needs_review'].includes(verdict.outcome) && gate5.functional?.passed === true ? 'functional' : 'smoke_only' };
+        oracle_scope: ['ready_for_pr', 'needs_review'].includes(verdict.outcome) && gate5.functional?.passed === true
+          && gate5.functional?.oracle_passed !== false ? 'functional' : 'smoke_only' };
       await repository.insert(p); // durable before provisioning, so uncertain create is reconcilable
       try {
         const created = await runtime.create(p, archive);

@@ -796,13 +796,20 @@ class _Execution:
         if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
             self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
         smoke = next((gate for gate in gates if gate["gate"] == 5), {})
-        oracle_review = passed and bool((smoke.get("functional") or {}).get("needs_review"))
+        oracle = smoke.get("functional") or {}
+        oracle_review = passed and bool(oracle.get("needs_review"))
         needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical"))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
-        reason = ("oracle functional fail trong khi acceptance, generated tests và smoke xanh: " + str(smoke["functional"].get("reason"))[:300]
-                  if oracle_review else "risk triage requires human review" if needs_review else last["reason"])
+        if oracle_review:
+            reason = ("needs_review, không có oracle hành vi, generated tests/smoke/acceptance xanh: "
+                      if not oracle.get("probe_id")
+                      else "oracle functional fail trong khi acceptance, generated tests và smoke xanh: ") + str(oracle.get("reason"))[:300]
+        elif needs_review:
+            reason = "risk triage requires human review"
+        else:
+            reason = last["reason"]
         if self.halt.get("reason") and not passed:
             reason = f"loop stop {self.halt['reason']}: {self.halt['detail']} | {reason}"
         elif self.stop_note and not passed:

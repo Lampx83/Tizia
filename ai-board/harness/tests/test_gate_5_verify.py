@@ -850,3 +850,46 @@ def test_oracle_defers_needs_generated_tests_and_smoke():
     assert verify.oracle_defers(s, ["node --test t.js"], True, True, ORACLE_FAIL) is True
     assert verify.oracle_defers(s, ["node --test t.js"], False, True, ORACLE_FAIL) is False
     assert verify.oracle_defers(s, ["node --test t.js"], True, False, ORACLE_FAIL) is False
+
+
+NO_ORACLE = {"probe_id": None, "passed": False, "reason": "No trusted behavioral oracle for this request"}
+
+
+def _no_oracle_state(tmp_path, **extra):
+    return {**state(checkout(tmp_path)), "request_detail": "Xóa liên kết quay về trang chủ.",
+            "acceptance": ["node --test test/generated.test.js"], **extra}
+
+
+def test_no_oracle_with_green_generated_tests_smoke_and_acceptance_is_needs_review(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
+    out = verify.run(_no_oracle_state(tmp_path), runner=FakeRunner())
+    assert out["blocked"] is False and out["failure_class"] is None
+    functional_result = out["evidence"]["functional"]
+    assert functional_result["passed"] is True and functional_result["probe_id"] is None
+    assert functional_result["needs_review"] is True and functional_result["oracle_passed"] is False
+    assert "needs_review" in out["evidence"]["text"] and "admin" in out["evidence"]["text"]
+
+
+def test_no_oracle_still_blocks_when_generated_tests_or_smoke_fail(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
+    for fail in ("generated_test", "smoke"):
+        (tmp_path / fail).mkdir()
+        out = verify.run(_no_oracle_state(tmp_path / fail), runner=FakeRunner(fail=fail))
+        assert out["blocked"] is True, fail
+
+
+def test_no_oracle_review_needs_generated_tests_and_smoke():
+    assert verify.no_oracle_review(True, True, dict(NO_ORACLE)) is True
+    assert verify.no_oracle_review(False, True, dict(NO_ORACLE)) is False
+    assert verify.no_oracle_review(True, False, dict(NO_ORACLE)) is False
+    assert verify.no_oracle_review(True, True, {"probe_id": None, "passed": False, "reason": "Behavior has not been verified"}) is False
+    assert verify.no_oracle_review(True, True, dict(ORACLE_FAIL)) is False
+
+
+def test_a_trusted_oracle_pass_is_not_marked_for_review(tmp_path):
+    out = verify.run(state(checkout(tmp_path)), runner=FakeRunner())
+    assert out["blocked"] is False
+    assert "needs_review" not in out["evidence"]["functional"]
+    assert "oracle_passed" not in out["evidence"]["functional"]

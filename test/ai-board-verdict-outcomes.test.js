@@ -90,6 +90,18 @@ test('a repaired verdict records one review_fix child after the ordered children
   assert.equal(stored.candidate.branch, 'ai-board/2026-09-24-ticket-1');
 });
 
+test('the admin trace carries the run loop guard, bounded, for the panel stop row', async () => {
+  const { db, store, submit } = await plannedRoot();
+  assert.equal((await store.getRequestTrace(1)).runs.at(-1).loop_guard, null, 'no guard before the verdict');
+  await submit(blocked(5, 'chữ tương phản thấp', 'ordinary',
+    { loop_guard: { reason: 'similarity', node: 'repair_check', detail: 'x'.repeat(500) } }));
+  const guard = (await store.getRequestTrace(1)).runs.at(-1).loop_guard;
+  assert.equal(guard.reason, 'similarity');
+  assert.equal(guard.node, 'repair_check');
+  assert.equal(guard.detail.length, 300);
+  db.close();
+});
+
 test('admin rollback needs the typed request number, waits for a free lease, and only an active worker runs it', async () => {
   const { db, store, submit, ticket } = await plannedRoot();
   await submit(passing());
@@ -466,10 +478,40 @@ test('a passing verdict needs a known harness oracle with every coverage flag th
   ]) await assert.rejects(async () => (await plannedRoot()).submit(withProbe(bad)), /passing verdict requires successful smoke/);
 });
 
+const noOracleProbe = { probe_id: null, passed: true, oracle_passed: false, needs_review: true,
+  reason: 'No trusted behavioral oracle for this request' };
+const noOracle = (functional, extra = {}) => ({ ...passing(), outcome: 'needs_review',
+  gates: [gates[3], gates[4], { ...gates[5], functional }, gates[55]], ...extra });
+
 test('the copy and search oracles are trusted only with their own coverage flag', async () => {
   for (const [probe_id, flag] of [['copy-response-v1', 'clipboard'], ['search-activity-v1', 'filtering']]) {
     const ok = { probe_id, passed: true, coverage: { [flag]: true } };
     assert.equal((await (await plannedRoot()).submit(withProbe(ok))).outcome, 'ready_for_pr', probe_id);
     await assert.rejects(async () => (await plannedRoot()).submit(withProbe({ ...ok, coverage: { rendered_text: true } })), /passing verdict requires successful smoke/);
   }
+});
+
+test('a no-oracle verdict cannot pass automatically or claim a trusted oracle', async () => {
+  const { submit } = await plannedRoot();
+  await assert.rejects(async () => submit(noOracle(noOracleProbe, { outcome: 'ready_for_pr' })), /oracle/);
+  for (const bad of [
+    { ...noOracleProbe, oracle_passed: undefined },  // reads like an ordinary trusted pass
+    { ...noOracleProbe, needs_review: false },
+    { ...noOracleProbe, reason: 'Behavior has not been verified' },
+    { ...noOracleProbe, probe_id: 'made-up-by-the-model-v1' },
+  ]) await assert.rejects(async () => submit(noOracle(bad)), /successful smoke/);
+});
+
+test('a request without a harness oracle is kept for review instead of being blocked or replanned', async () => {
+  const { db, submit, ticket } = await plannedRoot();
+  const why = 'needs_review, không có oracle hành vi, generated tests/smoke/acceptance xanh: No trusted behavioral oracle for this request';
+  const verdict = await submit(noOracle(noOracleProbe, { reason: why }));
+  assert.equal(verdict.outcome, 'needs_review');
+  const gate5 = verdict.gates.find((gate) => gate.gate === 5);
+  assert.deepEqual({ oracle_passed: gate5.functional.oracle_passed, needs_review: gate5.functional.needs_review },
+    { oracle_passed: false, needs_review: true });
+  const root = await db.prepare('SELECT phase, internal_reason FROM ai_tickets WHERE id=?').get(ticket.id);
+  assert.equal(root.phase, 'pre_pr_review');
+  assert.equal(root.internal_reason, why);
+  assert.equal((await db.prepare('SELECT outcome FROM ai_runs ORDER BY id DESC LIMIT 1').get()).outcome, 'needs_review');
 });

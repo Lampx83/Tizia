@@ -8,7 +8,7 @@
 <style>
   :root {
     --bg:#0b1220; --bg2:#111a2e; --bg3:#16213d; --accent:#fbbf24; --accent2:#60a5fa;
-    --ok:#4ade80; --warn:#fdba74; --bad:#fca5a5;
+    --ok:#4ade80; --warn:#fdba74; --bad:#fca5a5; --failed:#ff6b6b;
     --border:rgba(255,255,255,0.10); --txt:#e2e8f0; --muted:#94a3b8;
   }
   * { box-sizing:border-box; }
@@ -146,10 +146,10 @@
   .tone-warn .g-bar i { background:var(--warn); }
   .tone-bad .g-big, .tone-bad .g-sub { color:var(--bad); }
   .tone-bad .g-bar i { background:var(--bad); }
-  .g-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:44px 0 0; }
+  .g-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:44px 0 0; opacity:.6; }
   .g-state { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
   .g-state.st-succeeded { color:var(--ok); }
-  .g-state.st-failed { color:var(--bad); }
+  .g-state.st-failed { color:var(--failed); }
   .g-state.st-running { color:var(--accent2); }
   .g-state.st-stopped { color:var(--warn); }
   .g-frame { margin-top:28px; overflow-x:auto; overflow-y:hidden; }
@@ -165,22 +165,26 @@
   .g-edge.done { stroke:var(--ok); stroke-opacity:.8; marker-end:url(#g-arr-done); }
   .g-edge.stop { stroke:var(--bad); stroke-opacity:.6; stroke-dasharray:2 4; marker-end:url(#g-arr-stop); }
   .g-edge.flow { stroke:var(--accent2); stroke-opacity:1; stroke-dasharray:4 8; animation:g-flow 1.2s linear infinite; marker-end:url(#g-arr-flow); }
+  .g-edge.loop { stroke-width:2.6; }
   @keyframes g-flow { to { stroke-dashoffset:-24; } }
   .g-box { fill:var(--bg); stroke:var(--muted); stroke-width:1.5; }
   .g-glyph { color:var(--muted); }
   .g-node.st-succeeded .g-box, .g-node.st-succeeded .g-glyph { stroke:var(--ok); color:var(--ok); }
-  .g-node.st-failed .g-box, .g-node.st-failed .g-glyph { stroke:var(--bad); color:var(--bad); }
+  .g-node.st-failed .g-box, .g-node.st-failed .g-glyph { stroke:var(--failed); color:var(--failed); }
   .g-node.st-running .g-box, .g-node.st-running .g-glyph { stroke:var(--accent2); color:var(--accent2); }
   .g-node.st-stopped .g-box, .g-node.st-stopped .g-glyph { stroke:var(--warn); color:var(--warn); }
   .g-node.st-running .g-glyph { animation:g-turn 1.4s linear infinite; transform-box:fill-box; transform-origin:center; }
   @keyframes g-turn { to { transform:rotate(360deg); } }
   .g-halo { fill:none; stroke:var(--accent); stroke-width:1.5; }
-  .g-label { font-size:12px; fill:var(--muted); }
+  .g-label { font-size:13px; font-weight:500; fill:var(--muted); }
   .g-kicker { font-size:10px; fill:var(--muted); letter-spacing:.04em; }
   .g-node { cursor:pointer; outline:none; }
   .g-node:hover .g-label, .g-node.is-selected .g-label { fill:var(--txt); }
   .g-node:focus-visible .g-box { stroke:var(--accent); stroke-width:2.5; }
   .g-loop { margin:28px 0 0; }
+  .g-stop { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 10px; margin:20px 0 0; }
+  .g-stop .g-caption { margin:0; }
+  .g-stop-chip { font-size:13px; padding:2px 10px; border-radius:999px; border:1px solid var(--warn); color:var(--warn); background:rgba(253,186,116,.10); overflow-wrap:anywhere; }
   .g-resume { margin:12px 0 0; color:var(--ok); }
   .g-journal { list-style:none; display:flex; flex-wrap:wrap; gap:6px 8px; margin:0 0 12px; padding:0; font-size:12px; color:var(--muted); }
   .g-journal li { padding:4px 9px; border:1px solid var(--border); border-radius:999px; overflow-wrap:anywhere; }
@@ -193,7 +197,7 @@
   .g-step-name { flex:1; min-width:0; overflow-wrap:anywhere; }
   .g-step-state { font-size:11px; color:var(--muted); }
   .g-step:hover, .g-step.is-selected { background:var(--bg3); color:var(--txt); }
-  .g-step.st-succeeded .g-icon { color:var(--ok); } .g-step.st-failed .g-icon { color:var(--bad); } .g-step.st-running .g-icon { color:var(--accent2); } .g-step.st-stopped .g-icon { color:var(--warn); }
+  .g-step.st-succeeded .g-icon { color:var(--ok); } .g-step.st-failed .g-icon { color:var(--failed); } .g-step.st-running .g-icon { color:var(--accent2); } .g-step.st-stopped .g-icon { color:var(--warn); }
   .g-pane { padding:20px 24px; min-width:0; min-height:80px; }
   .g-icon { flex:none; }
   .g-empty { margin:0; }
@@ -204,6 +208,9 @@
   .g-error { margin:0 0 20px; }
   .g-error b { color:var(--bad); font-weight:600; }
   .g-error p { margin:4px 0 0; }
+  .g-repair { margin:0 0 20px; }
+  .g-repair b { color:var(--muted); font-weight:600; }
+  .g-repair p { margin:4px 0 0; }
   .g-pane h4 { font-size:13px; color:var(--muted); margin:24px 0 8px; font-weight:600; }
   .g-list { margin:0; padding-left:20px; font-size:13px; }
   .g-list li { margin:6px 0; overflow-wrap:anywhere; }
@@ -227,6 +234,6 @@
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
 <nav aria-label="Bài học AI Board"><a class="back" href="/ai-board-lessons.html">Duyệt bài học AI Board</a> <a class="back" href="/admin-shots.html">Ảnh nháp đã lưu</a></nav>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
-<script type="module" src="/js/admin-request.js?v=copy-audit1"></script>
+<script type="module" src="/js/admin-request.js?v=repair-stop1"></script>
 </body>
 </html>

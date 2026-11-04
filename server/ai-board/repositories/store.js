@@ -1314,6 +1314,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
 const RESUME_ORDER = ['gate_3', 'gate_4', 'gate_5', 'gate_5_5'];
 
+// Loop guard of one run as the panel shows it: reason, node and a short detail. Old runs may hold unvalidated JSON.
+function loopGuardView(verdict) {
+  const guard = verdict?.loop_guard;
+  if (typeof guard?.reason !== 'string' || !guard.reason) return null;
+  return { reason: guard.reason.slice(0, 40), node: String(guard.node ?? '').slice(0, 40), detail: String(guard.detail ?? '').slice(0, 300) };
+}
+
 // Which nodes a resumed attempt replayed from the journal (the ones before its resume point).
 function resumeSummary(journal) {
   const rows = (journal || []).filter((row) => row.node === 'resume');
@@ -2153,6 +2160,8 @@ function resumeSummary(journal) {
     for (const child of children) subtasksByRevision.set(child.plan_revision, (subtasksByRevision.get(child.plan_revision) || 0) + 1);
     const runs = runRows.map(({ evidence_json: runEvidence, ...run }, i) => {
       const subtaskCount = subtasksByRevision.get(run.plan_revision) || 0;
+      const evidence = parseJson(runEvidence);
+      const verdict = evidence?.verdict;
       const gates = [];
       const calls = [];
       for (const { run_id: runId, evidence_json: json, ...row } of traces) {
@@ -2166,16 +2175,17 @@ function resumeSummary(journal) {
       // Provider của lượt lấy từ evidence lần gọi model; nhiều provider (hiếm) thì quay về trần chung.
       const providers = new Set(calls.map((c) => c.evidence?.provider).filter(Boolean));
       const provider = providers.size === 1 ? [...providers][0] : null;
-      const rollback = parseJson(runEvidence)?.rollback ?? null;
+      const rollback = evidence?.rollback ?? null;
       const live = root.live && i === runRows.length - 1 && !run.status && !rollback;
-      const produced = parseJson(runEvidence)?.verdict?.candidate; // commit của chính lượt này (trace admin)
-      const changeClass = (parseJson(runEvidence)?.verdict?.gates || []).find((g) => [4, 5.5].includes(Number(g.gate)) && g.change_class)?.change_class ?? null;
+      const produced = verdict?.candidate; // commit của chính lượt này (trace admin)
+      const changeClass = (verdict?.gates || []).find((g) => [4, 5.5].includes(Number(g.gate)) && g.change_class)?.change_class ?? null;
       // Runner (Docker sandbox, gate 5/5.5) bị chặn: mã lỗi lấy từ evidence gate, không có thì để reason.
       const runnerGate = gates.filter((g) => [5, 5.5].includes(Number(g.gate)) && g.status === 'blocked').at(-1);
       const runnerFailure = runnerGate ? { gate: Number(runnerGate.gate), code: runnerGate.evidence?.code ?? null,
         reason: runnerGate.public_reason ?? null, internal_reason: runnerGate.internal_reason ?? null } : null;
       return { ...run, rollback, gates, calls, change_class: changeClass, runner_failure: runnerFailure, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
+        loop_guard: loopGuardView(verdict),
         budget_used: budgetUsed, budget_limit: root.budget_limit,
         subtask_count: subtaskCount, wall_clock_limit_s: wallClockLimit(subtaskCount, provider),
         progress: runProgress({ ...run, gates, calls }, events, live) };

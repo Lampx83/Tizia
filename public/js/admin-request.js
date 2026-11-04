@@ -6,7 +6,7 @@ import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
-import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261104c';
+import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261104d';
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
 

@@ -153,3 +153,21 @@ def test_scope_failure_stops_without_repair(monkeypatch):
 def test_plan_inconsistent_requeues_as_plan_class(monkeypatch):
     verdict, _ = drive(monkeypatch, [(fail("x", "Cannot find module '/app/public/js/ghost.js'"), "d")])
     assert verdict["failure_class"] == "plan" and verdict["repairs"] == []
+
+
+def test_a_no_oracle_run_reaches_the_verdict_as_needs_review_instead_of_a_replan():
+    execution = worker._Execution({}, ticket_id=1, checkout_source="unused", deps=None, budget=None, run_gate=None,
+                                  cleanup=None, catalog=None, request_detail=None, memory_path=None, should_stop=None,
+                                  candidate_opts=None, request_type=None, eval_tasks=None, preview_capture=None,
+                                  checkpoint=None, plan_hash=None)
+    execution.gates = [{"gate": 5, "blocked": False, "smoke_passed": True, "http_observed": True, "runner": "docker",
+                        "functional": {"probe_id": None, "passed": True, "oracle_passed": False, "needs_review": True,
+                                       "reason": "No trusted behavioral oracle for this request"}},
+                       {"gate": 5.5, "blocked": False, "reason": None, "risk_level": "low"}]
+    execution.kind, execution.state = None, {}
+    execution.candidate = {"branch": "ai-board/ticket-1", "base_sha": "a" * 40, "head_sha": "b" * 40, "commits": []}
+    execution.verdict()
+    result = execution.result
+    assert result["outcome"] == "needs_review" and result["candidate"] is not None
+    assert result["failure_class"] is None and "loop stop" not in result["reason"]
+    assert result["reason"].startswith("needs_review") and "No trusted behavioral oracle" in result["reason"]

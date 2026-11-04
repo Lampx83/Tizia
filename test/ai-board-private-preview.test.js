@@ -155,6 +155,18 @@ test('oracle-unavailable artifact has smoke-only label and never upgrades blocke
   }
 });
 
+test('a no-oracle review verdict publishes its candidate as smoke-only, never as oracle-verified', async () => {
+  const sha = 'a'.repeat(40);
+  const verdict = { outcome: 'needs_review', failure_class: null,
+    candidate: { branch: 'ai-board/2026-11-04-ticket-1', base_sha: 'b'.repeat(40), head_sha: sha, commits: [] },
+    gates: [{ gate: 4, blocked: false }, { gate: 5, blocked: false, runner: 'docker', smoke_passed: true, http_observed: true,
+      functional: { probe_id: null, passed: true, oracle_passed: false, needs_review: true,
+        reason: 'No trusted behavioral oracle for this request' } }] };
+  const f = fixture(); f.binding.evidence_json = JSON.stringify({ verdict });
+  const p = await f.service.publish({ requestId: 1, runId: 2, candidateSha: sha, archive: Buffer.from('private artifact') });
+  assert.equal(p.oracle_scope, 'smoke_only');
+});
+
 test('candidate cookies remain server-side per grant; parallel assets run sequentially and serving cookies never enter VM', async () => {
   const f = fixture(); const { p, grant } = await open(f);
   const request = { method: 'GET', path: '/', headers: { cookie: 'tizia_sid=REAL-SERVING; preview_access=REAL-GRANT' } };

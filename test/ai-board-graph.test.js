@@ -126,7 +126,7 @@ test('blocked plan run then passing plan run: only the latest plan decides', () 
 
 test('svg nodes carry their state in aria-label and the icon shape, not colour alone', () => {
   const html = renderTicketGraph(failed(), null);
-  assert.match(html, /aria-label="Check allowed files: Failed"/);
+  assert.match(html, /aria-label="Check scope: Failed"/);
   assert.match(html, /aria-label="Check request: Done"/);
   assert.match(html, /aria-label="Check code: Waiting"/);
   assert.match(html, /<path d="M5 5l6 6M11 5l-6 6"/);
@@ -246,6 +246,67 @@ test('node detail lists sandbox runs and skills from evidence, digests only', ()
   assert.ok(html.includes('<h4>Sandbox runs</h4>'));
   assert.ok(html.includes('<code>node --test test/a.test.js</code> · exit 0 · 0.8 s'));
   assert.ok(html.includes('<h4>Skills</h4><p>tizia-ui, node-test</p>'));
+});
+
+// Request 33 / ticket 110: gate 5 blocked on contrast, one repair round, then the loop stopped on similarity.
+const repairLoop = () => ({
+  root: root({ status: 'blocked', internal_reason: 'loop stop similarity: similarity in window of 2 steps | giao diện tệ hơn bản trước' }),
+  graph,
+  runs: [{ id: 20, trigger: 'execute', created_at: 100, updated_at: 900,
+    gates: [gate(21, 3, 'passed', 200), gate(22, 4, 'passed', 300), gate(23, 5, 'blocked', 400, { public_reason: 'chữ tương phản thấp' })],
+    calls: [], loop_guard: { reason: 'similarity', node: 'repair_check', detail: 'similarity in window of 2 steps' },
+    spans: [{ name: 'progress.decision', attributes: { 'tizia.progress.node': 'repair_check', 'tizia.progress.failure_class': 'test_assertion', 'tizia.strategy.action': 'repair_code' } }] }],
+  events: [],
+  journal: [
+    { run_id: 20, node: 'repair_check', outcome: 'passed', created_at: 500, state: {
+      gates: [{ gate: 5, repair_class: 'test_assertion', repair_action: 'repair_code' }],
+      repairs: [{ gate: 5, reason: 'chữ tương phản thấp' }],
+      repair_state: { stop_note: 'similarity: similarity in window of 2 steps', repair_reason: 'cổng 5 [test_assertion]: chữ tương phản thấp', round_metrics: [{ gate: 5 }] } } },
+    { run_id: 20, node: 'repair', outcome: 'passed', created_at: 600, state: { repairs: [{ gate: 5, reason: 'chữ tương phản thấp' }] } },
+  ],
+});
+
+test('the repair node shows the round the journal recorded, not "no journal yet"', () => {
+  const node = graphNodes(repairLoop()).repair;
+  assert.equal(node.state, 'succeeded');
+  assert.equal(node.repair.rounds.length, 1);
+  assert.deepEqual([node.repair.classes, node.repair.actions], [['test_assertion'], ['repair_code']]);
+  const html = renderTicketGraph(repairLoop(), 'repair');
+  assert.doesNotMatch(html, /Repair chưa có nhật ký/);
+  assert.match(html, /Failure class<\/dt><dd>test_assertion/);
+  assert.match(html, /Action<\/dt><dd>Sửa code/);
+  assert.match(html, /Lần 1<\/b> · cổng 5 · <code>test_assertion<\/code> · Sửa code/);
+  assert.match(html, /cổng 5 \[test_assertion\]: chữ tương phản thấp/);
+  assert.match(html, /Dừng: similarity: similarity in window of 2 steps/);
+  assert.match(html, /Strategy changes/);
+});
+
+test('an untrusted repair reason is escaped', () => {
+  const hostile = repairLoop();
+  const reason = '<img src=x onerror=alert(1)>';
+  for (const row of hostile.journal) {
+    if (row.state.repairs) row.state.repairs = [{ gate: 5, reason }];
+    if (row.state.repair_state) row.state.repair_state.repair_reason = reason;
+  }
+  const html = renderTicketGraph(hostile, 'repair');
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+});
+
+test('the loop stop is a first-class row: verdict loop_guard first, then the "loop stop x:" reason', () => {
+  const html = renderTicketGraph(repairLoop(), 'repair');
+  assert.match(html, /<p class="g-stop" role="status"><span class="g-caption">Stop reason<\/span><span class="g-stop-chip">similarity — window of 2 steps<\/span>/);
+  assert.match(html, /Repair needed\?<\/span>/);
+  assert.doesNotMatch(html, /giao diện tệ hơn bản trước/, 'the failure paragraph is not repeated');
+  // Older runs carry no loop_guard: the blocked reason prefix gives the same chip.
+  const fallback = repairLoop();
+  fallback.runs[0].loop_guard = null;
+  assert.match(renderTicketGraph(fallback, 'repair'), /<span class="g-stop-chip">similarity — window of 2 steps<\/span>/);
+  // Nothing stopped: no row at all.
+  const clean = repairLoop();
+  clean.runs[0].loop_guard = null;
+  clean.root = root({ status: 'blocked' });
+  assert.doesNotMatch(renderTicketGraph(clean, 'repair'), /Stop reason/);
 });
 
 test('budget cells: API shows paid tokens with a bar; no model-call or GPU cell; behaviour cells follow trace.behavior', () => {

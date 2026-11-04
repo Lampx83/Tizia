@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderRepairAgent } from '../public/js/ai-board-trace.js';
+import { graphNodes, renderTicketGraph } from '../public/js/ai-board-graph.js';
 
 const trace = (spans) => ({ runs: [{ id: 4, spans }] });
 
@@ -36,4 +37,25 @@ test('the progress window and strategy change render as the vector', () => {
   assert.match(html, /repair_check/);
   assert.match(html, /replan/);
   assert.match(html, /g3 f1 a1 · g3 f1 a2/);
+});
+
+// Agent path: no repair round started, so the journal holds the check and the stop only.
+const agentStop = () => ({
+  root: { id: 1, status: 'blocked', live: false },
+  runs: [{ id: 4, trigger: 'execute', created_at: 10, updated_at: 20, calls: [],
+    gates: [{ gate: 5, status: 'blocked', created_at: 11, public_reason: 'lỗi tương phản', evidence: null }],
+    spans: [
+      { name: 'repair_agent.proposal', attributes: { 'tizia.agent.outcome': 'denied', 'tizia.agent.reason': 'quá phạm vi' } },
+      { name: 'progress.decision', attributes: { 'tizia.progress.node': 'repair_check', 'tizia.progress.failure_class': 'scope', 'tizia.strategy.action': 'stop_admin' } }] }],
+  events: [],
+  journal: [{ run_id: 4, node: 'repair_check', outcome: 'done', created_at: 12, state: { repair_state: { stop_note: 'scope: ngoài phạm vi' } } }],
+});
+
+test('the agent path still fills the repair node: strategy change and stop', () => {
+  assert.equal(graphNodes(agentStop()).repair.state, 'succeeded');
+  const html = renderTicketGraph(agentStop(), 'repair');
+  assert.doesNotMatch(html, /Repair chưa có nhật ký/);
+  assert.match(html, /Strategy changes/);
+  assert.match(html, /repair check → Chờ quản trị viên/);
+  assert.match(html, /<h4>Stop<\/h4><p>scope: ngoài phạm vi<\/p>/);
 });
