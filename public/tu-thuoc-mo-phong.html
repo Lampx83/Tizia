@@ -301,6 +301,22 @@
   body.ref-open #edututor-fab,body.ref-open #edututor-panel{display:none !important;}
   .m2-inv{border:1px solid #cdbb8a;border-radius:8px;background:#fffdf6;padding:10px 12px;position:relative;overflow:hidden;font-size:.82rem;}
   .m2-inv .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);font:800 1.3rem 'Nunito',sans-serif;color:rgba(180,60,60,.12);pointer-events:none;text-align:center}
+  /* req #263: đơn hàng / báo cáo thuốc kiểm soát đặc biệt theo Mẫu số 12, 13 (mẫu minh hoạ) */
+  .ks-doc{margin:8px 0;line-height:1.5;color:#222;}
+  .ks-doc .ks-no{position:absolute;top:8px;right:12px;font-weight:800;font-size:.72rem;}
+  .ks-doc .ks-org{font-weight:800;font-size:.76rem;}
+  .ks-doc .ks-title{font-weight:800;text-align:center;font-size:.76rem;text-transform:uppercase;margin:8px 0 6px;}
+  .ks-doc .ks-center{text-align:center;margin:4px 0;}
+  .ks-doc .ks-scroll{overflow-x:auto;margin:6px 0;}
+  .ks-doc table{font-size:.72rem;min-width:720px;}
+  .ks-doc th{text-align:center;vertical-align:middle;}
+  .ks-doc select,.ks-doc input[type=date],.ks-doc input[type=number]{padding:3px 5px;border:1px solid #caa25a;border-radius:6px;font-size:.74rem;background:#fff;}
+  .ks-doc input[type=number]{width:64px;}
+  .ks-doc .ks-sign{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;margin-top:8px;font-size:.72rem;}
+  .ks-doc .ks-sign>div{flex:1 1 220px;}
+  .ks-doc .ks-sign .c{text-align:center;}
+  .ks-doc .ks-notes{margin-top:8px;font-size:.7rem;}
+  .ks-doc .ks-notes mark{background:#fff1a8;}
   .m2-pk{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0;}
   .m2-pk button{border:2px solid #d8c9a3;background:#fffdf6;border-radius:10px;padding:8px;cursor:pointer;font:700 .8rem 'Nunito',sans-serif;}
   .m2-pk button.ok{border-color:#2e8256;background:#e6f6ec;} .m2-pk button.bad{border-color:#c0392b;background:#fdecea;}
@@ -3510,6 +3526,50 @@ function getM1Ksdb(){
   return M1_KS;
 }
 function m1KsNext(st){ return getM1Ksdb().length ? 'ksdb' : 'supplier'; }
+/* req #263 (ThS Hương Lý): đơn hàng theo Mẫu số 12 và báo cáo theo Mẫu số 13 cô gửi. Tên cơ sở, số liệu, ngày tháng đều giả định;
+   mọi biểu mẫu có dấu mờ MẪU MINH HOẠ, không dựng chữ ký hay con dấu. */
+function viDate(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+function ksPeriod(it){
+  const y = new Date().getFullYear() - 1, m = m1HashNum(it.key+'km', 1, 12), d = m1HashNum(it.key+'kd', 1, 28);
+  const p2 = n => String(n).padStart(2,'0');
+  return { prevFrom:`${p2(d)}/${p2(m)}/${y-1}`, prevTo:`${p2(d)}/${p2(m)}/${y}`, prevToIso:`${y}-${p2(m)}-${p2(d)}`, today:viDate(new Date()) };
+}
+function ksDrugCell(it){
+  const pk = pkgData({ name:it.name, key:it.key });
+  return `${dn(it)}<br><small>${esc(it.form)}${it.form ? ' · ' : ''}${esc(m1PackInfo(it).spec)} · Số GĐKLH: ${esc(pk.reg)}${pk.realReg ? '' : ' (số minh hoạ)'}</small>`;
+}
+const KS_WM = '<div class="wm">MẪU MINH HOẠ · KHÔNG CÓ GIÁ TRỊ PHÁP LÝ</div>';
+const KS_ORG = '<div class="ks-org">NHÀ THUỐC TIZIA PHARMA (cơ sở mô phỏng)<br><span style="font-weight:600">Số: ……… (minh hoạ)</span></div>';
+function ksOrderDoc(st, ks, stage){
+  const edit = stage === 'edit', approved = stage === 'approved';
+  const toCell = edit ? `<select id="ksTo"><option value="">— chọn nơi nhận —</option>${['Bộ Y tế','Cục Quản lý Dược','Sở Y tế'].map(o => `<option${st.ks.to === o ? ' selected' : ''}>${o}</option>`).join('')}</select>` : esc(st.ks.to || 'Sở Y tế');
+  const nccCell = edit ? `<select id="ksNcc" style="max-width:100%"><option value="">— chọn công ty —</option>${M1_SUPPLIERS.map(x => `<option${st.ks.ncc === x.name ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : esc(st.ks.ncc || '……');
+  return `<div class="m2-inv ks-doc">${KS_WM}<div class="ks-no">Mẫu số 12</div>${KS_ORG}
+    <div class="ks-title">Đơn hàng mua thuốc gây nghiện, thuốc hướng thần, thuốc tiền chất, thuốc dạng phối hợp có chứa tiền chất/nguyên liệu làm thuốc là dược chất gây nghiện/dược chất hướng thần/tiền chất dùng làm thuốc/nhượng lại nguyên liệu làm thuốc là dược chất gây nghiện/dược chất hướng thần/tiền chất dùng làm thuốc</div>
+    <div class="ks-center">Kính gửi: ${toCell}</div>
+    <div class="ks-scroll"><table class="pos-table"><thead><tr><th>TT</th><th>Nguyên liệu/Tên thuốc, hoạt chất dạng bào chế nồng độ/hàm lượng, quy cách đóng gói, số GĐKLH hoặc GPNK</th><th>Đơn vị tính</th><th>Số lượng đề nghị mua/nhượng lại</th><th>Duyệt</th><th>Ghi chú</th></tr>
+      <tr><th></th><th>(1)</th><th>(2)</th><th>(3)</th><th>(4)</th><th>(5)</th></tr></thead><tbody>
+      ${ks.map((it, i) => `<tr><td style="text-align:center">${i+1}</td><td>${ksDrugCell(it)}</td><td style="text-align:center">${esc(it.unit)}</td><td style="text-align:center">${st.ks.qty[it.key]}</td><td style="text-align:center">${approved ? st.ks.qty[it.key] : (stage === 'pending' ? 'Chờ duyệt' : '')}</td><td>Cơ sở đề nghị được mua tại công ty ${nccCell}</td></tr>`).join('')}</tbody></table></div>
+    <div>Nhà thuốc Tizia Pharma cam kết sử dụng thuốc/nguyên liệu đúng mục đích và chịu trách nhiệm trước pháp luật về tính chính xác, hợp lệ của các thông tin, giấy tờ trong hồ sơ.</div>
+    <div class="ks-sign"><div><b>Nơi nhận:</b><br>- Như trên;<br>- Lưu tại cơ sở.</div>
+      <div class="c">…, ngày ${st.ks.sentAt || '…'}<br><b>NGƯỜI ĐẠI DIỆN THEO PHÁP LUẬT/NGƯỜI ĐƯỢC ỦY QUYỀN</b><br><i>(Ký, ghi rõ họ tên, chức danh, đóng dấu nếu có — mẫu)</i></div>
+      <div class="c">${approved ? `Ngày ${st.ks.approvedAt || '…'} (minh hoạ)` : 'Số ……, ngày …'}<br>Chấp thuận của cơ quan quản lý:<br>Đơn hàng này gồm ${approved ? `01 trang ${String(ks.length).padStart(2,'0')} khoản` : '…. trang …. khoản'}<br>Đơn hàng này có giá trị một năm kể từ ngày ký ban hành<br><b>CƠ QUAN CHẤP THUẬN</b><br><i>(${approved ? 'Đã chấp thuận — mẫu minh hoạ, không có chữ ký và con dấu' : 'Ký tên, đóng dấu'})</i></div></div></div>`;
+}
+function ksReportDoc(st, ks, edit){
+  const per = ksPeriod(ks[0]);
+  const num = (cls, it) => `<input type="number" min="0" class="${cls}" data-k="${esc(it.key)}">`;
+  return `<div class="m2-inv ks-doc">${KS_WM}<div class="ks-no">Mẫu số 13</div>${KS_ORG}
+    <div class="ks-title">Báo cáo xuất - nhập - tồn thuốc gây nghiện/thuốc hướng thần/thuốc tiền chất/thuốc dạng phối hợp có chứa tiền chất/nguyên liệu làm thuốc là dược chất gây nghiện/dược chất hướng thần/tiền chất dùng làm thuốc</div>
+    <div class="ks-center"><i>(Từ ngày ${edit ? '<input type="date" id="ksFrom">' : per.prevTo} đến ngày ${st.ks.sentAt || per.today})</i></div>
+    <div class="ks-center">Kính gửi: ${esc(st.ks.to || 'Sở Y tế')}</div>
+    <div class="ks-scroll"><table class="pos-table"><thead><tr><th>TT</th><th>Nguyên liệu/Tên thuốc, dạng bào chế, nồng độ/hàm lượng, quy cách đóng gói, số GĐKLH hoặc GPNK</th><th>Đơn vị tính</th><th>Số lượng tồn kho kỳ báo cáo trước chuyển sang</th><th>Số lượng nhập trong kỳ báo cáo</th><th>Tổng số</th><th>Số lượng xuất trong kỳ báo cáo</th><th>Tồn kho cuối kỳ báo cáo</th><th>Tên/Địa chỉ khách hàng</th><th>Ghi chú</th></tr>
+      <tr>${[1,2,3,4,5,6,7,8,9,10].map(n => `<th>(${n})</th>`).join('')}</tr></thead><tbody>
+      ${ks.map((it, i) => `<tr><td style="text-align:center">${i+1}</td><td>${ksDrugCell(it)}</td><td style="text-align:center">${esc(it.unit)}</td><td style="text-align:center">${it.tonDau}</td><td style="text-align:center">${it.nhap}</td><td style="text-align:center">${edit ? num('ks-tong', it) : it.tonDau + it.nhap}</td><td style="text-align:center">${it.xuat}</td><td style="text-align:center">${edit ? num('ks-t', it) : it.tonCuoi}</td><td>Theo bảng thống kê khách hàng kèm theo (minh hoạ)</td><td></td></tr>`).join('')}</tbody></table></div>
+    <div>* Báo cáo gửi kèm Đơn hàng của cơ sở gửi ${esc(st.ks.to || 'Sở Y tế')}.</div>
+    <div class="ks-sign"><div><b>Nơi nhận:</b><br>- Như trên;<br>- Lưu tại cơ sở.</div>
+      <div class="c">…, ngày ${st.ks.sentAt || '…'}<br><b>NGƯỜI ĐẠI DIỆN THEO PHÁP LUẬT/NGƯỜI ĐƯỢC ỦY QUYỀN</b><br><i>(Ký, ghi rõ họ tên, chức danh, đóng dấu nếu có — mẫu)</i></div></div>
+    <div class="ks-notes"><b>Ghi chú:</b><br><mark>- Kỳ báo cáo: ngày đầu của kỳ là ngày kết thúc của kỳ báo cáo nộp kèm Đơn hàng liền trước được phê duyệt.</mark><br>- Cột (9): chỉ áp dụng đối với cơ sở kinh doanh; có bảng thống kê danh sách khách hàng kèm theo số lượng và thời điểm xuất hàng tương ứng.</div></div>`;
+}
 function renderKsdbBranch(st){
   const ks = getM1Ksdb(); st.ks = st.ks || { qty:{}, xntOk:false, sent:false, approved:false };
   const U = it => it.unit[0].toUpperCase() + it.unit.slice(1);
@@ -3526,45 +3586,55 @@ function renderKsdbBranch(st){
     document.getElementById('ksQtyOk').addEventListener('click', () => {
       const bad = [];
       posPanel.querySelectorAll('.ks-q').forEach(inp => { const it = ks.find(x => x.key === inp.dataset.k); if(Number(inp.value) !== it.maxQty) bad.push(it); else st.ks.qty[it.key] = it.maxQty; });
-      if(bad.length){ document.getElementById('ksErr').textContent = '⚠️ Chưa đúng — tối đa = 150% × số lượng nhập năm trước (không vượt 150%). Tính lại cho: ' + bad.map(b => b.name).join(', ') + '.'; return; }
+      if(bad.length){ document.getElementById('ksErr').textContent = '⚠️ Chưa đúng — ô này điền số lượng TỐI ĐA = số đã nhập năm trước × 150%. ' + bad.map(b => `${b.name}: ${b.lastYear} ${b.unit} × 150% = ?`).join('; ') + '.'; return; }
       saveM1State(st); renderKsdbBranch(st);
     });
     return;
   }
   if(!st.ks.xntOk){
-    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 2 — Báo cáo xuất – nhập – tồn</b> (kèm đơn hàng). Tồn cuối kỳ = tồn đầu kỳ + nhập trong kỳ − xuất trong kỳ. Điền <b>tồn cuối kỳ</b>:</p>
-      <table class="pos-table"><thead><tr><th>Thuốc</th><th>Tồn đầu kỳ</th><th>Nhập trong kỳ</th><th>Xuất trong kỳ</th><th>Tồn cuối kỳ</th></tr></thead><tbody>
-      ${ks.map(it => `<tr><td>${dn(it)}</td><td>${it.tonDau}</td><td>${it.nhap}</td><td>${it.xuat}</td><td><input type="number" min="0" class="ks-t" data-k="${esc(it.key)}" style="width:90px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px"> ${it.unit}</td></tr>`).join('')}</tbody></table>
+    const per = ksPeriod(ks[0]);
+    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 2 — Báo cáo xuất – nhập – tồn</b> (Mẫu số 13, gửi kèm đơn hàng). Kỳ báo cáo nộp kèm đơn hàng liền trước đã được phê duyệt: <b>từ ${per.prevFrom} đến ${per.prevTo}</b>. Hãy điền <b>ngày đầu kỳ</b>, cột <b>Tổng số (6)</b> và <b>Tồn kho cuối kỳ (8)</b>:</p>
+      ${ksReportDoc(st, ks, true)}
       <button type="button" class="pos-btn" id="ksXntOk">✅ Kiểm tra</button><div class="pos-err" id="ksErr"></div>`;
     document.getElementById('ksXntOk').addEventListener('click', () => {
-      const bad = [];
-      posPanel.querySelectorAll('.ks-t').forEach(inp => { const it = ks.find(x => x.key === inp.dataset.k); if(Number(inp.value) !== it.tonCuoi) bad.push(it); });
-      if(bad.length){ document.getElementById('ksErr').textContent = '⚠️ Chưa đúng — tồn cuối = tồn đầu + nhập − xuất. Tính lại cho: ' + bad.map(b => b.name).join(', ') + '.'; return; }
+      const err = document.getElementById('ksErr');
+      if(document.getElementById('ksFrom').value !== per.prevToIso){ err.textContent = '⚠️ Chưa đúng ngày đầu kỳ — ngày đầu của kỳ là ngày KẾT THÚC của kỳ báo cáo nộp kèm đơn hàng liền trước được phê duyệt.'; return; }
+      const badTong = [], badCuoi = [];
+      ks.forEach(it => {
+        const v = c => Number(posPanel.querySelector(`.${c}[data-k="${CSS.escape(it.key)}"]`).value);
+        if(v('ks-tong') !== it.tonDau + it.nhap) badTong.push(it.name);
+        if(v('ks-t') !== it.tonCuoi) badCuoi.push(it.name);
+      });
+      if(badTong.length){ err.textContent = '⚠️ Chưa đúng cột (6) — tổng số = tồn kỳ trước chuyển sang (4) + nhập trong kỳ (5). Tính lại cho: ' + badTong.join(', ') + '.'; return; }
+      if(badCuoi.length){ err.textContent = '⚠️ Chưa đúng cột (8) — tồn cuối kỳ = tổng số (6) − xuất trong kỳ (7). Tính lại cho: ' + badCuoi.join(', ') + '.'; return; }
       st.ks.xntOk = true; saveM1State(st); renderKsdbBranch(st);
     });
     return;
   }
-  const docTable = `<table class="pos-table"><thead><tr><th>Thuốc, hàm lượng, quy cách</th><th>ĐVT</th><th>SL đề nghị mua</th><th>Tồn cuối kỳ (báo cáo XNT)</th></tr></thead><tbody>
-    ${ks.map(it => `<tr><td>${dn(it)}</td><td>${U(it)}</td><td>${st.ks.qty[it.key]}</td><td>${it.tonCuoi}</td></tr>`).join('')}</tbody></table>`;
   if(!st.ks.sent){
-    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 3 — Gửi Sở Y tế.</b> Soát lại đơn hàng và báo cáo, <b>người đại diện theo pháp luật ký</b> rồi gửi:</p>
-      <p class="pos-note"><b>Đơn hàng mua thuốc kiểm soát đặc biệt</b> (kèm Báo cáo xuất – nhập – tồn) — Kính gửi: Sở Y tế</p>${docTable}
+    posPanel.innerHTML = head + `<p class="pos-note"><b>Bước 3 — Lập đơn hàng và gửi.</b> Điền <b>nơi nhận</b> và <b>công ty đề nghị được mua</b> trên đơn hàng (Mẫu số 12), soát lại báo cáo kèm theo, <b>người đại diện theo pháp luật ký</b> rồi gửi:</p>
+      ${ksOrderDoc(st, ks, 'edit')}${ksReportDoc(st, ks, false)}
       <label style="display:flex;gap:8px;align-items:center;font-size:.82rem;margin:8px 0"><input type="checkbox" id="ksSign"> Người đại diện theo pháp luật đã ký tên (mẫu) và thông tin đã được kiểm tra.</label>
-      <button type="button" class="pos-btn" id="ksSend" disabled>📨 Gửi đơn + báo cáo lên Sở Y tế</button>`;
+      <button type="button" class="pos-btn" id="ksSend" disabled>📨 Gửi đơn hàng + báo cáo</button><div class="pos-err" id="ksErr"></div>`;
     document.getElementById('ksSign').addEventListener('change', e => { document.getElementById('ksSend').disabled = !e.target.checked; });
-    document.getElementById('ksSend').addEventListener('click', () => { st.ks.sent = true; saveM1State(st); renderKsdbBranch(st); });
-    return;
-  }
-  if(!st.ks.approved){
-    posPanel.innerHTML = head + `${docTable}<div class="pos-soon" style="color:#8a5a00">⏳ Đã gửi Sở Y tế — đang <b>chờ phê duyệt</b>. Chưa được mua thuốc kiểm soát đặc biệt khi chưa có phê duyệt.</div>
-      <button type="button" class="pos-btn" id="ksCheck">🔄 Kiểm tra phản hồi của Sở Y tế</button>`;
-    document.getElementById('ksCheck').addEventListener('click', e => {
-      e.target.disabled = true; e.target.textContent = 'Đang kiểm tra…';
-      setTimeout(() => { st.ks.approved = true; saveM1State(st); renderKsdbBranch(st); }, 1200);
+    document.getElementById('ksSend').addEventListener('click', () => {
+      const to = document.getElementById('ksTo').value, ncc = document.getElementById('ksNcc').value, err = document.getElementById('ksErr');
+      if(to !== 'Sở Y tế'){ err.textContent = '⚠️ Chưa đúng nơi nhận — đơn hàng và báo cáo của nhà thuốc gửi Sở Y tế.'; return; }
+      if(!ncc){ err.textContent = '⚠️ Chọn công ty đề nghị được mua ở cột Ghi chú.'; return; }
+      st.ks.to = to; st.ks.ncc = ncc; st.ks.sent = true; st.ks.sentAt = viDate(new Date()); saveM1State(st); renderKsdbBranch(st);
     });
     return;
   }
-  posPanel.innerHTML = head + `${docTable}<div class="pos-soon" style="color:#1f7a3d">✅ <b>Sở Y tế đã phê duyệt</b> đơn hàng (mẫu minh hoạ). Bây giờ mới được đặt mua thuốc kiểm soát đặc biệt cùng các thuốc khác.</div>
+  if(!st.ks.approved){
+    posPanel.innerHTML = head + `${ksOrderDoc(st, ks, 'pending')}${ksReportDoc(st, ks, false)}<div class="pos-soon" style="color:#8a5a00">⏳ Đã gửi Sở Y tế — đang <b>chờ phê duyệt</b>. Chưa được mua thuốc kiểm soát đặc biệt khi chưa có phê duyệt.</div>
+      <button type="button" class="pos-btn" id="ksCheck">🔄 Kiểm tra phản hồi của Sở Y tế</button>`;
+    document.getElementById('ksCheck').addEventListener('click', e => {
+      e.target.disabled = true; e.target.textContent = 'Đang kiểm tra…';
+      setTimeout(() => { st.ks.approved = true; st.ks.approvedAt = viDate(new Date()); saveM1State(st); renderKsdbBranch(st); }, 1200);
+    });
+    return;
+  }
+  posPanel.innerHTML = head + `${ksOrderDoc(st, ks, 'approved')}${ksReportDoc(st, ks, false)}<div class="pos-soon" style="color:#1f7a3d">✅ <b>Sở Y tế đã phê duyệt</b> đơn hàng (mẫu minh hoạ). Bây giờ mới được đặt mua thuốc kiểm soát đặc biệt cùng các thuốc khác.</div>
     <button type="button" class="pos-btn" id="ksNext">➡️ Sang chọn nhà cung ứng</button>`;
   document.getElementById('ksNext').addEventListener('click', () => {
     st.step = 'supplier'; saveM1State(st); window.refreshMissionsList?.();
