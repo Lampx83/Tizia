@@ -190,7 +190,7 @@
       "brief_chars": 1500, "recent_chars": 1000, "owned_files": 6, "decisions_chars": 1200, "decisions_max": 5,
       "thread_chars": 4000
     },
-    "gpu_s_per_user_day": { "loose": 1500, "folder": 4000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
+    "gpu_s_per_user_day": { "loose": 3000, "folder": 8000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
     "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" },
     "attachments": {
       "_why": "Request attachments (ticket 87). Flag AI_BOARD_MULTIMODAL off by default; text cut at max_chars total, cut shown to requester.",
