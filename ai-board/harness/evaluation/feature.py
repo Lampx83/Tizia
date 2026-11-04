@@ -1,12 +1,17 @@
 """Feature tier: acceptance, rubric 0-3 and metrics over a run record.
 
 record: {"plan": {"steps": [{"path","tier","kind"?}], "clarify"?} | None, "files": {path: text}, "handed": [kind], "resumes": int}
+check: ("file"|"has"|"json"|"handed"|"absent"|"asked"|"lacks"|"link", ...).
+"link" ties two files together: the module must export the symbol, the page must
+name the module and use the symbol. "lacks" asserts a regex is gone from every
+matching file (rename/removal), so a rewrite cannot pass by leaving the old name.
 rubric: 0 no/wrong plan, 1 correct plan, 2 some expected file written, 3 acceptance passed.
 """
 from __future__ import annotations
 
 import fnmatch
 import json
+import posixpath
 import re
 from collections import Counter
 
@@ -51,6 +56,21 @@ def check(spec: tuple, record: dict) -> bool:
         return not _match(files, spec[1])
     if kind == "asked":
         return bool((record.get("plan") or {}).get("clarify"))
+    if kind == "lacks":
+        return not any(re.search(spec[2], files[p]) for p in _match(files, spec[1]))
+    if kind == "link":
+        pages, modules, symbol = _match(files, spec[1]), _match(files, spec[2]), spec[3]
+        if not pages or not modules:
+            return False
+        for module in modules:
+            exported = (re.search(rf"export\s+(?:async\s+)?(?:function|class|const|let|var)\s+{re.escape(symbol)}\b", files[module])
+                        or re.search(rf"export\s*\{{[^}}]*\b{re.escape(symbol)}\b", files[module]))
+            if not exported:
+                continue
+            stem = posixpath.splitext(posixpath.basename(module))[0]
+            if any(symbol in files[p] and (stem in files[p] or module in files[p]) for p in pages):
+                return True
+        return False
     raise ValueError(f"unknown check {kind}")
 
 

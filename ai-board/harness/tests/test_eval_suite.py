@@ -712,3 +712,16 @@ def test_skill_variant_flag_is_validated_recorded_and_separates_the_arm(world, m
     assert variant["skill_variant"] == ["plan-from-request", "implement-one-slice"]
     assert set(variant["skill_variant_sha"]) == {"plan-from-request", "implement-one-slice"}
     assert "skill_variant" not in plain and "skill_variant_sha" not in plain
+
+
+def test_pack_build_derives_entries_and_keeps_only_the_requested_file_count():
+    from evaluation.suite import taskpack
+    cases = [
+        {"id": "g-one", "base_sha": "a" * 40, "gold_sha": "b" * 40, "files": ["public/x.html"], "title": "t", "detail": "d", "verify": "v"},
+        {"id": "g-two", "base_sha": "c" * 40, "gold_sha": "d" * 40, "files": ["public/a.html", "public/js/a.js"], "title": "t", "detail": "d", "verify": "v"},
+    ]
+    everything = taskpack.from_git_cases(cases)
+    assert [e["id"] for e in everything] == ["pack-g-one", "pack-g-two"]
+    assert [len(e["subtasks"]) for e in everything] == [1, 2]
+    assert everything[1]["commit"] == "d" * 40 and everything[1]["base_sha"] == "c" * 40
+    assert [e["id"] for e in taskpack.from_git_cases(cases, min_files=2)] == ["pack-g-two"]

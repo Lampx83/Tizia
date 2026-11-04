@@ -329,4 +329,8 @@ def report(info: dict, cases: list[dict], rows: list[dict], total: int, cut_shor
     rep["layers"] = LAYERS
     for style in sorted({r["style"] for r in rows}):
         rep["groups"][f"style={style}"] = eval_run.group_stats([r for r in rows if r["style"] == style])
+    by_id = {c["id"]: c for c in cases}
+    for count in sorted({len(c["files"]) for c in cases}):
+        rep["groups"][f"files={count}"] = eval_run.group_stats(
+            [r for r in rows if len(by_id[r["case"]]["files"]) == count])
     return rep

@@ -47,6 +47,22 @@ def load_pack(path) -> list[dict]:
              "level": len(e["files"])} for e in entries]
 
 
+def from_git_cases(cases: list[dict], min_files: int = 1) -> list[dict]:
+    """Pack entries from a git-mining corpus (eval_git cases): merged commit as gold, parent as base.
+    `min_files` keeps only multi-file commits; the pack tier reports them as level=len(files)."""
+    entries = []
+    for case in cases:
+        files = list(case.get("files") or [])
+        if len(files) < min_files:
+            continue
+        entries.append({
+            "id": f"pack-{case['id']}", "base_sha": case["base_sha"], "commit": case["gold_sha"], "files": files,
+            "title": case["title"], "detail": case["detail"],
+            "subtasks": [{"title": case["title"], "file": f, "verify": case["verify"]} for f in files],
+        })
+    return entries
+
+
 def gold_sections(repo, task: dict) -> dict[str, tuple[list[str], list[str], str, str]]:
     """{file: (added lines, removed lines, base text, merged text)} from git; lines stripped, trivial ones dropped."""
     out = {}

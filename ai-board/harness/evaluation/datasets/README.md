@@ -91,19 +91,40 @@ carries all five difficulties and both splits with a 65–75 % `dev` share.
 - Gold keeps at least one case per outcome family (`plan_pass`, `gate25_block`, `clarify`,
   `intake_review`).
 
-## Gold isolation
+## Isolation: the boundary is the AI Board runtime
 
-- The board worker sees **request text only** (`request_title` + `request_detail_vi`). Labels
-  never leave the host.
-- Grading reads gold on the host, after the run, from the external store.
-- No compose file, Dockerfile build context or candidate worktree mounts or copies the external
-  store path (`H:\01_Main_coding_projects\Tizia-eval`). Concretely: no compose service mounts a
-  host eval path; the worker image (`ai-board/worker.Dockerfile.dockerignore`) and the Gate 5
-  guest image (`ai-board/sandbox-runner/guest/Dockerfile.dockerignore`) both exclude
-  `ai-board/harness/evaluation/` data; the repo-level `.dockerignore` drops `ai-board/`; and
-  candidates are git checkouts at a pinned sha while the real CSV is untracked and outside the
-  repo. Keep those properties when you add services, and never bind-mount the store into a
-  worker or candidate.
+Threat model: **the AI Board pipeline**. This store must never be readable by
+
+- the AI Board worker (host process or container),
+- any candidate checkout/worktree the pipeline builds,
+- the Gate 5 guest image,
+- any compose service, Docker build context, image layer, or artifact the board can read.
+
+Enforced by construction, not by convention:
+
+- no compose service mounts a host eval path;
+- the worker image (`ai-board/worker.Dockerfile.dockerignore`) and the Gate 5 guest image
+  (`ai-board/sandbox-runner/guest/Dockerfile.dockerignore`) both exclude
+  `ai-board/harness/evaluation/` data;
+- the repo-level `.dockerignore` drops `ai-board/`;
+- candidates are git checkouts at a pinned sha while the real CSV is untracked and outside the
+  repo.
+
+Keep those properties when you add services, and never bind-mount the store into a worker or
+candidate.
+
+**Not in scope: developer tooling.** opencode, Claude Code, Codex and the human operator run on
+the host, outside the evaluated system, and are expected to read the `dev` split to build, debug
+and grade the harness. Treating them as the security boundary is unenforceable (they run with the
+owner's file access) and it hides the boundary that actually protects the measurement.
+
+The rule that does apply to them is methodological, not technical: do not tune prompts, skills,
+gates or datasets on the `gold` split (see Split rule). That is a review rule, not a sandbox; do
+not describe it as isolation from a coding agent.
+
+Packs (real merged commits used as gold) live in `Tizia-eval/packs/` and follow the same
+boundary: the worker and candidate never see them; the host reads them through
+`suite pack-check` / `suite run --pack`.
 
 ## Using it with the existing suite
 

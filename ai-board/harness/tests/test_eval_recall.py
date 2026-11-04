@@ -30,7 +30,7 @@ def test_recall_reports_files_gold_lines_and_section_costs_per_case_and_group_wi
         assert {"skill", "excerpt", "outline", "repomap", "exemplar", "lessons", "tree", "other", "total"} <= set(g3["chars"])
         assert g3["chars"]["skill"] > 0 and g3["chars"]["excerpt"] > 0
         assert g3["chars"]["total"] == sum(v for k, v in g3["chars"].items() if k != "total")
-    assert set(rep["groups"]) == {"all", "kind=replace", "kind=insert"}
+    assert set(rep["groups"]) == {"all", "kind=replace", "kind=insert", "files=1"}
     all_group = rep["groups"]["all"]
     assert (all_group["cases"], all_group["gate1"]["hit"], all_group["gate3"]["hit"]) == (4, 4, 4)
     assert (all_group["gate1"]["lo"], all_group["gate1"]["hi"]) == (51.0, 100.0)  # Wilson 95% của 4/4

@@ -41,9 +41,32 @@ def _backend(n, slug, title, request):
     return {
         "id": f"ft-backend-{n}", "size": "large", "request": request,
         "steps": [{"glob": page, "tier": "low"}, {"glob": api, "tier": "high"}, {"glob": mig, "tier": "high"}],
-        "checks": [("file", page), ("has", api, r"attach|router"), ("has", mig, r"CREATE TABLE IF NOT EXISTS"), ("has", page, r"/api/" + slug)],
+        "checks": [("file", page), ("has", api, r"attach|router"), ("has", api, r"/api/" + slug),
+                   ("has", mig, r"CREATE TABLE IF NOT EXISTS"), ("has", page, r"/api/" + slug)],
         "sample": {page: html + f"<script>fetch('/api/{slug}')</script>", api: "export function attachX(app){ app.get('/api/" + slug + "') }",
                    mig: f"CREATE TABLE IF NOT EXISTS {slug.replace('-', '_')} (id serial)"},
+    }
+
+
+def _crossfile(n, slug, title, module, symbol, request, old=None):
+    """Two-file contract: module exports `symbol`, page names the module and uses it, test imports it."""
+    page, test = f"public/{slug}.html", f"test/{slug}.test.js"
+    sample = {
+        page: PAGE.format(t=title) + (
+            f'<script type="module">\nimport {{ {symbol} }} from "/{module}";\n'
+            f'document.querySelector("h1").textContent = {symbol}(30);\n</script>'),
+        module: f"export function {symbol}(ms) {{\n  return ms + ' giây';\n}}\n",
+        test: ("import test from 'node:test';\nimport assert from 'node:assert/strict';\n"
+               f"import {{ {symbol} }} from '../{module}';\n\n"
+               f"test('{symbol} trả về chuỗi', () => assert.equal(typeof {symbol}(1), 'string'));\n"),
+    }
+    checks = [("file", page), ("file", test), ("link", page, module, symbol), ("has", test, symbol)]
+    if old:
+        checks += [("lacks", page, rf"\b{old}\b"), ("lacks", module, rf"\b{old}\b")]
+    return {
+        "id": f"ft-xfile-{n}", "size": "small", "request": request,
+        "steps": [{"glob": page, "tier": "low"}, {"glob": module, "tier": "low"}, {"glob": test, "tier": "low"}],
+        "checks": checks, "sample": sample,
     }
 
 
@@ -83,6 +106,11 @@ CASES = [
               "Thêm toà nhà gallery trưng bày lịch sử máy tính hiện đại vào khuôn viên trường IT: trang, đăng ký, vị trí mặc định, API và DB."),
     _building(2, "trung-tam-du-lieu", "Trung tâm dữ liệu",
               "Thêm toà nhà trung tâm dữ liệu vào khuôn viên IT: trang, đăng ký, vị trí mặc định, API và bảng DB."),
+    _crossfile(1, "luyen-de", "Luyện đề thi", "public/js/features/duration.js", "formatDuration",
+               "Thêm đếm ngược ở trang luyện đề: hàm formatDuration trong module dùng chung, trang gọi nó và có test."),
+    _crossfile(2, "the-hoat-chat", "Thẻ ghi nhớ hoạt chất", "public/js/features/cards.js", "shuffleCards",
+               "Đổi tên hàm mixCards thành shuffleCards trong module thẻ, cập nhật trang và test; không còn chỗ nào gọi tên cũ.",
+               old="mixCards"),
     _bogus(1, "Thêm nút xuất PDF vào public/trang-khong-ton-tai-xyz.html của trường IT.", "public/trang-khong-ton-tai-xyz.html"),
     _bogus(2, "Sửa hàm renderGalleryNoSuch trong server/contexts/campus/gallery-phantom.js để thêm bộ lọc.", "server/contexts/campus/gallery-phantom.js"),
 ]

@@ -36,6 +36,25 @@ def test_acceptance_passes_on_sample_and_fails_on_empty_or_partial():
     assert not feature.accepted(building, not_handed)  # data step must go to admin
 
 
+def test_cross_file_contract_and_rename():
+    link = BY_ID["ft-xfile-1"]
+    good = perfect(link)
+    assert feature.accepted(link, good)
+    module = "public/js/features/duration.js"
+    no_export = {**good, "files": {**good["files"], module: "export function other(){}\n"}}
+    assert not feature.accepted(link, no_export)
+    page = "public/luyen-de.html"
+    disconnected = {**good, "files": {**good["files"], page: "<html></html>"}}
+    assert not feature.accepted(link, disconnected)
+
+    rename = BY_ID["ft-xfile-2"]
+    good = perfect(rename)
+    assert feature.accepted(rename, good)
+    old = {**good, "files": {**good["files"], "public/the-hoat-chat.html":
+                             good["files"]["public/the-hoat-chat.html"].replace("shuffleCards", "mixCards")}}
+    assert not feature.accepted(rename, old)
+
+
 def test_hallucinated_target_must_be_questioned_not_written():
     case = BY_ID["ft-bogus-1"]
     assert feature.rubric(case, perfect(case)) == 3

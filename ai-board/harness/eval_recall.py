@@ -28,7 +28,7 @@ from eval_strata import _exemplars  # noqa: E402
 from gates import implement  # noqa: E402
 from settings import get_settings
 
-GROUPS = ("kind", "style", "difficulty", "transformation", "split")  # trục nhóm, lấy từ trường có trong case
+GROUPS = ("kind", "style", "difficulty", "transformation", "split", "files")  # trục nhóm, lấy từ trường có trong case
 TOOL_SECTION = {"grep": "excerpt", "outline": "outline", "repomap": "repomap", "exemplar": "exemplar", "lessons": "lessons", "tree": "tree"}
 BOOTSTRAP = 2000
 
@@ -107,7 +107,8 @@ def measure(case: dict) -> dict:
             via.append("fallback-excerpt")
             chars = _add(chars, {"excerpt": len(text or ""), "total": len(text or "")})
     total = sum(len(v) for v in case["gold"].values())
-    return {"corpus": case["corpus"], "case": case["id"], "groups": case["groups"],
+    return {"corpus": case["corpus"], "case": case["id"],
+            "groups": {**case["groups"], "files": str(len(case["gold"]))},
             "gate1": {"skill": ctx1["skill"], "picked": picked[:6], "found": len(found), "gold_files": len(case["gold"]),
                       "hit": len(found) == len(case["gold"]), "chars": _sections(ctx1, 1)},
             "gate3": {"via": via, "covered": covered, "gold_lines": total, "hit": covered == total, "chars": chars}}

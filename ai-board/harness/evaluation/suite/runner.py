@@ -430,6 +430,18 @@ def cmd_pack_check(args) -> int:
     return 1 if problems else 0
 
 
+def cmd_pack_build(args) -> int:
+    """Derive a pack from a git-mining corpus; writing only, validation stays in pack-check."""
+    cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
+    entries = taskpack.from_git_cases(cases, args.min_files)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(entries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"cases": len(cases), "entries": len(entries), "multi_file": sum(len(e["files"]) > 1 for e in entries),
+                      "out": str(out)}, ensure_ascii=False))
+    return 0
+
+
 def cmd_check(args) -> int:
     from main import ROOT
     run_dir = Path(args.root) / "suite" / args.name
@@ -557,6 +569,11 @@ def main(argv=None, deps=None) -> int:
     pk = sub.add_parser("pack-check", help="validate a task pack against git history")
     pk.add_argument("pack")
     pk.set_defaults(handler=cmd_pack_check)
+    pb = sub.add_parser("pack-build", help="derive a task pack from a git-mining corpus (no model)")
+    pb.add_argument("--cases", required=True, help="corpus-git cases.json")
+    pb.add_argument("--out", required=True, help="pack json to write")
+    pb.add_argument("--min-files", type=int, default=1, help="keep only commits touching at least N files")
+    pb.set_defaults(handler=cmd_pack_build)
     chk = sub.add_parser("check")
     chk.add_argument("--root", required=True)
     chk.add_argument("--name", required=True)
