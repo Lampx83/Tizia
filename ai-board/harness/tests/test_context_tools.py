@@ -127,6 +127,22 @@ def test_build_context_without_git_still_returns_manual_and_skill(tmp_path):
     assert "(không có)" in ctx["text"]
 
 
+@pytest.mark.parametrize("split,delivery,header", [
+    (False, False, "SKILL: edit-css-style"),
+    (False, True, "SKILL: edit-css-style"),
+    (True, False, "CONTEXT PROFILE: edit-css-style"),
+    (True, True, "SKILL: edit-css-style"),
+])
+def test_procedure_reaches_context_before_recent_and_repo_data(tmp_path, monkeypatch, split, delivery, header):
+    monkeypatch.setenv("AI_BOARD_PROMPT_ROLE_SPLIT", "1" if split else "")
+    monkeypatch.setenv("AI_BOARD_PROCEDURE_IN_SPLIT", "1" if delivery else "")
+    ctx = context.build_context(1, {"subject": "đổi màu nền", "folder_recent": "R1"}, None, tmp_path, "HEAD")
+    text = ctx["text"]
+    assert header in text
+    assert text.index(header) < text.index("RECENT REQUESTS (verbatim") < text.index("REPO DATA (read from git")
+    assert ("CONTEXT PROFILE" in text) is (split and not delivery)
+
+
 def test_note_used_only_when_hash_matches(repo, tmp_path):
     src, sha = repo
     index_path = tmp_path / "idx.json"
