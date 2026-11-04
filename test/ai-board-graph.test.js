@@ -251,16 +251,48 @@ test('budget cells: API shows paid tokens with a bar; no model-call or GPU cell;
   const local = { ...api, totals: { budget_unit: 'gpu_s', gpu_s: 19.8 } };
   const labels = budgetCells(local, EPOCH).map(c => c.label);
   assert.ok(!labels.includes('Model calls') && !labels.includes('GPU time') && !labels.includes('Tokens'));
-  assert.deepEqual(labels.filter(l => ['Context', 'Output', 'Topology', 'Run time'].includes(l)), ['Run time', 'Context', 'Output', 'Topology']);
+  assert.deepEqual(labels.filter(l => ['Token', 'Output', 'Topology', 'Run time'].includes(l)), ['Run time', 'Token', 'Output', 'Topology']);
   const behavior = { context: { tokens_in: 26000, limit: 32768, delta: 1200 }, output: { distinct_line_ratio: 0.1, compression_ratio: 0.05, warn: true },
     topology: { entropy: 0, idle_runs: 2, warn: true } };
   const by = Object.fromEntries(budgetCells({ ...local, behavior }, EPOCH).map(c => [c.label, c]));
-  assert.equal(by.Context.big, '26,000 / 32,768 token');
-  assert.equal(by.Context.sub, '+1,200 token so với bước trước');
+  assert.equal(by.Token.big, 'No data', 'per-step context is not a ticket total');
   assert.equal(by.Output.tone, 'warn');
   assert.equal(by.Topology.sub, '2 steps changed nothing');
   assert.equal(by.Topology.tone, 'warn');
-  assert.equal(budgetCells(local, EPOCH).find(c => c.label === 'Context').big, 'No data');
+});
+
+test('token cell: total tokens across every run, vi-VN, no delta and no context limit', () => {
+  const call = (tokens_in, tokens_out) => ({ evidence: { metrics: { tokens_in, tokens_out } } });
+  const multi = {
+    root: root(),
+    totals: { calls: 3, tokens_in: 8432, tokens_out: 3913 },
+    runs: [
+      { id: 1, trigger: 'plan', created_at: EPOCH, updated_at: EPOCH + 1, gates: [], calls: [call(5000, 2000), call(1000, 500)] },
+      { id: 2, trigger: 'execute', created_at: EPOCH + 2, updated_at: EPOCH + 3, gates: [], calls: [call(2432, 1413)] },
+    ],
+    behavior: { context: { tokens_in: 4432, limit: 32768, delta: 310 } },
+  };
+  const cells = budgetCells(multi, EPOCH);
+  const token = cells.find(c => c.label === 'Token');
+  assert.equal(token.big, '12.345 token');
+  assert.equal(token.sub, '');
+  assert.equal(token.tone, 'ok');
+  const text = JSON.stringify(cells);
+  assert.doesNotMatch(text, /so với bước trước/, 'no per-step delta');
+  assert.doesNotMatch(text, /32\.768/, 'no model context limit');
+});
+
+test('token cell: sums call evidence when totals are missing, No data without token metrics', () => {
+  const metric = (tokens_in, tokens_out) => ({ evidence: { metrics: { tokens_in, tokens_out } } });
+  const runs = [
+    { id: 1, trigger: 'plan', created_at: EPOCH, updated_at: EPOCH + 1, gates: [], calls: [metric(4000, 1000)] },
+    { id: 2, trigger: 'execute', created_at: EPOCH + 2, updated_at: EPOCH + 3, gates: [], calls: [metric(6000, 1345)] },
+  ];
+  const token = (trace) => budgetCells(trace, EPOCH).find(c => c.label === 'Token');
+  assert.equal(token({ root: root(), runs }).big, '12.345 token', 'sum across both runs');
+  assert.equal(token({ root: root(), totals: { tokens_in: 8000, tokens_out: 5000 }, runs: [] }).big, '13.000 token', 'totals win when present');
+  assert.equal(token({ root: root(), totals: { calls: 0, tokens_in: 0, tokens_out: 0 }, runs: [] }).big, 'No data');
+  assert.equal(token({ root: root(), runs: [{ ...runs[0], calls: [{ evidence: { metrics: {} } }] }] }).big, 'No data');
 });
 
 test('typical gate time is the median of earlier runs only, never the current run', () => {

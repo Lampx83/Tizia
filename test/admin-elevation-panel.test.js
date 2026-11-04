@@ -34,7 +34,7 @@ test('every decision goes through askConfirm, posts a reason and reloads the lis
 
 test('the request page shows the pending scope and decides it in place', () => {
   assert.match(detail, /const e = t\.root\?\.elevation_detail;/);
-  assert.match(detail, /if \(!e \|\| e\.state !== 'requested'\) return '';/);
+  assert.match(detail, /if \(!e \|\| !e\.state \|\| e\.state === 'none'\) return '';/, 'only a real elevation state renders a block');
   assert.match(detail, /\(e\.scope \|\| \[\]\)\.map/);
   assert.match(detail, /data-action="elevate" data-decision="approve">Duyệt quyền</);
   assert.match(detail, /\$\{elevationBlock\(t\)\}/, 'rendered inside the AI board summary');

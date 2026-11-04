@@ -1,7 +1,9 @@
 """Cổng 4 — static-check + minimalism guard. Nửa CƠ HỌC của
 ponytail/caveman minimalism (nửa kia là prompt cố định của cổng 3):
 `node --check` trên JS sinh ra, lint import (code AI sinh chỉ được chạm
-`ctx.surface.*`, không bao giờ import `db.js` hay context khác trực tiếp), và
+`ctx.surface.*`; import MỚI vào `db.js` hay context khác bị chặn — import đã có
+sẵn ở base thì không tính, nếu không thì không sửa được module nào vốn đã import
+db/admin), và
 so kích thước diff với ước lượng size khai trong plan (`small`/`large`, xem
 gates/brainstorm.py). Import cấm / lỗi cú pháp → BLOCK thật (không có gì chạy
 được thì không có gì để review). Vượt ~2x ước lượng hoặc chạm file ngoài plan
@@ -20,6 +22,7 @@ import classifier
 import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage
 from repositories import server_hsm
+from runtime import levels
 from runtime.budget import BudgetExhausted
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -40,6 +43,24 @@ _IMPORT_PATH = re.compile(r"""(?:from\s+|import\(\s*|require\(\s*)['"]([^'"]+)['
 _CORE_ACCESS = re.compile(r"\bctx\.core\b")
 # 1 context KHÁC _ai-generated, dạng path đã resolve (vd 'server/contexts/admin/index.js').
 _OTHER_CONTEXT = re.compile(r"(^|/)contexts/(?!_ai-generated/)[^/]+/")
+_CONTEXT_ROOT = re.compile(r"(?:^|.*/)contexts/([^/]+)/")
+
+
+def _context_of(path: str):
+    """Tên context chứa path (None nếu không nằm trong contexts/<name>/)."""
+    match = _CONTEXT_ROOT.search(path)
+    return match.group(1) if match else None
+
+
+def _resolved_imports(code: str, base: str) -> list[tuple[str, str]]:
+    """[(spec, path đã resolve)] cho import tương đối trong `code`, base = thư mục file."""
+    found = []
+    for m in _IMPORT_PATH.finditer(code or ""):
+        spec = m.group(1)
+        if not spec.startswith('.'):
+            continue
+        found.append((spec, posixpath.normpath(posixpath.join(base, spec))))
+    return found
 
 
 def _posix(path: str) -> str:
@@ -76,22 +97,28 @@ def _added_lines_for_file(diff_text: str, file_path: str) -> int:
     return count
 
 
-def lint_imports(code: str, file_path: str) -> list[str]:
+def lint_imports(code: str, file_path: str, base_code: str = "") -> list[str]:
     """Trả list vi phạm (rỗng = sạch). Import tương đối ('./...'/'../...') được
     RESOLVE theo `file_path` trước khi so — chuỗi thô như '../../db.js' không
     tự chứa 'contexts/'/'db.js' theo nghĩa path thật nếu không resolve. Package
     import (express, ws…) không bắt đầu bằng '.' — bỏ qua, không phải path nội
-    bộ cần chặn."""
+    bộ cần chặn.
+
+    `base_code` là nội dung file ở base: import đã có sẵn ở đó KHÔNG tính vi phạm
+    (sửa một module protected vốn đã import db/admin là hợp lệ; cổng chặn import
+    MỚI — quyền mới — chứ không chặn việc sửa module đã có quyền đó).
+    """
     base = posixpath.dirname(_posix(file_path))
+    already = {resolved for _, resolved in _resolved_imports(base_code, base)}
     violations = []
-    for m in _IMPORT_PATH.finditer(code):
-        spec = m.group(1)
-        if not spec.startswith('.'):
+    for spec, resolved in _resolved_imports(code, base):
+        if resolved in already:
             continue
-        resolved = posixpath.normpath(posixpath.join(base, spec))
-        if resolved.endswith('db.js') or _OTHER_CONTEXT.search(resolved):
+        # Context khác là ranh giới quyền thật; file cùng context thì không.
+        other_context = _OTHER_CONTEXT.search(resolved) and _context_of(resolved) != _context_of(_posix(file_path))
+        if resolved.endswith('db.js') or other_context:
             violations.append(f"import cấm: '{spec}' (chạm {resolved})")
-    if _CORE_ACCESS.search(code):
+    if _CORE_ACCESS.search(code) and not _CORE_ACCESS.search(base_code):
         violations.append("truy cập ctx.core — plugin AI sinh chỉ nhận ctx.surface")
     return violations
 
@@ -217,6 +244,16 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
 
     planned_files = {_posix(st["file"]) for st in plan["subtasks"]}
     scratch_repo = state.get("scratch_repo")
+    # Import đã có ở base không phải vi phạm: cổng chỉ chặn import MỚI (quyền mới).
+    base_read = levels.source_reader(state.get("checkout_source"), state.get("base_sha")) if state.get("checkout_source") else None
+    base_cache: dict[str, str] = {}
+
+    def base_code(path: str) -> str:
+        if base_read is None:
+            return ""
+        if path not in base_cache:
+            base_cache[path] = base_read(path) or ""
+        return base_cache[path]
 
     issues: list[str] = oversize_issues(state) if check_size else []
     needs_careful_review = bool(issues)
@@ -240,7 +277,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             if path.suffix != ".js" or not path.exists():
                 continue
             code = path.read_text(encoding="utf-8")
-            bad_imports = lint_imports(code, candidate)
+            bad_imports = lint_imports(code, candidate, base_code(candidate))
             if bad_imports:
                 reason = f"'{candidate}': {'; '.join(bad_imports)}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,

@@ -425,7 +425,7 @@ async function loadRequests() {
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
-  skill: 'Luyện kỹ năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
+  skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
 const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
@@ -691,7 +691,7 @@ function renderRequests() {
     </div>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
-        <th>#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
+        <th title="Vị trí trong 10 yêu cầu mới nhất · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
         <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
@@ -703,7 +703,10 @@ function renderRequests() {
             : '<span style="opacity:.45">legacy</span>';
           return `
         <tr data-rid="${r.id}">
-          <td>${index + 1}</td>
+          <td title="Vị trí ${index + 1} trong danh sách · yêu cầu #${r.id}">
+            <div>#${index + 1}</div>
+            <div style="font-size:11px;opacity:.55;white-space:nowrap">ID ${r.id}</div>
+          </td>
           <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>

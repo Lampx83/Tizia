@@ -39,24 +39,34 @@ def approved(path, level, plan=None):
 
 # ── cổng 1 ──────────────────────────────────────────────────────────────────
 
-def test_gate_1_returns_elevation_required_for_a_protected_plan():
+def test_gate_1_returns_elevation_required_for_a_protected_file_that_imports_core():
+    # content/index.js import sẵn db.js + admin/index.js: mức của file là core, không phải protected.
     plan = protected_plan()
     out = brainstorm.run(request_for(plan), deps_with(plan), Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is True
     assert out["outcome"] == "elevation_required"
     body = out["elevation_required"]
-    assert body["required"] == [{"path": "server/contexts/content/index.js", "level": "protected",
+    assert body["required"] == [{"path": "server/contexts/content/index.js", "level": "core",
                                  "why": body["required"][0]["why"]}]
     assert out["plan"] is not None and out["plan"]["summary_vi"] == plan["summary_vi"]  # plan giữ để server lưu
     assert out["elevation"] == body and out["evidence"]["elevation"] == body               # worker chuyển tiếp
     # Worker POST /api/ai-board/worker/tickets/:id/elevation dùng thẳng paths/levels/reason này.
     assert body["paths"] == ["server/contexts/content/index.js"]
-    assert body["levels"] == ["protected"]
+    assert body["levels"] == ["core"]
     assert body["plan_hash"] == levels.fingerprint(out["plan"])
     assert body["reason"].startswith("elevation_required:")
-    assert out["signals"] == ["elevation: protected server/contexts/content/index.js"]
+    assert out["signals"] == ["elevation: core server/contexts/content/index.js"]
     assert out["public_message"]
+
+
+def test_gate_1_asks_only_protected_for_a_protected_file_without_core_imports():
+    plan = protected_plan()
+    plan["subtasks"][0]["file"] = "server/contexts/safety/profanity-vi.js"   # protected, không import sẵn
+    out = brainstorm.run(request_for(plan), deps_with(plan), Budget(max_wall_clock_s=999))
+
+    assert out["outcome"] == "elevation_required"
+    assert out["elevation_required"]["required"][0]["level"] == "protected"
 
 
 def test_gate_1_returns_elevation_required_for_a_core_plan():
@@ -70,7 +80,7 @@ def test_gate_1_returns_elevation_required_for_a_core_plan():
 
 def test_gate_1_lets_the_plan_through_when_the_request_carries_an_approved_elevation():
     plan = protected_plan()
-    request = request_for(plan, elevation=approved("server/contexts/content/index.js", "protected"))
+    request = request_for(plan, elevation=approved("server/contexts/content/index.js", "core"))
     out = brainstorm.run(request, deps_with(plan), Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is False, out
@@ -78,9 +88,18 @@ def test_gate_1_lets_the_plan_through_when_the_request_carries_an_approved_eleva
     assert "elevation_required" not in out
 
 
+def test_a_protected_elevation_does_not_cover_a_file_that_imports_core():
+    plan = protected_plan()
+    request = request_for(plan, elevation=approved("server/contexts/content/index.js", "protected"))
+    out = brainstorm.run(request, deps_with(plan), Budget(max_wall_clock_s=999))
+
+    assert out["outcome"] == "elevation_required"
+    assert out["elevation_required"]["required"][0]["level"] == "core"
+
+
 def test_a_plan_context_elevation_is_read_too():
     plan = protected_plan()
-    plan = {**plan, "elevation": approved("server/contexts/content/index.js", "protected")}
+    plan = {**plan, "elevation": approved("server/contexts/content/index.js", "core")}
     out = brainstorm.run(request_for(plan), deps_with(plan), Budget(max_wall_clock_s=999))
 
     assert out["blocked"] is False, out

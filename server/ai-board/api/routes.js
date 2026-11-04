@@ -42,6 +42,8 @@ export function attachAiBoardRequestRoutes(router, {
   onCancelled = null,
   db = null, // chỉ để intake-guard ghi cờ; thiếu thì vẫn chặn 422 bình thường
   classifyRequest = defaultClassifyRequest, // (title, detail) → {model, clarity, danger} | null
+  // (text) → danger verdict | null for admin skill text; undefined = the real logprob classifier, fail-open.
+  classifySkillText,
   needsProfile = () => false, // (user) → true while the onboarding is unanswered (admin never)
   onClarify = null, // ({requestId, domain, title, student}) when a new request waits for clarification (bell)
   aux = asyncAux, // helper modules (aux-async.js)
@@ -49,7 +51,7 @@ export function attachAiBoardRequestRoutes(router, {
 }) {
   const route = asyncRoutes(router);
   if(store.db) attachLessonReviewRoutes(router,{db:store.db,requireAuth,requireStrictCsrf});
-  if(store.db) attachSkillRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
+  if(store.db) attachSkillRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf,classifySkillText});
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.get('/api/ai-board/capabilities', requireAuth, (req, res) => {
@@ -583,6 +585,7 @@ export function attachAiBoardWorkerRoutes(router, {
   onVerdict = null, // ({request_id, title, domain, student, kind}) sau mỗi verdict: chuông cho người gửi
   onClarify = null, // ({requestId, title, domain, student}) khi Gate 2.5 cần người gửi làm rõ
   aux = asyncAux, // PostgreSQL helpers, as in attachAiBoardRequestRoutes
+  classifySkillText, // undefined = real danger classifier for worker-reported skill text (fail-open)
   lessonOptions,
 }) {
   const route = asyncRoutes(router);
@@ -632,7 +635,7 @@ export function attachAiBoardWorkerRoutes(router, {
     res.json(await gateProofs.apply(req.params.id, req.params.op, req.body || {}));
   }));
   const spanService = createSpanService(store);
-  attachWorkerSkillRoutes(route,{store,authenticate,handle});
+  attachWorkerSkillRoutes(route,{store,authenticate,handle,classifySkillText});
   route.post('/api/ai-board/worker/tickets/:id/spans', authenticate, handle(async (req,res) => {
     res.json(await spanService.record(req.params.id, req.body || {}));
   }));

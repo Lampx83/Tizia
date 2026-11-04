@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 
 import path_policy
@@ -56,6 +57,9 @@ _PROTECTED = tuple(re.compile(p, re.I) for p in (r"^server/contexts/", r"^server
 # `node --test test/x.test.js` không đẩy plan lên mức cao hơn).
 _REF = re.compile(r"(?<![\w./-])((?:public|server|content|db|migrations?|scripts|tools|ai-board|test|tests)"
                   r"/[\w./-]+)(?![\w-])")
+# Import tương đối ('./x.js', '../y.js') — path nội bộ duy nhất cần suy mức.
+_IMPORT_SPEC = re.compile(r"""(?:from\s+|import\(\s*|require\(\s*)['"]([^'"]+)['"]""")
+_CONTEXT_ROOT = re.compile(r"(?:^|.*/)contexts/([^/]+)/")
 
 CONTEXT_KEYS = ("elevation", "approved_elevation", "elevations", "elevation_required")
 APPROVED_STATUS = frozenset({"approved", "granted", "active", "ok", "elevated", "done"})
@@ -110,6 +114,68 @@ def touch_level(path, touched=()) -> str:
     return strictest([level_of(path), *(level_of(item) for item in touched)])
 
 
+def _context_of(path):
+    """Tên context chứa path (None nếu không nằm trong contexts/<name>/)."""
+    match = _CONTEXT_ROOT.search(str(path or ""))
+    return match.group(1) if match else None
+
+
+def import_paths(code: str, path) -> list[str]:
+    """Path nội bộ (posix, đã resolve theo `path`) mà code import — bỏ package import."""
+    normalized = path_policy.normalize(path)
+    if normalized is None:
+        return []
+    base = posixpath.dirname(normalized)
+    found = []
+    for spec in _IMPORT_SPEC.findall(code or ""):
+        if not spec.startswith('.'):
+            continue
+        found.append(posixpath.normpath(posixpath.join(base, spec)))
+    return list(dict.fromkeys(found))
+
+
+def import_levels(code: str, path) -> list[str]:
+    """Mức mà import HIỆN CÓ của `path` chạm: vào context KHÁC là core (vượt ranh giới quyền),
+    còn lại theo catalog. file_level dùng để elevation phải đủ mức cho cả import sẵn có."""
+    here = _context_of(path)
+    return [CORE if (other := _context_of(item)) and other != here else level_of(item)
+            for item in import_paths(code, path)]
+
+
+def source_reader(source, sha: str | None = None):
+    """read(path) -> nội dung file tại `sha` (mặc định HEAD của `source`); None nếu không có.
+    Không phải repo/không đọc được thì trả None để caller quay về mức suy từ path."""
+    if not source:
+        return None
+    import code_index
+
+    if sha is None:
+        try:
+            sha = code_index.git(source, "rev-parse", "HEAD").decode().strip()
+        except OSError:
+            return None
+
+    def read(path) -> str | None:
+        try:
+            return code_index.git(source, "show", f"{sha}:{path}").decode("utf-8", "replace")
+        except OSError:
+            return None
+
+    return read
+
+
+def file_level(path, read=None) -> str:
+    """Mức của file đích: path + mức mọi import HIỆN CÓ của nó chạm.
+    Vùng surface giữ surface — import cấm trong code sinh do cổng 4 chặn, elevation không mở.
+    Import vào chính AI Board không biến file ngoài thành vùng self (self là file AI Board);
+    mức cao nhất còn duyệt được là core."""
+    level = level_of(path)
+    if read is None or level == SURFACE:
+        return level
+    touched = [CORE if extra == SELF else extra for extra in import_levels(read(path) or "", path)]
+    return strictest([level, *touched])
+
+
 def script_paths(task: dict) -> list[str]:
     """Đường dẫn code nằm trong verify/acceptance của subtask, chỉ path đã khai báo."""
     texts = [task.get("verify"), task.get("acceptance")]
@@ -126,20 +192,23 @@ def task_level(task: dict) -> str:
     return touch_level(task.get("file"), script_paths(task))
 
 
-def requirements(plan: dict) -> list[dict]:
-    """[{path, level, why}] cho target trên surface; cùng path giữ mức cao nhất, bỏ mức surface."""
+def requirements(plan: dict, read=None) -> list[dict]:
+    """[{path, level, why}] cho target trên surface; cùng path giữ mức cao nhất, bỏ mức surface.
+    `read(path)` là nội dung file tại base: có thì mức target gộp cả import sẵn có (file_level)."""
     found: dict[str, dict] = {}
 
     def add(path, source):
         normalized = path_policy.normalize(path)
         if normalized is None:
             return
-        level = level_of(normalized)
+        level = file_level(normalized, read)
         if level == SURFACE:
             return
         if normalized in found and RANK[found[normalized]["level"]] >= RANK[level]:
             return
-        found[normalized] = {"path": normalized, "level": level, "why": f"{WHY[level]}: {source}"}
+        found[normalized] = {"path": normalized, "level": level,
+                             "why": f"{WHY[level]}: {source}"
+                                    + ("" if level == level_of(normalized) else " (import sẵn có trong file chạm mức này)")}
 
     for index, task in enumerate(plan.get("subtasks") or [], start=1):
         add(str(task.get("file") or ""), f"file subtask {index}")

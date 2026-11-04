@@ -1,7 +1,7 @@
 """Guard classifier, harness side of server/ai-board/classifier.js: same labels, prompt and
 thresholds (server/ai-board/classifier-calibration.json). One token from AI_BOARD_CLASSIFIER_MODEL, softmax over
-the task's letters only. It runs next to the JSON guardrails and may only raise severity; a scoring reject
-signal is observational until a separately approved runtime policy consumes it."""
+the task's letters only. It runs next to the JSON guardrails and may only raise severity: danger is 'active' as
+escalate-only (a scoring reject signal stays observational while reject_min is null), clarity is 'shadow'."""
 from __future__ import annotations
 
 import json

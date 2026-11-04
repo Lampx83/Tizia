@@ -7,6 +7,7 @@ ai-board/memory/
 ai-board/ai-log.md
 ai-board/inbox.json
 ai-board/harness/.venv/
+ai-board/harness/evaluation/datasets/
 ai-board/sandbox-runner/
 **/__pycache__/
 **/.pytest_cache/

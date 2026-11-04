@@ -6,6 +6,7 @@ import { LIMITS, WorkerContractError } from '../repositories/store-contract.js';
 import { SKILL_TASK_TYPES } from '../skill-task-types.js';
 import { checkSkillText, publicMessage } from '../security/intake-guard.js';
 import { essenceMissing } from '../security/essence.js';
+import { recordSkillFlag, reviewEvidence, reviewSkillText } from '../security/skill-review.js';
 import { tokenCounter } from './token-count.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
@@ -28,6 +29,9 @@ const validId = value => (typeof value === 'number' || typeof value === 'string'
 const escape = text => text.replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#x27;' }[c]));
 const NODE_STAGES = ['plan', 'execute', 'verdict'];
 const FORBIDDEN = /(?:ignore|override|bypass|grant|enable)\s+(?:all\s+)?(?:platform|permission|tools?|rules?|budget|sandbox)|(?:request|require|need)\w*\s+(?:permission|access|tools?)|tools?\s+required\s*:|(?:bỏ qua|ghi đè|cấp quyền|vô hiệu hóa|yêu cầu quyền|cần quyền)/i;
+// Essence the worker extracts from the source skill before rewriting; stored beside the smoke evidence.
+const ESSENCE_LISTS = ['procedure', 'guardrails', 'verification', 'examples', 'failure_modes', 'not_capturable'];
+const ESSENCE_SIZE = { items: 12, item: 300, trigger: 400 };
 
 // Per-node skill caps; a node without its own value uses the global limits.
 export function stageBudgets() {
@@ -84,11 +88,29 @@ function defaults() {
   });
 }
 
-export function createSkillService(db) {
+export function createSkillService(db, { reviewText = reviewSkillText } = {}) {
   /** Same deterministic guardrail as request text; blocked skill text is never stored, approved or served. */
   const guardSkillText = (text, status = 400) => {
     const verdict = checkSkillText(text);
     if (verdict.block) throw bad(verdict.message || publicMessage('reject'), 'skill_blocked', status);
+  };
+  // Model verdict sits on top of the lexicon: it audits every escalation and refuses only when the calibration
+  // sets reject_min. Never throws; the caller decides whether a reject is a refusal or a failed job.
+  const inspectSkill = async (text, stage, context = {}) => {
+    let verdict = null;
+    try { verdict = await reviewText(String(text ?? '')); } catch (error) { console.warn('[ai-board] skill review skipped:', error.message); return null; }
+    if (!verdict) return null;
+    const reject = verdict.reject === true && verdict.shadow !== true;
+    if (reject || verdict.escalate === true) {
+      await recordSkillFlag(db, { stage, verdict, action: reject ? 'rejected' : 'flagged', ...context });
+    }
+    return verdict;
+  };
+  /** Lexicon first (hard rule), then the model refusal. Refused text is never stored. */
+  const reviewSkill = async (text, stage, context = {}) => {
+    const verdict = await inspectSkill(text, stage, context);
+    if (verdict?.reject === true && verdict.shadow !== true) throw bad(publicMessage('reject'), 'skill_blocked', 422);
+    return verdict;
   };
   async function requireCurrentAdmin(actor) {
     // Signed identity (aiboard-server): role comes from the verified header; this board has no sessions table.
@@ -120,6 +142,13 @@ export function createSkillService(db) {
           instructions: job.instructions ?? null, attempts: job.attempts ?? 0, result_version_id: results.get(v.id) ?? null } : null };
     }) };
   }
+  const evidenceJson = (evaluation, review) => {
+    const clean = evaluation ? cleanEval(evaluation) : null;
+    const flagged = review ? reviewEvidence(review, review.reject && review.shadow !== true ? 'rejected' : review.escalate === true ? 'flagged' : 'clear') : null;
+    if (!clean && !flagged) return null;
+    return { method: clean?.method ?? 'toy_json_smoke', kinds: clean?.kinds ?? [], passed: clean?.passed ?? 0,
+      total: clean?.total ?? 0, ...(clean?.extraction ? { extraction: clean.extraction } : {}), ...(flagged ? { review: flagged } : {}) };
+  };
   async function appendVersion(actor, item, taskTypes, text, parentId = null, extra = {}) {
     guardSkillText(text);
     const now = Date.now();
@@ -130,7 +159,7 @@ export function createSkillService(db) {
     }
     const id = await db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,parent_version_id,created_by,created_at,eval_json,proposal_id,proposal_source,proposal_reason)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [item.id, version, JSON.stringify(taskTypes), text, hash(text), lint.token_count ?? Buffer.byteLength(text), JSON.stringify(lint), parentId, actor.id, now,
-      extra.evaluation ? JSON.stringify(cleanEval(extra.evaluation)) : null, extra.proposal_id ?? null, extra.source ?? null, extra.reason ?? null]);
+      evidenceJson(extra.evaluation, extra.review), extra.proposal_id ?? null, extra.source ?? null, extra.reason ?? null]);
     await db.run('UPDATE ai_skills SET updated_by=?,updated_at=? WHERE id=?', [actor.id, now, item.id]);
     return { skill: await skill(item.id), version: (await read(item.id)).versions.find(v => v.id === id) };
   }
@@ -138,13 +167,15 @@ export function createSkillService(db) {
     if (typeof input.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(input.name) || input.name.startsWith('default-')) throw bad('Choose an admin skill name');
     if (!Array.isArray(input.task_types) || !input.task_types.length || new Set(input.task_types).size !== input.task_types.length || input.task_types.some(t => !TASK_TYPES.includes(t))) throw bad('Choose valid task types');
     if (typeof input.original_text !== 'string' || Buffer.byteLength(input.original_text, 'utf8') > 3000) throw bad('Upload exceeds conservative 3000-token bound');
+    guardSkillText(input.original_text);
+    const review = await reviewSkill(input.original_text, 'upload', { adminId: actor.id, skillName: input.name });
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const now = Date.now();
       await db.run(`INSERT INTO ai_skills(name,task_types_json,created_by,updated_by,created_at,updated_at)
         VALUES(?,?,?,?,?,?) ON CONFLICT(name) DO NOTHING`, [input.name, JSON.stringify(input.task_types), actor.id, actor.id, now, now]);
       const item = await db.get(`SELECT * FROM ai_skills WHERE name=?${db.lockRow}`, [input.name]);
-      return appendVersion(actor, item, input.task_types, input.original_text);
+      return appendVersion(actor, item, input.task_types, input.original_text, null, { review });
     });
   }
   /** Served text + lint for a version: rewrite when present, else the upload. Throws unless it is approvable. */
@@ -203,6 +234,7 @@ export function createSkillService(db) {
   async function requestRewrite(actor, id, versionId, input) {
     if (input.confirmed !== true) throw bad('Rewrite confirmation required', 'confirmation_required');
     const instructions = cleanInstructions(input.instructions);
+    if (instructions) await reviewSkill(instructions, 'instructions', { adminId: actor.id, skillId: Number(id), versionId: Number(versionId) });
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const { version } = await lockedVersion(id, versionId);
@@ -240,10 +272,12 @@ export function createSkillService(db) {
   }
   async function edit(actor, id, versionId, input) {
     if (typeof input.text !== 'string' || Buffer.byteLength(input.text, 'utf8') > 3000) throw bad('Edited text exceeds conservative 3000-token bound');
+    guardSkillText(input.text);
+    const review = await reviewSkill(input.text, 'edit', { adminId: actor.id, skillId: Number(id), versionId: Number(versionId) });
     return db.tx(async () => {
       await requireCurrentAdmin(actor);
       const { item, version } = await lockedVersion(id, versionId);
-      return appendVersion(actor, item, parse(version.task_types_json, []), input.text, version.id);
+      return appendVersion(actor, item, parse(version.task_types_json, []), input.text, version.id, { review });
     });
   }
   async function rollback(actor, id, input) {
@@ -299,14 +333,31 @@ export function createSkillService(db) {
         original_text: v.original_text, instructions: job.instructions ?? null, max_tokens: 1500, bound: REWRITE_BOUND } };
     });
   }
+  // Source essence the worker extracted before rewriting: keep it small, drop anything that is not a string.
+  const cleanExtraction = input => {
+    if (!input || typeof input !== 'object') return null;
+    const trigger = typeof input.trigger === 'string' ? input.trigger.trim().slice(0, ESSENCE_SIZE.trigger) : '';
+    const lists = Object.fromEntries(ESSENCE_LISTS.map(key => [key, (Array.isArray(input[key]) ? input[key] : [])
+      .filter(item => typeof item === 'string' && item.trim()).slice(0, ESSENCE_SIZE.items)
+      .map(item => item.trim().slice(0, ESSENCE_SIZE.item))]));
+    return trigger || ESSENCE_LISTS.some(key => lists[key].length) ? { trigger, ...lists } : null;
+  };
   const cleanEval = input => {
     const kinds = (Array.isArray(input?.kinds) ? input.kinds : []).slice(0, 3).filter(k => TASK_TYPES.includes(k?.kind))
       .map(k => ({ kind: k.kind, ok: k.ok === true, tokens: Number.isSafeInteger(k.tokens) ? k.tokens : null, ...(typeof k.reason === 'string' ? { reason: k.reason.slice(0, 200) } : {}) }));
-    return { method: 'toy_json_smoke', kinds, passed: kinds.filter(k => k.ok).length, total: kinds.length };
+    const extraction = cleanExtraction(input?.extraction);
+    return { method: 'toy_json_smoke', kinds, passed: kinds.filter(k => k.ok).length, total: kinds.length, ...(extraction ? { extraction } : {}) };
   };
   async function reportRewrite(input) {
+    // Screen the model output before it can hold the rewrite row lock. The lexicon stays the hard rule; the
+    // classifier only audits and, with a reject_min calibration, fails the job.
+    const id = Number(input.job_id);
+    const running = await db.get('SELECT id,status,claim_token FROM ai_skill_rewrites WHERE id=?', [id]);
+    if (!running || running.status !== 'running' || typeof input.claim_token !== 'string' || input.claim_token !== running.claim_token) throw bad('Stale rewrite claim', 'stale_claim', 409);
+    const output = typeof input.rewritten_text === 'string' ? input.rewritten_text : '';
+    const review = output && !checkSkillText(output).block ? await inspectSkill(output, 'rewrite_output', { jobId: id }) : null;
     return db.tx(async () => {
-      const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE id=?${db.lockRow}`, [Number(input.job_id)]);
+      const job = await db.get(`SELECT * FROM ai_skill_rewrites WHERE id=?${db.lockRow}`, [id]);
       if (!job || job.status !== 'running' || typeof input.claim_token !== 'string' || input.claim_token !== job.claim_token) throw bad('Stale rewrite claim', 'stale_claim', 409);
       const now = Date.now(), usage = { model_calls: Number(input.usage?.model_calls) || 0, tokens: Number(input.usage?.tokens) || 0 };
       const raw = typeof input.raw_response === 'string' ? input.raw_response.slice(0, 20000) : null;
@@ -316,14 +367,19 @@ export function createSkillService(db) {
       if (typeof input.rewritten_text !== 'string' || !input.rewritten_text) { await finish('failed', String(input.error || 'no_output').slice(0, 200)); return { status: 'failed' }; }
       if (checkSkillText(input.rewritten_text).block) { await finish('failed', 'guardrail_blocked'); return { status: 'failed' }; }
       const source = await db.get('SELECT v.*,s.name FROM ai_skill_versions v JOIN ai_skills s ON s.id=v.skill_id WHERE v.id=?', [job.version_id]);
+      if (review?.reject === true && review.shadow !== true) {
+        await finish('failed', 'classifier_rejected');
+        return { status: 'failed', review: reviewEvidence(review, 'rejected') };
+      }
       const lost = essenceMissing(source.original_text, input.rewritten_text);
       if (lost.length) { await finish('failed', `essence_lost: ${lost.join(', ')}`.slice(0, 200)); return { status: 'failed', essence_lost: lost }; }
       const next = Number((await db.get('SELECT COALESCE(MAX(version),0)+1 AS n FROM ai_skill_versions WHERE skill_id=?', [source.skill_id])).n);
       // Bản viết lại là phiên bản mới (con của nguồn), số version trong front matter được chỉnh để khớp trước khi lint.
       const text = input.rewritten_text.replace(/^version:.*$/m, `version: ${next}`);
       const actor = { id: job.confirmed_by };
+      const extraction = input.extraction ?? input.evaluation?.extraction;
       const child = await appendVersion(actor, { id: source.skill_id, name: source.name}, parse(source.task_types_json, []), text, source.id,
-        { evaluation: input.evaluation });
+        { evaluation: { ...(input.evaluation || {}), ...(extraction ? { extraction } : {}) }, review });
       await db.run("UPDATE ai_skill_versions SET origin='rewrite' WHERE id=?", [child.version.id]);
       await finish('succeeded', null);
       return { status: 'succeeded', lint_ok: child.version.lint.ok, version_id: child.version.id };

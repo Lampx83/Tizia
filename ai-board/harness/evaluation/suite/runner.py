@@ -24,6 +24,7 @@ from gates import gate3_guards, plan_validate
 from runtime import tool_loop, tool_manifest
 from runtime.budget import Budget
 from services.context import VARIANT_FILES
+from evaluation import requests_dataset
 from evaluation.suite import ablation, case_select, grading, isolated, metrics, reconcile, taskpack, trial
 from evaluation.suite.launcher import sqlite_launcher
 
@@ -109,8 +110,30 @@ def render(rep: dict) -> str:
     return "\n".join(lines)
 
 
-FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "config_sha256", "tool_manifest", "suite_hash", "pipeline_hash")
+FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "config_sha256", "tool_manifest", "suite_hash", "pipeline_hash", "requests_dataset_sha256")
 COMPARISON_PINS = FIXED + ("reasoning", "corpus_sha", "seed", "repeats", "modes", "fast_tier", "review", "packs", "budget")
+# A run that does not touch request-level data carries no dataset pin; two such runs still compare.
+OPTIONAL_PINS = ("requests_dataset_sha256",)
+
+
+def requests_dataset_pin(dataset=None) -> dict:
+    """Manifest pins for the request-level dataset; {} when this run uses none. Raise OSError if the named file is missing."""
+    source = str(dataset or os.environ.get(requests_dataset.ENV, "") or "").strip()
+    if not source:
+        return {}
+    loaded = requests_dataset.load(source)
+    return {"requests_dataset_sha256": loaded.sha256, "requests_dataset_path": str(loaded.path),
+            "requests_dataset_rows": len(loaded.rows)}
+
+
+def _live_dataset_pin(meta: dict) -> dict:
+    """Pin recomputed from the manifest path; a vanished file yields None so integrity fails."""
+    if not meta.get("requests_dataset_path"):
+        return {}
+    try:
+        return {"requests_dataset_sha256": requests_dataset.dataset_hash(meta["requests_dataset_path"])}
+    except OSError:
+        return {"requests_dataset_sha256": None}
 
 
 def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list[str]:
@@ -237,6 +260,11 @@ def cmd_run(args, deps=None) -> int:
             **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {}),
             **({"react_plan": True} if args.react_plan else {}), **({"sandbox_tool": True} if args.sandbox_tool else {}),
             **({"skill_variant": variant, "skill_variant_sha": {v: _sha(VARIANT_FILES[v]) for v in variant}} if variant else {})}
+    try:
+        dataset_pin = requests_dataset_pin(args.requests_dataset)
+    except OSError as error:
+        print(f"[suite] {error}", file=sys.stderr)
+        return 2
     if prov["dirty"] and not args.allow_dirty:
         print("[suite] working tree has uncommitted changes: commit them (or --allow-dirty for a throwaway run)", file=sys.stderr)
         return 2
@@ -290,6 +318,7 @@ def cmd_run(args, deps=None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
             "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
+            **dataset_pin,
             **({"case_ids": case_meta} if case_meta else {})}
     meta_path = run_dir / "run.json"
     if meta_path.exists():
@@ -362,7 +391,7 @@ def cmd_run(args, deps=None) -> int:
     rows = list(store.rows.values())
     complete = not todo or len(store.rows) >= len(tasks) * len(modes) * args.repeats
     status = f"aborted: {abort[0]}" if abort else "complete" if complete else "partial"
-    problems = integrity(meta, rows, provenance(ROOT, model, router)) if rows else []
+    problems = integrity(meta, rows, {**provenance(ROOT, model, router), **_live_dataset_pin(meta)}) if rows else []
     meta_path.write_text(json.dumps({**meta, "status": status, "rows": len(rows), "integrity": problems}, indent=2), encoding="utf-8")
     if rows:
         print(render(write_report(run_dir, rows)))
@@ -406,7 +435,7 @@ def cmd_check(args) -> int:
     run_dir = Path(args.root) / "suite" / args.name
     meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     store = Store(run_dir / "results.jsonl", Path(args.root) / eval_corpus.VAULT / "suite" / args.name / "results.jsonl")
-    problems = integrity(meta, list(store.rows.values()), provenance(ROOT, meta["model"], None))
+    problems = integrity(meta, list(store.rows.values()), {**provenance(ROOT, meta["model"], None), **_live_dataset_pin(meta)})
     print(json.dumps({"status": meta.get("status"), "rows": len(store.rows), "problems": problems}, ensure_ascii=False))
     return 1 if problems else 0
 
@@ -420,7 +449,7 @@ def cmd_compare(args) -> int:
         manifests.append(json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {})
     ma, mb = manifests
     problems = [f"missing or different pin: {key}" for key in COMPARISON_PINS
-                if ma.get(key) is None or mb.get(key) is None or ma[key] != mb[key]]
+                if ma.get(key) != mb.get(key) or (key not in OPTIONAL_PINS and ma.get(key) is None)]
     if any(not isinstance(meta.get("budget"), dict) or not meta["budget"] for meta in manifests):
         problems.append("missing explicit budget pins")
     if any(meta.get("dirty") is not False or meta.get("status") != "complete" or meta.get("integrity") != [] for meta in manifests):
@@ -497,6 +526,8 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--max-minutes", type=float)
     run.add_argument("--trial-timeout-s", type=int, default=300, help="whole-trial deadline; timeout stops the suite pending cleanup reconciliation")
     run.add_argument("--allow-dirty", action="store_true")
+    run.add_argument("--requests-dataset", default="",
+                     help=f"request-level dataset directory or CSV (default: ${requests_dataset.ENV}); pinned in run.json as sha256 + path + rows, never read by the board")
     run.add_argument("--review", action="store_true", help="also run the gate 4 model content review on gold-mode candidates (false-block rate)")
     run.add_argument("--pack", action="append", help="task pack JSON (merged-history tasks); repeatable")
     run.add_argument("--context-arm", choices=ablation.ARMS, default="default", help="gate 3 context ablation: fullfile = whole numbered file instead of excerpt; nosiblings = no folder listing")
