@@ -132,6 +132,57 @@ def test_closest_finds_typo_but_not_new_file(tmp_path):
     assert repomap.closest("public/brand-new-page.html", tmp_path) is None
 
 
+# ── chỉ mục code ngoài public/: câu backend/db có shortlist, câu UI giữ nguyên danh sách ──
+
+ROUTE = """const express = require('express');
+const { saveDispense } = require('./store');
+export function attachDispenseRoutes(router) {
+  router.get('/api/pharmacy/dispense', list);
+  router.post('/api/pharmacy/dispense/:id/confirm', confirm);
+}
+module.exports = { attachDispenseRoutes };
+"""
+MIGRATION = """CREATE TABLE IF NOT EXISTS medicine_dispense (
+  dispense_id   BIGSERIAL PRIMARY KEY,
+  medicine_code TEXT NOT NULL,
+  pharmacist_name TEXT NOT NULL
+);
+"""
+BACKEND = {
+    "server/contexts/_ai-generated/pharmacy/index.js": ROUTE,
+    "server/contexts/_ai-generated/pharmacy/store.js": "module.exports = { saveDispense: () => 1 };\n",
+    "server/db/migrations/021-medicine-dispense.sql": MIGRATION,
+    "test/pharmacy-dispense.test.js":
+        "import { attachDispenseRoutes } from '../server/contexts/_ai-generated/pharmacy/index.js';\n",
+}
+
+
+def test_public_question_keeps_the_same_list_after_backend_files_are_indexed(tmp_path):
+    src = _repo(tmp_path)
+    before = _real_related(src, "HEAD", "trò đố vui trắc nghiệm")
+    assert before == ["public/quiz.html", "public/js/quiz.js"]
+    # File code cố tình dùng lại đúng từ vựng của câu hỏi UI: vẫn không chen vào danh sách.
+    _commit(src, {**BACKEND, "server/contexts/_ai-generated/quiz/routes.js":
+                  "router.get('/api/quiz/scores', list);\n"})
+    assert _real_related(src, "HEAD", "trò đố vui trắc nghiệm") == before
+
+
+def test_backend_question_returns_the_route_file(tmp_path):
+    src = _repo(tmp_path)
+    # Tên miền dùng chung với public/: câu có dấu hiệu backend vẫn phải thấy file server trước.
+    _commit(src, {**BACKEND, "public/dispense.html": "<h1>Đơn thuốc nhà thuốc</h1>"})
+    found = _real_related(src, "HEAD", "thêm route /api/pharmacy/dispense để xác nhận đơn thuốc")
+    assert found[0] == "server/contexts/_ai-generated/pharmacy/index.js" and "server/db/index.js" not in found
+    assert "server/contexts/_ai-generated/pharmacy/store.js" in found
+
+
+def test_migration_question_returns_the_sql_file(tmp_path):
+    src = _repo(tmp_path)
+    _commit(src, BACKEND)
+    found = _real_related(src, "HEAD", "thêm cột pharmacist_name cho bảng medicine_dispense")
+    assert found[0] == "server/db/migrations/021-medicine-dispense.sql"
+
+
 # ── gates/brainstorm.py: gợi ý vào prompt khi có, fallback khi không ──
 
 def test_brainstorm_prompt_includes_repomap_hints(monkeypatch, request_item):

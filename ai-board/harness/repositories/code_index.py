@@ -27,6 +27,10 @@ import path_policy
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "memory" / "code_index.json"
 ROOTS = path_policy.code_roots()
 EXTS = (".html", ".css", ".js", ".mjs")
+# Chỉ mục thứ 2 (repo_index): code ngoài public/ cho câu hỏi backend/db. public/ giữ nguyên chỉ mục cũ.
+CODE_ROOTS = ("server", "test")
+CODE_EXTS = (".js", ".mjs", ".sql")
+MAX_CODE_FILES = 2000  # ponytail: trần số file mỗi lần index; repo thật ~350, nâng nếu repo phình
 MAX_BYTES = 400_000   # ponytail: file lớn hơn là bundle/vendor, bỏ qua; nâng nếu thiếu file thật
 MAX_ITEMS = 150       # mỗi danh sách trong 1 entry, giữ file index nhỏ
 SUMMARY_MAX = 300
@@ -42,6 +46,17 @@ _EXPORT_LIST = re.compile(r"^\s*export\s*\{([^}]*)\}", re.M)
 _EXPORT_DEFAULT = re.compile(r"^\s*export\s+default\b", re.M)
 _IMPORT = re.compile(r"""(?:\bimport\s+(?:[^'"()]*?\bfrom\s*)?|\bimport\s*\(\s*"""
                      r"""|\bexport\s*(?:\*(?:\s*as\s+[\w$]+)?|\{[^}]*\})\s*from\s*)['"]([^'"]+)['"]""")
+# Code ngoài public/ dùng CJS + chuỗi route; tên bảng/cột đọc từ DDL trong .sql.
+_CJS_EXPORT = re.compile(r"\b(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=")
+_CJS_EXPORTS_OBJ = re.compile(r"\bmodule\.exports\s*=\s*\{([^}]*)\}", re.S)
+_CJS_REQUIRE = re.compile(r"\brequire\s*\(\s*['\"]([^'\"]+)['\"]\s*\)")
+_ROUTE_LITERAL = re.compile(r"""\.\s*(?:get|post|put|patch|delete|options|head|all|use)\s*\(\s*['"`]([^'"`\n]{1,200})['"`]""")
+_SQL_TABLE = re.compile(r"\b(?:create\s+(?:or\s+replace\s+)?(?:temp\s+|temporary\s+)?table(?:\s+if\s+not\s+exists)?"
+                        r"|alter\s+table(?:\s+if\s+exists)?|insert\s+into|delete\s+from|update|references)\s+([\w.$]+)", re.I)
+_SQL_COLUMN = re.compile(r"(?:^|[(,])\s*([A-Za-z_][\w$]*)\s+(?:bigserial|serial|bigint|int|integer|smallint|text"
+                         r"|varchar|character|numeric|decimal|boolean|bool|jsonb|json|timestamptz|timestamp|date"
+                         r"|time|uuid|bytea|real|double|float|money)\b", re.I | re.M)
+_SQL_INDEX = re.compile(r"\bcreate\s+(?:unique\s+)?index(?:\s+if\s+not\s+exists)?\s+([\w$.]+)", re.I)
 
 
 def git(source, *args: str, input: bytes | None = None) -> bytes:
@@ -191,14 +206,15 @@ def _indexable(path: str, size: int) -> bool:
         and not path_policy.denied(path, "read")
 
 
-def _blobs(source, sha: str, paths: list[str] | None = None) -> dict[str, tuple[str, int]]:
-    """{path: (blob sha, size)} ở `sha`, lọc file đáng index."""
+def _blobs(source, sha: str, paths: list[str] | None = None, keep=None) -> dict[str, tuple[str, int]]:
+    """{path: (blob sha, size)} ở `sha`, lọc file đáng index (`keep`, mặc định `_indexable`)."""
     raw = git(source, "ls-tree", "-r", "-l", "-z", sha, "--", *(paths or ROOTS)).decode("utf-8", "replace")
+    check = keep or _indexable
     out = {}
     for rec in filter(None, raw.split("\0")):
         meta, path = rec.split("\t", 1)
         _mode, kind, blob, size = meta.split()
-        if kind == "blob" and size.isdigit() and _indexable(path, int(size)):
+        if kind == "blob" and size.isdigit() and check(path, int(size)):
             out[path] = (blob, int(size))
     return out
 
@@ -295,6 +311,75 @@ def ui_index(source: str, commit: str) -> dict:
                              line, lines[line - 1].strip()[:160]))
         files[path] = {"text": texts, "lines": lines, "uses": uses, "imports": imports}
         for word in set(" ".join(t for _, t in texts).split()):
+            words.setdefault(word, set()).add(path)
+    return {"files": files, "words": words}
+
+
+# ── chỉ mục code ngoài public/ (server/, test/): cùng khuôn dữ liệu, cùng ngân sách, cache theo sha ──
+
+
+def _code_indexable(path: str, size: int) -> bool:
+    return path.startswith(tuple(r + "/" for r in CODE_ROOTS)) and path.endswith(CODE_EXTS) \
+        and size <= MAX_BYTES and not path_policy.denied(path, "read")
+
+
+def js_code_names(path: str, js: str) -> dict:
+    """{'names': [export/import + chuỗi route], 'specs': [module require/import]} của file JS ngoài public/."""
+    esm = js_symbols(path, js)
+    names = list(esm["exports"]) + _CJS_EXPORT.findall(js)
+    for group in _CJS_EXPORTS_OBJ.findall(js):
+        for part in group.split(","):
+            key = part.partition(":")[0].strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", key):
+                names.append(key)
+    specs = [*_IMPORT.findall(js), *_CJS_REQUIRE.findall(js)]
+    for match in _NAMED.finditer(js):
+        names += [name.split(" as ")[0].strip() for name in match.group(1).split(",") if name.strip()]
+    names += [posixpath.basename(posixpath.splitext(spec)[0]) for spec in specs if spec.startswith(".")]
+    names += _ROUTE_LITERAL.findall(js)
+    return {"names": _uniq(names), "specs": _uniq(specs)}
+
+
+def sql_names(sql: str) -> list[str]:
+    """Tên bảng/cột/index của file .sql, đọc từ DDL (không phân tích cú pháp SQL đầy đủ)."""
+    return _uniq(name.rstrip(".") for name in (*_SQL_TABLE.findall(sql), *_SQL_COLUMN.findall(sql),
+                                               *_SQL_INDEX.findall(sql)))
+
+
+def _resolve_code(owner: str, spec: str, known: frozenset[str] | set[str]) -> str | None:
+    """Specifier tương đối trong file code → đường repo CÓ trong chỉ mục (require('./x') → x.js/x/index.js)."""
+    spec = spec.split("#")[0].split("?")[0].strip()
+    if not spec.startswith("."):
+        return None  # package npm hoặc đường tuyệt đối
+    base = posixpath.normpath(posixpath.join(posixpath.dirname(owner), spec))
+    if base == ".." or base.startswith("../"):
+        return None
+    for candidate in (base, *(base + ext for ext in (".js", ".mjs")),
+                      *(posixpath.join(base, "index" + ext) for ext in (".js", ".mjs"))):
+        if candidate in known:
+            return candidate
+    return None
+
+
+@functools.lru_cache(maxsize=2)
+def repo_index(source: str, commit: str) -> dict:
+    """Chỉ mục code ngoài public/ ở `commit` (sha đã resolve — cache theo nó): server/, test/ .js|.mjs, server .sql.
+    files[path] = {text: [(0, " tên ")], imports: [path có trong chỉ mục]}; words[từ fold] = {path}.
+    JS góp tên export/import + chuỗi route, .sql góp tên bảng/cột/index. ui_index giữ nguyên cho public/."""
+    blobs = dict(sorted(_blobs(source, commit, list(CODE_ROOTS), _code_indexable).items())[:MAX_CODE_FILES])
+    known = set(blobs)
+    paths = sorted(blobs)
+    files, words = {}, {}
+    for path, text in zip(paths, _read_blobs(source, [blobs[p][0] for p in paths])):
+        if path.endswith(".sql"):
+            names, imports = sql_names(text), []
+        else:
+            found = js_code_names(path, text)
+            names = found["names"]
+            imports = _uniq(resolved for resolved in
+                            (_resolve_code(path, spec, known) for spec in found["specs"]) if resolved)
+        files[path] = {"text": [(0, f" {name} ") for name in names], "imports": imports}
+        for word in {w for name in names for w in file_context.fold(name).split()}:
             words.setdefault(word, set()).add(path)
     return {"files": files, "words": words}
 

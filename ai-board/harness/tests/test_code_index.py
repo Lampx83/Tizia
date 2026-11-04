@@ -178,3 +178,56 @@ def test_refresh_notes_second_try_can_fix_and_budget_files_limits(repo, tmp_path
                                    budget=Budget(max_wall_clock_s=999), source=src, old_sha=sha, new_sha=sha2, path=path)
     assert out["updated"] == ["public/school.html"] and out["skipped"] == ["public/inline.html"]
 
+
+
+# ── chỉ mục thứ 2 (repo_index): code ngoài public/ cho câu hỏi backend/db ──────────────────────────
+
+def test_js_code_names_collects_exports_requires_and_route_strings():
+    js = ("const express = require('express');\nconst { save } = require('./store');\n"
+          "import { plan } from './plan.js';\n"
+          "router.get('/api/pharmacy/dispense', list);\napp.use('/api/pharmacy', router);\n"
+          "module.exports = { attachDispenseRoutes };\n")
+    found = code_index.js_code_names("server/contexts/_ai-generated/pharmacy/index.js", js)
+    assert "attachDispenseRoutes" in found["names"]
+    assert "store" in found["names"] and "plan" in found["names"]      # tên module tương đối nó require/import
+    assert "/api/pharmacy/dispense" in found["names"] and "/api/pharmacy" in found["names"]
+    assert "express" not in found["names"]                            # package npm không phải đường repo
+    assert set(found["specs"]) == {"express", "./store", "./plan.js"}
+
+
+def test_sql_names_reads_tables_columns_and_indexes():
+    sql = ("CREATE TABLE IF NOT EXISTS medicine_dispense (\n  dispense_id BIGSERIAL PRIMARY KEY,\n"
+           "  pharmacist_name TEXT NOT NULL\n);\n"
+           "CREATE INDEX ix_dispense_code ON medicine_dispense (dispense_id);\n"
+           "ALTER TABLE ai_tickets ADD COLUMN lease_mode TEXT;\n")
+    assert {"medicine_dispense", "dispense_id", "pharmacist_name", "ix_dispense_code", "ai_tickets"} \
+        <= set(code_index.sql_names(sql))
+
+
+def test_repo_index_covers_server_and_test_but_not_public_or_denied(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    _git(src, "init", "-q")
+    _git(src, "config", "user.email", "t@t")
+    _git(src, "config", "user.name", "t")
+    sha = _commit(src, {
+        "public/school.html": "<h1>Trường ảo</h1>",
+        "server/contexts/_ai-generated/pharmacy/index.js":
+            "const store = require('./store');\nrouter.get('/api/pharmacy/dispense', list);\n",
+        "server/contexts/_ai-generated/pharmacy/store.js": "module.exports = { save: () => 1 };\n",
+        "server/db/migrations/021-dispense.sql": "CREATE TABLE medicine_dispense (pharmacist_name TEXT);\n",
+        "test/pharmacy.test.js": "import './x';\n",
+        "server/ai-board/migrations/999-denied.sql": "CREATE TABLE denied_table (x TEXT);\n",
+        "server/ai-board/api/routes.js": "router.get('/api/ai-board', list);\n",
+    })
+    index = code_index.repo_index(str(src), sha)
+    assert set(index["files"]) == {"server/contexts/_ai-generated/pharmacy/index.js",
+                                   "server/contexts/_ai-generated/pharmacy/store.js",
+                                   "server/db/migrations/021-dispense.sql", "test/pharmacy.test.js"}
+    assert index["files"]["server/contexts/_ai-generated/pharmacy/index.js"]["imports"] == \
+        ["server/contexts/_ai-generated/pharmacy/store.js"]           # require('./store') → store.js có thật
+    assert "pharmacist" in index["words"] and "medicine" in index["words"]       # .sql góp tên bảng/cột
+    assert "api" in index["words"] and "dispense" in index["words"]              # route string
+    # public/ giữ nguyên ở ui_index; vùng AI Board (deny_paths) không được đọc
+    assert "public/school.html" in code_index.ui_index(str(src), sha)["files"]
+    assert not any(path.startswith("server/ai-board/") for path in index["files"])

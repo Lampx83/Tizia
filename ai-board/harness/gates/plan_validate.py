@@ -56,6 +56,7 @@ import file_context
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
 from runtime import coverage, levels
+from services import target_confidence
 from settings import DEFAULT_GATE25_FIXES, get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
@@ -882,6 +883,17 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 judge('unverified grounding', False, state['validator_note'])
         except ValueError as error:
             judge("source grounding", False, str(error))
+            # Trích dẫn không khớp: phân biệt "sai file" với "sai trích dẫn" bằng tín hiệu tất định trước khi chặn.
+            confidence = target_confidence.assess(
+                plan, {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
+            if (confidence['level'] == 'low' and not final_hit(plan, request, state, files)
+                    and 'không tìm thấy trích dẫn' in str(error)):
+                judge('target confidence', False, confidence['reason'])
+                return {'gate': 2.5, 'blocked': True, 'reason': 'plan_target_uncertain',
+                        'outcome': 'plan_target_uncertain', 'signals': [confidence['reason'], str(error)],
+                        'confidence': confidence,
+                        'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
+                        'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.'}
             return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
                     'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
                     'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',

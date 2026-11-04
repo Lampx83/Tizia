@@ -1,13 +1,16 @@
 """Sơ đồ repo của AI Board — gợi ý file liên quan, dựng tại chỗ ở đúng commit, không dùng công cụ ngoài.
 
 related(): file có chữ hiển thị / tên đường dẫn khớp câu hỏi (IDF, chuẩn hoá theo độ dài file) + 1 bước theo
-đồ thị import (file nó import và file import nó), trên code_index.ui_index (public/, RAM, theo commit).
+đồ thị import (file nó import và file import nó), trên 2 chỉ mục RAM theo commit: code_index.ui_index (public/)
+và code_index.repo_index (server/, test/ — tên export/import, chuỗi route, bảng/cột của .sql).
+Chỉ mục code chỉ nhận từ mà public/ KHÔNG có, nên câu hỏi chỉ về UI trả đúng danh sách như trước.
 closest(): file thật gần nhất với 1 đường dẫn plan chọn nhưng chưa tồn tại (bắt lỗi gõ, cổng 3).
 Chỉ là gợi ý — cổng vẫn phải đọc file thật trước khi kết luận.
 """
 from __future__ import annotations
 
 import difflib
+import itertools
 import math
 import re
 from pathlib import Path
@@ -17,18 +20,20 @@ from services import file_context
 
 ROOT = Path(__file__).resolve().parents[3]
 SEEDS = file_context.WEIGHTS["repomap_seeds"]
+# Câu hỏi nói về backend/db (route, api, migration, sql, server, dữ liệu) → chỉ mục code đứng trước.
+# Không có dấu hiệu này thì chỉ mục code chỉ nhận từ mà public/ không có → câu hỏi UI trả y danh sách cũ.
+CODE_INTENT = re.compile(r"/(?:api|static|assets)\b|\b(?:route|router|endpoint|api|migration|sql|database|db"
+                         r"|backend|server|middleware|schema|test)\b|\bdu lieu\b")
 
 
 def _tokens(text: str) -> set[str]:
     return {w for w in re.split(r"[^a-z0-9]+", file_context.fold(text)) if len(w) >= file_context.WEIGHTS["min_term_len"]}
 
 
-def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHTS["repomap_limit"]) -> list[str]:
-    """File liên quan tới câu hỏi, file khớp nhất trước rồi hàng xóm import của nó. Rỗng khi không khớp gì."""
-    commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
-    index = code_index.ui_index(source, commit)
+def _ranked(index: dict, terms: set[str]) -> list[str]:
+    """File của 1 chỉ mục khớp `terms`, khớp nhất trước: IDF (từ quá phổ biến bỏ) + tên file/thư mục khớp,
+    chia theo căn bậc hai số từ của file."""
     files, total = index["files"], max(len(index["files"]), 1)
-    terms = _tokens(question)
     score = dict.fromkeys(files, 0.0)
     for term in terms:
         holders = index["words"].get(term, set())
@@ -39,10 +44,28 @@ def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHT
             if term in _tokens(path):  # tên file/thư mục khớp: tín hiệu mạnh hơn 1 từ trong nội dung
                 score[path] += math.log(total)
     size = {p: len({w for _, t in files[p]["text"] for w in t.split()}) or 1 for p in files}
-    ranked = sorted((p for p in files if score[p] > 0), key=lambda p: -score[p] / math.sqrt(size[p]))
+    return sorted((p for p in files if score[p] > 0), key=lambda p: -score[p] / math.sqrt(size[p]))
+
+
+def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHTS["repomap_limit"]) -> list[str]:
+    """File liên quan tới câu hỏi, file khớp nhất trước rồi hàng xóm import của nó. Rỗng khi không khớp gì.
+    Câu về backend/db (CODE_INTENT) → chỉ mục code xếp trước, chấm trên mọi từ của câu. Câu không có dấu
+    hiệu đó → chỉ mục code chỉ nhận từ public/ không có, nên câu hỏi UI trả đúng danh sách như trước."""
+    commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    terms = _tokens(question)
+    intent = bool(CODE_INTENT.search(f" {file_context.fold(question)} "))
+    ui = code_index.ui_index(source, commit)
+    # public/ đã giải thích từ này (nội dung hoặc tên file) → không dùng nó để chấm code khi câu không rõ backend.
+    public = set(ui["words"]) | {token for path in ui["files"] for token in _tokens(path)}
+    code_terms = terms if intent else terms - public
+    code = code_index.repo_index(source, commit) if code_terms else {"files": {}, "words": {}}
+    ui_ranked, code_ranked = _ranked(ui, terms), _ranked(code, code_terms)
+    ranked = (code_ranked, ui_ranked) if intent else (ui_ranked, code_ranked)
     out: list[str] = []
-    for seed in ranked[:SEEDS]:
-        out += [seed, *files[seed]["imports"], *(p for p, e in files.items() if seed in e["imports"])]
+    for seed in (p for pair in itertools.zip_longest(ranked[0][:SEEDS], ranked[1][:SEEDS]) for p in pair if p):
+        index = ui if seed in ui["files"] else code
+        out += [seed, *index["files"][seed]["imports"],
+                *(path for path, entry in index["files"].items() if seed in entry["imports"])]
     return list(dict.fromkeys(out))[:limit]
 
 

@@ -199,7 +199,8 @@ def test_a_grounding_veto_about_a_real_plan_file_still_blocks(tmp_path):
 
     out = plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state)
 
-    assert out["blocked"] is True and out["reason"] == "plan_ungrounded"
+    # Vẫn chặn: verdict có bằng chứng thì không bị hạ thành "chưa rõ mục tiêu".
+    assert out["blocked"] is True and out["reason"].startswith("plan_")
 
 
 def test_an_unverifiable_objection_without_records_is_unverified_not_blocking(tmp_path):
@@ -594,7 +595,7 @@ def test_a_second_identical_failure_blocks_exactly_as_before(tmp_path):
     assert out["retry"].startswith("repairable_retry")  # the admin sees why the plan was retried
 
 
-def test_a_grounding_block_without_final_hit_is_unchanged(tmp_path):
+def test_a_low_confidence_target_is_parked_with_its_own_reason(tmp_path):
     _target_repo(tmp_path)
     plan = _target_plan()
     models = _ValidationQueue(plan, WRONG)
@@ -605,8 +606,23 @@ def test_a_grounding_block_without_final_hit_is_unchanged(tmp_path):
 
     assert plan_validate.final_hit(plan, request, state) is False
     assert len(_validator_prompts(models)) == 1
-    assert set(out) == {"gate", "blocked", "reason", "outcome", "signals", "evidence", "public_message"}
-    assert "validator_retry" not in state
+    assert out["blocked"] is True and out["reason"] == "plan_target_uncertain"
+    assert out["confidence"]["level"] == "low" and out["confidence"]["reason"]
+    assert "validator_retry" not in state  # a wrong target is not repaired by re-asking
+
+
+def test_a_high_confidence_target_keeps_the_old_grounding_block(tmp_path, monkeypatch):
+    _target_repo(tmp_path)
+    plan = _target_plan()
+    models = _ValidationQueue(plan, WRONG)
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    monkeypatch.setattr(plan_validate.target_confidence, "assess",
+                        lambda *a, **k: {"level": "high", "signals": {}, "candidates": [], "reason": ""})
+
+    request = _named_request("public/khac.html")
+    out = plan_validate.run(request, deps_with(models), Budget(), state)
+
+    assert out["reason"] == "plan_ungrounded" and "confidence" not in out
 
 
 def test_an_ai_board_path_still_blocks_on_the_first_verdict(tmp_path):
