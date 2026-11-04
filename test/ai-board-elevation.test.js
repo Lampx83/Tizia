@@ -7,6 +7,9 @@ import express from 'express';
 import { openBoard } from './support/ai-board-db.js';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/api/routes.js';
+import { createHsmStore } from '../server/ai-board/hsm/store.js';
+import { CONTRACT_HASH } from '../server/ai-board/hsm/contract.js';
+import { CAPABILITY_CATALOG } from '../server/ai-board/security/policy.js';
 import { claimAndRun, corePlan, protectedPlan, submit } from './support/ai-board-scenarios.js';
 
 const USERS = [
@@ -241,6 +244,84 @@ test('unknown requests are 404 and a decision needs a known decision and a reaso
     await assert.rejects(store.requestElevation(id, { paths: ['../escape.js'], levels: 'core', reason: 'x' }),
       { status: 422, code: 'invalid_path' });
     await assert.rejects(store.requestElevation(id, { paths: [], reason: 'x' }), { status: 422, code: 'elevation_scope_required' });
+  } finally { db.close(); }
+});
+
+// Gate 3 (hsm.authorizeAction) reads ai_authorizations: an approved elevation covering the plan is the grant.
+const gate3 = (store, rootId, c) => createHsmStore(store).authorizeAction(rootId, {
+  run_id: c.run.id, worker_id: c.lease.workerId, lease_token: c.lease.leaseToken,
+  action: 'run_in_sandbox', contract_hash: CONTRACT_HASH,
+});
+
+test('an approved elevation authorizes its validated protected plan at gate 3 without a manual authorize call', async () => {
+  const { db, store } = await fixture();
+  try {
+    const { request_id: id, root_ticket_id: rootId } = await newRequest(store, 'gate3-elev');
+    await store.requestElevation(id, { paths: [CONTENT], levels: 'protected', reason: 'Sửa dịch vụ nội dung.' });
+    await store.decideElevation(id, { decision: 'approve', reason: 'Đồng ý.', adminUserId: 9 });
+
+    const claimed = await claimAndRun(store, 'w1');
+    const planned = await submit(store, claimed, protectedPlan(), 'plan-elev-gate3');
+    assert.equal(planned.status, 'planned', 'the elevated protected plan is ready to execute');
+    const root = await db.d.get('SELECT plan_hash, plan_revision FROM ai_tickets WHERE id=?', [rootId]);
+    assert.equal(root.plan_hash, planned.plan_hash);
+    const grants = await db.d.all('SELECT plan_hash, plan_revision, admin_user_id FROM ai_authorizations WHERE root_ticket_id=?',
+      [rootId]);
+    assert.deepEqual(grants, [{ plan_hash: root.plan_hash, plan_revision: root.plan_revision, admin_user_id: 9 }]);
+
+    const action = await gate3(store, rootId, claimed);
+    assert.equal(action.authorized, true);
+    assert.deepEqual([action.plan_hash, action.plan_revision], [root.plan_hash, root.plan_revision]);
+  } finally { db.close(); }
+});
+
+test('an unelevated protected plan still waits for the admin authorization', async () => {
+  const { db, store } = await fixture();
+  try {
+    const { root_ticket_id: rootId } = await newRequest(store, 'gate3-plain');
+    const claimed = await claimAndRun(store, 'w1');
+    const planned = await submit(store, claimed, protectedPlan(), 'plan-plain-gate3');
+    assert.equal(planned.status, 'waiting_authorization');
+    assert.equal((await db.d.get('SELECT COUNT(*) AS n FROM ai_authorizations WHERE root_ticket_id=?', [rootId])).n, 0);
+
+    // The official admin route is still the only way those plans get authorized.
+    await assert.rejects(gate3(store, rootId, claimed), { status: 409, code: 'action_not_authorized' });
+    await store.releaseLease(rootId, { ...claimed.lease, outcome: 'planned', idempotencyKey: 'release-plain-gate3' });
+    await store.authorizePlan(rootId, planned.plan_hash, 9);
+    const root = await db.d.get('SELECT plan_hash, plan_revision FROM ai_tickets WHERE id=?', [rootId]);
+    assert.deepEqual(await db.d.get('SELECT plan_hash, plan_revision FROM ai_authorizations WHERE root_ticket_id=?', [rootId]),
+      { plan_hash: root.plan_hash, plan_revision: root.plan_revision });
+
+    const resumed = await claimAndRun(store, 'w1');
+    await store.resumeAuthorizedPlan(rootId, { ...resumed.lease, runId: resumed.run.id });
+    assert.equal((await gate3(store, rootId, resumed)).authorized, true);
+  } finally { db.close(); }
+});
+
+test('a grant for one plan hash/revision does not authorize another plan', async () => {
+  const { db, store } = await fixture();
+  try {
+    const { request_id: id, root_ticket_id: rootId } = await newRequest(store, 'gate3-other');
+    await store.requestElevation(id, { paths: [CONTENT], levels: 'protected', reason: 'Sửa dịch vụ nội dung.' });
+    await store.decideElevation(id, { decision: 'approve', reason: 'Đồng ý.', adminUserId: 9 });
+    const claimed = await claimAndRun(store, 'w1');
+    const planned = await submit(store, claimed, protectedPlan(), 'plan-elev-other');
+    assert.equal(planned.status, 'planned');
+
+    // Same ticket, another revision and hash, validated elsewhere: the grant must not travel with the ticket.
+    const root = await db.d.get('SELECT plan_hash, plan_revision FROM ai_tickets WHERE id=?', [rootId]);
+    const otherHash = 'c'.repeat(64), otherRevision = root.plan_revision + 1, now = Date.now();
+    await db.d.run(`INSERT INTO ai_plans(root_ticket_id, revision, plan_hash, plan_json, status, tier,
+      capability_policy_hash, created_at) VALUES (?, ?, ?, '{}', 'valid', 'protected', ?, ?)`,
+    [rootId, otherRevision, otherHash, CAPABILITY_CATALOG.hash, now]);
+    await db.d.run('UPDATE ai_tickets SET plan_hash=?, plan_revision=? WHERE id=?', [otherHash, otherRevision, rootId]);
+    await db.d.run('UPDATE ai_runs SET plan_hash=?, plan_revision=? WHERE id=?', [otherHash, otherRevision, claimed.run.id]);
+    await assert.rejects(gate3(store, rootId, claimed), { status: 409, code: 'action_not_authorized' });
+
+    // Back on the validated plan the same lease is authorized again.
+    await db.d.run('UPDATE ai_tickets SET plan_hash=?, plan_revision=? WHERE id=?', [root.plan_hash, root.plan_revision, rootId]);
+    await db.d.run('UPDATE ai_runs SET plan_hash=?, plan_revision=? WHERE id=?', [root.plan_hash, root.plan_revision, claimed.run.id]);
+    assert.equal((await gate3(store, rootId, claimed)).authorized, true);
   } finally { db.close(); }
 });
 

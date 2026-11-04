@@ -73,11 +73,51 @@ def test_prompt_fences_student_text_like_node():
     assert prompt.count("NOI_DUNG>>>") == 1 and "H. Gian lận" in prompt
 
 
-def test_shadow_danger_keeps_the_probabilities_but_never_escalates():
+def test_shipped_modes_are_active_escalate_only_for_danger_and_shadow_for_clarity():
+    tasks = classifier.CLASSIFIER["tasks"]
+    assert tasks["danger"]["mode"] == "active"
+    assert tasks["clarity"]["mode"] == "shadow"  # clear_min/split_min are hand-set, never fitted
+    assert tasks["danger"]["scoring"]["review_min"] == 0.5
+    assert tasks["danger"]["scoring"]["reject_min"] is None  # nothing is auto-rejected
+
+
+def test_shadow_danger_keeps_the_probabilities_but_never_escalates(monkeypatch):
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "shadow")
     deps = deps_with(Classifying([["F", math.log(0.8)], ["A", math.log(0.2)]]))
     out = intake_guard.run("Thêm bài", "một bài lịch sử", deps, Budget())
     assert out["verdict"] == "allow" and out["classifier"]["escalate"] is False and out["classifier"]["shadow"] is True
     assert out["classifier"]["probs"]["politics_religion"] > 0.7
+
+
+def test_active_danger_escalates_a_risky_request_and_leaves_a_benign_one_alone():
+    risky = intake_guard.run("Thêm bài", "một bài lịch sử",
+                             deps_with(Classifying([["F", math.log(0.9)], ["A", math.log(0.1)]])), Budget())
+    assert risky["verdict"] == "human_review" and risky["classifier"].get("shadow", False) is False
+    assert "model_politics_religion" in risky["labels"] and risky["classifier"]["reject"] is False
+    benign = intake_guard.run("Đổi màu nút", "trang giới thiệu, nút xanh hơn",
+                              deps_with(Classifying([["A", math.log(0.95)], ["F", math.log(0.05)]])), Budget())
+    assert benign["verdict"] == "allow" and benign["classifier"]["escalate"] is False
+
+
+def test_active_danger_is_fail_open_on_a_parser_failure_or_no_budget(monkeypatch):
+    parser = intake_guard.run("Đổi màu nút", "trang giới thiệu, nút xanh hơn",
+                              deps_with(Classifying([["not-a-label", 0.0]])), Budget())
+    assert parser["verdict"] == "allow" and parser.get("classifier") is None, parser
+    monkeypatch.setattr(classifier, "classify", lambda *a, **k: None)  # budget/outage path: no signal
+    broke = intake_guard.run("Đổi màu nút", "trang giới thiệu, nút xanh hơn",
+                             deps_with(Classifying([["F", math.log(0.9)], ["A", math.log(0.1)]])), Budget())
+    assert broke["verdict"] == "allow" and broke.get("classifier") is None, broke
+
+
+def test_classify_skips_the_call_without_budget_or_model():
+    models = Classifying([["F", math.log(0.9)], ["A", math.log(0.1)]])
+    deps = deps_with(models)
+    assert classifier.classify("danger", "x", deps, Budget(max_model_calls=0), gate=1) is None
+    assert classifier.danger("x", deps, Budget(max_model_calls=0), gate=1) is None
+    assert not any(c["model"] == "fake-classifier" for c in models.calls)
+    unset = deps_with(Classifying([["F", math.log(0.9)], ["A", math.log(0.1)]]))
+    unset.models.classifier_model = ""
+    assert classifier.classify("danger", "x", unset, Budget(), gate=1) is None
 
 
 def test_intake_escalates_to_human_review_when_the_model_is_sure_of_a_danger(monkeypatch):
@@ -216,6 +256,7 @@ def test_shadow_mode_never_rejects(monkeypatch):
     scoring = {**classifier.CLASSIFIER["tasks"]["danger"]["scoring"], "reject_min": 0.7}
     monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "scoring", scoring)
     monkeypatch.setattr(classifier, "classify", lambda *a, **k: {"model": "m", "probs": GOLDEN["mixed"][0]})
+    monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "shadow")
     shadow = classifier.danger("x", None, None, gate=1)
     assert (shadow["shadow"], shadow["escalate"], shadow["reject"]) == (True, False, False)
     monkeypatch.setitem(classifier.CLASSIFIER["tasks"]["danger"], "mode", "active")

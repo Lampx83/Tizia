@@ -6,7 +6,7 @@ import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../../ser
 
 export const KEY = 'fixture-worker-key-32-characters-long';
 export const text = (name = 'frontend-example', body = '1. Keep labels clear.') => `---\nname: ${name}\ndescription: UI guidance\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n${body}\n`;
-export async function setup() {
+export async function setup({ classifySkillText } = {}) {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'it'], [9, 'admin', 'Admin', 'admin', null]] });
   await db.d.exec('CREATE TABLE sessions(token TEXT PRIMARY KEY,user_id BIGINT REFERENCES users(id),expires_at BIGINT NOT NULL)');
   await db.d.run('INSERT INTO sessions(token,user_id,expires_at) VALUES (?,?,?)', ['skill-admin-session',9,Date.now()+86400000]);
@@ -21,7 +21,7 @@ export async function setup() {
   const auth = (req, res, next) => req.user ? next() : res.sendStatus(401);
   const admin = (req, res, next) => req.user?.role === 'admin' ? next() : res.sendStatus(403);
   const csrf = (req, res, next) => req.get('x-csrf-fixture') === 'yes' ? next() : res.sendStatus(403);
-  attachAiBoardRequestRoutes(app, { store, requireAuth: auth, requireAdmin: admin, requireEnrolled: auth, requireStrictCsrf: csrf });
+  attachAiBoardRequestRoutes(app, { store, requireAuth: auth, requireAdmin: admin, requireEnrolled: auth, requireStrictCsrf: csrf, classifySkillText });
   attachAiBoardWorkerRoutes(app, { store, env: { AI_BOARD_WORKER_KEY: KEY } });
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));

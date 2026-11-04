@@ -166,17 +166,32 @@ const clockText = (ms) => {
 
 const toneOf = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.8 ? 'warn' : 'ok');
 const fmt = (n) => Number(n).toLocaleString('en-US');
+const fmtVi = (n) => Number(n).toLocaleString('vi-VN');
 
 const pct = (n) => `${Math.round(n * 100)}%`;
-const signed = (n) => `${n > 0 ? '+' : ''}${fmt(n)}`;
 
-// Behaviour cells from trace.behavior (services/behavior.js): context growth, output repetition, node topology.
+// Ticket-wide model tokens: every model call of every run. Never the last step's context window or its delta.
+const callMetrics = (trace) => (trace?.runs || []).flatMap(run => (run.calls || []).map(call => call.evidence?.metrics || {}));
+const tokenCell = (trace) => {
+  const totals = trace?.totals;
+  const measured = callMetrics(trace).filter(m => Number.isFinite(m.tokens_in) || Number.isFinite(m.tokens_out));
+  const hasTotals = Number.isFinite(totals?.tokens_in) || Number.isFinite(totals?.tokens_out);
+  const totalsSum = numberOr(totals?.tokens_in) + numberOr(totals?.tokens_out);
+  if (hasTotals && (totalsSum > 0 || measured.length)) {
+    return { label: 'Token', big: `${fmtVi(totalsSum)} token`, sub: '', tone: 'ok', bar: false };
+  }
+  if (measured.length) {
+    const sum = measured.reduce((n, m) => n + numberOr(m.tokens_in) + numberOr(m.tokens_out), 0);
+    return { label: 'Token', big: `${fmtVi(sum)} token`, sub: '', tone: 'ok', bar: false };
+  }
+  return { label: 'Token', big: 'No data', sub: '', tone: 'idle', bar: false };
+};
+
+// Behaviour cells from trace.behavior (services/behavior.js): output repetition and node topology.
 function behaviorCells(b) {
   const tone = (warn, known) => (!known ? 'idle' : warn ? 'warn' : 'ok');
-  const ctx = b?.context, out = b?.output, topo = b?.topology;
+  const out = b?.output, topo = b?.topology;
   return [
-    { label: 'Context', big: ctx?.tokens_in == null ? 'No data' : `${fmt(ctx.tokens_in)} / ${fmt(ctx.limit)} token`,
-      sub: ctx?.tokens_in == null ? '' : `${signed(ctx.delta ?? 0)} token so với bước trước`, tone: ctx?.tokens_in == null ? 'idle' : 'ok', bar: false },
     { label: 'Output', big: out?.distinct_line_ratio == null ? 'No data' : `${pct(out.distinct_line_ratio)} distinct lines`,
       sub: out?.compression_ratio == null ? 'Compression: short output' : `Compression ${out.compression_ratio}${out.warn ? ' · repetitive' : ''}`, tone: tone(out?.warn, out?.distinct_line_ratio != null), bar: false },
     { label: 'Topology', big: topo?.entropy == null ? 'Too few steps' : `Entropy ${topo.entropy}`,
@@ -216,7 +231,7 @@ export function budgetCells(trace = {}, now = Date.now()) {
     const big = eta.eta_ms < 60000 ? 'under 1 min' : `about ${Math.round(eta.eta_ms / 60000)} min`;
     cells.push({ label: 'Time left', big, sub: SOURCE_TEXT[eta.source], tone: 'idle', bar: false });
   } else cells.push({ label: 'Time left', big: 'No estimate', sub: 'No earlier run timed the next steps', tone: 'idle', bar: false });
-  return [...cells, ...behaviorCells(trace.behavior)];
+  return [...cells, tokenCell(trace), ...behaviorCells(trace.behavior)];
 }
 
 const ICON = {

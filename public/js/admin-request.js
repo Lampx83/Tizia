@@ -6,7 +6,7 @@ import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
-import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261103a';
+import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261104b';
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
 
@@ -15,6 +15,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&
 const fmt = (t) => t ? clockFmt(t) : 'chưa có';
 const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-VN');
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
+  skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
+const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+  rejected: 'Từ chối', cancelled: 'Đã hủy' };
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
@@ -44,10 +48,10 @@ async function post(path, body) {
   return data;
 }
 
-const API_ERROR = { folder_not_approved: 'chức năng chưa được duyệt; hãy duyệt ở tab "Chức năng" trước', folder_archived: 'chức năng đã được lưu trữ',
-  request_closed: 'yêu cầu đã đóng', budget_ceiling: 'đã vượt trần ngân sách, cần tạo yêu cầu mới', plan_not_found: 'không tìm thấy kế hoạch này (có thể đã đổi, hãy tải lại trang)',
-  core_human_owned: 'phần lõi chỉ con người làm', csrf_invalid: 'phiên đã hết hạn, hãy tải lại trang', 401: 'cần đăng nhập lại', 403: 'bạn không có quyền thực hiện', 404: 'không tìm thấy',
-  409: 'trạng thái đã thay đổi, hãy tải lại trang', 429: 'thao tác quá nhanh, thử lại sau ít giây', 500: 'máy chủ gặp lỗi, thử lại sau', 'Failed to fetch': 'mất kết nối máy chủ' };
+const API_ERROR = { folder_not_approved: 'chức năng chưa được duyệt. Duyệt ở tab "Chức năng" trước', folder_archived: 'chức năng đã được lưu trữ',
+  request_closed: 'yêu cầu đã đóng', budget_ceiling: 'đã vượt trần ngân sách. Cần tạo yêu cầu mới', plan_not_found: 'không tìm thấy kế hoạch này. Kế hoạch có thể đã đổi; tải lại trang',
+  core_human_owned: 'phần lõi chỉ con người làm', csrf_invalid: 'phiên đã hết hạn. Tải lại trang', 401: 'cần đăng nhập lại', 403: 'bạn không có quyền thực hiện', 404: 'không tìm thấy',
+  409: 'trạng thái đã thay đổi. Tải lại trang', 429: 'thao tác quá nhanh. Thử lại sau ít giây', 500: 'máy chủ gặp lỗi. Thử lại sau', 'Failed to fetch': 'mất kết nối máy chủ' };
 const errText = (e) => { const m = String(e?.message ?? e); return API_ERROR[m] || ROLLOUT_ERROR[m] || `lỗi không rõ (mã ${m})`; };
 
 function renderAtts(list) {
@@ -71,7 +75,7 @@ function renderThread(messages) {
 
 function renderDecisions(decisions) {
   if (!decisions.length) return '';
-  return `<h2>Quyết định AI (${decisions.length})</h2>` + decisions.map(d => `<div class="blk">
+  return `<h2>AI decisions (${decisions.length})</h2>` + decisions.map(d => `<div class="blk">
     <div class="who">${fmt(d.created_at)} · ${esc(d.decided_by)}${d.model ? ' · ' + esc(d.model) : ''} · độ tin cậy ${(d.confidence || 0).toFixed(2)}</div>
     <div><b>${esc(d.action)}</b> → ${esc(d.status_applied)}${d.priority_score != null ? ` · ưu tiên ${esc(d.priority_score)}` : ''}</div>
     ${d.reason ? `<div class="meta">${esc(d.reason)}</div>` : ''}
@@ -138,7 +142,7 @@ function eventDetail(e) {
   const rows = e.event_type === 'request_classified' ? classifiedRows(data) : flat.slice(0, 6).map(([k, v]) => [esc(k), esc(v)]);
   const covered = e.event_type !== 'request_classified' && flat.length === Object.keys(data).length && flat.length <= 6;
   return `${rows.length ? `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
-    ${covered ? '' : `<details class="raw"><summary>raw JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`}`;
+    ${covered ? '' : `<details class="raw"><summary>JSON gốc</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`}`;
 }
 
 function renderEvents(events) {
@@ -174,6 +178,7 @@ const CHILD_STATE = {
   queued: ['idle', 'chờ làm'], waiting_authorization: ['warn', 'chờ cho phép'], human_owned: ['warn', 'người làm'],
   done: ['ok', 'xong'], failed: ['bad', 'lỗi'], cancelled: ['bad', 'đã dừng'], invalidated: ['idle', 'bỏ (kế hoạch cũ)'],
 };
+const childStatus = (s) => CHILD_STATE[s]?.[1] || s;
 const code = (s) => `<code>${esc(s)}</code>`;
 // Mức rủi ro cổng 5.5 của lượt gần nhất có đánh giá.
 const riskOf = (runs) => [...runs].reverse().flatMap((r) => r.gates || [])
@@ -201,7 +206,7 @@ function stepState(child, root, execution, order) {
 }
 
 function renderPlan(p, root, children, trace) {
-  if (!p) return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2><p class="meta">${root.status === 'queued' && root.phase === 'needs_replan' ? 'Đang chờ lập kế hoạch mới; kế hoạch trước đã hết hiệu lực.' : 'Chưa có kế hoạch hiện hành.'}</p></section>`;
+  if (!p) return `<section id="current-plan"><h2>Plan</h2><p class="meta">${root.status === 'queued' && root.phase === 'needs_replan' ? 'Đang chờ lập kế hoạch mới. Kế hoạch trước đã hết hiệu lực.' : 'Chưa có kế hoạch hiện hành.'}</p></section>`;
   const plan = p.plan || {};
   const [approvalState, approval] = planApproval(p, root);
   const folderWait = root.status === 'waiting_authorization' && root.internal_reason === 'folder_not_approved';
@@ -213,11 +218,11 @@ function renderPlan(p, root, children, trace) {
   const fileList = plan.allowed_scope || p.allowed_scope || [];
   const capList = plan.capabilities || p.capabilities || [];
   const requestTitle = view?.thread?.request?.title || '';
-  return `<section id="current-plan"><h2>Kế hoạch hiện hành</h2>
+  return `<section id="current-plan"><h2>Plan</h2>
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
       <dl class="kv">
-        ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện; không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
+        ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện. Không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
         <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
         <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</dd>
         <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || 'chưa có'}</dd>
@@ -237,7 +242,7 @@ function renderPlan(p, root, children, trace) {
           <div class="meta">AI tự sửa thêm sau khi kiểm tra chưa đạt</div></li>`;
       }).join('')}</ol>
       ${folderWait ? `<div class="confirm folder-wait" role="status"><div class="confirm-title">Chức năng này chưa được duyệt</div>
-        <div class="meta">Duyệt chức năng một lần ở tab "Chức năng"; kế hoạch này sẽ tự được cho phép chạy.</div>
+        <div class="meta">Duyệt chức năng một lần ở tab "Chức năng". Kế hoạch này sẽ tự được cho phép chạy.</div>
         <div class="row"><a class="btn ok" href="/admin.html#features" target="_top">Mở tab Chức năng</a></div></div>` : ''}
       ${waiting && !folderWait ? (ui.authorizeConfirm === p.plan_hash
         ? `<div class="confirm" role="alertdialog" aria-label="Cho phép thực hiện kế hoạch">
@@ -247,7 +252,7 @@ function renderPlan(p, root, children, trace) {
                <li>Quyền: ${capList.map(capText).join(', ') || 'chưa có'}</li>
                <li>Rủi ro: <b>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</b> · mức duyệt: ${esc(TIER_TEXT[p.tier] || p.tier)}</li>
              </ul>
-             <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch này; chưa có gì được phát hành.</div>
+             <div class="meta">Worker sẽ chạy các cổng 3 → 5.5 trên kế hoạch này. Chưa có gì được phát hành.</div>
              <div class="row" style="margin-top:8px">
                <button class="btn ok" data-action="authorize-go" data-root="${esc(root.id)}" data-hash="${esc(p.plan_hash)}">Cho phép, bắt đầu thực hiện</button>
                <button class="btn" data-action="authorize-close">Thôi, chưa cho phép</button>
@@ -267,8 +272,8 @@ async function submitReconcile(btn) {
     const r = await post(`/api/admin/ai-board/tickets/${root.id}/unknown-writes/${encodeURIComponent(f.identity)}/reconcile`,
       { decision: f.decision, reason: f.reason.trim(), evidence: { note: f.evidence.trim() }, resume: !!f.resume });
     ui.reconcile = null;
-    ui.flash = r.resumed ? 'Đã chốt bước ghi; worker sẽ chạy tiếp ở lượt tới.'
-      : r.remaining_open ? `Đã chốt; còn ${r.remaining_open} bước chờ đối chiếu.` : 'Đã chốt bước ghi. Yêu cầu vẫn dừng đến khi bạn cho chạy tiếp.';
+    ui.flash = r.resumed ? 'Đã chốt bước ghi. Worker sẽ chạy tiếp ở lượt tới.'
+      : r.remaining_open ? `Đã chốt. Còn ${r.remaining_open} bước chờ đối chiếu.` : 'Đã chốt bước ghi. Yêu cầu vẫn dừng đến khi bạn cho chạy tiếp.';
   } catch (e) {
     f.msg = `Không chốt được: ${errText(e)}`;
   }
@@ -282,7 +287,7 @@ async function authorizePlan(btn) {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/authorize-plan`, { plan_hash: btn.dataset.hash });
     ui.authorizeConfirm = null;
     ui.authorizeMsg = '';
-    ui.flash = 'Đã cho phép; worker sẽ nhận ở lượt tới.';
+    ui.flash = 'Đã cho phép. Worker sẽ nhận ở lượt tới.';
   } catch (e) {
     ui.authorizeMsg = `Không cho phép được: ${errText(e)}`;
   }
@@ -295,7 +300,7 @@ const ADMIN_ACTION = { note: 'ghi chú', reject: 'từ chối', authorize_plan: 
   rollback: 'hoàn tác', extend_budget: 'gia hạn ngân sách', retry_transient: 'chạy lại sau lỗi hạ tầng', acknowledge_data_step: 'xác nhận bước dữ liệu' };
 const managedLine = (m) => `<div class="meta" data-managed>${m
   ? `Phụ trách: <b>${esc(m.managed_by_name || '#' + m.managed_by)}</b> từ ${fmt(m.claimed_at)}${m.last_admin_id !== m.managed_by ? ` · gần nhất ${esc(m.last_admin_name || '#' + m.last_admin_id)}` : ''} · ${esc(ADMIN_ACTION[m.last_action] || m.last_action)} ${fmt(m.last_action_at)}`
-  : 'Chưa có admin nào phụ trách; admin đầu tiên thao tác sẽ nhận yêu cầu.'}</div>`;
+  : 'Chưa có admin nào phụ trách. Admin đầu tiên thao tác sẽ nhận yêu cầu.'}</div>`;
 function renderActions(request, trace) {
   const root = trace?.root;
   const candidate = trace?.candidate;
@@ -308,11 +313,11 @@ function renderActions(request, trace) {
   if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
-      ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng. Hạn mức cấu hình trong contract.json; đổi xong cần triển khai lại mới áp dụng, rồi bấm Chạy lại.</p>` : ''}
+      ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng. Hạn mức nằm trong contract.json. Đổi xong phải triển khai lại rồi bấm Chạy lại.</p>` : ''}
       ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
-        title="Đã xong một phần plan; chạy nốt phần còn lại từ checkpoint, không lập plan mới">Tiếp tục phần còn lại</button>` : ''}
+        title="Kế hoạch đã xong một phần. Chạy nốt phần còn lại từ chỗ đã dừng. Không lập kế hoạch mới.">Tiếp tục phần còn lại</button>` : ''}
       ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
-        title="Lỗi hạ tầng thoáng qua (GPU dùng chung); chạy lại khi bạn thấy GPU rảnh">Chạy lại ngay</button>` : ''}
+        title="Lỗi hạ tầng tạm thời (GPU dùng chung). Chạy lại khi GPU rảnh.">Chạy lại ngay</button>` : ''}
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
         title="${busy ? 'AI Board đang xử lý; chờ lượt này xong.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
@@ -328,7 +333,7 @@ async function retryTransient(btn) {
   btn.disabled = true;
   try {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/retry-transient`, {});
-    ui.flash = 'Đã đưa yêu cầu về hàng đợi; worker sẽ nhận ở lượt tới.';
+    ui.flash = 'Đã đưa yêu cầu về hàng đợi. Worker sẽ nhận ở lượt tới.';
   } catch (e) {
     ui.flash = `Không chạy lại được: ${errText(e)}`;
     btn.disabled = false;
@@ -342,8 +347,8 @@ function renderConfirm(request, candidate) {
   const consequences = rollback ? [
     `AI Board kiểm tra nhánh ${code(candidate?.branch)} (${esc(candidate?.commits?.length)} commit, sửa ${files.map(code).join(', ') || 'chưa có'}).`,
     'Nếu nhánh chưa được merge: xóa nhánh. Web đang chạy không đổi vì thay đổi chưa từng lên web.',
-    'Nếu đã merge vào dev/main: tạo nhánh revert mới. Cần người mở PR và merge nhánh đó để gỡ thay đổi khỏi web.',
-    'Revert chỉ gỡ code. Trường dữ liệu đã được mở rộng và bản ghi người dùng đã ghi vẫn được giữ, không bị hoàn tác theo.',
+    'Nếu đã merge vào dev/main: tạo nhánh revert mới. Người khác phải mở PR và merge nhánh đó để gỡ thay đổi khỏi web.',
+    'Revert chỉ gỡ code. Trường dữ liệu mới và bản ghi người dùng vẫn giữ nguyên, không bị hoàn tác.',
   ] : [
     'Yêu cầu chuyển sang "Từ chối", AI Board dừng mọi lượt đang chạy của yêu cầu này.',
     'AI Board chưa tạo thay đổi nào cho yêu cầu này nên không có gì phải gỡ.',
@@ -372,7 +377,7 @@ async function submitConfirm(btn) {
   try {
     if (ui.confirm === 'rollback') {
       const r = await post(`/api/admin/ai-board/requests/${REQUEST_ID}/rollback`, { confirm: typed });
-      ui.flash = r.duplicate ? 'Yêu cầu hoàn tác đã được gửi trước đó.' : 'Đã gửi yêu cầu hoàn tác; worker sẽ nhận ở lượt tới.';
+      ui.flash = r.duplicate ? 'Yêu cầu hoàn tác đã được gửi trước đó.' : 'Đã gửi yêu cầu hoàn tác. Worker sẽ nhận ở lượt tới.';
     } else {
       await post(`/api/requests/${REQUEST_ID}/status`, { status: 'rejected', note: 'Quản trị viên đã hủy yêu cầu.', confirm: typed });
       ui.flash = 'Đã hủy yêu cầu.';
@@ -400,8 +405,8 @@ function reconcileForm(write, writes) {
     <fieldset><legend>Kết quả thực tế của bước ghi</legend>
     ${Object.entries(WRITE_DECISION).map(([k, label]) => `<label class="rf-opt"><input type="radio" name="decision" value="${k}" data-rf="decision"${f.decision === k ? ' checked' : ''}> ${esc(label)}</label>`).join('')}</fieldset>
     <label class="rf-field">Lý do (bắt buộc)<textarea data-rf="reason" rows="2" maxlength="2000">${esc(f.reason)}</textarea></label>
-    <label class="rf-field">Bằng chứng đã kiểm tra, ví dụ mã biên nhận hoặc kết quả đối chiếu (bắt buộc)<textarea data-rf="evidence" rows="3" maxlength="4000">${esc(f.evidence)}</textarea></label>
-    ${lastOpen ? `<label class="rf-opt"><input type="checkbox" data-rf="resume"${f.resume ? ' checked' : ''}> Cho worker chạy tiếp ngay sau khi chốt (chỉ khi đây là bước mở cuối cùng)</label>` : ''}
+    <label class="rf-field">Bằng chứng đã kiểm tra, ví dụ mã biên nhận (bắt buộc)<textarea data-rf="evidence" rows="3" maxlength="4000">${esc(f.evidence)}</textarea></label>
+    ${lastOpen ? `<label class="rf-opt"><input type="checkbox" data-rf="resume"${f.resume ? ' checked' : ''}> Cho worker chạy tiếp sau khi chốt (chỉ bước mở cuối)</label>` : ''}
     ${f.msg ? `<p class="err" role="alert">${esc(f.msg)}</p>` : ''}
     <div class="row"><button type="button" class="btn ok" data-action="reconcile-go">Chốt bước này</button>
       <button type="button" class="btn" data-action="reconcile-close">Thôi</button></div></form>`;
@@ -417,7 +422,7 @@ function renderWrites(t) {
     ? `<div class="line1"><b>Ghi chưa rõ kết quả (UnknownWrite)</b>${tag('warn', `${open.length} bước đang chờ đối chiếu`)}</div>
        <p class="meta">Worker đã dừng vì không chắc một bước ghi đã xảy ra hay chưa. Hệ thống không tự lặp lại bước này.</p>`
     : violation ? `<div class="line1"><b>Vi phạm quyền hoặc ranh giới (PermissionViolation)</b>${tag('bad', 'cần xử lý theo lý do')}</div>
-       <p class="meta">Không có bước ghi nào cần đối chiếu: yêu cầu bị chặn vì hành động vượt quyền hiện hành. Đối chiếu không áp dụng; xem lý do ở bước bị chặn bên dưới.</p>` : '';
+       <p class="meta">Không có bước ghi nào cần đối chiếu. Yêu cầu bị chặn vì hành động vượt quyền hiện hành. Xem lý do ở bước bị chặn bên dưới.</p>` : '';
   return `<section class="blk st-${open.length ? 'warn' : violation ? 'bad' : 'idle'}" id="unknown-writes" aria-label="Bước ghi chưa rõ">${head}
     ${open.map((w) => `<div class="write-row"><div class="line1"><b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}
         <span class="meta">công việc ${esc(w.child)} · mã ${esc(String(w.identity).slice(0, 8))}</span></div>
@@ -437,7 +442,7 @@ function reasonBlock(raw) {
   if (!data || typeof data !== 'object' || typeof data.reason !== 'string') return `<div class="meta">${esc(raw)}</div>`;
   const review = data.reason.startsWith('validator_disagreement') ? ' <span class="pill">cần admin xem xét: hai lần soát không đồng ý</span>' : '';
   return `<div class="meta">Cổng ${esc(data.gate)}: ${esc(data.reason)}${review}</div>
-    <details class="raw"><summary>raw JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+    <details class="raw"><summary>JSON gốc</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
 }
 
 const BUDGET_REASON = { daily_gpu_folder: 'GPU trong ngày của thư mục', daily_gpu_loose: 'GPU trong ngày của người gửi',
@@ -451,7 +456,7 @@ function allowanceBlock(a) {
   if (!a) return '';
   const daily = a.daily_gpu?.applies ? [a.daily_gpu] : [];
   const hit = [...daily, ...a.groups].filter(g => g.hit).map(g => BUDGET_REASON[g.reason] || g.reason);
-  const holds = a.unknown_holds > 0 ? `<div class="meta">${fmtNum(a.unknown_holds)} lần gọi model chưa rõ kết quả vẫn giữ ngân sách; chưa có cách giải phóng tự động.</div>` : '';
+  const holds = a.unknown_holds > 0 ? `<div class="meta">${fmtNum(a.unknown_holds)} lần gọi model chưa rõ kết quả vẫn giữ ngân sách. Chưa có cách giải phóng tự động.</div>` : '';
   return `<div class="meta" style="margin-top:4px">${a.blocked_reason ? `Bị chặn: ${esc(BUDGET_REASON[a.blocked_reason] || a.blocked_reason)}. ` : ''}${hit.length
     ? `Đã chạm giới hạn: ${esc(hit.join('; '))}.` : 'Chưa chạm giới hạn ngân sách nào.'}</div>${holds}
     <details class="raw"><summary>Chi tiết ngân sách</summary><ul class="meta">
@@ -476,12 +481,12 @@ function renderRollout(t) {
   const [state, label] = ROLLOUT_MODE[r.envelope.mode];
   const head = r.candidate.head_sha;
   const act = (name, text, cls = '', audience = ui.audience || 'owner_only') => `<button class="btn ${cls}" data-action="rollout" data-do="${name}" data-root="${esc(r.ticket_id)}" data-head="${esc(head)}" data-audience="${esc(audience)}">${text}</button>`;
-  return `<h2>Phát hành bản thay đổi</h2>
+  return `<h2>Release</h2>
     <div class="blk" id="rollout">
       <div class="line1"><b>Bản ${code(head.slice(0, 10))}</b> trên ${code(r.candidate.base_sha.slice(0, 10))} ${tag(state, label)}
         ${r.release ? `<span>Hiện tại: <b>${esc(AUDIENCE[r.release.status] || 'đang tắt')}</b> (${code(r.release.slug)})</span>` : '<span class="meta">Chưa đăng ký chức năng để phát hành.</span>'}</div>
       <div class="meta">Phạm vi: ${r.candidate.files.map((f) => code(f)).join(' ')}</div>
-      ${r.base?.changed ? `<div class="meta" role="alert">Base của nhánh chính đã đổi từ ${code(r.candidate.base_sha.slice(0, 10))} sang ${code(r.base.observed.slice(0, 10))}: bằng chứng cũ không dùng để phát hành lên base mới.</div>` : ''}
+      ${r.base?.changed ? `<div class="meta" role="alert">Nhánh chính đã đổi từ ${code(r.candidate.base_sha.slice(0, 10))} sang ${code(r.base.observed.slice(0, 10))}. Bằng chứng cũ không dùng để phát hành lên bản mới.</div>` : ''}
       ${r.envelope.reasons.length ? `<div class="meta">Cần duyệt vì: ${esc(r.envelope.reasons.map(reasonText).join('; '))}</div>` : ''}
       <div class="row">
         <label class="meta">Người xem <select id="rollout-audience">${Object.entries(AUDIENCE).map(([k, v]) => `<option value="${k}" ${k === (ui.audience || 'owner_only') ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -502,7 +507,7 @@ async function rolloutDo(btn) {
   ui.audience = $('#rollout-audience')?.value || btn.dataset.audience;
   try {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/rollout/${btn.dataset.do}`, { head_sha: btn.dataset.head, audience: ui.audience });
-    ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi', reverify: 'xếp hàng kiểm lại với base mới; worker sẽ nhận ở lượt tới' }[btn.dataset.do]}.`;
+    ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi', reverify: 'xếp hàng kiểm lại với base mới. Worker sẽ nhận ở lượt tới' }[btn.dataset.do]}.`;
   } catch (e) {
     ui.rolloutMsg = `Chưa thực hiện được: ${errText(e)}`;
   }
@@ -520,9 +525,9 @@ function resultBox(t, messages = []) {
   const plan = t.plan?.plan;
   if (!plan) return '';
   const files = (plan.allowed_scope || []).map((f) => code(f)).join(' ');
-  const subtasks = (t.children || []).map((c) => `<li>${esc(c.title)} <span class="meta">${esc(c.status)}</span></li>`).join('');
+  const subtasks = (t.children || []).map((c) => `<li>${esc(c.title)} <span class="meta">${esc(childStatus(c.status))}</span></li>`).join('');
   const row = (k, v) => (v ? `<div class="g-result-row"><span class="meta">${k}</span><span>${v}</span></div>` : '');
-  return `<div class="g-result"><div class="g-caption">Kết quả</div>
+  return `<div class="g-result"><div class="g-caption">Result</div>
     ${row('Mục tiêu', esc(plan.goal))}
     ${row('File thay đổi', files)}
     ${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}
@@ -543,10 +548,10 @@ function dataSteps(t) {
     const body = payload ? `<details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(payload.layout, null, 2))}</pre></details>` : '';
     const action = c.status === 'waiting_data'
       ? `<button class="btn ok" data-action="ack-data" data-root="${esc(t.root.id)}" data-child="${esc(c.id)}" data-title="${esc(c.title)}">Đã áp dụng, ghi nhận</button>`
-      : `<span class="meta">${c.status === 'done' ? 'Đã ghi nhận' : esc(c.status)}</span>`;
+      : `<span class="meta">${c.status === 'done' ? 'Đã ghi nhận' : esc(childStatus(c.status))}</span>`;
     return `<li><b>${esc(c.title)}</b> <span class="meta">${code(target)}</span>${body}${action}</li>`;
   }).join('');
-  return `<div class="g-result"><div class="g-caption">Bước dữ liệu cần quản trị viên</div><ul>${items}</ul>
+  return `<div class="g-result"><div class="g-caption">Data steps</div><ul>${items}</ul>
     <span class="meta" id="data-step-result" role="status" tabindex="-1">${esc(ui.dataMsg || '')}</span></div>`;
 }
 
@@ -557,7 +562,7 @@ async function ackDataStep(btn) {
   btn.disabled = true;
   try {
     await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/data-steps/${encodeURIComponent(btn.dataset.child)}/acknowledge`, {});
-    ui.dataMsg = 'Đã ghi nhận bước dữ liệu; các bước phụ thuộc sẽ chạy ở lượt tới.';
+    ui.dataMsg = 'Đã ghi nhận bước dữ liệu. Các bước phụ thuộc sẽ chạy ở lượt tới.';
   } catch (e) {
     ui.dataMsg = `Không ghi nhận được: ${errText(e)}`;
   }
@@ -609,31 +614,35 @@ function elevationContextCard(ctx) {
   const evidence = ctx.evidence || {};
   return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
     <div class="g-caption">Duyệt cái gì</div>
-    <ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+    <ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
     ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
-    : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
+    : '<div class="meta">Worker không gửi bước kế hoạch. Chỉ có phạm vi path.</div>'}
     <div class="g-caption">Vì sao</div>
     <div>${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
     ${ctx.request?.excerpt ? `<blockquote class="meta" style="white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</blockquote>` : ''}
     <div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}${ctx.flags?.plan_missing ? ' Không có bước kế hoạch để đối chiếu.' : ''}</div>
     <div class="g-caption">Rủi ro</div>
     <div>${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
-    ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'rủi ro cao; đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
+    ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'Rủi ro cao. Đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
     ${risk.reasons?.length ? `<ul>${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
     ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     <div class="g-caption">Bằng chứng</div>
-    <div class="meta">plan ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · revision ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · revision ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>
+    <div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>
   </div>`;
 }
 
 function elevationBlock(t) {
   const e = t.root?.elevation_detail;
-  if (!e || e.state !== 'requested') return '';
+  if (!e || !e.state || e.state === 'none') return '';
+  if (e.state !== 'requested') {
+    const label = e.state === 'approved' ? 'Quyền đã được duyệt' : 'Yêu cầu quyền đã bị từ chối';
+    return `<div class="g-result" aria-label="Quyền chạm vùng bảo vệ"><div class="g-caption">Approval</div><div>${esc(label)}${e.max_level ? ` · mức ${esc(e.max_level)}` : ''}${e.reason ? ` · ${esc(e.reason)}` : ''}</div></div>`;
+  }
   const ctx = ui.elevationContext;
   const blocked = !ctx || ctx.error || ctx.flags?.self_scope;
   const items = (e.scope || []).map((i) => `<li>${code(i.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[i.level] || i.level)}</span></li>`).join('');
   // Có ngữ cảnh thì thẻ đã chứa phạm vi + lý do: không lặp lại danh sách cũ ở trên.
-  const summary = ctx && !ctx.error ? '' : `<div class="g-caption">Kế hoạch xin quyền chạm phần bảo vệ/lõi</div>
+  const summary = ctx && !ctx.error ? '' : `<div class="g-caption">Approval request</div>
     ${e.reason ? `<div class="meta">${esc(e.reason)}</div>` : ''}
     <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>`;
   return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt">
@@ -743,11 +752,11 @@ function render() {
     <header class="request-head">
       <a class="back" href="/admin.html#requests">Về trang quản trị</a>
       <h1>Yêu cầu #${esc(r.id)}: ${esc(r.title)}</h1>
-      <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(r.type)} · ${esc(r.student)}`}
-        · <span class="pill">${esc(r.status)}</span>${r.execution_mode === 'queue' ? ' · <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''} · tạo ${fmt(r.created_at)}</div>
+      <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(REQUEST_TYPE_LABEL[r.type] || r.type)} · ${esc(r.student)}`}
+        · <span class="pill">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' · <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''} · tạo ${fmt(r.created_at)}</div>
       ${renderActions(r, trace)}
     </header>
-    ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có ticket AI Board.</section>'}
+    ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có phiếu xử lý AI Board.</section>'}
   `);
   syncOpen();
   const go = $('#confirm-go');
@@ -790,7 +799,7 @@ async function refresh() {
   }
   if (!trace.ok && retainedTrace) stopLiveTrace();
   if (ui.flash === ui.traceError) ui.flash = '';
-  ui.traceError = trace.ok ? '' : `Không tải được tiến trình (${trace.status}). Đã dừng hiệu ứng; đang chờ kết nối lại.`;
+  ui.traceError = trace.ok ? '' : `Không tải được tiến trình (mã ${trace.status}). Đã dừng tự cập nhật. Đang chờ kết nối lại.`;
   if (ui.traceError) ui.flash = ui.traceError;
   if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
   render();
@@ -800,7 +809,7 @@ async function refresh() {
   } catch (e) {
     stopLiveTrace();
     if (e.message !== 'login') {
-      ui.traceError = 'Mất kết nối cập nhật. Đã dừng hiệu ứng; kết quả cuối cùng được giữ để đối chiếu.';
+      ui.traceError = 'Mất kết nối cập nhật. Đã dừng tự cập nhật. Kết quả cuối cùng vẫn giữ để đối chiếu.';
       ui.flash = ui.traceError;
       if (view) render();
     }

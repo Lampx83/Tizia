@@ -43,6 +43,36 @@ def test_a_file_touching_several_levels_takes_the_strictest():
     assert levels.touch_level(generated) == "surface"
 
 
+def _reader(files):
+    return lambda path: files.get(path)
+
+
+def test_a_protected_file_that_imports_core_needs_core_elevation():
+    reader = _reader({"server/contexts/content/index.js":
+                      "import { db } from '../../db.js';\n"})
+    plan = {"subtasks": [{"file": "server/contexts/content/index.js"}]}
+
+    assert levels.requirements(plan, reader)[0]["level"] == "core"
+    # không có reader (base chưa đọc được) thì giữ mức suy từ path
+    assert levels.requirements(plan)[0]["level"] == "protected"
+
+
+def test_importing_another_context_also_needs_core_elevation():
+    reader = _reader({"server/contexts/content/index.js": "import { requireAdmin } from '../admin/index.js';\n"})
+
+    assert levels.file_level("server/contexts/content/index.js", reader) == "core"
+    # sibling trong cùng context thì không phải ranh giới quyền
+    assert levels.file_level("server/contexts/content/index.js",
+                             _reader({"server/contexts/content/index.js": "import { x } from './helper.js';\n"})) == "protected"
+
+
+def test_a_core_file_importing_the_ai_board_still_asks_for_core_not_self():
+    # self là file AI Board; file db.js chỉ import vào AI Board nên mức duyệt được cao nhất là core
+    reader = _reader({"server/db.js": "import { applyMigrations } from './ai-board/db/index.js';\n"})
+
+    assert levels.file_level("server/db.js", reader) == "core"
+
+
 def test_requirements_list_only_targets_above_surface():
     plan = {"subtasks": [
         {"file": "server/contexts/_ai-generated/faq/index.js", "verify": "node --test test/faq.test.js"},

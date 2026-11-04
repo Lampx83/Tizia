@@ -179,6 +179,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
     import path_policy
     scope = levels.scope_entries(approved) if approved else []
     plan_hash = levels.fingerprint(plan)
+    read = levels.source_reader(source, sha)
     seen: list[str] = []
     granted: set[str] = set()
     pending: list[str] = []
@@ -208,7 +209,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
     must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
     if sha is None:
         if pending:
-            raise levels.ElevationRequired(levels.requirements(plan), plan)
+            raise levels.ElevationRequired(levels.requirements(plan, read), plan)
         return
     try:  # 1 tiến trình git cho mọi file
         found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *must_exist)
@@ -223,7 +224,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
     if existing_migrations:
         raise ValueError(f"migration '{sorted(existing_migrations)[0]}' đã tồn tại — migration phải additive (file mới)")
     if pending:
-        raise levels.ElevationRequired(levels.requirements(plan), plan)
+        raise levels.ElevationRequired(levels.requirements(plan, read), plan)
 
 
 SEARCH_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "search_terms.md").read_text(encoding="utf-8")
@@ -328,7 +329,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             scope = levels.approved_scope(request, None, plan)
             check_files(plan, source, commit, scope)
             # Script/verify target cũng tính: chạy script trong vùng protected/core cần đúng mức đó.
-            needs = levels.requirements(plan)
+            needs = levels.requirements(plan, levels.source_reader(source, commit))
             boarded = [item for item in needs if item["level"] == levels.SELF]
             if boarded:
                 raise ValueError(f"file '{boarded[0]['path']}' nằm ngoài vùng được phép: vùng AI Board luôn bị chặn")

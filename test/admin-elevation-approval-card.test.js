@@ -57,7 +57,7 @@ test('"Duyệt tất cả" only takes loaded, low/medium, inside-request items',
 });
 
 test('the request page repeats the card and keeps the same server endpoints', () => {
-  assert.match(detail, /api\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevation-context`\)/);
+  assert.match(detail, /api\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevation-context`/, 'single-context call');
   assert.match(detail, /function elevationContextCard\(ctx\)/);
   for (const heading of ['Duyệt cái gì', 'Vì sao', 'Rủi ro', 'Bằng chứng']) {
     assert.match(detail, new RegExp(`>${heading}</div>`), `detail card has ${heading}`);

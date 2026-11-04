@@ -616,8 +616,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         return {"gate": 2.5, "blocked": True, "reason": "không có plan từ cổng 1"}
 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
-    # bằng code (path + catalog), không hỏi model — elevation đã duyệt thì plan đi tiếp bình thường.
-    needs = levels.requirements(plan)
+    # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
+    needs = levels.requirements(plan, levels.source_reader(state.get('checkout_source'), state.get('base_sha')))
     scope = levels.approved_scope(request, state, plan)
     blocked_paths = [item for item in needs if item["level"] == levels.SELF]
     if blocked_paths:

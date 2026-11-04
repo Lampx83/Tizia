@@ -16,7 +16,7 @@ Tizia: web học tập bằng mô phỏng. Node ESM ("type": "module") + Express
 - Dòng thêm trong public/ KHÔNG chứa: "<script", "on...=" sau khoảng trắng (onclick=), "javascript:", "eval(", "new Function(", "document.write(", email, số điện thoại. Gắn sự kiện bằng addEventListener trong module có sẵn.
 
 ## Vùng cấm
-server/index.js, server/db.js, ai-board/, server/ai-board/, package*.json, Dockerfile, docker-compose*, .env*, code auth/thanh toán/admin, cơ sở dữ liệu.
+server/db.js, cơ sở dữ liệu: chỉ chạm khi plan đã được admin duyệt elevation đúng file. server/index.js, ai-board/, server/ai-board/, package*.json, Dockerfile, docker-compose*, .env*, code auth/thanh toán/admin: luôn cấm.
 
 ## Nội dung
 Giọng giáo dục, hợp học sinh; không chính trị, tôn giáo, biểu tượng quốc gia, tình dục, bạo lực.

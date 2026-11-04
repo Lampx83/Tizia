@@ -454,6 +454,42 @@ test('heartbeat, typed run/event and release enforce lease and idempotency', asy
   }
 });
 
+test('a replayed report or release key is a duplicate row, never a 500', async () => {
+  const { db, store } = await fixture();
+  const { base, close } = await serve(store, { AI_BOARD_WORKER_KEY: KEY });
+  try {
+    const claim = await (await post(base, '/api/ai-board/worker/claim', { worker_id: 'w3', version: 'test', mode: 'shadow' })).json();
+    const { ticket } = claim;
+    const lease = { worker_id: 'w3', lease_token: ticket.lease_token };
+    const run = (await (await post(base, `/api/ai-board/worker/tickets/${ticket.id}/runs`,
+      { ...lease, trigger: 'shadow_precheck', idempotency_key: 'run-replay-0001' })).json()).run;
+
+    const report = { ...lease, run_id: run.id, event_type: 'shadow_precheck_passed',
+      public_message: 'Đã kiểm tra yêu cầu.', idempotency_key: 'replay-0001' };
+    const first = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/events`, report);
+    assert.equal(first.status, 200);
+    const again = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/events`, report);
+    assert.equal(again.status, 200, 'a replayed report answers 200');
+    assert.equal((await again.json()).event.id, (await first.json()).event.id, 'the retry returns the original row');
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND idempotency_key=?')
+      .get(ticket.id, 'replay-0001')).n, 1);
+
+    // A release that reuses a key another event already wrote applies its transition instead of raising duplicate key.
+    const release = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/release`,
+      { ...lease, outcome: 'shadow_ok', idempotency_key: 'replay-0001' });
+    assert.equal(release.status, 200);
+    const retry = await post(base, `/api/ai-board/worker/tickets/${ticket.id}/release`,
+      { ...lease, outcome: 'shadow_ok', idempotency_key: 'replay-0001' });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).ticket.duplicate, true);
+    const row = await db.prepare('SELECT status, phase, lease_owner FROM ai_tickets WHERE id=?').get(ticket.id);
+    assert.deepEqual({ ...row }, { status: 'queued', phase: 'shadow_checked', lease_owner: null });
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
 test('expired lease fails closed and another worker can reclaim it', async () => {
   const { db, store } = await fixture();
   const { base, close } = await serve(store);

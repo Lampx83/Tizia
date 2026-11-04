@@ -46,7 +46,7 @@ test('admin trace route feeds the ticket graph its contract nodes and edges', as
       assert.deepEqual(trace.graph.nodes, contract.execution_graph.nodes);
       assert.deepEqual(trace.graph.edges, contract.execution_graph.edges);
       const html = renderTicketGraph(trace, null, Number(trace.root.lease_expires_at) || 0);
-      assert.match(html, /<section class="ticket-graph">/);
+      assert.match(html, /<section class="ticket-graph"[ >]/);
       assert.match(html, /<div class="g-frame"><svg class="g-svg" viewBox=/);
       assert.match(html, /data-edge="gate_1>gate_2"/);
       assert.match(html, /aria-label="Run app: Done"/);

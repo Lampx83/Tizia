@@ -68,11 +68,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     ) VALUES (?, 0, 'root', ?, ?, 'queued', ?, 0, ?, NULL, ?, ?)
   `;
   const insertTag = 'INSERT INTO ai_ticket_tags(ticket_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING';
+  // Một (ticket, idempotency_key) chỉ ghi một lần: worker gửi lại report/release là no-op, không phải 500.
   const insertEvent = `
     INSERT INTO ai_events (
       ticket_id, event_type, actor_type, actor_id, transition,
       public_message, internal_detail, idempotency_key, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (ticket_id, idempotency_key) DO NOTHING
   `;
 
   // Đưa root sang trạng thái mới và nhả lease: worker đang giữ sẽ gặp stale_lease ở heartbeat/verdict kế tiếp rồi dừng.
@@ -1293,13 +1295,15 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), Number(ticketId)]);
       if (!run) throw new WorkerContractError('run does not belong to ticket');
     }
-    const info = await db.insert(`
+    // Concurrent retries of the same report land on the unique key instead of raising: keep the first row.
+    await db.run(`
       INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
         public_message, internal_detail, idempotency_key, created_at)
       VALUES (?, ?, ?, 'worker', ?, NULL, ?, ?, ?, ?)
+      ON CONFLICT (ticket_id, idempotency_key) DO NOTHING
     `, [Number(ticketId), input.runId ? Number(input.runId) : null, input.eventType, input.workerId,
       input.publicMessage || null, internalDetail || null, input.idempotencyKey, input.now,]);
-    return await db.get('SELECT * FROM ai_events WHERE id=?', [info]);
+    return await db.get('SELECT * FROM ai_events WHERE ticket_id=? AND idempotency_key=?', [Number(ticketId), input.idempotencyKey]);
   });
 
   async function recordWorkerEvent(ticketId, input) {
@@ -1412,7 +1416,7 @@ function resumeSummary(journal) {
       }
     }
     await db.run(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, last_seen_at=?, updated_at=? WHERE worker_id=?`, [input.now, input.now, input.workerId]);
-    await db.run(`INSERT INTO ai_release_receipts(ticket_id, idempotency_key, worker_id, status, phase, created_at) VALUES (?, ?, ?, ?, ?, ?)`, [Number(ticketId), input.idempotencyKey, input.workerId, next[0], next[1], input.now]);
+    await db.run(`INSERT INTO ai_release_receipts(ticket_id, idempotency_key, worker_id, status, phase, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [Number(ticketId), input.idempotencyKey, input.workerId, next[0], next[1], input.now]);
     await db.run(insertEvent, [Number(ticketId), 'lease_released', 'worker', input.workerId, `running->${next[0]}`,
       next[2], input.internalDetail || null, input.idempotencyKey, input.now,]);
     return { status: next[0], phase: next[1] };
@@ -1486,6 +1490,16 @@ function resumeSummary(journal) {
   const coversTier = (elevation, tier) => (elevation?.state === 'approved'
     && LEVEL_RANK[elevation.max_level] >= LEVEL_RANK[tier]);
   const elevationPending = (elevation) => elevation?.state === 'requested';
+
+  // Quyền nâng mức đã duyệt phủ mức của plan chính là quyền thực thi cho đúng hash/revision đó: cổng 3 đọc
+  // ai_authorizations, nên ghi quyền ngay lúc plan được duyệt thay vì bắt admin duyệt tay lần nữa.
+  async function authorizeElevatedPlan(ticketId, planHash, revision, tier, elevation, now) {
+    if (tier === 'surface' || !elevation?.by || !coversTier(elevation, tier)) return false;
+    await db.run(`INSERT INTO ai_authorizations(root_ticket_id, plan_hash, plan_revision, admin_user_id, created_at)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    [Number(ticketId), String(planHash), Number(revision), Number(elevation.by), now]);
+    return true;
+  }
 
   /** {paths, levels} → [{path, level}]; mỗi path một mức, trùng path thì giữ mức chặt hơn. */
   function elevationScopeOf(paths, levels) {
@@ -1595,6 +1609,10 @@ function resumeSummary(journal) {
         SELECT 1 FROM ai_authorizations WHERE root_ticket_id=? AND plan_hash=? AND plan_revision=?
       `, [Number(ticketId), existing.plan_hash, existing.revision]);
       const existingChildren = await planChildren(ticketId, existing.revision);
+      // A plan replayed after its elevation was approved gets the same grant as a fresh validation.
+      const planTier = existingChildren.reduce((top, child) => (LEVEL_RANK[child.tier] > LEVEL_RANK[top] ? child.tier : top),
+        existing.tier);
+      await authorizeElevatedPlan(Number(ticketId), existing.plan_hash, existing.revision, planTier, elevation, now);
       const plannedGate = planGate({ tier: existing.tier, authorized, folderHeld: await folderNotApproved(root.source_request_id), elevation });
       const plannedStatus = plannedGate.status;
       if (!sameSubmission) {
@@ -1679,6 +1697,8 @@ function resumeSummary(journal) {
       VALUES (?, ?, ?, ?, 'valid', ?, ?, ?, ?, ?)
     `, [Number(ticketId), revision, checked.planHash, checked.planJson, effectiveTier,
       checked.policyHash, publicNote, internalReason, now]);
+    // Approved elevation covering this plan's targets is the plan authorization (gate 3 does not wait for a manual one).
+    await authorizeElevatedPlan(Number(ticketId), checked.planHash, revision, checked.tier, elevation, now);
     // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới.
     const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
     await db.run(`

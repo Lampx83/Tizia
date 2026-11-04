@@ -86,8 +86,26 @@ const diffHtml = (a, b) => `<pre class="skill-diff" aria-label="So sánh bản g
   `<span class="diff-${kind}">${kind === 'add' ? '+ ' : kind === 'del' ? '- ' : '  '}${esc(line)}</span>`).join('')}</pre>`;
 const versionState = (version, active) => version.rejected_at ? 'Đã từ chối' : version.id === active ? 'Đang được chọn' : version.approved_by ? 'Đã duyệt' : version.rewrite ? REWRITE[version.rewrite.status] : 'Bản nháp';
 const when = ms => Number.isFinite(Number(ms)) ? fmt(Number(ms)) : '';
-const evalHtml = version => !version.evaluation?.kinds ? '' : `<p class="meta">Smoke test nhỏ: ${version.evaluation.passed}/${version.evaluation.total} loại tác vụ qua. ${version.evaluation.kinds.map(kind =>
+const evalHtml = version => !version.evaluation?.kinds?.length ? '' : `<p class="meta">Smoke test nhỏ: ${version.evaluation.passed}/${version.evaluation.total} loại tác vụ qua. ${version.evaluation.kinds.map(kind =>
   `${esc(TYPE[kind.kind] || kind.kind)} ${kind.ok ? 'qua' : `chưa qua (${esc(kind.reason || 'không rõ')})`}`).join('; ')}. Đây chỉ là kiểm tra dạng đầu ra, không đo chất lượng.</p>`;
+// Model verdict on the skill text: escalate tags the draft for the admin, it never approves anything by itself.
+const REVIEW_TEXT = { flagged: 'cần người xem lại trước khi duyệt', rejected: 'bị từ chối trước khi lưu', clear: 'không thấy dấu hiệu rủi ro' };
+const reviewHtml = version => {
+  const review = version.evaluation?.review;
+  if (!review) return '';
+  const labels = Array.isArray(review.labels) && review.labels.length ? ` (${review.labels.join(', ')})` : '';
+  return `<p class="meta skill-review">Bộ phân loại an toàn: ${esc(REVIEW_TEXT[review.action] || REVIEW_TEXT.clear)}${esc(labels)}${review.shadow ? ' · chỉ ghi log' : ''}.</p>`;
+};
+// Source essence the worker extracted before rewriting, so the admin sees what the rewrite was told to preserve.
+const essenceHtml = version => {
+  const essence = version.evaluation?.extraction;
+  if (!essence) return '';
+  const row = (label, items) => (Array.isArray(items) && items.length ? `<li><strong>${label}</strong>: ${items.map(esc).join(' · ')}</li>` : '');
+  const rows = [essence.trigger ? `<li><strong>Dùng khi</strong>: ${esc(essence.trigger)}</li>` : '',
+    row('Quy trình', essence.procedure), row('Ràng buộc', essence.guardrails), row('Kiểm chứng', essence.verification),
+    row('Ví dụ', essence.examples), row('Lỗi thường gặp', essence.failure_modes), row('Không chuyển được', essence.not_capturable)].join('');
+  return rows ? `<details class="skill-essence"><summary>Nội dung gốc đã trích để viết lại</summary><ul>${rows}</ul></details>` : '';
+};
 const sample = name => `---\nname: ${name}\ndescription: Hướng dẫn cho giao diện hiện có\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n2. Kiểm tra thao tác bằng bàn phím.\n`;
 
 let teardown = null;
@@ -178,7 +196,9 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
           </button>
           <div class="ver-body"${index === 0 ? '' : ' hidden'}>
             ${version.rewrite ? `<p class="meta">${esc(REWRITE[version.rewrite.status])}${version.rewrite.error ? `: ${esc(version.rewrite.error)}` : ''}${version.rewrite.usage ? `. ${Number(version.rewrite.usage.model_calls)} lượt gọi, ${Number(version.rewrite.usage.tokens)} token.` : ''}</p>` : ''}
+            ${reviewHtml(version)}
             ${evalHtml(version)}
+            ${essenceHtml(version)}
             ${rewritten ? diffHtml(version.original_text, version.rewritten_text) : `<pre class="skill-source">${esc(version.original_text)}</pre>`}
             ${version.rewrite?.raw_response ? `<details><summary>Phản hồi gốc của model</summary><pre class="skill-source">${esc(version.rewrite.raw_response)}</pre></details>` : ''}
             ${admin ? `<div class="toolbar ver-actions">

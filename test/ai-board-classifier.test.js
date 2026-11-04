@@ -56,7 +56,7 @@ test('danger only escalates to human review at 0.7, logs from 0.3, never blocks'
   assert.equal(decideDanger({ safe: 0.95 }).escalate, false);
 });
 
-test('signed stacker vectors match Python and SHADOW has no automatic rejection threshold', () => {
+test('signed stacker vectors match Python and active danger has no automatic rejection threshold', () => {
   const scoring = CLASSIFIER.tasks.danger.scoring;
   const vectors = [
     [{ safe: 0.97, system_attack: 0.01, abuse_hate: 0.005, sexual: 0.002, violence_self_harm: 0.003,
@@ -68,7 +68,8 @@ test('signed stacker vectors match Python and SHADOW has no automatic rejection 
     [{ safe: 0.2, sexual: 0.75 }, 0.8945697942630529],
   ];
   for (const [probs, expected] of vectors) assert.ok(Math.abs(stackerScore(probs, scoring) - expected) < 1e-9);
-  assert.equal(CLASSIFIER.tasks.danger.mode, 'shadow');
+  assert.equal(CLASSIFIER.tasks.danger.mode, 'active'); // escalate-only: no reject_min, guard still rejects
+  assert.equal(CLASSIFIER.tasks.clarity.mode, 'shadow'); // no fitted clarity thresholds yet
   assert.equal(scoring.review_min, 0.5);
   assert.equal(scoring.reject_min, null);
 });
@@ -87,7 +88,8 @@ test('classification model calls are serial even when both tasks are enabled', a
   });
   assert.equal(peak, 1);
   assert.equal(classified.model, 'test-model');
-  assert.equal(classified.danger.shadow, true);
+  assert.equal(classified.danger.shadow, false); // danger ships active
+  assert.equal(classified.danger.escalate, false); // but a calm answer still passes
   assert.equal(classified.danger.coverage.status, 'partial');
 });
 

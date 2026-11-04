@@ -60,6 +60,50 @@ def test_render_new_report_and_legacy_report_are_compatible():
     assert "2.0" in text
 
 
+def test_compare_requires_the_dataset_pin_only_when_a_run_records_it(tmp_path, capsys):
+    paths = [tmp_path / arm / "results.jsonl" for arm in ("control", "candidate")]
+    meta = {"ref": "source", "dirty": False, "model": "model", "routing_catalog": "catalog",
+            "prompt_lock": "prompt", "skill_lock": "skill", "contract_hash": "contract", "config_sha256": "config", "tool_manifest": "tools",
+            "suite_hash": "suite", "pipeline_hash": "pipeline", "reasoning": {}, "corpus_sha": "corpus",
+            "seed": 7, "repeats": 1, "modes": ["gold"], "fast_tier": True, "review": False,
+            "packs": [], "budget": {"model_calls": 40}, "status": "complete", "integrity": []}
+    for path in paths:
+        path.parent.mkdir()
+        path.write_text(json.dumps({**row(), "repeat": 1}) + "\n")
+        path.with_name("run.json").write_text(json.dumps(meta))
+    args = SimpleNamespace(baseline=str(paths[0]), candidate=str(paths[1]))
+    runner.cmd_compare(args)
+    assert json.loads(capsys.readouterr().out.partition(" ")[2])["verdict"] != "incomparable"  # neither run used it
+
+    pin = {"requests_dataset_sha256": "a" * 64, "requests_dataset_path": "H:/eval/requests-v1.csv", "requests_dataset_rows": 37}
+    paths[0].with_name("run.json").write_text(json.dumps({**meta, **pin}))
+    runner.cmd_compare(args)
+    result = json.loads(capsys.readouterr().out.partition(" ")[2])
+    assert result["verdict"] == "incomparable"
+    assert "missing or different pin: requests_dataset_sha256" in result["reasons"]
+
+    paths[1].with_name("run.json").write_text(json.dumps({**meta, **pin, "requests_dataset_sha256": "b" * 64}))
+    runner.cmd_compare(args)
+    assert "missing or different pin: requests_dataset_sha256" in json.loads(capsys.readouterr().out.partition(" ")[2])["reasons"]
+
+    paths[1].with_name("run.json").write_text(json.dumps({**meta, **pin}))
+    runner.cmd_compare(args)
+    assert json.loads(capsys.readouterr().out.partition(" ")[2])["verdict"] != "incomparable"
+
+
+def test_manifest_integrity_flags_a_changed_or_missing_dataset(tmp_path):
+    path = tmp_path / "requests-v1.csv"
+    path.write_bytes(b"id,split\n1,dev\n")
+    from evaluation import requests_dataset
+    meta = {"requests_dataset_sha256": requests_dataset.dataset_hash(path), "requests_dataset_path": str(path)}
+    assert runner._live_dataset_pin(meta) == {"requests_dataset_sha256": meta["requests_dataset_sha256"]}
+    path.write_bytes(b"id,split\n1,gold\n")
+    assert runner._live_dataset_pin(meta) != {"requests_dataset_sha256": meta["requests_dataset_sha256"]}
+    path.unlink()
+    assert runner._live_dataset_pin(meta) == {"requests_dataset_sha256": None}
+    assert runner._live_dataset_pin({}) == {}
+
+
 def test_compare_rejects_unmatched_repeats_and_duplicate_trials():
     baseline = [{**row(), "repeat": 1}, {**row(), "repeat": 2}]
     for candidate in (baseline[:1], [baseline[0], baseline[0]], [{**baseline[0], "id": "other"}]):

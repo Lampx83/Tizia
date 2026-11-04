@@ -1,5 +1,6 @@
 """Cổng 4 (static_check.py) — node --check + lint import +
 minimalism guard (vượt ước lượng/file ngoài plan -> flag, không block)."""
+import subprocess
 from pathlib import Path
 
 from gates import static_check
@@ -104,6 +105,94 @@ def test_generated_code_using_only_ctx_surface_passes_gate_4(tmp_path):
 
     assert out["blocked"] is False
     assert out["needs_careful_review"] is False
+
+
+# ── import đã có ở base: sửa module protected vốn import db/admin là hợp lệ ─────
+
+BASE_CONTENT = ("import { db } from '../../db.js';\n"
+                "import { requireAdmin } from '../admin/index.js';\n"
+                "export const plugin = { name: 'content' };\n")
+
+
+def _git(repo: Path, *args: str) -> str:
+    out = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
+                         stdin=subprocess.DEVNULL)
+    assert out.returncode == 0, out.stderr
+    return out.stdout.strip()
+
+
+def _base_repo(tmp_path: Path, rel: str, code: str) -> tuple[Path, str]:
+    repo = tmp_path / "base"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t.local")
+    _git(repo, "config", "user.name", "t")
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(code, encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    return repo, _git(repo, "rev-parse", "HEAD")
+
+
+def _scratch(tmp_path: Path, rel: str, code: str) -> Path:
+    scratch = tmp_path / "scratch"
+    path = scratch / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(code, encoding="utf-8")
+    return scratch
+
+
+def _gate4_for(tmp_path, rel, base_code, new_code):
+    repo, sha = _base_repo(tmp_path, rel, base_code)
+    scratch = _scratch(tmp_path, rel, new_code)
+    plan = _plan([{"title": "t", "file": rel, "verify": "v", "size": "small"}])
+    diffs = [{"title": "t", "file": rel, "diff": "+x\n"}]
+    return static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(scratch),
+                             "checkout_source": str(repo), "base_sha": sha})
+
+
+def test_editing_a_protected_file_that_already_imports_db_and_admin_passes_gate_4(tmp_path):
+    out = _gate4_for(tmp_path, "server/contexts/content/index.js", BASE_CONTENT,
+                     BASE_CONTENT + "export const extra = 1;\n")
+
+    assert out["blocked"] is False, out
+    assert "db.js" not in (out.get("reason") or "")
+
+
+def test_adding_a_new_admin_import_to_that_same_file_still_blocks(tmp_path):
+    out = _gate4_for(tmp_path, "server/contexts/content/index.js", BASE_CONTENT,
+                     BASE_CONTENT + "import { attachAdmin } from '../admin/routes.js';\n")
+
+    assert out["blocked"] is True
+    assert "contexts/admin" in out["reason"]
+    assert out["failure_class"] == "critical"
+
+
+def test_adding_a_new_db_import_to_a_file_without_one_still_blocks(tmp_path):
+    base = "export const x = 1;\n"
+    out = _gate4_for(tmp_path, "server/contexts/content/index.js", base,
+                     base + "import { db } from '../../db.js';\n")
+
+    assert out["blocked"] is True
+    assert "db.js" in out["reason"]
+
+
+def test_a_brand_new_file_gets_no_baseline_exemption(tmp_path):
+    out = _gate4_for(tmp_path, "server/contexts/content/fresh.js", "export const x = 1;\n",
+                     "import { db } from '../../db.js';\n")
+    assert out["blocked"] is True and "db.js" in out["reason"]
+
+
+def test_importing_a_sibling_file_of_the_same_context_is_not_a_boundary_violation():
+    assert static_check.lint_imports("import { x } from './helper.js';\n",
+                                     "server/contexts/content/index.js") == []
+
+
+def test_lint_compares_against_the_base_imports_only():
+    code = BASE_CONTENT + "export const extra = 1;\n"
+    assert static_check.lint_imports(code, "server/contexts/content/index.js")  # không có base -> chặn
+    assert static_check.lint_imports(code, "server/contexts/content/index.js", BASE_CONTENT) == []
 
 
 # ── node --check: cú pháp hỏng -> BLOCK ─────────────────────────────────────

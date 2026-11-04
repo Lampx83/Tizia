@@ -1,7 +1,7 @@
 // Logprob classifier: one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
 // only. Same labels, prompt and thresholds as ai-board/harness/classifier.py (classifier-calibration.json).
-// Clarity may request clarification; danger computes review/reject signals for calibration.
-// The intake route suppresses SHADOW actions, and its deterministic guard owns rejection.
+// Clarity stays log-only (mode 'shadow'). Danger is 'active' but escalate-only: it adds human review and
+// never rejects on its own (reject_min null), while the intake route's deterministic guard owns reject/critical.
 import fs from 'node:fs';
 import { routedClassifyRequest } from '../providers/model-routing.js';
 import { environment } from '../settings.js';

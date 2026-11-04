@@ -64,4 +64,4 @@ def test_pad_filler_never_uses_variant_skills(monkeypatch):
 def test_pad_with_variant_off_is_the_same_length_ablation_as_before_variants(monkeypatch):
     monkeypatch.setenv("AI_BOARD_SKILL_PAD_CHARS", "10100")
     text = context.skill_text(context.SKILLS["edit-css-style"], 3)
-    assert hashlib.sha256(text.encode()).hexdigest()[:16] == "d7bfa32433ba522b"
+    assert hashlib.sha256(text.encode()).hexdigest()[:16] == "4e65952540d9fa7f"

@@ -1,5 +1,5 @@
 // Deterministic clarity rules decide clarification without any model; the logprob classifier
-// only acts in mode 'active' (clarity ships in 'shadow' until calibrated).
+// only acts in mode 'active' (danger ships active, clarity stays 'shadow' until calibrated).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -50,9 +50,10 @@ test('grilling stops by rule once the answers name a concrete thing', () => {
   assert.equal(answersClear(['làm lại toàn bộ các nút']), false); // still too broad
 });
 
-test('clarity and danger ship in shadow; shadow results never act', async () => {
+test('danger ships active (escalate-only) and clarity shadows; a shadow result never acts', async () => {
   assert.equal(CLASSIFIER.tasks.clarity.mode, 'shadow');
-  assert.equal(CLASSIFIER.tasks.danger.mode, 'shadow');
+  assert.equal(CLASSIFIER.tasks.danger.mode, 'active');
+  assert.equal(CLASSIFIER.tasks.danger.scoring.reject_min, null);
   const body = (letter) => ({ logprobs: [{ token: letter, logprob: 0, top_logprobs: [{ token: letter, logprob: 0 }] }] });
   const fetchImpl = async (_url, init) => ({
     ok: true, json: async () => body(JSON.parse(init.body).prompt.includes('thuộc nhóm nào') ? 'D' : 'B'),
@@ -61,11 +62,11 @@ test('clarity and danger ship in shadow; shadow results never act', async () => 
   const out = await classifyRequest('x', 'y', { env, fetchImpl });
   assert.equal(out.clarity.shadow, true);   // model said vague, but it is only logged
   assert.equal(out.clarity.probs.vague, 1);
-  assert.equal(out.danger.shadow, true);
+  assert.equal(out.danger.shadow, false);    // danger acts, escalate-only
   assert.deepEqual(out.danger.labels, ['sexual']);
-  const active = await classifyRequest('x', 'y', { env, fetchImpl, modes: { clarity: 'off', danger: 'active' } });
-  assert.equal(active.clarity, null);
-  assert.equal(active.danger.shadow, false);
+  const shadow = await classifyRequest('x', 'y', { env, fetchImpl, modes: { clarity: 'off', danger: 'shadow' } });
+  assert.equal(shadow.clarity, null);
+  assert.equal(shadow.danger.shadow, true);
 });
 
 test('resolveClarify merges rules, model, feature override and client support', () => {
