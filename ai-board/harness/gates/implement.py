@@ -81,6 +81,8 @@ def retry_hint(error: str, iteration: int) -> str:
     if "cú pháp JS lỗi" in error:  # usual cause: replace repeats text the search left untouched (a closing `';`)
         return ("Chép CẢ dòng cần sửa vào search (đến hết dòng, gồm `';` hay `);`) để replace không lặp lại phần "
                 "đuôi dòng; kiểm lại dấu nháy/ngoặc.")
+    if "cú pháp test lỗi" in error:
+        return "Viết lại `test` thành 1 khối JS hợp lệ (kiểm dấu nháy/ngoặc), ngắn và đúng file trong phạm vi."
     if "Các chỗ khớp" in error:  # ambiguous search: the error already lists every match with its neighbours
         return ("Chọn MỘT chỗ khớp ở trên và thêm dòng liền kề của nó (đã liệt kê) vào search để chỉ khớp 1 chỗ; "
                 "hoặc dùng {\"after_line\": N, \"insert\": ...} nếu chỉ chèn thêm.")
@@ -381,8 +383,13 @@ def _check_rest(out: dict, current: str | None, file: str | None) -> None:
         raise ValueError(f"test_file '{out['test_file']}' phải nằm trong test/")
     if file and not path_policy.names_scope(out["test"], [file]):
         raise ValueError(f"test phải import hoặc nêu file trong phạm vi: {file}")
-    if test_file.endswith((".js", ".mjs")) and (_COMMONJS.search(out["test"]) or "node:test" not in out["test"]):
+    is_js_test = test_file.endswith((".js", ".mjs"))
+    if is_js_test and (_COMMONJS.search(out["test"]) or "node:test" not in out["test"]):
         raise ValueError("test phải là ESM dùng node:test (import), không dùng require/module.exports")
+    if is_js_test:
+        from gates import static_check
+        if broken := static_check.syntax_error(out["test"]):
+            raise ValueError(f"cú pháp test lỗi: {broken[-600:]}")
     out["test_file"] = test_file
 
 

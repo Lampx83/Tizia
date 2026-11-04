@@ -80,6 +80,13 @@ def test_commonjs_test_is_retried_as_esm():
         raise AssertionError("CommonJS test phải bị loại")
 
 
+def test_unparseable_generated_test_is_retried_at_gate_3(tmp_path):
+    broken = {**GOOD, "test": ESM_TEST + "assert.ok(js.includes('<div class='a'>'));\n"}
+    out, prompts = _run(tmp_path, SeqModels([broken, GOOD]))
+    assert out["blocked"] is False and len(prompts) == 2
+    assert "cú pháp test lỗi" in prompts[1]
+
+
 def test_truncated_output_is_retried(tmp_path):
     out, prompts = _run(tmp_path, SeqModels([GOOD, GOOD], done_reasons=["length", "stop"]))
     assert out["blocked"] is False and len(prompts) == 2

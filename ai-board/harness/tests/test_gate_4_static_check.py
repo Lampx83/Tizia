@@ -382,8 +382,16 @@ def test_unparseable_generated_test_is_dropped_when_a_harness_oracle_decides(tmp
     assert any("dropped" in issue and "oracle" in issue for issue in out["issues"])
 
 
-def test_unparseable_generated_test_still_blocks_without_an_oracle(tmp_path):
+def test_unparseable_generated_test_without_an_oracle_is_dropped_when_no_plan_verify_names_it(tmp_path):
     plan, diffs = _broken_test_case(tmp_path)
+    out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": "Đổi màu nền"})
+    assert out["blocked"] is False
+    assert diffs[0]["test_file"] is None and not (tmp_path / "test/x.test.js").exists()
+
+
+def test_unparseable_generated_test_named_by_a_plan_verify_still_blocks(tmp_path):
+    plan, diffs = _broken_test_case(tmp_path)
+    plan["subtasks"][0]["verify"] = "node --test test/x.test.js"
     out = static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path), "request_detail": "Đổi màu nền"})
     assert out["blocked"] is True and "test/x.test.js" in out["reason"] and "node --check" in out["reason"]
 

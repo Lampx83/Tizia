@@ -123,6 +123,17 @@ def lint_imports(code: str, file_path: str, base_code: str = "") -> list[str]:
     return violations
 
 
+_TEST_PATH = re.compile(r"\b((?:tests?)/[\w./-]+\.(?:js|mjs))")
+
+
+def _planned_tests(plan: dict) -> set[str]:
+    """Test paths a plan verify names. The plan has no test field; a runnable verify like `node --test test/x.test.js` is the only trace."""
+    named: set[str] = set()
+    for st in plan["subtasks"]:
+        named.update(_TEST_PATH.findall(str(st.get("verify") or "")))
+    return named
+
+
 def node_check(path: Path) -> str | None:
     """`node --check` 1 file .js dạng ES module (repo Tizia `"type": "module"`).
     Đọc qua stdin + `--input-type=module` thay vì truyền thẳng path — scratch
@@ -243,6 +254,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         return {"gate": 4, "blocked": True, "reason": "không có plan/diffs từ cổng 1/3", "needs_careful_review": True}
 
     planned_files = {_posix(st["file"]) for st in plan["subtasks"]}
+    planned_tests = _planned_tests(plan)
     scratch_repo = state.get("scratch_repo")
     # Import đã có ở base không phải vi phạm: cổng chỉ chặn import MỚI (quyền mới).
     base_read = levels.source_reader(state.get("checkout_source"), state.get("base_sha")) if state.get("checkout_source") else None
@@ -283,12 +295,15 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "critical"}
             err = node_check(path)
-            if err and candidate != file_path and functional.select(state):
-                # The harness oracle verifies this request; a model-written test that cannot even be parsed is dropped, never shipped.
-                path.unlink()
-                d["test_file"] = None
-                issues.append(f"generated test '{candidate}' dropped (syntax error; the harness oracle verifies this request): {err[:200]}")
-                continue
+            if err and candidate != file_path:
+                oracle = functional.select(state)
+                if oracle or candidate not in planned_tests:
+                    # Harness oracle or no plan entry: a model-invented test that cannot be parsed is dropped, never shipped.
+                    why = "the harness oracle verifies this request" if oracle else "no plan verify names this test"
+                    path.unlink()
+                    d["test_file"] = None
+                    issues.append(f"generated test '{candidate}' dropped (syntax error; {why}): {err[:200]}")
+                    continue
             if err:
                 reason = f"'{candidate}' node --check: {err}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
