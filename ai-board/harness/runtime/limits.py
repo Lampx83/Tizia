@@ -50,23 +50,29 @@ def _int_or(env, key, default):
 
 
 def loop(env=None) -> dict:
-    """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override, sai kiểu thì lấy mặc định."""
+    """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override, sai kiểu thì lấy mặc định.
+    Bật progress loop thì trần mềm nâng theo limits.progress: bước còn tiến bộ không bị cắt, còn trần thật là
+    budget/wall clock/quyền."""
     env = os.environ if env is None else env
     spec = _parsed()["limits"]["loop"]
+    moving = progress(env)
     return {
-        "model_calls": _int_or(env, "AI_BOARD_LOOP_MODEL_CALLS", spec["model_calls"]),
-        "tool_calls": _int_or(env, "AI_BOARD_LOOP_TOOL_CALLS", spec["tool_calls"]),
+        "model_calls": _int_or(env, "AI_BOARD_LOOP_MODEL_CALLS",
+                               moving["loop_model_calls"] if moving["enabled"] else spec["model_calls"]),
+        "tool_calls": _int_or(env, "AI_BOARD_LOOP_TOOL_CALLS",
+                              moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
     }
 
 
 def loop_adaptive(env=None) -> dict:
-    """Soft budget + stuck rules for the tool loop; flag AI_BOARD_ADAPTIVE_BUDGET (contract default) gates their use."""
+    """Soft budget + stuck rules for the tool loop; flag AI_BOARD_ADAPTIVE_BUDGET (contract default) gates their use.
+    Progress loop implies it: that flag already replaces the fixed round caps this soft budget belonged to."""
     spec = _parsed()["limits"]["loop"]
     flag = get_settings(env).adaptive_budget
     return {
-        "enabled": spec["default_enabled"] if flag is None else flag,
+        "enabled": (spec["default_enabled"] if flag is None else flag) or progress(env)["enabled"],
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],

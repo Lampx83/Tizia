@@ -115,7 +115,9 @@
       "repeat_hash": 2,
       "similarity": 0.98,
       "strategy_max_per_level": 2,
-      "max_children": 2
+      "max_children": 2,
+      "loop_model_calls": 40,
+      "loop_tool_calls": 120
     },
     "repair_agent": {
       "_why": "Last automatic layer before the admin, only for failure classes the deterministic ladder does not cover: one heavy-model call per attempt with the Gate 3 tool manifest, fenced context, schema and permission checks. Hard ceiling of attempts; flag defaults off.",

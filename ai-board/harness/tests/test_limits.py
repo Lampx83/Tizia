@@ -82,6 +82,20 @@ def test_local_run_wall_clock_is_sum_of_node_caps():
     assert limits.run_wall_clock_s(99, local=True) == 12300 <= limits._parsed()["limits"]["local_wall_clock_s"]["max"]
 
 
+def test_progress_flag_raises_the_soft_loop_caps_and_nothing_else():
+    moving = limits.progress(env={"AI_BOARD_PROGRESS_LOOP": "1"})
+    off, on = limits.loop(env={}), limits.loop(env={"AI_BOARD_PROGRESS_LOOP": "1"})
+    assert (off["model_calls"], off["tool_calls"]) == (10, 30)
+    assert (on["model_calls"], on["tool_calls"]) == (moving["loop_model_calls"], moving["loop_tool_calls"])
+    assert on["model_calls"] > off["model_calls"] and on["tool_calls"] > off["tool_calls"]
+    assert (on["repeats"], on["error_chars"]) == (off["repeats"], off["error_chars"])
+    # Hard ceilings and the env override do not move with the soft caps.
+    assert limits.budget(env={"AI_BOARD_PROGRESS_LOOP": "1"}) == limits.budget(env={})
+    assert limits.loop(env={"AI_BOARD_PROGRESS_LOOP": "1", "AI_BOARD_LOOP_MODEL_CALLS": "7"})["model_calls"] == 7
+    assert not limits.loop_adaptive(env={})["enabled"]
+    assert limits.loop_adaptive(env={"AI_BOARD_PROGRESS_LOOP": "1"})["enabled"]
+
+
 def test_exhausted_detail_names_the_cap():
     b = Budget(max_wall_clock_s=10.0)
     b.elapsed_before_s = 20.0
