@@ -74,6 +74,22 @@ def loop_adaptive(env=None) -> dict:
     }
 
 
+def progress(env=None) -> dict:
+    """Progress window + strategy caps; flag AI_BOARD_PROGRESS_LOOP (contract default) gates their use."""
+    spec = _parsed()["limits"]["progress"]
+    flag = get_settings(env).progress_loop
+    return {**{k: v for k, v in spec.items() if not k.startswith("_")},
+            "enabled": spec["default_enabled"] if flag is None else flag}
+
+
+def repair_agent(env=None) -> dict:
+    """Repair agent role + caps; flag AI_BOARD_MODEL_REPAIR (contract default) gates their use."""
+    spec = _parsed()["limits"]["repair_agent"]
+    flag = get_settings(env).model_repair
+    return {**{k: v for k, v in spec.items() if not k.startswith("_")},
+            "enabled": spec["default_enabled"] if flag is None else flag}
+
+
 def react_plan(env=None) -> dict:
     """Gate 2 ReAct loop caps + stuck rules; flag AI_BOARD_REACT_PLAN (contract default) gates use."""
     spec = _parsed()["limits"]["react_plan"]

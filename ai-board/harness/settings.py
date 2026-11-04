@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # flag bật/tắt; None = theo mặc định trong contract.json
     adaptive_budget: bool | None = None
     react_plan: bool | None = None
+    progress_loop: bool | None = None
+    model_repair: bool | None = None
     sandbox_tool: bool = False
     skill_select: bool | None = None
     multimodal: bool = False

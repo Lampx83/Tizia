@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from settings import get_settings
 
 CATALOG = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'model-routing.json'
-ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor', 'elevation_risk'}
+ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor', 'elevation_risk', 'repair_planner'}
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
 
 

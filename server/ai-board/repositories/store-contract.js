@@ -232,6 +232,30 @@ function cleanEval(e) {
   return { accepted: e.accepted === true && out.wins > out.losses && !out.dropped.length, ...out };
 }
 
+function cleanProgress(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const list = (items, max) => (Array.isArray(items) ? items.slice(0, max).map((item) => String(item).slice(0, 120)) : []);
+  return {
+    signals: list(value.signals, 8),
+    window: list(value.window, 8),
+    ...(value.reason ? { reason: String(value.reason).slice(0, 60) } : {}),
+    ...(value.stop ? { stop: String(value.stop).slice(0, 60) } : {}),
+  };
+}
+
+/** Attempts of the repair agent: outcome, action, files touched and the reason the harness kept or denied it. */
+function cleanRepairAgent(value) {
+  const outcomes = new Set(['applied', 'denied', 'rejected', 'error', 'stopped']);
+  return (Array.isArray(value) ? value : []).filter((item) => item && outcomes.has(item.outcome)).slice(0, 6)
+    .map((item) => ({
+      attempt: Number.isInteger(item.attempt) ? item.attempt : 0,
+      outcome: item.outcome,
+      ...(item.action ? { action: String(item.action).slice(0, 40) } : {}),
+      ...(item.reason ? { reason: String(item.reason).slice(0, 300) } : {}),
+      files: (Array.isArray(item.files) ? item.files : []).slice(0, 8).map((file) => String(file).slice(0, 200)),
+    }));
+}
+
 /** selfRequest: yêu cầu board tự sửa — cổng 5 là eval 2 sha (runner 'eval') thay Docker smoke + HTTP. */
 function validatePrePrVerdict(value, selfRequest = false) {
   if (!value || typeof value !== 'object' || !CONTRACT.verdict_outcomes.includes(value.outcome)) {
@@ -338,6 +362,9 @@ function validatePrePrVerdict(value, selfRequest = false) {
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),
       detail: String(value.loop_guard.detail ?? '').slice(0, 300) } } : {}),
+    ...(value.progress && typeof value.progress === 'object' && !Array.isArray(value.progress) ? { progress: cleanProgress(value.progress) } : {}),
+    ...(value.strategy !== undefined ? { strategy: value.strategy == null ? null : String(value.strategy).slice(0, 80) } : {}),
+    ...(Array.isArray(value.repair_agent) && value.repair_agent.length ? { repair_agent: cleanRepairAgent(value.repair_agent) } : {}),
     // Tuỳ chọn: sha gốc + skill cổng 1 của lượt, để task eval từ lần hỏng chạy lại được.
     ...(SHA.test(String(value.base_sha)) ? { base_sha: value.base_sha } : {}),
     ...(/^[a-z0-9-]{1,80}$/.test(String(value.skill)) ? { skill: value.skill } : {}) };

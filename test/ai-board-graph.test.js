@@ -137,7 +137,14 @@ test('svg nodes carry their state in aria-label and the icon shape, not colour a
 test('nodes are keyboard-reachable svg groups with button role', () => {
   const html = renderTicketGraph(failed(), null);
   assert.match(html, /<g class="g-node[^"]*" data-node="gate_2" role="button" tabindex="0"/);
-  assert.equal((html.match(/role="button" tabindex="0"/g) || []).length, 15);
+  assert.equal((html.match(/role="button" tabindex="0"/g) || []).length, 16);
+});
+
+test('the repair agent sits on its own row and its branch runs through the free corridor', () => {
+  const html = renderTicketGraph(running(), null);
+  assert.match(html, /data-node="repair_agent"/);
+  assert.match(html, /d="M910 380V430H570V452" data-edge="repair_check>repair_agent"/);
+  assert.match(html, /d="M570 480V430H740V408" data-edge="repair_agent>repair"/);
 });
 
 test('edges follow the contract: passed path, repair loop, verdict, and blocked stop', () => {

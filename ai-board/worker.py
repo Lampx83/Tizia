@@ -26,8 +26,8 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import coverage, loop_guard, objection_repeat  # noqa: E402
-from runtime.limits import config_sha256, contract, loop_guard as loop_limits, run_wall_clock_s, scaled_limit  # noqa: E402
+from runtime import coverage, loop_guard, objection_repeat, progress  # noqa: E402
+from runtime.limits import config_sha256, contract, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
@@ -225,6 +225,10 @@ class _Execution:
         self.round_metrics: list[dict] = []
         self.progress_rounds = self.no_progress = 0
         self.diff_texts: list[str] = []
+        self.progress_window = None
+        self.agent_attempts = 0
+        self.agent_evidence: list[dict] = []
+        self.reuse_next = None
         self.halt: dict = {}
         self.stop_note: str | None = None
         self.shots: list[dict] = []
@@ -239,7 +243,8 @@ class _Execution:
         node = lambda name, fn: node_span(self.deps, name, fn)  # gates already span inside run_gate
         return {"attempt_open": node("attempt_open", self.attempt_open), "gate_3": lambda: self.gate(3), "gate_4": lambda: self.gate(4),
                 "gate_5": lambda: self.gate(5), "gate_5_5": lambda: self.gate(5.5), "attempt_close": node("attempt_close", self.attempt_close),
-                "repair_check": node("repair_check", self.repair_check), "repair": node("repair", self.repair),
+                "repair_check": node("repair_check", self.repair_check), "repair_agent": node("repair_agent", self.repair_agent),
+                "repair": node("repair", self.repair),
                 "verdict": node("verdict", self.verdict)}
 
     ENTRY = "execute"
@@ -357,6 +362,9 @@ class _Execution:
             self.diff_texts = list(repair_state.get("diff_texts") or [])
             self.progress_rounds = int(repair_state.get("progress_rounds") or 0)
             self.no_progress = int(repair_state.get("no_progress") or 0)
+            tried = [str(item) for item in repair_state.get("window_tried") or []][:20]
+            if tried:  # resume starts a fresh window but keeps what was already tried
+                self._progress_window().tried = tried
             self.stop_note = repair_state.get("stop_note")
             self.repair_reason = repair_state.get("repair_reason")
             self.base_sha = base
@@ -396,6 +404,7 @@ class _Execution:
                 "round_metrics": list(self.round_metrics), "progress_rounds": self.progress_rounds,
                 "no_progress": self.no_progress, "stop_note": self.stop_note, "repair_reason": self.repair_reason,
                 "diff_texts": [str(text)[-8000:] for text in self.diff_texts[-3:]],
+                "window_tried": list(self.progress_window.tried) if self.progress_window is not None else [],
             },
         }
         if node == "gate_3":  # the full generated code is only needed once per attempt; other nodes cost little
@@ -449,7 +458,10 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
-        if self.repair_files and 0 < len(self.repair_files) < len(self.produced):
+        if self.reuse_next is not None:
+            state["reuse"] = dict(self.reuse_next)  # the agent already wrote these files: rebuild, no model call
+            self.reuse_next = None
+        elif self.repair_files and 0 < len(self.repair_files) < len(self.produced):
             state["reuse"] = {file: entry for file, entry in self.produced.items() if file not in self.repair_files}
         state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
@@ -550,6 +562,9 @@ class _Execution:
         if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
+            from runtime import repair_agent as agent
+            if agent.applies(last.get("repair_action")) and self._agent_available():
+                return "agent"
             return "done"
         if not self.budget.tick():
             self.kind = "budget"
@@ -568,11 +583,25 @@ class _Execution:
         scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
         scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
         cls = repair_class.classify(self.last_result, self.produced, scope)
+        choice = None
+        if progress.enabled():
+            window = self._progress_window()
+            window.allow_strategy(loop_guard.state_hash(str(self.last_result.get("reason")),
+                                                         str(self.last_result.get("gate")), str(self.kind)))
+            choice = progress.choose(cls["class"], tried=window.tried)
+            if choice:
+                cls["action"] = choice["action"]
+                if cls["action"] != repair_class.REPAIR_CODE:
+                    if cls["action"] not in window.tried:
+                        window.tried.append(cls["action"])
+                    window.reset()
         last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
+        progress.record(getattr(self.deps, "trace", None), node="repair_check",
+                        failure_class=cls["class"], action=cls["action"])
         if cls["action"] == repair_class.REPLAN:
             self.kind, self.stop_note = "plan", f"plan_inconsistent: {last['reason'][:200]}"
             return False
-        if cls["action"] != repair_class.REPAIR_CODE:
+        if cls["action"] not in (repair_class.REPAIR_CODE, progress.CHANGE_FILE):
             self.stop_note = f"{cls['class']}: {last['reason'][:200]}"
             return False
         now = repair_class.metrics(self.last_result, (self.state or {}).get("diffs") or [])
@@ -582,6 +611,15 @@ class _Execution:
             else:
                 self.no_progress += 1
         self.round_metrics.append(now)
+        if progress.enabled():
+            decision = self._progress_step(now)
+            if decision["stagnant"]:
+                detail = f"{decision['reason']} in window of {len(decision['window'])} steps"
+                self.halt.update(reason=decision["reason"], node="repair_check", detail=detail)
+                self.stop_note = f"{decision['reason']}: {detail}"
+                return False
+            self.repair_files = cls["files"]
+            return True
         spec = REPAIR_REPLAN
         if self.no_progress >= int(spec.get("no_progress_rounds") or 2):
             self.stop_note = (f"stuck: {self.no_progress} consecutive repair rounds without progress "
@@ -598,6 +636,153 @@ class _Execution:
             return False
         self.repair_files = cls["files"]
         return True
+
+    def _progress_window(self):
+        if self.progress_window is None:
+            spec, guard = progress_limits(), loop_limits()
+            self.progress_window = progress.Window(
+                window=spec["window"], min_signals=spec["min_signals"], repeat_hash=spec["repeat_hash"],
+                similarity=spec["similarity"], max_chars=guard["similarity_max_chars"])
+        return self.progress_window
+
+    def _progress_step(self, now: dict) -> dict:
+        """Feed one repair round into the window; signals come from real change, never raw diff text."""
+        diff_text = chr(10).join(str(item.get("diff")) for item in (self.state or {}).get("diffs") or [])
+        text = str((self.last_result.get("evidence") or {}).get("text") or "")
+        evidence = tuple(str(item)[:160] for item in (self.last_result.get("issues") or [])) or (
+            hashlib.sha256(text.encode()).hexdigest()[:12],)
+        return self._progress_window().step(
+            fails=now["fails"], gate=now["gate"], check="fail" if self.last_result.get("blocked") else "pass",
+            diff=diff_text, evidence=evidence,
+            state=loop_guard.state_hash(diff_text, str(self.last_result.get("reason")),
+                                        f"{self.last_result.get('gate')}:{self.kind}"))
+
+    def _agent_available(self) -> bool:
+        """Agent runs only before its attempt cap and never twice for the same failure input."""
+        spec = repair_agent_limits()
+        if not spec["enabled"] or self.agent_attempts >= int(spec["attempts"]):
+            return False
+        return "repair_agent" not in self._progress_window().tried
+
+    def _produced_text(self) -> dict[str, str]:
+        """File text the agent may edit: each produced file and its test."""
+        out = {}
+        for file, entry in self.produced.items():
+            out[file] = str(entry.get("code") or "")
+            if entry.get("test_file"):
+                out[entry["test_file"]] = str(entry.get("test") or "")
+        return out
+
+    def _agent_note(self, record: dict) -> None:
+        """One bounded agent record; the trace keeps the same fields as a span so the admin panel can show them."""
+        self.agent_evidence.append({**record, "attempt": self.agent_attempts})
+        trace = getattr(self.deps, "trace", None)
+        if trace is None or not hasattr(trace, "add_span"):
+            return
+        now = int(time.time() * 1000)
+        window = self.progress_window.snapshot() if self.progress_window is not None else {}
+        trace.add_span("repair_agent.proposal", {
+            "tizia.agent.outcome": str(record.get("outcome") or ""),
+            "tizia.agent.action": str(record.get("action") or "")[:40],
+            "tizia.agent.reason": str(record.get("reason") or "")[:300],
+            "tizia.agent.files": [str(item)[:120] for item in record.get("files") or []][:8],
+            "tizia.progress.window": [str(item)[:80] for item in window.get("window") or []][:8],
+        }, start_ms=now, end_ms=now)
+
+    def repair_agent(self) -> str:
+        """One heavy-model proposal for a failure class the deterministic ladder can only hand to the admin."""
+        from runtime import levels, repair_agent as agent, tool_loop
+        spec = repair_agent_limits()
+        self.agent_attempts += 1
+        if self.agent_attempts > int(spec["attempts"]):
+            self._agent_note({"outcome": "stopped", "reason": f"hết {spec['attempts']} lượt"})
+            self.stop_note = f"repair agent: hết {spec['attempts']} lượt"
+            return "blocked"
+        routing = getattr(getattr(self.deps, "models", None), "routing", None)
+        if routing is None:
+            self._agent_note({"outcome": "stopped", "reason": "không có model routing"})
+            self.stop_note = "repair agent: không có model routing"
+            return "blocked"
+        code = self._produced_text()
+        scope = set(code)
+        last = self.gates[-1]
+        window = self._progress_window()
+        from runtime.root_allowance import current as root_allowance
+        if not self.budget.tick():
+            self._agent_note({"outcome": "stopped", "reason": "budget cạn"})
+            self.stop_note = "repair agent: budget cạn"
+            return "blocked"
+        if (get_settings().tool_loop == "1" or root_allowance() is not None) and not self.budget.spend_repair():
+            self._agent_note({"outcome": "stopped", "reason": "hết lượt sửa nội dung"})
+            self.stop_note = "repair agent: hết lượt sửa nội dung"
+            return "blocked"
+        context = agent.context({
+            "rules": (f"tools: {', '.join(sorted(agent.allowed_tools(tool_loop.MANIFEST)))}; "
+                      "không shell, không mạng, không Docker; chỉ sửa file trong scope, mỗi thay đổi là một khối search/replace "
+                      "khớp đúng một lần trong file."),
+            "capability": ", ".join(str(item) for item in self.plan.get("capabilities") or []),
+            "request": str(self.request_detail or ""),
+            "spec": str(self.plan.get("goal") or ""),
+            "failure": f"cổng {last['gate']}: {last.get('reason')}\n" + str((last.get("evidence") or {}).get("text") or ""),
+            "tried": "\n".join(window.tried),
+            "plan": json.dumps(_execution_plan(self.plan), ensure_ascii=False)[:2000],
+            "target": "\n".join(sorted(code)),
+        }, limit=int(spec["context_chars"]))
+        try:
+            body = self.deps.call_model(routing.first(spec["role"])["model"], agent.prompt(context), gate=3, budget=self.budget,
+                                        role=spec["role"], format="json", prompt_name="repair_agent.md",
+                                        options={"temperature": spec["temperature"], "num_predict": spec["max_tokens"]})
+            proposal = agent.parse(body.get("response"))
+        except agent.ProposalError as error:
+            self._agent_note({"outcome": "rejected", "reason": str(error)[:300]})
+            self.stop_note = f"repair agent: {error}"
+            return "blocked"
+        except Exception as error:  # noqa: BLE001 - model/network outage: hand the failure to the admin
+            self._agent_note({"outcome": "error", "reason": str(error)[:300]})
+            self.stop_note = f"repair agent: {error}"
+            return "blocked"
+        verdict = agent.check(proposal, scope=scope, code=code, elevation=levels.approved_scope(state=self.state, plan=self.plan),
+                              plan_hash=levels.fingerprint(self.plan), manifest=tool_loop.MANIFEST)
+        if not verdict["ok"]:
+            self._agent_note({"outcome": "denied", "reason": verdict["reason"][:300], "files": verdict["files"],
+                              "action": proposal["action"]})
+            self.stop_note = f"repair agent: {verdict['reason']}"
+            return "blocked"
+        if proposal["action"] == progress.STOP_ADMIN:
+            self._agent_note({"outcome": "stopped", "action": proposal["action"], "files": [],
+                              "reason": proposal["diagnosis"][:300]})
+            self.stop_note = f"repair agent: {proposal['diagnosis'][:200]}"
+            return "blocked"
+        self._apply_agent(proposal, verdict["files"])
+        self.repairs.append({"gate": last["gate"], "reason": f"repair agent: {proposal['diagnosis'][:160]}"})
+        self.repair_reason = f"cổng {last['gate']} [repair_agent]: {proposal['diagnosis'][:160]}"
+        window.tried.append("repair_agent")
+        steps = window.snapshot().get("window") or ()
+        window.reset()
+        progress.record(getattr(self.deps, "trace", None), node="repair_agent", failure_class=last.get("repair_class"),
+                        action=proposal["action"], window=steps)
+        self._agent_note({"outcome": "applied", "action": proposal["action"], "files": verdict["files"],
+                          "reason": proposal["diagnosis"][:300]})
+        return "passed"
+
+    def _apply_agent(self, proposal: dict, files: list[str]) -> None:
+        """Write the accepted edits into the produced entries; the next gate 3 rebuilds the scratch from them."""
+        from runtime import repair_agent as agent
+        text = agent.apply(proposal, self._produced_text())
+        for file, entry in self.produced.items():
+            test = entry.get("test_file")
+            touched = [path for path in (file, test) if path and path in files]
+            if not touched:
+                continue
+            if file in files:
+                entry["code"] = text[file]
+            if test and test in files:
+                entry["test"] = text[test]
+            entry["model"] = f"{entry.get('model') or 'model'}+repair_agent"
+        if isinstance(self.state, dict):
+            self.state["produced"] = dict(self.produced)
+        self.reuse_next = dict(self.produced)
+        self.repair_files = []
 
     def repair(self) -> str:
         if self.checkpoint is not None:
@@ -628,6 +813,8 @@ class _Execution:
             **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
+            **progress.verdict_fields(window=self.progress_window),
+            **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

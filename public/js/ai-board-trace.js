@@ -180,6 +180,34 @@ export function renderRunnerTrace(trace = {}) {
   }).filter(Boolean).join('');
 }
 export const TECHNICAL_EVENTS = new Set(['heartbeat', 'lease_released', 'gate_started', 'shadow_precheck_passed']);
+const AGENT_OUTCOMES = { applied: 'Đã áp dụng', denied: 'Bị từ chối', rejected: 'Sai định dạng', error: 'Lỗi model',
+  stopped: 'Dừng thủ công' };
+// Progress window and repair-agent proposals: vector, strategy changes, denials and a manual stop.
+export function renderRepairAgent(trace = {}) {
+  const rows = (trace.runs || []).flatMap((run) => (run.spans || []).map((span) => ({ run, span })));
+  const agent = rows.filter(({ span }) => span.name === 'repair_agent.proposal');
+  const decisions = rows.filter(({ span }) => span.name === 'progress.decision');
+  if (!agent.length && !decisions.length) return '';
+  const head = '<h2>Repair agent</h2><p class="meta">Mỗi đề xuất sửa và mỗi lần đổi cách sửa đều được ghi lại.</p>';
+  const attempts = agent.map(({ run, span }) => {
+    const a = span.attributes || {};
+    const files = (a['tizia.agent.files'] || []).map((file) => `<code>${esc(basename(file))}</code>`).join(' ');
+    const outcome = AGENT_OUTCOMES[a['tizia.agent.outcome']] || a['tizia.agent.outcome'] || 'chưa rõ';
+    return `<tr><td>Lượt ${esc(run.id)}</td><td>${esc(outcome)}</td><td>${esc(a['tizia.agent.action'] || 'không đổi')}</td>
+      <td>${files || '<span class="meta">không có</span>'}</td><td>${esc(a['tizia.agent.reason'] || '')}</td></tr>`;
+  }).join('');
+  const changes = decisions.map(({ span }) => {
+    const a = span.attributes || {};
+    const window = (a['tizia.progress.window'] || []).join(' · ');
+    const action = a['tizia.strategy.action'] ? ` → ${esc(a['tizia.strategy.action'])}` : '';
+    return `<li><span>${esc(a['tizia.progress.node'] || 'bước sửa')}${action}</span>
+      <span class="meta">${esc(a['tizia.progress.failure_class'] || '')}${window ? ` · ${esc(window)}` : ''}</span></li>`;
+  }).join('');
+  return `${head}${attempts ? `<div class="table-wrap"><table><thead><tr><th>Lượt chạy</th><th>Kết quả</th><th>Hành động</th><th>Tệp</th><th>Lý do</th></tr></thead>
+    <tbody>${attempts}</tbody></table></div>` : '<p class="blk meta">Chưa có đề xuất sửa nào.</p>'}
+    ${changes ? `<ol class="g-events">${changes}</ol>` : ''}`;
+}
+
 // Receipts describe the checked candidate at that time; they do not assert a release.
 export function renderVerificationClaims(trace = {}) {
   const claims = (trace.runs || []).flatMap(run => (run.spans || [])

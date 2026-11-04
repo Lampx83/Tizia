@@ -12,7 +12,7 @@
       { "id": "gate_1", "gate": 1 }, { "id": "gate_2", "gate": 2 }, { "id": "gate_2_5", "gate": 2.5 },
       { "id": "plan_ready", "end": true }, { "id": "plan_stopped", "end": true },
       { "id": "attempt_open" }, { "id": "reverify_open" }, { "id": "gate_3", "gate": 3 }, { "id": "gate_4", "gate": 4 }, { "id": "gate_5", "gate": 5 }, { "id": "gate_5_5", "gate": 5.5 },
-      { "id": "attempt_close" }, { "id": "repair_check" }, { "id": "repair" }, { "id": "verdict", "end": true }
+      { "id": "attempt_close" }, { "id": "repair_check" }, { "id": "repair_agent" }, { "id": "repair" }, { "id": "verdict", "end": true }
     ],
     "edges": [
       { "from": "gate_1", "on": "passed", "to": "gate_2" }, { "from": "gate_1", "on": "blocked", "to": "plan_stopped" },
@@ -26,6 +26,8 @@
       { "from": "gate_5_5", "on": "passed", "to": "attempt_close" }, { "from": "gate_5_5", "on": "blocked", "to": "attempt_close" },
       { "from": "attempt_close", "on": "passed", "to": "repair_check" },
       { "from": "repair_check", "on": "repair", "to": "repair" }, { "from": "repair_check", "on": "done", "to": "verdict" },
+      { "from": "repair_check", "on": "agent", "to": "repair_agent" },
+      { "from": "repair_agent", "on": "passed", "to": "repair" }, { "from": "repair_agent", "on": "blocked", "to": "verdict" },
       { "from": "repair", "on": "passed", "to": "attempt_open" }
     ],
     "recursion_limit": 200
@@ -103,6 +105,30 @@
       "similarity_window": 2,
       "similarity_max_chars": 20000,
       "topology_window": 6
+    },
+    "progress": {
+      "_why": "Progress-based loop control (runtime/progress.py): the loop slides a window over step signals instead of counting rounds. Signals and strategies are registries filled by the node that owns them; this block only holds the thresholds. Flags default off, so the old behaviour stays.",
+      "flag": "AI_BOARD_PROGRESS_LOOP",
+      "default_enabled": false,
+      "window": 3,
+      "min_signals": 1,
+      "repeat_hash": 2,
+      "similarity": 0.98,
+      "strategy_max_per_level": 2,
+      "max_children": 2
+    },
+    "repair_agent": {
+      "_why": "Last automatic layer before the admin, only for failure classes the deterministic ladder does not cover: one heavy-model call per attempt with the Gate 3 tool manifest, fenced context, schema and permission checks. Hard ceiling of attempts; flag defaults off.",
+      "flag": "AI_BOARD_MODEL_REPAIR",
+      "default_enabled": false,
+      "role": "repair_planner",
+      "model": "heavy",
+      "temperature": 0,
+      "max_tokens": 4096,
+      "context_chars": 6000,
+      "attempts": 3,
+      "model_calls": 3,
+      "tool_calls": 12
     },
     "behavior": {
       "_why": "Thresholds of the behaviour metrics shown per ticket (services/behavior.js). context_limit_tokens is the vLLM max_model_len; compression_ratio is compressed/original bytes, so a low value means repetitive output.",

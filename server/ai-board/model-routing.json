@@ -39,6 +39,9 @@
     ],
     "elevation_risk": [
       "vllm-heavy-coder"
+    ],
+    "repair_planner": [
+      "vllm-heavy-coder"
     ]
   },
   "candidates": {
@@ -55,7 +58,8 @@
         "calibration",
         "eval_judge",
         "compactor",
-        "elevation_risk"
+        "elevation_risk",
+        "repair_planner"
       ],
       "capabilities": [
         "json"
@@ -138,6 +142,11 @@
       "thinking": false,
       "temperature": 0,
       "num_predict": 600
+    },
+    "repair_planner": {
+      "thinking": false,
+      "temperature": 0,
+      "num_predict": 4096
     }
   },
   "reasoning": {
@@ -149,7 +158,8 @@
     "classifier": false,
     "calibration": true,
     "eval_judge": true,
-    "elevation_risk": false
+    "elevation_risk": false,
+    "repair_planner": false
   },
   "reasoning_extra_tokens": 8192
 }

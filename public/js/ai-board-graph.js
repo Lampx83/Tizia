@@ -20,6 +20,7 @@ const NODES = {
   reverify_open: { name: 'Check on new base', purpose: 'Rebuild the change on the latest base. Check it again.', at: [400, 380] },
   repair_check: { name: 'Repair needed?', purpose: 'Decide if one more repair is allowed.', at: [910, 380] },
   repair: { name: 'Repair', purpose: 'Record the reason. Start the attempt again.', at: [740, 380] },
+  repair_agent: { name: 'Repair agent', purpose: 'The AI proposes one fix when the fixed ladder would stop.', at: [570, 480] },
   verdict: { name: 'Verdict', purpose: 'Final result: ready, needs review, or blocked.', at: [910, 480] },
 };
 const STEP_STATE = { run: 'running', ok: 'succeeded', bad: 'failed' };
@@ -34,9 +35,11 @@ const PURPOSE_EN = {
 const PIN_LABEL = { candidate: 'change', plan: 'plan', base: 'base commit', harness: 'checker code', prompt: 'content check prompt',
   tool: 'toolset', model: 'model', oracle: 'permission list' };
 // Drawn: the main path, the repair and verdict branches, and blocked edges into plan_stopped. Other blocked edges would clutter the graph.
-const drawnEdge = (edge) => ['passed', 'repair', 'done'].includes(edge.on) || edge.to === 'plan_stopped';
+const drawnEdge = (edge) => ['passed', 'repair', 'done', 'agent'].includes(edge.on) || edge.to === 'plan_stopped';
 // Edges that loop back in the drawing. They run under the row so they do not cross nodes.
 const BACKWARD = new Set(['repair>attempt_open']);
+// Free corridor between the repair row and the agent row; the agent branch routes there, never across a box.
+const AGENT_CORRIDOR = 430;
 
 const gateOf = (id) => (id.startsWith('gate_') ? Number(id.slice(5).replace('_', '.')) : null);
 const numberOr = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
@@ -319,6 +322,10 @@ function logPanel(node) {
 function edgePath(from, to, back) {
   const [x1, y1] = NODES[from].at, [x2, y2] = NODES[to].at;
   const sx = Math.sign(x2 - x1), sy = Math.sign(y2 - y1);
+  if (from === 'repair_agent' || to === 'repair_agent') {
+    return to === 'repair_agent' ? `M${x1} ${y1}V${AGENT_CORRIDOR}H${x2}V${y2 - 28}`
+      : `M${x1} ${y1}V${AGENT_CORRIDOR}H${x2}V${y2 + 28}`;
+  }
   if (back) return `M${x1} ${y1}V${Math.max(y1, y2) + 60}H${x2}V${y2 + 28}`;
   if (y1 === y2) return `M${x1} ${y1}L${x2 - sx * 75} ${y2}`;
   if (x1 === x2) return `M${x1} ${y1}L${x2} ${y2 - sy * 28}`;

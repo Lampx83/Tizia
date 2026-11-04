@@ -59,7 +59,7 @@ def handlers(outcomes):
             queue = outcomes.get(nid, ["passed"])
             return queue.pop(0) if len(queue) > 1 else queue[0]
         return run
-    names = ["attempt_open", "gate_3", "gate_4", "gate_5", "gate_5_5", "attempt_close", "repair_check", "repair", "verdict"]
+    names = ["attempt_open", "gate_3", "gate_4", "gate_5", "gate_5_5", "attempt_close", "repair_check", "repair_agent", "repair", "verdict"]
     return {n: node(n) for n in names}, calls
 
 
