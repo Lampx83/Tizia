@@ -480,7 +480,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     screenshot = None
     smoke_ok = False
     http_observed = False
-    probe_id = functional.select(state)
+    probe_id = functional.select(state) or functional.select_fallback(state, pages)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
     teardown_confirmed = False
 
@@ -629,6 +629,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                 'needs_review, admin xem xét, không tự đạt: ' + str(functional_result.get('reason')))
                 else:
                     raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
+            if (probe_id in (functional.ROUTE_PROBE, functional.FALLBACK_TEXT_PROBE) and functional_result.get('passed')
+                    and test_files and not generated_ok):
+                functional_result = {**functional_result, 'needs_review': True, 'oracle_passed': True, 'disagree': True}
+                logs.append('Oracle từ diff đạt nhưng generated test đỏ: needs_review, admin xem xét, không tự đạt')
             kind = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)

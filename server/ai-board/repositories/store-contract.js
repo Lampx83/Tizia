@@ -95,6 +95,8 @@ const ORACLE_COVERAGE = {
   'text-visible-v1': ['rendered_text'],
   'copy-response-v1': ['clipboard'],
   'search-activity-v1': ['filtering'],
+  'fallback-route-v1': ['route_contract'],
+  'fallback-rendered-text-v1': ['rendered_text'],
 };
 // Requests the harness has no oracle for: green smoke/generated evidence keeps the change for an admin, never a pass.
 const NO_ORACLE = 'No trusted behavioral oracle for this request';
@@ -335,11 +337,15 @@ function validatePrePrVerdict(value, selfRequest = false) {
   if (passing && !selfRequest && gate5.runner !== 'docker') {
     throw new WorkerContractError('passing verdict requires gate 5 on real docker');
   }
+  // Generated test disagreed with a diff-derived oracle: the harness flags it, so it is evidence for a human only.
+  const reviewed = covered && functional.needs_review === true && functional.oracle_passed === true;
   if (value.outcome === 'ready_for_pr' && noOracle)
     throw new WorkerContractError('a request without a trusted oracle cannot pass automatically');
+  if (value.outcome === 'ready_for_pr' && functional.needs_review === true)
+    throw new WorkerContractError('a run flagged for review cannot pass automatically');
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
     throw new WorkerContractError('ready verdict requires low or medium risk');
-  if (value.outcome === 'needs_review' && !noOracle && !['high', 'critical'].includes(gate55?.risk_level))
+  if (value.outcome === 'needs_review' && !noOracle && !reviewed && !['high', 'critical'].includes(gate55?.risk_level))
     throw new WorkerContractError('review verdict requires high or critical risk');
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);

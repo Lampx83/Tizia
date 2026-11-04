@@ -2,6 +2,9 @@
 import json
 import re
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 NO_ORACLE = 'No trusted behavioral oracle for this request'
@@ -9,12 +12,15 @@ QUEUE_PROBE = 'queue-worker-availability-v1'
 TEXT_PROBE = 'text-visible-v1'
 COPY_PROBE = 'copy-response-v1'
 SEARCH_PROBE = 'search-activity-v1'
+ROUTE_PROBE = 'fallback-route-v1'
+FALLBACK_TEXT_PROBE = 'fallback-rendered-text-v1'
 SEARCH_PAGE = '/school.html?domain=it'
 READY_TEXT = re.compile('phút nữa', re.IGNORECASE)  # ETA line shown while a worker is ready or busy
 OFFLINE_TEXT = re.compile('chưa thể ước tính', re.IGNORECASE)  # the requester's own words; a sentence-initial capital is the same text
 # Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/repositories/store-contract.js.
 ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',),
-           COPY_PROBE: ('clipboard',), SEARCH_PROBE: ('filtering',)}
+           COPY_PROBE: ('clipboard',), SEARCH_PROBE: ('filtering',), ROUTE_PROBE: ('route_contract',),
+           FALLBACK_TEXT_PROBE: ('rendered_text',)}
 
 _QUOTED = re.compile(r"""(?<!\w)(?:'([^'\n]{2,120})'|"([^"\n]{2,120})"|“([^”\n]{2,120})”|‘([^’\n]{2,120})’|«([^»\n]{2,120})»)""")
 _PAGE_LINE = re.compile(r'^\[Trang: .*\] \S+[ \t]*$', re.M)
@@ -122,14 +128,14 @@ def _still_shown(text, lines):
     return any(line == t or (len(t) >= 12 and t in line) for line in lines)
 
 
-def run_text(base, state, fixture, pages):
+def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
     """Open the changed page(s) as a logged-in user; every quoted 'present' text must show, every 'absent' one must not."""
-    expected = text_expectation(state)
-    fail = lambda reason, **extra: {'probe_id': TEXT_PROBE, 'passed': False, 'reason': reason, **extra}
+    expected = text_expectation(state) if expected is None else expected
+    fail = lambda reason, **extra: {'probe_id': probe_id, 'passed': False, 'reason': reason, **extra}
     if not pages:
         return fail('Không có trang nào để quan sát chữ hiển thị')
     if fixture is None:
-        return fail('Session fixture unavailable')
+        return {**fail('Session fixture unavailable'), 'infra': True}
     from playwright.sync_api import sync_playwright
     from gates import visual
     from gates.verify import _launch
@@ -153,7 +159,7 @@ def run_text(base, state, fixture, pages):
                 shown[path] = text
                 lines += [_norm(line) for line in page.evaluate('() => document.body.innerText').splitlines() if line.strip()]
         except Exception as error:
-            return fail(str(error)[:1000])
+            return {**fail(str(error)[:1000]), 'infra': True}
         finally:
             browser.close()
     seen = ' '.join(shown.values())
@@ -164,7 +170,7 @@ def run_text(base, state, fixture, pages):
         reason = 'Chữ người dùng yêu cầu không hiển thị trên trang: ' + ', '.join(repr(t) for t in missing)
     elif lingering:
         reason = 'Chữ cần bỏ vẫn còn trên trang: ' + ', '.join(repr(t) for t in lingering)
-    return {'probe_id': TEXT_PROBE, 'passed': reason is None, 'reason': reason, 'coverage': {'rendered_text': True},
+    return {'probe_id': probe_id, 'passed': reason is None, 'reason': reason, 'coverage': {'rendered_text': True},
             'observations': {'expected': json.dumps(expected, ensure_ascii=False),
                              **({'missing': json.dumps(missing, ensure_ascii=False)} if missing else {}),
                              **{f'page {path}': text[:1000] for path, text in shown.items()}}}
@@ -349,9 +355,91 @@ def run_search(base, fixture):
                 browser.close()
 
 
+def _added(state):
+    """Lines the diff adds (no +++ headers)."""
+    text = '\n'.join(str(item.get('diff', '')) for item in state.get('full_diff') or [])
+    return [line[1:] for line in text.splitlines() if line.startswith('+') and not line.startswith('+++')]
+
+
+_ROUTE = re.compile(r"""\b(?:app|router|route)\.(get|post|put|patch|delete)\s*\(\s*['"`](/[\w\-/.]*)['"`]""")
+
+
+def _added_routes(state):
+    """[(METHOD, path)] the diff registers; parameterised paths (':id') are not probed."""
+    return [(m.group(1).upper(), m.group(2)) for line in _added(state) for m in _ROUTE.finditer(line)][:5]
+
+
+def _added_texts(state):
+    """Visible text the diff adds to changed HTML; 12+ chars, at most 3 (short words appear everywhere)."""
+    from gates import visual
+    return [t for t in visual.changed_texts(state.get('full_diff'), '+') if len(t) >= 12][:3]
+
+
+def select_fallback(state, pages=()):
+    """Oracle from the diff when select() names none: added page text, else an added route."""
+    if select(state):
+        return None
+    if pages and _added_texts(state):
+        return FALLBACK_TEXT_PROBE
+    return ROUTE_PROBE if _added_routes(state) else None
+
+
+def _fetch(method, url):
+    """(status, body head) for one route; 4xx/5xx answered as status, network errors raised."""
+    request = urllib.request.Request(url, method=method, data=None if method == 'GET' else b'')
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            if urllib.parse.urlsplit(response.url).netloc != urllib.parse.urlsplit(url).netloc:
+                raise RuntimeError('route redirected outside the disposable app origin')
+            return response.status, response.read(500)
+    except urllib.error.HTTPError as error:
+        return error.code, error.read(500)
+
+
+def run_route(base, state):
+    """GET added route must answer 2xx; a write route must not answer 404 or 5xx (a CSRF refusal is a valid answer)."""
+    unavailable = lambda note: {'probe_id': None, 'passed': False, 'reason': NO_ORACLE, 'note': note[:300]}
+    routes = _added_routes(state)
+    if not routes:
+        return unavailable('no route in diff')
+    observations, problems = {}, []
+    for method, path in routes:
+        try:
+            status, body = _fetch(method, base + path)
+        except OSError as error:
+            return unavailable(f'route probe unavailable: {error}')
+        except RuntimeError as error:
+            return {'probe_id': ROUTE_PROBE, 'passed': False, 'reason': str(error)[:500], 'coverage': {'route_contract': True}}
+        key = f'{method} {path}'
+        observations[key] = f'HTTP {status}; body: {body.decode("utf-8", "replace")}'
+        answered = 200 <= status < 300 if method == 'GET' else status != 404 and status < 500
+        if not answered:
+            problems.append(f'Route mới không trả lời: {key} → HTTP {status}')
+    return {'probe_id': ROUTE_PROBE, 'passed': not problems, 'reason': '; '.join(problems)[:500] or None,
+            'coverage': {'route_contract': True}, 'observations': observations}
+
+
+def _fallback_text(base, state, fixture, pages):
+    """Diff's added text on changed pages; a probe that cannot run is no oracle, never a failure."""
+    texts = _added_texts(state)
+    if not texts:
+        return {'probe_id': None, 'passed': False, 'reason': NO_ORACLE, 'note': 'no added text in diff'}
+    try:
+        result = run_text(base, state, fixture, pages, expected={'present': texts, 'absent': []}, probe_id=FALLBACK_TEXT_PROBE)
+    except Exception as error:
+        result = {'infra': True, 'reason': str(error)}
+    if result.get('infra'):
+        return {'probe_id': None, 'passed': False, 'reason': NO_ORACLE, 'note': f"text probe unavailable: {result.get('reason')}"[:300]}
+    return result
+
+
 def run(base, probe_id, fixture=None, state=None, pages=()):
     if probe_id == TEXT_PROBE:
         return run_text(base, state or {}, fixture, list(pages))
+    if probe_id == FALLBACK_TEXT_PROBE:
+        return _fallback_text(base, state or {}, fixture, list(pages))
+    if probe_id == ROUTE_PROBE:
+        return run_route(base, state or {})
     if probe_id == COPY_PROBE:
         return run_copy(base, fixture)
     if probe_id == SEARCH_PROBE:
