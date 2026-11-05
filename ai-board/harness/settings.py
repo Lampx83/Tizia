@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     private_preview_enabled: bool = False
     model_routing: bool = False
     oracle_css_size: bool = False
+    compile_prose_verify: bool = False
 
     # mode
     tool_loop: Literal["", "1", "auto"] = ""

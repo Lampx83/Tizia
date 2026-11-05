@@ -26,6 +26,8 @@ from __future__ import annotations
 import json
 import posixpath
 import re
+import shlex
+import unicodedata
 from pathlib import Path
 
 import code_index
@@ -46,6 +48,9 @@ DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/mi
 # Plan nhiều lớp: verify/acceptance phải là lệnh chạy được, không phải câu mô tả.
 RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
 # File chưa có ở base chỉ được là trang mới, module JS mới, plugin _ai-generated mới, hoặc migration mới.
+PROSE_CHECK = re.compile(r"(?P<path>\S+)\s+(?:chứa chuỗi|chứa|contains)\s+'(?P<text>.+?)'"
+                         r"(?:\s+(?:và|and)\s+(?:không còn|no longer contains)\s+'(?P<gone>.+?)')?\.?")
+_SAFE_PATH = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
                      r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
@@ -115,6 +120,26 @@ def check_dag(subtasks: list[dict]) -> None:
         raise ValueError("depends_on tạo chu trình — DAG phải acyclic")
 
 
+def compile_prose_verify(text: str, files: set[str]) -> str | None:
+    """Prose 'path chứa 'x' [và không còn 'y'] → sh -c grep cmd. None nếu lạ form hoặc path ngoài files."""
+    s = unicodedata.normalize("NFC", text.strip())
+    if any(c in s for c in "\r\n\x00"):
+        return None
+    m = PROSE_CHECK.fullmatch(s)
+    if not m or m["path"] not in files or not _SAFE_PATH.fullmatch(m["path"]):
+        return None
+    if any(part in (".", "..") for part in m["path"].split("/")):
+        return None
+    texts = [m["text"]] + ([m["gone"]] if m["gone"] is not None else [])
+    if any(not t.strip() for t in texts):
+        return None
+    path = m["path"]
+    cmds = [f"grep -qF -- {shlex.quote(m['text'])} {path}"]
+    if m["gone"] is not None:
+        cmds.append(f"! grep -qF -- {shlex.quote(m['gone'])} {path}")
+    return f"sh -c {shlex.quote(' && '.join(cmds))}"
+
+
 def parse_plan(text: str) -> dict:
     """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema."""
     try:
@@ -154,6 +179,13 @@ def parse_plan(text: str) -> dict:
         if not isinstance(acceptance, list) or not acceptance or any(
                 not isinstance(item, str) or not item.strip() for item in acceptance):
             raise ValueError("acceptance phải là mảng chuỗi không rỗng")
+    if get_settings().compile_prose_verify:
+        files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
+        for st in subtasks:
+            st["verify"] = compile_prose_verify(st["verify"], files) or st["verify"]
+        if acceptance is not None:
+            acceptance = [compile_prose_verify(item, files) or item for item in acceptance]
+            plan["acceptance"] = acceptance
     feature_plan = ((acceptance is not None or any(st.get("layer") for st in subtasks))
                     and (len(subtasks) > 1 or any(st.get("layer") in ("db", "backend") for st in subtasks)))
     if feature_plan:
