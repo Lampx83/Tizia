@@ -318,3 +318,12 @@ def test_identifier_shaped_quotes_are_not_visible_labels(quote):
 def test_only_identifier_quotes_leave_no_text_oracle():
     assert functional.select(ASK('Đăng ký trang, file chứa chuỗi "so-tay-git"')) is None
     assert functional.select(ASK('Thêm nút "Nộp bài" và đăng ký "so-tay-git"')) == functional.TEXT_PROBE
+
+
+def test_nfd_page_text_matches_nfc_expectation():
+    import unicodedata
+    nfc = 'Kiểm tra bảng tập nút thuốc'
+    nfd = unicodedata.normalize('NFD', nfc)
+    assert nfd != nfc
+    assert functional._norm(nfd) == functional._norm(nfc)
+    assert functional._still_shown(nfc, [functional._norm(nfd)])
