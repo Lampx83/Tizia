@@ -89,8 +89,17 @@ class Settings(BaseSettings):
     qwen_tokenizer: Path | None = None
     retrieval_weights: Path | None = None
 
+    gate1_probe_timeout_s: float = 45.0
+
     # secret; worker.take_secret vẫn đọc-rồi-xoá key của chính nó khỏi môi trường
     internal_key: SecretStr = SecretStr("")
+
+    @field_validator("gate1_probe_timeout_s")
+    @classmethod
+    def _probe_timeout(cls, value):
+        if not 1.0 <= value <= 300.0:
+            raise ValueError("must be within 1..300 seconds")
+        return value
 
     @field_validator("tool_loop", mode="before")
     @classmethod

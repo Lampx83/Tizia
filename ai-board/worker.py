@@ -1365,6 +1365,12 @@ def screenshot_payload(shots: list[dict]) -> list[dict]:
     return images
 
 
+def gate1_probe_client():
+    """OllamaClient cho preflight; timeout = AI_BOARD_GATE1_PROBE_TIMEOUT_S (mặc định 45s), không ảnh hưởng call thật."""
+    from models import OllamaClient
+    return dataclasses.replace(OllamaClient.from_env(), timeout_s=get_settings().gate1_probe_timeout_s)
+
+
 def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl: float = 60.0) -> Callable[[], dict | None]:
     """Generate 1 token on each intake model. None = load được hết, else model_unavailable. Chỉ cache thành công."""
     ok_at: dict[str, float] = {}
@@ -1382,11 +1388,15 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
                     return {'status': 'model_unavailable', 'model': role,
                             'error': f'{role}: endpoint đang cooldown, không probe'}
                 budget = Budget(max_model_calls=6, max_units=600, max_wall_clock_s=600.0)
+                # Probe failure must not arm the router cooldown, or the backoff retry is refused without probing.
+                cooldowns = dict(ollama.routing.cooldowns)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
                         role=role, budget=budget, format=None,
                         options={'num_predict': 1})
                 except Exception as error:
+                    ollama.routing.cooldowns.clear()
+                    ollama.routing.cooldowns.update(cooldowns)
                     ok_at.pop(role, None)
                     from runtime import root_allowance as _root
                     from runtime import budget as _budget
@@ -2233,10 +2243,7 @@ def main(argv: list[str] | None = None) -> int:
     import memory
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
-        from models import OllamaClient
-        # 45s: probe 1 token bình thường 0,1s; quá 45s là endpoint treo, fail nhanh để endpoint vào cooldown
-        # thay vì giữ worker suốt 3 lần thử của một call.
-        worker.model_check = model_preflight(dataclasses.replace(OllamaClient.from_env(), timeout_s=45.0))
+        worker.model_check = model_preflight(gate1_probe_client())
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None,
                                        client=worker.client, worker_id=worker.worker_id)
         if engine_url := get_settings().engine_url:

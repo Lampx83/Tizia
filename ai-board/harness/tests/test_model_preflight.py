@@ -102,7 +102,7 @@ def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypat
     import main
     roles = []
     monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, role=None, **k: roles.append(role) or {})
-    routing = type('Router', (), {'candidates': staticmethod(lambda role: [] if role == 'classifier' else [{}])})()
+    routing = type('Router', (), {'candidates': staticmethod(lambda role: [] if role == 'classifier' else [{}]), 'cooldowns': {}})()
     ollama = type('Models', (), {'routing': routing, 'gate1_model': 'm'})()
     assert model_preflight(ollama)() is None
     assert roles == ['gate1']
@@ -112,7 +112,7 @@ def test_probe_is_skipped_while_the_endpoint_cools_down(monkeypatch):
     import main
     calls = []
     monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, **k: calls.append(1) or {})
-    routing = type('Router', (), {'candidates': staticmethod(lambda role, exclude=(): [])})()
+    routing = type('Router', (), {'candidates': staticmethod(lambda role, exclude=(): []), 'cooldowns': {}})()
     ollama = type('Models', (), {'routing': routing, 'gate1_model': 'm'})()
     verdict = model_preflight(ollama)()
     assert verdict['status'] == 'model_unavailable' and 'cooldown' in verdict['error']
@@ -145,3 +145,98 @@ def test_gpu_wait_doubles_up_to_the_contract_ceiling():
         waits.append(worker.run_once()['retry_in_s'])
         now[0] += waits[-1]
     assert waits == [60.0, 120.0, 240.0, 300.0, 300.0]
+
+
+class RoutedOllama(FakeOllama):
+    """Fake routed gateway: one gate1 candidate, router cooldown rules like ModelRouter.candidates."""
+
+    def __init__(self, now):
+        super().__init__()
+        self.now, self.down, self.cooldowns = now, True, {}
+        self.routing = self
+
+    def clock(self):
+        return self.now[0]
+
+    def candidates(self, role, exclude=()):
+        if role != 'gate1' or self.cooldowns.get('ollama', 0) > self.clock():
+            return []
+        return [{'provider': 'ollama', 'id': 'g1', 'model': 'g1'}]
+
+    def failed(self, candidate):
+        self.cooldowns[candidate['provider']] = self.clock() + 60
+
+
+def routed_call(ollama, now):
+    """Fake Deps.call_model: a down endpoint hangs 45 s then fails, arming the router cooldown like pipeline.py."""
+    def call(self, model, prompt, *, role=None, **kwargs):
+        ollama.calls.append((role, prompt))
+        if not ollama.down:
+            return {}
+        now[0] += 45.0
+        ollama.failed(ollama.candidates(role)[0])
+        raise TimeoutError('timed out')
+    return call
+
+
+def test_failed_preflight_probe_does_not_arm_cooldown(monkeypatch):
+    import main
+    now = [0.0]
+    ollama = RoutedOllama(now)
+    monkeypatch.setattr(main.Deps, 'call_model', routed_call(ollama, now))
+    verdict = model_preflight(ollama, clock=lambda: now[0])()
+    assert verdict['status'] == 'model_unavailable' and 'timed out' in verdict['error']
+    assert ollama.candidates('gate1') and ollama.cooldowns == {}
+
+
+def test_real_call_failure_still_arms_cooldown():
+    now = [0.0]
+    ollama = RoutedOllama(now)
+    ollama.failed(ollama.candidates('gate1')[0])
+    assert ollama.candidates('gate1') == []
+    now[0] = 61.0
+    assert ollama.candidates('gate1')
+
+
+def test_next_probe_after_backoff_actually_probes_and_clears_backoff(monkeypatch):
+    import main
+    now = [0.0]
+    ollama = RoutedOllama(now)
+    monkeypatch.setattr(main.Deps, 'call_model', routed_call(ollama, now))
+    worker, transport = worker_with(ollama, lambda: now[0])
+    assert worker.run_once()['retry_in_s'] == 60.0
+    ollama.down = False
+    now[0] = 60.0
+    assert worker.run_once()['status'] != 'waiting_gpu'
+    assert ollama.calls[-1][0] == 'gate1'
+    assert any(call[1].endswith('/claim') for call in transport.calls)
+    assert worker._gpu_backoff_s == 0.0
+
+
+def test_gate1_probe_timeout_default_is_45s(monkeypatch):
+    import worker
+    from models import OllamaClient
+    from settings import reset_settings
+    monkeypatch.delenv('AI_BOARD_GATE1_PROBE_TIMEOUT_S', raising=False)
+    monkeypatch.setattr(OllamaClient, 'from_env', lambda *a, **kw: OllamaClient())
+    reset_settings()
+    assert worker.gate1_probe_client().timeout_s == 45.0
+
+
+def test_gate1_probe_timeout_comes_from_env(monkeypatch):
+    import worker
+    from models import OllamaClient
+    from settings import reset_settings
+    monkeypatch.setenv('AI_BOARD_GATE1_PROBE_TIMEOUT_S', '120')
+    monkeypatch.setattr(OllamaClient, 'from_env', lambda *a, **kw: OllamaClient())
+    reset_settings()
+    assert worker.gate1_probe_client().timeout_s == 120.0
+
+
+def test_gate1_probe_timeout_rejects_out_of_range(monkeypatch):
+    import pytest
+    from settings import get_settings, reset_settings
+    reset_settings()
+    for bad in ('0', '-1', '301', 'nan', 'abc'):
+        with pytest.raises(ValueError):
+            get_settings({'AI_BOARD_GATE1_PROBE_TIMEOUT_S': bad})
