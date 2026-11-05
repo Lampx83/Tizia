@@ -377,6 +377,12 @@ function validatePrePrVerdict(value, selfRequest = false) {
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),
       detail: String(value.loop_guard.detail ?? '').slice(0, 300) } } : {}),
+    ...(value.stop_report && typeof value.stop_report === 'object' ? { stop_report: {
+      class: String(value.stop_report.class ?? '').slice(0, 40),
+      tried: (Array.isArray(value.stop_report.tried) ? value.stop_report.tried : []).slice(0, 10).map((g) => Number(g)),
+      blocked_gate: Number(value.stop_report.blocked_gate),
+      reason: String(value.stop_report.reason ?? '').slice(0, 300),
+    } } : {}),
     ...(value.progress && typeof value.progress === 'object' && !Array.isArray(value.progress) ? { progress: cleanProgress(value.progress) } : {}),
     ...(value.strategy !== undefined ? { strategy: value.strategy == null ? null : String(value.strategy).slice(0, 80) } : {}),
     ...(Array.isArray(value.repair_agent) && value.repair_agent.length ? { repair_agent: cleanRepairAgent(value.repair_agent) } : {}),
