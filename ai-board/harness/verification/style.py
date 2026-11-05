@@ -89,15 +89,15 @@ def judge(checks, observed):
 
 def run_style(base, state, fixture, pages):
     """Open changed pages as a logged-in user; compare computed style of selected elements to the diff's value."""
-    from playwright.sync_api import sync_playwright
-    from gates import visual
-    from gates.verify import _launch
     checks = _checks(state) or []
     unavailable = lambda note: {'probe_id': None, 'passed': False, 'reason': functional.NO_ORACLE, 'note': note[:300]}
     if not checks or not pages:
         return unavailable('no checkable declaration or page')
     if fixture is None:
         return unavailable('Session fixture unavailable')
+    from playwright.sync_api import sync_playwright
+    from gates import visual
+    from gates.verify import _launch
     observed = [[0, 0] for _ in checks]
     with sync_playwright() as p:
         browser = _launch(p)
