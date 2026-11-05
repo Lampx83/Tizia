@@ -86,6 +86,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       WHERE id=?${onlyOpen ? " AND status != 'cancelled'" : ''}
     `, [status, phase, note, reason === undefined ? root.internal_reason : reason, now, root.id]);
     await db.run(`UPDATE ai_workers SET status='idle', current_ticket_id=NULL, updated_at=? WHERE current_ticket_id=?`, [now, root.id]);
+    if (status === 'cancelled' || status === 'failed') {
+      // Zero metrics: the worker's real GPU time is not known here, and an open hold would charge the unknown ceiling.
+      await db.run('UPDATE ai_work_reservations SET tokens_used=0, metrics_json=?, settled_at=? WHERE root_ticket_id=? AND settled_at IS NULL',
+        [JSON.stringify({ tokens_in: null, tokens_out: null, wall_ms: null, gpu_ms: 0 }), now, root.id]);
+    }
     if (!await db.get('SELECT 1 FROM ai_events WHERE ticket_id=? AND idempotency_key=?', [root.id, event.idem])) {
       await db.run(insertEvent, [root.id, event.type, event.actorType, String(event.actorId), `${root.status}->${status}`,
         note, event.detail ?? null, event.idem, now]);
@@ -2660,6 +2665,7 @@ function resumeSummary(journal) {
     folderBrief,
     listWorkers,
     cancelRequest,
+    dailyGpuStatus,
     requestRollback,
     submitRollback,
     requestReverify,
