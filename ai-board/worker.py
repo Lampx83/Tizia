@@ -26,7 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import coverage, loop_guard, objection_repeat, progress  # noqa: E402
+from runtime import coverage, loop_guard, objection_repeat, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, contract, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
 CONTRACT = contract()
@@ -825,9 +825,14 @@ class _Execution:
             reason = f"loop stop {self.halt['reason']}: {self.halt['detail']} | {reason}"
         elif self.stop_note and not passed:
             reason = f"{reason} | repair stop: {self.stop_note}"
+        stop = None
+        if not passed and stop_report.enabled():
+            stop = stop_report.build(outcome, reason, last["gate"], kind, [g["gate"] for g in gates])
+            reason = stop_report.render(stop)
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
+            **({"stop_report": stop} if stop else {}),
             **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),

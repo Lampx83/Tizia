@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     model_routing: bool = False
     oracle_css_size: bool = False
     compile_prose_verify: bool = False
+    stop_report_v2: bool = False
 
     # mode
     tool_loop: Literal["", "1", "auto"] = ""

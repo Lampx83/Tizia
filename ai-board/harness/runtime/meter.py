@@ -205,6 +205,7 @@ class Tracer:
                  "tizia.role": request.get("role"), "tizia.prompt_roles": request.get("prompt_roles")}
         if request.get("skills"):
             attrs["tizia.skills.selected"] = [s["name"] for s in request["skills"]]
+            attrs["tizia.skill.id"] = request["skills"][0]["name"]
             attrs["tizia.skills.dropped"] = [f"{d['name']}: {d['reason']}" for d in request["skill_selection"]["dropped"]]
         if request.get("temperature") is not None:
             attrs["gen_ai.request.temperature"] = request["temperature"]
