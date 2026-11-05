@@ -233,3 +233,62 @@ def test_repair_check_routes_to_the_agent_only_for_a_ladder_that_would_stop(monk
     assert run.repair_check() == "agent"
     run.gates[-1]["repair_action"] = progress.REPAIR_CODE
     assert run.repair_check() == "done"
+
+
+def transient_run(deps, monkeypatch):
+    run = execution(deps)
+    result = {"gate": 5, "blocked": True, "failure_class": "transient", "reason": "mạng lỗi tạm thời",
+              "evidence": {"text": ""}}
+    run.last_result = result
+    run.gates[-1] = {**run.gates[-1], **result}
+    return run
+
+
+def test_diagnose_off_keeps_the_ladder_routing_an_infra_failure(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_REPAIR_DIAGNOSE", raising=False)
+    deps = Deps(proposal())
+    run = transient_run(deps, monkeypatch)
+    assert "agent" in [run.repair_check() for _ in range(3)]
+
+
+def test_diagnose_on_never_routes_an_infra_failure_to_the_agent(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REPAIR_DIAGNOSE", "1")
+    deps = Deps(proposal())
+    run = transient_run(deps, monkeypatch)
+    assert "agent" not in [run.repair_check() for _ in range(3)]
+    assert deps.calls == []
+
+
+def test_diagnose_on_routes_a_quality_failure_to_the_agent(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REPAIR_DIAGNOSE", "1")
+    run = execution(Deps(proposal()))
+    monkeypatch.setattr(run, "_repair_allowed", lambda last: False)
+    run.gates[-1]["repair_class"] = "test_assertion"
+    run.gates[-1]["repair_action"] = progress.STOP_ADMIN
+    assert run.repair_check() == "agent"
+
+
+def test_diagnose_on_records_the_diagnosis_with_class_and_gate(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REPAIR_DIAGNOSE", "1")
+    run = execution(Deps(proposal()))
+    run.gates[-1]["repair_class"] = "test_assertion"
+    assert run.repair_agent() == "passed"
+    record = run.agent_evidence[-1]
+    assert record["outcome"] == "applied"
+    assert record["diagnosis"] == "selector lệch"
+    assert record["failure_class"] == "test_assertion" and record["gate"] == 5
+
+
+def test_diagnose_on_records_the_diagnosis_of_a_denied_scope_edit(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REPAIR_DIAGNOSE", "1")
+    run = execution(Deps(proposal(changes=[{"file": "public/js/other.js", "search": "x", "replace": "y"}])))
+    assert run.repair_agent() == "blocked"
+    record = run.agent_evidence[-1]
+    assert record["outcome"] == "denied" and record["diagnosis"] == "selector lệch"
+
+
+def test_diagnose_off_adds_no_diagnosis_fields(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_REPAIR_DIAGNOSE", raising=False)
+    run = execution(Deps(proposal()))
+    assert run.repair_agent() == "passed"
+    assert "diagnosis" not in run.agent_evidence[-1]

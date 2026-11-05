@@ -43,6 +43,14 @@ def applies(action) -> bool:
     return str(action or "") == progress.STOP_ADMIN
 
 
+ROUTABLE = frozenset({"syntax", "test_assertion", "acceptance_command", "unclassified"})
+
+
+def routable(failure_class) -> bool:
+    """Quality failures only; infra, busy, budget, timeout, scope and plan stops never reach the agent."""
+    return str(failure_class or "") in ROUTABLE
+
+
 def visual(result: dict) -> bool:
     """Gate 5 blocked because the new UI is worse than the base (reason prefix of gates/verify.py)."""
     return "giao diện tệ hơn" in str(result.get("reason") or "")

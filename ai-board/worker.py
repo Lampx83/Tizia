@@ -564,7 +564,7 @@ class _Execution:
             return "done"
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
             from runtime import repair_agent as agent
-            if agent.applies(last.get("repair_action")) and self._agent_available():
+            if agent.applies(last.get("repair_action")) and self._agent_available() and self._diagnose_routes(last):
                 return "agent"
             return "done"
         if not self.budget.tick():
@@ -657,6 +657,17 @@ class _Execution:
             diff=diff_text, evidence=evidence,
             state=loop_guard.state_hash(diff_text, str(self.last_result.get("reason")),
                                         f"{self.last_result.get('gate')}:{self.kind}"))
+
+    def _diagnose_routes(self, last: dict) -> bool:
+        """Flag AI_BOARD_REPAIR_DIAGNOSE: agent only for quality failures; off keeps every ladder stop routable."""
+        from runtime import repair_agent as agent
+        return not get_settings().repair_diagnose or agent.routable(last.get("repair_class"))
+
+    def _diagnosis_note(self, proposal: dict, last: dict) -> dict:
+        """Flag-gated fields that make the stated diagnosis auditable per attempt."""
+        if not get_settings().repair_diagnose:
+            return {}
+        return {"diagnosis": proposal["diagnosis"], "failure_class": last.get("repair_class"), "gate": last["gate"]}
 
     def _agent_available(self) -> bool:
         """Agent runs only before its attempt cap and never twice for the same failure input."""
@@ -756,7 +767,7 @@ class _Execution:
                               plan_hash=levels.fingerprint(self.plan), manifest=tool_loop.MANIFEST)
         if not verdict["ok"]:
             self._agent_note({"outcome": "denied", "reason": verdict["reason"][:300], "files": verdict["files"],
-                              "action": proposal["action"]})
+                              "action": proposal["action"], **self._diagnosis_note(proposal, last)})
             self.stop_note = f"repair agent: {verdict['reason']}"
             return "blocked"
         if proposal["action"] == progress.STOP_ADMIN:
@@ -773,7 +784,7 @@ class _Execution:
         progress.record(getattr(self.deps, "trace", None), node="repair_agent", failure_class=last.get("repair_class"),
                         action=proposal["action"], window=steps)
         self._agent_note({"outcome": "applied", "action": proposal["action"], "files": verdict["files"],
-                          "reason": proposal["diagnosis"][:300]})
+                          "reason": proposal["diagnosis"][:300], **self._diagnosis_note(proposal, last)})
         return "passed"
 
     def _apply_agent(self, proposal: dict, files: list[str]) -> None:

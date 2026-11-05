@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     react_plan: bool | None = None
     progress_loop: bool | None = None
     model_repair: bool | None = None
+    repair_diagnose: bool = False
     sandbox_tool: bool = False
     skill_select: bool | None = None
     multimodal: bool = False
