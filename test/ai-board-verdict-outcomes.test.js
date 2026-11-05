@@ -515,3 +515,20 @@ test('a request without a harness oracle is kept for review instead of being blo
   assert.equal(root.internal_reason, why);
   assert.equal((await db.prepare('SELECT outcome FROM ai_runs ORDER BY id DESC LIMIT 1').get()).outcome, 'needs_review');
 });
+
+test('a stop report from the verdict reaches the admin run trace; flag-off verdicts add no key', async () => {
+  const { db, store, submit } = await plannedRoot();
+  const stop = { class: 'check_failed', tried: [1, 2, 3, 4, 5], blocked_gate: 5, reason: 'smoke fail' };
+  await submit(blocked(5, 'smoke fail', 'ordinary', { stop_report: stop }));
+  assert.deepEqual((await store.getRequestTrace(1)).runs.at(-1).stop_report, stop);
+  const stored = JSON.parse((await db.prepare('SELECT evidence_json FROM ai_runs').get()).evidence_json).verdict;
+  assert.deepEqual(stored.stop_report, stop);
+  db.close();
+});
+
+test('a verdict without stop_report leaves the admin run trace unchanged', async () => {
+  const { db, store, submit } = await plannedRoot();
+  await submit(blocked(5, 'smoke fail', 'ordinary'));
+  assert.equal('stop_report' in (await store.getRequestTrace(1)).runs.at(-1), false);
+  db.close();
+});

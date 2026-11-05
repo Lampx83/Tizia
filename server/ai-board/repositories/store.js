@@ -2191,6 +2191,7 @@ function resumeSummary(journal) {
       return { ...run, rollback, gates, calls, change_class: changeClass, runner_failure: runnerFailure, totals: summarizeCalls(calls.map((c) => c.evidence)),
         commit: produced ? { branch: produced.branch, head_sha: produced.head_sha } : null,
         loop_guard: loopGuardView(verdict),
+        ...(verdict?.stop_report ? { stop_report: verdict.stop_report } : {}),
         budget_used: budgetUsed, budget_limit: root.budget_limit,
         subtask_count: subtaskCount, wall_clock_limit_s: wallClockLimit(subtaskCount, provider),
         progress: runProgress({ ...run, gates, calls }, events, live) };
