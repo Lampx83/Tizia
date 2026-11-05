@@ -14,13 +14,14 @@ COPY_PROBE = 'copy-response-v1'
 SEARCH_PROBE = 'search-activity-v1'
 ROUTE_PROBE = 'fallback-route-v1'
 FALLBACK_TEXT_PROBE = 'fallback-rendered-text-v1'
+STYLE_PROBE = 'computed-style-v1'
 SEARCH_PAGE = '/school.html?domain=it'
 READY_TEXT = re.compile('phút nữa', re.IGNORECASE)  # ETA line shown while a worker is ready or busy
 OFFLINE_TEXT = re.compile('chưa thể ước tính', re.IGNORECASE)  # the requester's own words; a sentence-initial capital is the same text
 # Oracle -> coverage flags it must report true. Keep in sync with ORACLE_COVERAGE in server/ai-board/repositories/store-contract.js.
 ORACLES = {QUEUE_PROBE: ('requester_api', 'mounted_ui', 'recovery'), TEXT_PROBE: ('rendered_text',),
            COPY_PROBE: ('clipboard',), SEARCH_PROBE: ('filtering',), ROUTE_PROBE: ('route_contract',),
-           FALLBACK_TEXT_PROBE: ('rendered_text',)}
+           FALLBACK_TEXT_PROBE: ('rendered_text',), STYLE_PROBE: ('computed_style',)}
 
 _QUOTED = re.compile(r"""(?<!\w)(?:'([^'\n]{2,120})'|"([^"\n]{2,120})"|“([^”\n]{2,120})”|‘([^’\n]{2,120})’|«([^»\n]{2,120})»)""")
 _PAGE_LINE = re.compile(r'^\[Trang: .*\] \S+[ \t]*$', re.M)
@@ -440,6 +441,9 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
         return _fallback_text(base, state or {}, fixture, list(pages))
     if probe_id == ROUTE_PROBE:
         return run_route(base, state or {})
+    if probe_id == STYLE_PROBE:
+        from verification import style
+        return style.run_style(base, state or {}, fixture, list(pages))
     if probe_id == COPY_PROBE:
         return run_copy(base, fixture)
     if probe_id == SEARCH_PROBE:

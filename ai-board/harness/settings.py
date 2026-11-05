@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     gate25_sim_user: bool = False
     private_preview_enabled: bool = False
     model_routing: bool = False
+    oracle_css_size: bool = False
 
     # mode
     tool_loop: Literal["", "1", "auto"] = ""

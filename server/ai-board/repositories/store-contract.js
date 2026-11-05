@@ -97,6 +97,7 @@ const ORACLE_COVERAGE = {
   'search-activity-v1': ['filtering'],
   'fallback-route-v1': ['route_contract'],
   'fallback-rendered-text-v1': ['rendered_text'],
+  'computed-style-v1': ['computed_style'],
 };
 // Requests the harness has no oracle for: green smoke/generated evidence keeps the change for an admin, never a pass.
 const NO_ORACLE = 'No trusted behavioral oracle for this request';
