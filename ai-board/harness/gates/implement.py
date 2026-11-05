@@ -707,7 +707,11 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         check_merge_markers(subtask, candidate)
 
     def run_loop():
-        """(proposal | None, blocked gate result | None)"""
+        """(proposal | None, blocked gate result | None); (None, None) falls back to one-shot."""
+        if not state.get("checkout_source"):
+            if trace:
+                trace.note("tool", "tool loop skipped", "tool_loop_skipped: no checkout_source")
+            return None, None
         looped = tool_loop.run_subtask(
             subtask, current, deps=deps, budget=budget, model=model, source=state["checkout_source"], sha=state["base_sha"],
             check=check_candidate,

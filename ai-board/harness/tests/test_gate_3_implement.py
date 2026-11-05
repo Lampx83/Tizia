@@ -609,3 +609,15 @@ def test_single_subtask_plan_prompt_is_byte_identical_to_today(tmp_path):
         title=subtask["title"], file=subtask["file"], verify=subtask["verify"])
     assert models.calls[0]["prompt"] == expected
     assert subtask_contract.block(plan) == ""
+
+
+def test_tool_loop_without_checkout_source_falls_back_to_one_shot(tmp_path, monkeypatch):
+    from runtime import tool_loop
+    monkeypatch.setenv("AI_BOARD_TOOL_LOOP", "1")
+    monkeypatch.setattr(tool_loop, "run_subtask", lambda *a, **k: pytest.fail("loop must not run without checkout_source"))
+    codegen = {"code": "console.log('hi');\n", "test_file": "test/hi.test.js", "test": "import test from 'node:test';\n// test hi\n"}
+    models = FakeModels(plan_with(["features"]), codegen=codegen)
+    out = implement.run({"plan": plan_with(["features"])}, deps_with(models), Budget(max_wall_clock_s=999),
+                        repo_dir=tmp_path)
+    assert not out.get("blocked"), out.get("reason")
+    assert out["diffs"]
