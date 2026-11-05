@@ -2,7 +2,9 @@
 from dataclasses import replace
 from pathlib import Path
 import json
+import shutil
 import subprocess
+import unicodedata
 from types import SimpleNamespace
 
 import pytest
@@ -480,6 +482,47 @@ def test_a_described_acceptance_is_not_executed_as_a_shell_command(tmp_path):
     out = verify.run({**state(checkout(tmp_path)), "acceptance": ["Trang hiện bộ thẻ"]}, runner=runner)
     assert out["blocked"] is False
     assert not [args for args, _ in runner.calls if "sh" in args]
+
+
+VI_TEXT = "Bảng tập kiểm nút thuốc"
+
+
+def _grep_exit(tmp_path, page, literal):
+    (tmp_path / "page.html").write_text(page, encoding="utf-8")
+    cmd = verify.expand_nfd_literals(f"curl -s x | grep -q '{literal}' page.html")
+    return subprocess.run(["sh", "-c", cmd], cwd=tmp_path, capture_output=True).returncode
+
+
+needs_sh = pytest.mark.skipif(shutil.which("sh") is None, reason="needs a POSIX sh")
+
+
+@needs_sh
+def test_nfd_page_matches_nfc_literal(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    assert _grep_exit(tmp_path, f"<h1>{nfd}</h1>", unicodedata.normalize("NFC", VI_TEXT)) == 0
+
+
+@needs_sh
+def test_nfc_page_matches_nfd_literal(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    assert _grep_exit(tmp_path, f"<h1>{VI_TEXT}</h1>", nfd) == 0
+
+
+@needs_sh
+def test_truly_different_vietnamese_text_still_fails(tmp_path):
+    assert _grep_exit(tmp_path, f"<h1>{VI_TEXT}</h1>", "Bảng tập kiểm nút xương") == 1
+
+
+@needs_sh
+def test_shell_metacharacters_in_literal_stay_inert(tmp_path):
+    literal = "Thuốc $(touch pwned) `touch pwned2` ; x"
+    assert _grep_exit(tmp_path, f"<h1>{VI_TEXT}</h1>", literal) == 1
+    assert not (tmp_path / "pwned").exists() and not (tmp_path / "pwned2").exists()
+
+
+def test_ascii_command_is_byte_identical():
+    cmd = "curl -fsS http://127.0.0.1:8041/ | grep -q 'Hello world' && npm test"
+    assert verify.expand_nfd_literals(cmd) == cmd
 
 
 class InternalRunner(FakeRunner):

@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import unicodedata
 import uuid
 import secrets
 import urllib.request
@@ -33,6 +34,23 @@ def acceptance_commands(state: dict) -> list[str]:
     from gates.brainstorm import RUNNABLE  # cùng định nghĩa "lệnh chạy được" với cổng 1
     items = state.get("acceptance") or []
     return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
+
+
+_GREP_LITERAL = re.compile(r"(\bgrep(?:\s+-[A-Za-z]+)*)\s+'([^']*)'")
+
+
+def expand_nfd_literals(item: str) -> str:
+    """Rewrite grep '<non-ASCII>' to match its NFC and NFD forms; other commands unchanged."""
+    # ponytail: only single-quoted grep patterns; mixed-form text and double quotes still byte-match.
+    def swap(match: re.Match) -> str:
+        literal = match.group(2)
+        if literal.isascii():
+            return match.group(0)
+        nfc, nfd = unicodedata.normalize("NFC", literal), unicodedata.normalize("NFD", literal)
+        if "'" in nfc or "'" in nfd:
+            return match.group(0)
+        return f"{match.group(1)} -e '{nfc}' -e '{nfd}'"
+    return _GREP_LITERAL.sub(swap, item)
 
 
 def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
@@ -575,7 +593,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             acceptance = acceptance_commands(state)
             for item in acceptance:
                 try:
-                    command([*compose, "exec", "-T", "tizia", "sh", "-lc", item], timeout=120)
+                    command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
                     raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
