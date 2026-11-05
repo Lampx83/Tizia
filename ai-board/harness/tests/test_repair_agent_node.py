@@ -57,6 +57,9 @@ class Budget:
     def tick(self):
         return True
 
+    def spend_repair(self):
+        return True
+
 
 def execution(deps, *, produced=None, state=None, gates=None):
     plan = json.loads(json.dumps(PLAN))
@@ -228,6 +231,7 @@ def test_the_agent_flag_off_keeps_the_ladder_routing(monkeypatch):
 
 
 def test_repair_check_routes_to_the_agent_only_for_a_ladder_that_would_stop(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_REPAIR_DIAGNOSE", raising=False)
     run = execution(Deps(proposal()))
     monkeypatch.setattr(run, "_repair_allowed", lambda last: False)
     assert run.repair_check() == "agent"

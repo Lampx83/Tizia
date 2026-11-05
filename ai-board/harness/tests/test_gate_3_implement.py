@@ -5,6 +5,15 @@ from pathlib import Path
 
 import pytest
 
+NEW_FLAGS = ("AI_BOARD_COMPILE_PROSE_VERIFY", "AI_BOARD_ORACLE_CSS_SIZE", "AI_BOARD_EXPLORE_LOW_CONFIDENCE",
+             "AI_BOARD_PROCEDURE_IN_SPLIT", "AI_BOARD_TOOL_LOOP", "AI_BOARD_STOP_REPORT_V2", "AI_BOARD_REPAIR_DIAGNOSE")
+
+
+@pytest.fixture(autouse=True)
+def _new_flags_off(monkeypatch):
+    for name in NEW_FLAGS:
+        monkeypatch.delenv(name, raising=False)
+
 def test_revoked_authority_prevents_candidate_file_writes(tmp_path):
     from repositories import server_hsm
     class Revoked:

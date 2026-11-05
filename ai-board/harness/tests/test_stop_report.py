@@ -24,7 +24,8 @@ def test_classify_stable_class(outcome, reason, gate, failure_class, cls):
     assert stop_report.classify(outcome, reason, gate, failure_class) == cls
 
 
-def test_flag_default_off_and_env_on():
+def test_flag_default_off_and_env_on(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_STOP_REPORT_V2", raising=False)
     assert stop_report.enabled() is False
     assert stop_report.enabled(env={"AI_BOARD_STOP_REPORT_V2": "1"}) is True
     assert get_settings(env={}).stop_report_v2 is False

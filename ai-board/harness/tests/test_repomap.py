@@ -219,6 +219,7 @@ def test_check_file_path_warns_on_typo_only(monkeypatch, capsys, tmp_path):
 
 
 def test_run_calls_check_file_path_for_every_subtask_before_generating(monkeypatch, tmp_path):
+    monkeypatch.delenv("AI_BOARD_TOOL_LOOP", raising=False)
     calls = []
     monkeypatch.setattr(implement, "check_file_path", lambda f: calls.append(f))
     codegen = {"code": "x", "test_file": "test/t.test.js", "test": "import test from 'node:test';\ny"}
