@@ -65,8 +65,8 @@ async function serve(store) {
     postTraces: (ticketId, body) => fetch(`${base}/api/ai-board/worker/tickets/${ticketId}/traces`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-ai-worker-key': KEY }, body: JSON.stringify(body),
     }),
-    getTrace: (requestId, user) => fetch(`${base}/api/admin/ai-board/requests/${requestId}/trace`, {
-      headers: { 'x-test-user': String(user) },
+    getTrace: (requestId, user, etag) => fetch(`${base}/api/admin/ai-board/requests/${requestId}/trace`, {
+      headers: { 'x-test-user': String(user), ...(etag ? { 'if-none-match': etag } : {}) },
     }),
     setStatus: (requestId, status, confirm = `#${requestId}`) => fetch(`${base}/api/requests/${requestId}/status`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': '9', 'x-csrf-token': 'ok' },
@@ -108,6 +108,24 @@ test('admin trace exposes durable root allowance without exposing reservation cr
     assert.equal(trace.root_work.unknown_model_attempts, 1);
     assert.doesNotMatch(JSON.stringify(trace.root_work), /lease_hash|lease_token/);
     assert.equal((await api.getTrace(request.request_id, 1)).status, 403);
+  } finally { await api.close(); await db.close(); }
+});
+
+test('admin trace poll: unchanged revision answers 304, a new trace row answers 200 with a new ETag', async () => {
+  const { db, store } = await fixture();
+  const request = await newRequest(store, 'trace-etag-001');
+  const { ticket, lease, run } = await leasedRun(store, 'trace-etag-worker');
+  const api = await serve(store);
+  try {
+    const first = await api.getTrace(request.request_id, 9);
+    assert.equal(first.status, 200);
+    const etag = first.headers.get('etag');
+    assert.ok(etag);
+    assert.equal((await api.getTrace(request.request_id, 9, etag)).status, 304);
+    assert.equal((await api.postTraces(ticket.id, { ...lease, run_id: run.id, calls: [call('etag-call-1')] })).status, 200);
+    const changed = await api.getTrace(request.request_id, 9, etag);
+    assert.equal(changed.status, 200);
+    assert.notEqual(changed.headers.get('etag'), etag);
   } finally { await api.close(); await db.close(); }
 });
 

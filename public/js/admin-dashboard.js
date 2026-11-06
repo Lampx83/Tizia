@@ -8,6 +8,7 @@ import { morph } from './dom-morph.js';
 import { askConfirm } from './confirm-dialog.js';
 import { mountSkillsTab } from './admin-skills.js?v=skills-ux1';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
+import { createPoll } from './poll.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -2547,7 +2548,7 @@ async function init() {
   }).catch(() => {});
 
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
-  setInterval(autoRefresh, 60_000);
+  createPoll(autoRefresh, () => 60_000).arm();
 
   // Manual refresh
   $('#refreshBtn')?.addEventListener('click', refresh);
