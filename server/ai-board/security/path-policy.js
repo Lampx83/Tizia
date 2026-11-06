@@ -17,7 +17,7 @@ export function normalizePath(value) {
 export function check(value, op = 'read') {
   const normalized = normalizePath(value);
   if (normalized === null) return { allow: false, reason: `${op}: path không hợp lệ` };
-  const hit = DENY.find((re) => re.test(normalized));
+  const hit = DENY.find((re) => re.test(normalized) || re.test(`${normalized}/`));
   return hit ? { allow: false, reason: `${op}: ${normalized} thuộc vùng AI Board/hạ tầng (deny_paths)` } : { allow: true, reason: '' };
 }
 

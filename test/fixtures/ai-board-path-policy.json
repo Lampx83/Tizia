@@ -32,5 +32,11 @@
   { "path": ".env.example", "allow": false },
   { "path": "node_modules/x/y.js", "allow": false },
   { "path": "public/js/evaluation/x.js", "allow": false },
-  { "path": "heldout/cases.json", "allow": false }
+  { "path": "heldout/cases.json", "allow": false },
+  { "path": "ai-board", "allow": false },
+  { "path": "server/ai-board", "allow": false },
+  { "path": "server/contexts/ai-board-intake", "allow": false },
+  { "path": "public/heldout", "allow": false },
+  { "path": "public/js/secrets", "allow": false },
+  { "path": "public/js/evaluation", "allow": false }
 ]
