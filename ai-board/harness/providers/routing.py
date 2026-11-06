@@ -139,6 +139,8 @@ class ModelRouter:
 
     def reasoning(self, role):
         """Catalog `reasoning` map: roles whose vLLM calls run with thinking on (extra token allowance for the reasoning)."""
+        if role in {item.strip() for item in get_settings(self.settings).reasoning_off.split(',')}:
+            return False
         return bool((self.catalog.get('reasoning') or {}).get(role))
 
     def reasoning_tokens(self):

@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     retrieval_weights: Path | None = None
 
     gate1_probe_timeout_s: float = 45.0
+    reasoning_off: str = ""
 
     # secret; worker.take_secret vẫn đọc-rồi-xoá key của chính nó khỏi môi trường
     internal_key: SecretStr = SecretStr("")

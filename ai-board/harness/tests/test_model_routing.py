@@ -371,3 +371,12 @@ def test_hosted_api_call_uses_bearer_only_https_and_is_labelled_api(monkeypatch)
     assert url == 'https://api.example.test/v1/chat/completions'
     assert headers['Authorization'] == 'Bearer hosted-key' and 'X-ollama-seckey' not in headers
     assert body['model'] == 'hosted-model' and result['_provider'] == 'api'
+
+
+def test_reasoning_off_env_overrides_catalog_without_a_local_catalog_copy():
+    config = shipped_catalog()
+    assert config['reasoning']['gate3_heavy'] is True
+    assert ModelRouter({}, config).reasoning('gate3_heavy') is True
+    router = ModelRouter({'AI_BOARD_REASONING_OFF': 'gate3_heavy, calibration'}, config)
+    assert router.reasoning('gate3_heavy') is False and router.reasoning('calibration') is False
+    assert router.reasoning('eval_judge') is True
