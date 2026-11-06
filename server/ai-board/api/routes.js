@@ -372,16 +372,9 @@ export function attachAiBoardRequestRoutes(router, {
   route.post('/api/admin/ai-board/requests/:id/clarify', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const text = String(req.body?.answer || '').trim().slice(0, 4000);
     if (text.length < 3) return res.status(422).json({ error: 'answer_rejected' });
-    const root = await store.queryGet('SELECT id FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [Number(req.params.id)]);
-    if (!root) return res.status(404).json({ error: 'request_not_found' });
-    const now = Date.now();
-    await store.db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
-      VALUES (?, 'admin', 'Quản trị viên', ?, '[]', ?)`, [Number(req.params.id), text, now]);
-    await store.db.run(`UPDATE ai_tickets SET status='queued', phase='needs_replan', public_note=?,
-      lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`,
-    ['Người gửi đã trả lời; lập kế hoạch lại.', now, root.id]);
-    await store.db.run("DELETE FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [root.id]);
-    res.json({ ok: true, status: 'queued', phase: 'needs_replan' });
+    const answered = await store.answerClarification(req.params.id, text);
+    if (!answered) return res.status(404).json({ error: 'request_not_found' });
+    res.json(answered);
   });
 
   const traceModel = createTraceReadModel(store);
