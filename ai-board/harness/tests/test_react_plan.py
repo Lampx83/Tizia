@@ -171,7 +171,7 @@ def test_bad_json_is_an_observation_not_a_crash(repo, react_on):
     out = react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
 
     assert out["quotes"] == [[QUOTE]]
-    assert "lỗi định dạng" in deps.prompts[1]
+    assert "format error" in deps.prompts[1]
 
 
 def test_pop_quotes_requires_quote_for_every_subtask():

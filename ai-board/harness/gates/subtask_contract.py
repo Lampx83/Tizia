@@ -32,8 +32,8 @@ _SQL = re.compile(r"\b(?:select|insert\s+into|update|delete\s+from|create\s+tabl
 _IMPORT = re.compile(r"""import\s+(?:([\w*\s{},]+?)\s+from\s+)?['"](\.[^'"]+)['"]""")
 _NAMED = re.compile(r"\{([^}]*)\}")
 
-HEADER = ("HỢP ĐỒNG GIỮA CÁC BƯỚC (suy ra từ plan, không phải yêu cầu mới — dùng ĐÚNG tên mà bước "
-          "khác đã hứa, không tự đặt tên khác):")
+HEADER = ("CONTRACT BETWEEN STEPS (derived from the plan, not a new request — use EXACTLY the names another step "
+          "promised; do not name things differently):")
 
 
 def _text(task: dict) -> str:

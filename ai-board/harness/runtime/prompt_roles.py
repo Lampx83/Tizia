@@ -5,7 +5,7 @@ from pathlib import Path
 from settings import get_settings
 
 SYSTEM = (Path(__file__).resolve().parent.parent / "prompts" / "system_roles.md").read_text(encoding="utf-8").strip()
-RESTATE = "\n\nNhắc lại: trả đúng định dạng đã yêu cầu ở trên, không thêm chữ nào ngoài định dạng đó."
+RESTATE = "\n\nReminder: reply in exactly the format requested above, with no text outside that format."
 TOOL_ROLES = ("gate3_light", "gate3_heavy")
 REASONING_ROLES = ("gate1", "gate4_review")
 # Dự phòng khi catalog thiếu role; số liệu theo manual (tool loop: thinking off, sampling non-thinking).

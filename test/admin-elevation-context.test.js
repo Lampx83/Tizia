@@ -194,7 +194,7 @@ test('one model call per plan_hash + scope, then the cached verdict', async () =
     assert.equal(calls.length, 1);
     assert.match(calls[0].url, /\/v1\/chat\/completions$/);
     assert.equal(calls[0].body.messages[0].role, 'system');
-    assert.match(calls[0].body.messages[1].content, /NGỮ CẢNH:/);
+    assert.match(calls[0].body.messages[1].content, /CONTEXT:/);
 
     const second = await assessElevationRisk({ db: db.d, context, env: MODEL_ENV, fetchImpl });
     assert.equal(second.source, 'cached');

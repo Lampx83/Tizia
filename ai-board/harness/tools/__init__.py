@@ -365,19 +365,19 @@ def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
 
 
 TOOLS: dict[str, Tool] = {t.name: t for t in (
-    Tool("tree", "Liệt kê file/thư mục con trực tiếp của 1 thư mục ở base sha.",
+    Tool("tree", "List the files and direct subfolders of one folder at the base sha.",
          {"type": "object", "properties": {"path": _STR}, "required": ["path"]}, tree),
-    Tool("outline", "Dàn ý 1 file: thẻ/id/class, selector CSS, export/import JS, css/js trang liên kết.",
+    Tool("outline", "Outline of one file: tags/ids/classes, CSS selectors, JS exports/imports, and the page's linked css/js.",
          {"type": "object", "properties": {"file": _STR}, "required": ["file"]}, outline),
-    Tool("grep", "Cửa sổ dòng quanh từ khoá trong 1 file; không có file thì liệt kê file khớp trong path.",
+    Tool("grep", "Window of lines around keywords in one file; with no file, list the files matching in path.",
          {"type": "object", "properties": {"words": _WORDS, "file": _STR, "path": _STR}, "required": ["words"]}, grep),
-    Tool("locate", "Tìm chữ hiển thị người dùng nhắc (không cần dấu/hoa) trong html/js của public/, trả file:dòng.",
+    Tool("locate", "Find visible text the user mentions (diacritics and case not needed) in public/ html/js; return file:line.",
          {"type": "object", "properties": {"phrases": _WORDS}, "required": ["phrases"]}, locate),
-    Tool("exemplar", "Trang có sẵn giống chức năng mới nhất (theo chữ hiển thị) + dàn ý và phần đầu trang để làm khung.",
+    Tool("exemplar", "Existing page most similar to the newest feature (by visible text) + its outline and head, to use as a frame.",
          {"type": "object", "properties": {"words": _WORDS}, "required": ["words"]}, exemplar),
-    Tool("repomap", "File liên quan theo chữ hiển thị + đồ thị import ở đúng commit (gợi ý, không phải nguồn sự thật).",
+    Tool("repomap", "Related files by visible text + import graph at the exact commit (a hint, not the source of truth).",
          {"type": "object", "properties": {"question": _STR}, "required": ["question"]}, repomap_tool),
-    Tool("lessons", "Bài học từ verdict cũ liên quan tới file/từ khoá.",
+    Tool("lessons", "Lessons from past verdicts related to the file/keywords.",
          {"type": "object", "properties": {"file": _STR, "words": _WORDS}, "required": ["file", "words"]}, lessons),
 )}
 

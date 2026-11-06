@@ -73,8 +73,8 @@ def test_build_prompt_lists_files_produced_by_earlier_subtasks():
     subtask = {"title": "Header", "file": "public/index.html", "verify": "node --test test/x.test.js", "size": "small"}
     prompt = implement.build_prompt(subtask, produced=["public/js/features/faq/index.js", "public/faq.html"])
     assert "public/js/features/faq/index.js" in prompt and "public/faq.html" in prompt
-    assert "FILE DA TAO" in prompt
-    assert "FILE DA TAO" not in implement.build_prompt(subtask)
+    assert "FILES CREATED IN PREVIOUS STEPS" in prompt
+    assert "FILES CREATED IN PREVIOUS STEPS" not in implement.build_prompt(subtask)
 
 
 def test_build_prompt_contains_only_this_subtask():
@@ -84,7 +84,7 @@ def test_build_prompt_contains_only_this_subtask():
     assert subtask["title"] in prompt
     assert subtask["file"] in prompt
     assert subtask["verify"] in prompt
-    assert "LẦN TRƯỚC" not in prompt
+    assert "PREVIOUS ATTEMPT BLOCKED" not in prompt
 
 
 def test_repair_prompt_keeps_the_locked_prefix_and_appends_the_gate_reason():
@@ -420,7 +420,7 @@ def test_test_file_outside_test_dir_is_a_repairable_model_mistake(tmp_path):
 
 def test_prompt_states_where_generated_tests_must_live():
     prompt = implement.build_prompt({"title": "t", "file": "public/x.html", "verify": "v", "size": "small"})
-    assert "\"test_file\" nằm trong thư mục test/" in prompt and "node:test" in prompt
+    assert "\"test_file\" lives in the test/ directory" in prompt and "node:test" in prompt
 
 
 # ── LF/107 tiêu chí 8 (2026-10-28): context cho file mới — mẫu thật + deps + sanity artifact ──
@@ -567,7 +567,7 @@ FEATURE_PLAN = {"summary_vi": "Thêm API thuật ngữ và hai trang dùng nó."
 def test_contract_is_derived_from_a_db_route_page_plan_and_bounded():
     block = subtask_contract.block(FEATURE_PLAN)
 
-    assert block.startswith("HỢP ĐỒNG GIỮA CÁC BƯỚC") and "suy ra từ plan" in block
+    assert block.startswith("CONTRACT BETWEEN STEPS") and "derived from the plan" in block
     # route/verify của bước API, bảng của migration, và MỌI file trong plan đều có tên
     assert "/api/glossary" in block and "bảng glossary" in block
     for subtask in FEATURE_PLAN["subtasks"]:

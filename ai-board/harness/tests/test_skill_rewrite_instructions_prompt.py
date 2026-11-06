@@ -29,10 +29,10 @@ BASE = {'id': 1, 'name': 'copy-default-test', 'version': 1, 'original_text': '--
 
 def test_instructions_are_a_labeled_data_block_after_the_skill():
     user = captured({**BASE, 'instructions': 'Giữ nhãn nút rõ ràng.'})
-    assert 'ghi chú của admin' in user
+    assert 'admin note (data' in user
     assert user.index('Giữ nhãn nút rõ ràng.') > user.index('copy-default-test')
     assert 'data' in user.lower()
 
 
 def test_no_instructions_leaves_the_prompt_unchanged():
-    assert 'ghi chú của admin' not in captured({**BASE, 'instructions': None})
+    assert 'admin note (data' not in captured({**BASE, 'instructions': None})

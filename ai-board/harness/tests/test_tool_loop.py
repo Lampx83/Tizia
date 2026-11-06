@@ -340,7 +340,7 @@ def test_prompt_carries_the_excerpt_and_the_edit_test_finish_order():
     out = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model="m", source=".", sha="abc", check=lambda o: None,
                                 context="L2| <h1>A</h1>")
     assert out["status"] == "proposed"
-    assert "L2| <h1>A</h1>" in deps.prompts[0] and "edit_file" in deps.prompts[0].split("Thứ tự làm")[1]
+    assert "L2| <h1>A</h1>" in deps.prompts[0] and "edit_file" in deps.prompts[0].split("Order of work:")[1]
 
 
 def test_finish_before_edit_and_test_is_a_cheap_nudge_not_a_content_repair():
@@ -363,7 +363,7 @@ def test_repeating_the_same_request_gets_a_hint_then_stops_the_loop():
     bad = {"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": "không có", "replace": "x"}]}}
     out, _, deps = run([bad])
     assert out["status"] == "blocked" and out["failure_class"] == "ordinary" and "lặp lại" in out["reason"]
-    assert "LẶP ĐÚNG" in deps.prompts[2] and "LẶP ĐÚNG" not in deps.prompts[1]
+    assert "repeated the EXACT previous request" in deps.prompts[2] and "repeated the EXACT previous request" not in deps.prompts[1]
 
 
 def test_search_miss_lists_real_lines_that_share_words_with_the_search():

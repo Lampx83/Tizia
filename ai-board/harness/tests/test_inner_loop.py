@@ -58,7 +58,7 @@ def test_search_mismatch_is_retried_with_the_error_and_snippet_then_passes(tmp_p
     assert len(prompts) == 2
     assert prompts[1].startswith(prompts[0])  # prefix + ngữ cảnh giữ nguyên byte → KV cache
     retry = prompts[1][len(prompts[0]):]
-    assert "LẦN THỬ 1" in retry and "không khớp" in retry and "Không có" in retry
+    assert "ATTEMPT 1" in retry and "không khớp" in retry and "Không có" in retry
     assert (tmp_path / "scratch/public/tinh-nang.html").read_text(encoding="utf-8").count("<p>Mới.</p>") == 1
 
 
@@ -175,12 +175,12 @@ def test_a_file_that_was_already_broken_is_not_blamed_on_the_edit(tmp_path):
 
 def test_syntax_retry_hint_says_to_copy_the_whole_line():
     hint = implement.retry_hint("cú pháp JS lỗi sau khi áp edit: SyntaxError", 0)
-    assert "CẢ dòng" in hint
+    assert "WHOLE line" in hint
 
 
 def test_near_miss_retry_hint_says_to_copy_the_quoted_line_exactly():
     hint = implement.retry_hint("edit 1: search không khớp đoạn nào trong file: 'x'\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\nL2| y", 0)
-    assert "NGUYÊN VĂN" in hint
+    assert "VERBATIM" in hint
 
 
 def test_inner_retries_vary_the_sampling_so_a_deterministic_loop_can_break(tmp_path):

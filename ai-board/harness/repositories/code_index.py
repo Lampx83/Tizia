@@ -473,7 +473,7 @@ def refresh_notes(changed_files: list[str], deps, budget_files: int = 5, *, budg
             diff=diff[:3000] or "(file mới)", outline=outline_text(file, entry)[:2500])
         note, error = None, None
         for attempt in range(2):
-            ask = prompt if attempt == 0 else prompt + f"\n\nLẦN TRƯỚC SAI: {error}. Chỉ dùng anchor có trong DÀN Ý."
+            ask = prompt if attempt == 0 else prompt + f"\n\nPREVIOUS ATTEMPT WRONG: {error}. Use only anchors that appear in the OUTLINE."
             body = deps.call_model(deps.models.gate1_model, ask, gate=1, budget=budget,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="note_refresh.md")
             try:

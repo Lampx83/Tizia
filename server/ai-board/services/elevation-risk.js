@@ -122,13 +122,13 @@ function compactContext(context) {
 /** Prompt cố định: rubric skill + ngữ cảnh đã cắt; model chỉ trả JSON, không được tự cấp quyền. */
 export function buildRiskPrompt(context) {
   return [
-    'Soát yêu cầu nâng mức dưới đây. Chỉ đánh giá rủi ro; quyết định cuối thuộc quản trị viên.',
+    'Review the elevation request below. Assess risk only; the final decision belongs to the administrator.',
     'Trả JSON đúng dạng: {"level":"low|medium|high","reasons":["..."],"recommendation":"approve|review|reject","questions":["..."]}',
-    'Không bịa path không có trong scope; nêu lý do ngắn, cụ thể.',
+    'Do not invent paths that are not in scope; give short, specific reasons.',
     '',
     skillBody(),
     '',
-    'NGỮ CẢNH:',
+    'CONTEXT:',
     compactContext(context),
   ].join('\n');
 }
@@ -179,7 +179,7 @@ export async function assessElevationRisk({ db = null, context, env = environmen
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
       headers: vllmHeaders(candidate.connection.secret),
       body: JSON.stringify(vllmBody({ model: candidate.model, messages: [
-        { role: 'system', content: 'Bạn là người soát bảo mật cho quản trị viên. Chỉ trả JSON.' },
+        { role: 'system', content: 'You are the security reviewer for the administrator. Return JSON only.' },
         { role: 'user', content: buildRiskPrompt(context) },
       ], temperature: 0, maxTokens: 600, json: true })),
     });
