@@ -10,6 +10,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
+from conftest import fake_repo_tree
 from gates import brainstorm
 from runtime import levels
 
@@ -111,15 +112,14 @@ def test_db_must_be_a_new_generated_context_migration_and_backend_stays_generate
 def test_new_generated_context_file_at_plugin_root_is_allowed(monkeypatch):
     plan = brainstorm.parse_plan(json.dumps(feature_plan()))
     plan["subtasks"][1]["file"] = "server/contexts/_ai-generated/faq/index.js"
-    monkeypatch.setattr(brainstorm.code_index, "git", lambda *a: b"")
+    fake_repo_tree(monkeypatch, {}, "a" * 40)
     brainstorm.check_files(plan, "src", "a" * 40)
 
 
 def test_existing_migration_is_not_additive(monkeypatch):
     plan = brainstorm.parse_plan(json.dumps(feature_plan()))
-    monkeypatch.setattr(brainstorm.code_index, "git",
-                        lambda source, *args: b"server/contexts/_ai-generated/gallery/migrations/001-gallery.sql\n"
-                        if any("migrations" in str(arg) for arg in args) else b"server/contexts/_ai-generated/gallery/index.js\n")
+    fake_repo_tree(monkeypatch, {"server/contexts/_ai-generated/gallery/migrations/001-gallery.sql": "",
+                                 "server/contexts/_ai-generated/gallery/index.js": ""}, "a" * 40)
     with pytest.raises(ValueError, match="additive"):
         brainstorm.check_files(plan, "src", "a" * 40)
 

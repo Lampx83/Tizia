@@ -210,3 +210,39 @@ def pinned_head(monkeypatch):
     pinned = "5" * 40
     monkeypatch.setattr(runner, "provenance", lambda *a, **k: {**real(*a, **k), "ref": pinned})
     return pinned
+
+
+class FakeRepoTree:
+    """RepoAtCommit trong bộ nhớ: {path: bytes}, không spawn git."""
+
+    def __init__(self, blobs: dict[str, bytes | str]):
+        self.blobs = {p: (v.encode("utf-8") if isinstance(v, str) else v) for p, v in blobs.items()}
+        self.sha = "fake"
+
+    def files(self):
+        return frozenset(self.blobs)
+
+    def exists(self, path):
+        path = path.rstrip("/")
+        return any(p == path or p.startswith(path + "/") for p in self.blobs)
+
+    def children(self, folder=""):
+        prefix = folder.strip("/") + "/" if folder.strip("/") else ""
+        return sorted({prefix + p[len(prefix):].split("/", 1)[0] for p in self.blobs if p.startswith(prefix)})
+
+    def read_many(self, paths):
+        return {p: self.blobs.get(p) for p in paths}
+
+    def read(self, path):
+        return self.blobs.get(path)
+
+
+def fake_repo_tree(monkeypatch, blobs: dict[str, bytes | str], sha: str = "fakesha"):
+    """Thay repo_at_commit.at/resolve bằng cây trong bộ nhớ; trả cây để assert."""
+    from repositories import repo_at_commit
+
+    tree = FakeRepoTree(blobs)
+    tree.sha = sha
+    monkeypatch.setattr(repo_at_commit, "at", lambda source, s: tree)
+    monkeypatch.setattr(repo_at_commit, "resolve", lambda source, ref="HEAD": sha)
+    return tree

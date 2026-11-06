@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import posixpath
 import re
-import subprocess
 from pathlib import Path
 
+from repositories import repo_at_commit
 from services import repomap
 
 MAX_CANDIDATES = 5
@@ -27,13 +27,10 @@ _LINE_MARKER = re.compile(r"^[ \t]*(?:[\w./-]+:)?L?\d+\|[ ]?", re.M)
 def _grep_files(source, sha: str, needle: str) -> list[str]:
     """File ở `sha` chứa nguyên văn `needle` (git grep -F). Lỗi repo/sha → []: không có bằng chứng, không raise."""
     try:
-        result = subprocess.run(["git", "grep", "-F", "-l", "--no-color", "-e", needle, sha, "--"],
-                                cwd=source, capture_output=True, stdin=subprocess.DEVNULL)
+        out = repo_at_commit.grep(source, sha, ["-F", "-l", "--no-color", "-e", needle])
     except OSError:
         return []
-    if result.returncode not in (0, 1):
-        return []
-    return [record.split(":", 1)[-1] for record in result.stdout.decode("utf-8", "replace").splitlines() if record]
+    return [record.split(":", 1)[-1] for record in out.splitlines() if record]
 
 
 def _needle(quote: str) -> str | None:

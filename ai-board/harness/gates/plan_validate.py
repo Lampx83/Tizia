@@ -48,16 +48,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import time
 from pathlib import Path
 
 import context
-import code_index
 import file_context
 import path_policy
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
+from repositories import repo_at_commit
 from runtime import coverage, levels, limits
 from services import target_confidence
 from settings import DEFAULT_GATE25_FIXES, get_settings
@@ -192,22 +191,13 @@ def explore_enabled() -> bool:
     return os.environ.get(EXPLORE_FLAG) == '1'
 
 
-def _git_text(source, *args: str) -> str | None:
-    """stdout của `git -C source <args>`; lỗi/exit khác 0 → None."""
-    try:
-        result = subprocess.run(['git', '-C', str(source), *args], capture_output=True, stdin=subprocess.DEVNULL)
-    except OSError:
-        return None
-    return result.stdout.decode('utf8', 'replace') if result.returncode == 0 else None
-
-
 def _in_scope(path: str, source, sha: str) -> bool:
-    """Tương đối, trong SOURCE_ROOTS, đuôi file đọc được, không bị path_policy chặn, là blob ở sha."""
+    """Tương đối, trong SOURCE_ROOTS, đuôi file đọc được, không bị path_policy chặn, là file ở sha."""
     if not path.startswith(SOURCE_ROOTS) or '..' in Path(path).parts or not _FILE_SUFFIX.match(Path(path).suffix):
         return False
     if path_policy.denied(path):
         return False
-    return _git_text(source, 'cat-file', '-t', f'{sha}:{path}') == 'blob\n'
+    return repo_at_commit.at(source, sha).is_file(path)
 
 
 def _explore_result(op: str, action: dict, source, sha: str) -> str:
@@ -216,12 +206,15 @@ def _explore_result(op: str, action: dict, source, sha: str) -> str:
         pattern = str(action.get('pattern') or '')
         if len(pattern) < 8:
             return '(pattern quá ngắn, cần >= 8 ký tự)'
-        out = _git_text(source, 'grep', '-n', '-F', '--no-color', '-e', pattern, sha, '--') or ''
+        try:
+            out = repo_at_commit.grep(source, sha, ['-n', '-F', '--no-color', '-e', pattern])
+        except OSError:
+            out = ''
         return '\n'.join(line[:200] for line in out.splitlines()[:20]) or '(không khớp)'
     path = str(action.get('path') or '')
     if not _in_scope(path, source, sha):
         return '(ngoài phạm vi hoặc không tồn tại)'
-    lines = (_git_text(source, 'show', f'{sha}:{path}') or '').splitlines()
+    lines = (repo_at_commit.at(source, sha).read(path) or b'').decode('utf8', 'replace').splitlines()
     start = max(int(action.get('start') or 1), 1)
     end = min(int(action.get('end') or start + 40), start + 60, len(lines))
     return '\n'.join(f'{n}| {lines[n - 1][:200]}' for n in range(start, end + 1)) or '(rỗng)'
@@ -264,7 +257,7 @@ def explore_target(request: dict, plan: dict, state: dict, deps, budget, *, sour
 def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None, dict, str]:
     source = state.get('checkout_source') or Path(__file__).resolve().parents[3]
     try:
-        sha = code_index.git(source, 'rev-parse', 'HEAD').decode().strip()
+        sha = repo_at_commit.resolve(source)
     except OSError:
         return None, {}, '(không đọc được commit nguồn)'
     files = {}
@@ -272,14 +265,17 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
     tasks = list(plan.get('subtasks') or []) + [{'file': path} for path in state.get('source_targets') or []]
     named = coverage.requested_paths("\n".join(str(request.get(key) or "") for key in ("subject", "body", "detail")))
     tasks += [{'file': path} for path in named if path not in {str(task.get('file') or '') for task in tasks}]
+
+    def readable(path: str) -> bool:
+        return path.startswith(SOURCE_ROOTS) and '..' not in Path(path).parts
+
+    blobs = repo_at_commit.at(source, sha).read_many(
+        [path for path in (str(task.get('file') or '') for task in tasks) if readable(path)])
     for task in tasks:
         path = str(task.get('file') or '')
-        if not path.startswith(SOURCE_ROOTS) or '..' in Path(path).parts:
+        if not readable(path) or blobs.get(path) is None:
             continue
-        try:
-            text = code_index.git(source, 'show', f'{sha}:{path}').decode('utf8', 'replace')
-        except OSError:
-            continue
+        text = blobs[path].decode('utf8', 'replace')
         files[path] = text
         wide = 'context' in fixes()
         words = file_context.keywords(request.get('subject'), request.get('body'), task.get('title'), task.get('verify') if wide else None)
@@ -384,9 +380,12 @@ def literal_contradicts(request: dict, best: str | None, files: dict, source, sh
     if 'literal' not in fixes() or not best or not sha:
         return False
     try:
-        home = code_index.git(source, 'show', f'{sha}:{best}').decode('utf8', 'replace')
+        blob = repo_at_commit.at(source, sha).read(best)
     except OSError:
         return False
+    if blob is None:
+        return False
+    home = blob.decode('utf8', 'replace')
     return any(lit in home and not any(lit in text for text in files.values())
                for lit in file_context.literals(request.get('subject'), request.get('body')))
 

@@ -6,7 +6,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
-import code_index
+from repositories import repo_at_commit
 
 CONFIG = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json").read_text(encoding="utf-8"))["limits"]["retrieval"]
 
@@ -22,10 +22,9 @@ _TESTISH = re.compile(r"(?:^|/)tests?/|\.test\.m?js$|(?:^|/)test_[\w-]+\.py$")
 def listing(source, sha: str) -> set[str]:
     """Mọi file ở `sha`; rỗng nếu git lỗi."""
     try:
-        raw = code_index.git(source, "ls-tree", "-r", "--name-only", "-z", sha).decode("utf-8", "replace")
+        return set(repo_at_commit.at(source, sha).files())
     except OSError:
         return set()
-    return {p for p in raw.split("\0") if p}
 
 
 def _tokens(text: str) -> list[str]:
