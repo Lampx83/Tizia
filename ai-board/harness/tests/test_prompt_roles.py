@@ -59,8 +59,8 @@ def test_split_on_puts_rules_in_system_and_restates_format_last_in_user(split_on
     models = FakeModels([EDIT, TEST, FINISH])
     assert run(models)["status"] == "proposed"
     call = models.calls[1]
-    assert call["extra"]["system"].startswith(prompt_roles.SYSTEM) and "Luật nền tảng" not in call["prompt"]
-    assert call["prompt"].index("Thứ tự làm") < call["prompt"].index("KẾT QUẢ TOOL edit_file") < call["prompt"].rindex("Nhắc lại")
+    assert call["extra"]["system"].startswith(prompt_roles.SYSTEM) and "Base rules:" not in call["prompt"]
+    assert call["prompt"].index("Order of work:") < call["prompt"].index("TOOL RESULT edit_file") < call["prompt"].rindex("Reminder:")
     assert call["prompt"].endswith(prompt_roles.RESTATE)
 
 
@@ -131,7 +131,7 @@ def test_explicit_plan_cap_wins_over_the_role_reasoning_budget(split_on, monkeyp
 
 
 def test_split_values_block_at_most_five_lines():
-    values = prompt_roles.SYSTEM.split("Giá trị kỹ thuật:", 1)[1].strip().splitlines()
+    values = prompt_roles.SYSTEM.split("Engineering values:", 1)[1].strip().splitlines()
     assert len(values) <= 5
 
 

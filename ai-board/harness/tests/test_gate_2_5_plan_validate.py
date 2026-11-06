@@ -551,7 +551,7 @@ class _ValidationQueue(FakeModels):
         self.seen = 0
 
     def generate(self, model, prompt, **kw):
-        if "PLAN CẦN SOÁT" in prompt:
+        if "PLAN TO CHECK" in prompt:
             if self.seen and self.queue:
                 self.validation = self.queue.pop(0)
             self.seen += 1
@@ -559,7 +559,7 @@ class _ValidationQueue(FakeModels):
 
 
 def _validator_prompts(models):
-    return [call["prompt"] for call in models.calls if "PLAN CẦN SOÁT" in call["prompt"]]
+    return [call["prompt"] for call in models.calls if "PLAN TO CHECK" in call["prompt"]]
 
 
 def test_a_grounding_block_on_the_named_target_gets_one_clean_second_pass(tmp_path):
@@ -575,7 +575,7 @@ def test_a_grounding_block_on_the_named_target_gets_one_clean_second_pass(tmp_pa
     assert out["blocked"] is False, out
     prompts = _validator_prompts(models)
     assert len(prompts) == 2
-    assert "SOÁT LẠI MỘT ĐIỂM ĐÃ BỊ CHẶN" in prompts[1] and TARGET in prompts[1]
+    assert "RE-CHECK ONE BLOCKED POINT" in prompts[1] and TARGET in prompts[1]
     assert "không tìm thấy trích dẫn" in prompts[1]  # the exact defect
     assert state["grounding"]["evidence"][0]["quote"] == QUOTE
     assert out["retry"].startswith("repairable_retry") and state["validator_retry"] == out["retry"]

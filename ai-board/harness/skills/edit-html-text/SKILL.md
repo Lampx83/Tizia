@@ -10,7 +10,7 @@ priority: 2
 ## gate 1
 1. "file" = the file whose lines (in "(trích)" or "file khớp từ khoá") contain the old text. If a script sets it (textContent = '...'), "file" is where that string literal is.
 2. One subtask per file, usually one in total, size "small".
-3. title quotes old and new text: Đổi "<cũ>" thành "<mới>" trong <thẻ/id>.
+3. The title quotes the old and new text: Đổi "<cũ>" thành "<mới>" trong <thẻ/id>.
 4. verify = "<file> chứa '<mới>' và không còn '<cũ>'".
 ## gate 3
 1. Change only the words; keep tags, attributes, ids, classes and indentation.

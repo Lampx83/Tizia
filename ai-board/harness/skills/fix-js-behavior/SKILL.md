@@ -9,7 +9,7 @@ budget3: 5500
 priority: 5
 ---
 ## gate 1
-1. The behaviour lives in a module under "js liên kết" of the page, or in the page's inline module script. Pick the file whose outline or excerpt shows the function, id or string involved.
+1. The behaviour lives in a module under the page's "js liên kết" line, or in the page's inline module script. Pick the file whose outline or excerpt shows the function, id or string involved.
 2. Smallest possible fix: one subtask, one file, size "small". Never rewrite a module.
 3. verify = one fact a test can check: an exported pure function's result, or a fixed line present in the file.
 ## gate 3

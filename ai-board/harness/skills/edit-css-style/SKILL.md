@@ -13,7 +13,7 @@ priority: 1
 1. Find the page in REPO DATA and read its "css liên kết" line.
 2. If it lists a local .css file, "file" = that .css file. If it says "(không có file .css ...)", "file" = the page itself (the rule is in its <style>).
 3. Name the ONE selector to change from the "selector" list (e.g. `.section-title h1`). Whole-page text → `body`; never `*`. No fitting selector → say "thêm rule mới <selector>".
-4. Colours: xanh dương #2563eb, xanh lá #16a34a, đỏ #dc2626, vàng #facc15, tím #7c3aed, cam #ea580c, hồng #db2777, đen #111827, trắng #ffffff.
+4. Colour names used in requests map to these values: xanh dương #2563eb, xanh lá #16a34a, đỏ #dc2626, vàng #facc15, tím #7c3aed, cam #ea580c, hồng #db2777, đen #111827, trắng #ffffff.
 5. One subtask, size "small". verify = "rule <selector> trong <file> có <property>: <value>".
 ## gate 3
 1. Change only the declaration inside the existing rule. Property missing → add one declaration line to that rule. Rule missing → add it just before `</style>` (or at the end of the .css file).

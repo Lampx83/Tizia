@@ -15,7 +15,7 @@ priority: 4
 3. Link it from another page only if the request asks; that is a second subtask on that page.
 4. Size "small". verify = "public/<tên>.html có <html lang=\"vi\">, <title> và <h1> '<tiêu đề>'".
 ## gate 3
-1. New file: return the whole page in `code`, following this skeleton; keep head lines as they are.
+1. New file: return the whole page in `code`, following this skeleton; keep the head lines as they are.
 2. Vietnamese text with diacritics; reuse the dark theme below.
 3. Test: read the file with fs; assert lang="vi", the <title> and the <h1> text.
 Skeleton:

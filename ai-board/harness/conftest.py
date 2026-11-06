@@ -125,7 +125,7 @@ class FakeModels:
         # lọt tới cổng 7 mà không cần đổi gì. Cổng 2.5 dùng CHUNG gate1_model
         # với cổng 1 (đúng thiết kế thật — vai validator, không phải model
         # khác) nên generate() phân biệt 2 lời gọi bằng nội dung PROMPT
-        # (marker "PLAN CẦN SOÁT" chỉ có trong prompts/plan_validate.md).
+        # (marker "PLAN TO CHECK" chỉ có trong prompts/plan_validate.md).
         scope = [s["file"] for s in (plan.get("subtasks", []) if isinstance(plan, dict) else [])]
         if "test" in self.codegen and scope:
             self.codegen = {**self.codegen, "test": self.codegen["test"] + "".join(f"// scope: {f}\n" for f in scope)}
@@ -154,7 +154,7 @@ class FakeModels:
             payload = self.plan if guard_reply else {"labels": ["ok"], "reason": "fixture"}
         elif model in (self.gate3_model, self.gate3_model_light):
             payload = self.codegen
-        elif "PLAN CẦN SOÁT" in prompt:  # cổng 2.5 — xem docstring __init__
+        elif "PLAN TO CHECK" in prompt:  # cổng 2.5 — xem docstring __init__
             payload = self.validation
         else:
             payload = self.plan

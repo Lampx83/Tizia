@@ -9,7 +9,7 @@ priority: 3
 ---
 ## gate 1
 1. "file" = the page itself. An empty `<div id="...-host">` is filled by JS: put the new static block next to it, not inside it.
-2. title says exactly where: "Thêm khối <nội dung> ngay sau <div id=...>" or "ngay trước <footer>".
+2. The title says exactly where: "Thêm khối <nội dung> ngay sau <div id=...>" or "ngay trước <footer>".
 3. Static HTML only, reuse classes from the outline (e.g. `section`, `section-title`). No <script>, no onclick.
 4. One subtask, size "small". verify = "<file> chứa id=\"<id mới>\" và chữ '<nội dung>'".
 ## gate 3
