@@ -70,3 +70,17 @@ test('admin clarify handler holds no SQL: the transition lives in the store', ()
   const handler = ROUTES_SRC.slice(start, end);
   assert.doesNotMatch(handler, /\b(SELECT|INSERT|UPDATE|DELETE)\b|store\.db|queryGet|needs_replan/);
 });
+
+test('only the store writes the needs_replan phase in SQL (requester-edit is the known remaining writer)', () => {
+  const root = new URL('../server/ai-board/', import.meta.url);
+  const writers = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, dir);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.js') && /phase\s*=\s*'needs_replan'/.test(fs.readFileSync(full, 'utf8'))) writers.push(full.pathname.split('/server/ai-board/')[1]);
+    }
+  };
+  walk(root);
+  assert.deepEqual(writers.sort(), ['repositories/store.js', 'services/requester-edit.js']);
+});

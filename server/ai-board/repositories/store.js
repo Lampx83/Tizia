@@ -984,13 +984,13 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   // Admin answer → root back to needs_replan (fresh plan). Returns null when the request has no root.
   const answerClarificationTransaction = (requestId, text, now) => db.tx(async () => {
-    const root = await db.get('SELECT id FROM ai_tickets WHERE source_request_id=? AND parent_id IS NULL', [requestId]);
+    const root = await lockedRequestRoot(requestId);
     if (!root) return null;
+    if (PHASES[root.phase]?.terminal) throw new WorkerContractError('request is closed', 409, 'request_closed');
     await db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
       VALUES (?, 'admin', 'Quản trị viên', ?, '[]', ?)`, [requestId, text, now]);
-    await db.run(`UPDATE ai_tickets SET status='queued', phase='needs_replan', public_note=?,
-      lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE id=?`,
-    ['Người gửi đã trả lời; lập kế hoạch lại.', now, root.id]);
+    if (root.plan_hash) await invalidateCurrentPlan(root, now);
+    await requeueForReplan(root.id, { publicNote: 'Người gửi đã trả lời; lập kế hoạch lại.' }, now);
     await db.run("DELETE FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [root.id]);
     return { ok: true, status: 'queued', phase: 'needs_replan' };
   });
