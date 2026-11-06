@@ -3,7 +3,7 @@
 # (thêm --profile storage khi cần SeaweedFS cho đính kèm ảnh thô như trước đây)
 # - Hai cầu nội bộ riêng: webnet (web + postgres web) và boardnet (aiboard-server + postgres board);
 #   một cầu chia sẻ external tizia-internal để gọi nhau qua tên DNS service, không publish IP/port chéo.
-# - Không chạy cùng lúc docker-compose.dev.yml hoặc docker-compose.dev.prod.yml: trùng tên container/volume.
+# - Không chạy cùng lúc với docker-compose.dev.yml: trùng tên container/volume.
 # Bí mật: từ .env của host hoặc env của stack (AI_BOARD_INTERNAL_SECRET dùng chung cho hai phía).
 services:
   # ---- Phía web (service names giữ nguyên: tizia-dev, tizia-postgres) ----
@@ -19,32 +19,32 @@ services:
 
   # ---- Phía AI board: aiboard-server + POSTGRES + storage trong stack này (worker/sandbox opt-in profile ai-board) ----
   aiboard-server:
-    extends: { file: docker-compose.dev.prod.yml, service: aiboard-server }
+    extends: { file: docker-compose.dev.yml, service: aiboard-server }
     networks: !override [boardnet, tizia-internal]   # KHÔNG publish port; web gọi http://aiboard-server:8081
 
   aiboard-postgres:
-    extends: { file: docker-compose.dev.prod.yml, service: aiboard-postgres }
+    extends: { file: docker-compose.dev.yml, service: aiboard-postgres }
     networks: !override [boardnet]
 
   seaweedfs:
-    extends: { file: docker-compose.dev.prod.yml, service: seaweedfs }
+    extends: { file: docker-compose.dev.yml, service: seaweedfs }
     networks: !override [boardnet, tizia-internal]
 
   seaweedfs-ui-auth:
-    extends: { file: docker-compose.dev.prod.yml, service: seaweedfs-ui-auth }
+    extends: { file: docker-compose.dev.yml, service: seaweedfs-ui-auth }
     networks: !override [boardnet]   # UI bind loopback host; seaweedfs cũng phải với tới 9333/8888 qua cùng cầu
     ports: !override ["127.0.0.1:9333:9333", "127.0.0.1:8888:8888"]
 
   image-registry:
-    extends: { file: docker-compose.dev.prod.yml, service: image-registry }
+    extends: { file: docker-compose.dev.yml, service: image-registry }
     networks: !override [boardnet]
 
   sandbox-runner:
-    extends: { file: docker-compose.dev.prod.yml, service: sandbox-runner }
+    extends: { file: docker-compose.dev.yml, service: sandbox-runner }
     networks: !override [boardnet, sandbox-api]      # worker gọi sandbox bằng DNS sandbox-runner chứ không qua host
 
   ai-board-worker:
-    extends: { file: docker-compose.dev.prod.yml, service: ai-board-worker }
+    extends: { file: docker-compose.dev.yml, service: ai-board-worker }
     environment:  # ghi đè cùng các biến; bare = lấy từ .env / stack env
       AI_BOARD_SERVER_URL: http://aiboard-server:8081
     networks: !override
@@ -52,7 +52,7 @@ services:
       - sandbox-api
 
   ai-board-worker-2:
-    extends: { file: docker-compose.dev.prod.yml, service: ai-board-worker-2 }
+    extends: { file: docker-compose.dev.yml, service: ai-board-worker-2 }
     networks: !override [boardnet, sandbox-api]
 
 networks:
