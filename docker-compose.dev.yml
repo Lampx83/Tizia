@@ -15,7 +15,8 @@ services:
     ports: !override
       - "${PORT:-8041}:8041"  # cửa duy nhất: web
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:  # chỉ nối dây trong container; cấu hình khác nằm trong .env
       NODE_ENV: development
       AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0
