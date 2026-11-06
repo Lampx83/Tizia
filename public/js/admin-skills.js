@@ -1,5 +1,6 @@
 import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel, tokenShareText, estimateTokens } from './admin-skills-state.js?v=skills-ux2';
 import { fmt } from './ai-board-clock.js';
+import { createPoll } from './poll.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 // Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
@@ -307,15 +308,9 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
 
   // Poll the open skill while a rewrite is queued/running. One timer, no overlap; stops when
   // hidden, detached (tab changed) or no active job. Re-render only when versions changed.
-  let current = null, pollTimer = null, polling = false, seq = 0;
-  const onVisibility = () => { if (document.hidden) schedule(); else poll(); };
+  let current = null, polling = false, seq = 0;
   const armed = () => shouldPoll({ visible: !document.hidden, connected: host.isConnected, versions: current?.data?.versions });
-  const schedule = () => {
-    clearTimeout(pollTimer); pollTimer = null;
-    if (!polling && armed()) pollTimer = setTimeout(poll, POLL_MS);
-  };
-  const poll = async () => {
-    clearTimeout(pollTimer); pollTimer = null;
+  const loop = createPoll(async () => {
     if (polling || !armed()) return;
     polling = true;
     const { item, data: before } = current, mark = seq;
@@ -329,10 +324,9 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
       }
     } catch { /* transient; next tick retries */ }
     finally { polling = false; }
-    schedule();
-  };
-  document.addEventListener('visibilitychange', onVisibility);
-  teardown = () => { clearTimeout(pollTimer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, () => (armed() ? POLL_MS : null));
+  const schedule = () => loop.arm();
+  teardown = () => loop.stop();
 
   const select = async id => {
     const item = skills.find(skill => String(skill.id ?? skill.name) === String(id));

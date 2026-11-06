@@ -23,6 +23,7 @@ import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
+import { createTraceReadModel } from '../services/trace-read-model.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
 import { classifierConfigured, environment, getSettings } from '../settings.js';
@@ -367,10 +368,6 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ request: { ...row, votes: 0 }, messages: [first, ...messages] });
   });
 
-  route.get('/api/admin/ai-board/requests/:requestId/decisions', requireAuth, requireAdmin, async (_req, res) => {
-    res.json({ decisions: [] });
-  });
-
   // Admin answers a clarification on the board DB, then the root is queued for a fresh plan.
   route.post('/api/admin/ai-board/requests/:id/clarify', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const text = String(req.body?.answer || '').trim().slice(0, 4000);
@@ -387,24 +384,18 @@ export function attachAiBoardRequestRoutes(router, {
     res.json({ ok: true, status: 'queued', phase: 'needs_replan' });
   });
 
+  const traceModel = createTraceReadModel(store);
+  route.get('/api/admin/ai-board/requests/:requestId/decisions', requireAuth, requireAdmin, async (_req, res) => {
+    res.json({ decisions: [] });
+  });
+
   route.get('/api/admin/ai-board/requests/:requestId/trace', requireAuth, requireAdmin, async (req, res) => {
-    const trace = await store.getRequestTrace(req.params.requestId);
-    if (!trace) return res.status(404).json({ error: 'ticket_not_found' });
-    if (store.db) trace.root_work = await createRootAllowanceService(store).read(trace.root.id);
-    if (store.db) trace.hsm = await createHsmStore(store).read(trace.root.id);
-    if (store.db) {
-      const spans = createSpanService(store);
-      const byRun = await spans.forRuns(trace.runs.map((r) => r.id));
-      for (const run of trace.runs) run.spans = byRun.get(Number(run.id)) || [];
-      trace.gate_history = await spans.gateHistory(30);
-    }
-    if (trace.resume) {
-      trace.resume.saved_ms = (trace.resume.replayed_nodes || []).reduce((sum, node) => {
-        const gate = Number(String(node).slice(5).replace('_', '.'));
-        return sum + Number(trace.gate_history?.[gate]?.median_ms || 0);
-      }, 0);
-    }
-    res.json(trace);
+    const out = await traceModel.read(req.params.requestId, req.get('If-None-Match'));
+    if (!out) return res.status(404).json({ error: 'ticket_not_found' });
+    res.set('Cache-Control', 'private, no-cache');
+    if (out.etag) res.set('ETag', out.etag);
+    if (out.notModified) return res.status(304).end();
+    res.json(out.trace);
   });
 
   route.post('/api/admin/ai-board/tickets/:id/extend-budget', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {

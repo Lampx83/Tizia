@@ -9,6 +9,7 @@ import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=20261104d';
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
+import { createPoll } from './poll.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -33,7 +34,7 @@ async function api(path, options = {}) {
     location.href = '/login.html?return=' + encodeURIComponent(location.pathname + location.search);
     throw new Error('login');
   }
-  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  return { ok: r.ok, status: r.status, etag: r.headers.get('ETag'), data: await r.json().catch(() => ({})) };
 }
 
 async function post(path, body) {
@@ -71,16 +72,6 @@ function renderThread(messages) {
       ${renderAtts(m.attachments)}
     </div>`;
   }).join('') || '<div class="blk meta">Chưa có trao đổi nào.</div>';
-}
-
-function renderDecisions(decisions) {
-  if (!decisions.length) return '';
-  return `<h2>AI decisions (${decisions.length})</h2>` + decisions.map(d => `<div class="blk">
-    <div class="who">${fmt(d.created_at)} · ${esc(d.decided_by)}${d.model ? ' · ' + esc(d.model) : ''} · độ tin cậy ${(d.confidence || 0).toFixed(2)}</div>
-    <div><b>${esc(d.action)}</b> → ${esc(d.status_applied)}${d.priority_score != null ? ` · ưu tiên ${esc(d.priority_score)}` : ''}</div>
-    ${d.reason ? `<div class="meta">${esc(d.reason)}</div>` : ''}
-    ${d.public_note ? `<div>${esc(d.public_note)}</div>` : ''}
-  </div>`).join('');
 }
 
 function budgetCell(used, limit) {
@@ -278,7 +269,7 @@ async function submitReconcile(btn) {
     f.msg = `Không chốt được: ${errText(e)}`;
   }
   await refresh();
-  schedule();
+  poll.arm();
 }
 
 async function authorizePlan(btn) {
@@ -779,29 +770,35 @@ document.addEventListener('click', (e) => {
 
 async function refresh() {
   try {
-  const [thread, decisions, trace] = await Promise.all([
+  const headers = traceEtag ? { 'If-None-Match': traceEtag } : {};
+  const [thread, trace] = await Promise.all([
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/thread`),
-    api(`/api/admin/ai-board/requests/${REQUEST_ID}/decisions`),
-    api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`, { headers }),
   ]);
   if (!thread.ok) {
     stopLiveTrace();
     $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
     return false;
   }
-  // Never retain privileged trace data after a role/auth denial.
-  const retainedTrace = trace.status >= 500 ? view?.trace : null;
-  view = { thread: thread.data, decisions: decisions.data?.decisions || [], trace: trace.ok ? trace.data : retainedTrace };
-  if (trace.ok && trace.data?.root?.id != null) {
-    const writes = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/unknown-writes`);
-    if (writes.ok) view.trace.writes = writes.data;
-    const rollout = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/rollout`);
-    if (rollout.ok) view.trace.rollout = rollout.data;
+  // 304: tiến trình không đổi, giữ nguyên view.trace (kể cả writes/rollout) và không hỏi lại.
+  if (trace.status === 304) {
+    view = { ...view, thread: thread.data };
+  } else {
+    traceEtag = trace.ok ? trace.etag : null;
+    // Never retain privileged trace data after a role/auth denial.
+    const retainedTrace = trace.status >= 500 ? view?.trace : null;
+    view = { thread: thread.data, trace: trace.ok ? trace.data : retainedTrace };
+    if (trace.ok && trace.data?.root?.id != null) {
+      const writes = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/unknown-writes`);
+      if (writes.ok) view.trace.writes = writes.data;
+      const rollout = await api(`/api/admin/ai-board/tickets/${trace.data.root.id}/rollout`);
+      if (rollout.ok) view.trace.rollout = rollout.data;
+    }
+    if (!trace.ok && retainedTrace) stopLiveTrace();
+    if (ui.flash === ui.traceError) ui.flash = '';
+    ui.traceError = trace.ok ? '' : `Không tải được tiến trình (mã ${trace.status}). Đã dừng tự cập nhật. Đang chờ kết nối lại.`;
+    if (ui.traceError) ui.flash = ui.traceError;
   }
-  if (!trace.ok && retainedTrace) stopLiveTrace();
-  if (ui.flash === ui.traceError) ui.flash = '';
-  ui.traceError = trace.ok ? '' : `Không tải được tiến trình (mã ${trace.status}). Đã dừng tự cập nhật. Đang chờ kết nối lại.`;
-  if (ui.traceError) ui.flash = ui.traceError;
   if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
   render();
   // Ngữ cảnh duyệt elevation tải sau (có thể một lần gọi model): vẽ trước để trang không đứng chờ.
@@ -823,24 +820,20 @@ function stopLiveTrace() {
 }
 
 // Đang có worker xử lý thì hỏi 2 giây/lần, còn lại 10 giây; tạm dừng khi tab ẩn hoặc admin đang xác nhận.
-let timer = null;
+let traceEtag = null;
 const ENDED = ['done', 'cancelled'];
-function schedule() {
-  clearTimeout(timer);
-  const root = view?.trace?.root;
-  if (root && !root.live && ENDED.includes(root.status)) return;
-  const active = root && (root.live || ['queued', 'running'].includes(root.status));
-  timer = setTimeout(tick, active ? 2000 : 10000);
-}
-async function tick() {
+const poll = createPoll(async () => {
   if (view?.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) {
     stopLiveTrace();
     render();
   }
-  if (!document.hidden && !ui.confirm && !ui.reconcile) await refresh().catch(e => { if (e.message !== 'login') console.warn(e); });
-  schedule();
-}
-document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+  if (!ui.confirm && !ui.reconcile) await refresh();
+}, () => {
+  const root = view?.trace?.root;
+  if (root && !root.live && ENDED.includes(root.status)) return null;
+  const active = root && (root.live || ['queued', 'running'].includes(root.status));
+  return active ? 2000 : 10000;
+});
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -878,7 +871,7 @@ document.addEventListener('click', e => {
     post(`/api/requests/${encodeURIComponent(btn.dataset.request)}/continue`, {})
       .then(() => { ui.flash = 'Đã xếp hàng chạy nốt phần còn lại; worker sẽ nhận ở lượt tới.'; })
       .catch(e => { ui.flash = `Không tiếp tục được: ${errText(e)}`; btn.disabled = false; })
-      .finally(async () => { await refresh(); schedule(); });
+      .finally(async () => { await refresh(); poll.arm(); });
     return;
   } else if (action === 'rollout') return rolloutDo(btn);
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
@@ -890,7 +883,7 @@ document.addEventListener('click', e => {
       btn.disabled = true;
       post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
         .then((r) => { ui.flash = `Đã chạy lại bước này. ${r.note}`; })
-        .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); schedule(); });
+        .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); poll.arm(); });
     });
     return;
   }
@@ -921,6 +914,6 @@ installLightbox();
 
 (async () => {
   if (!REQUEST_ID) { $('#app').innerHTML = '<p class="err">Thiếu id yêu cầu.</p>'; return; }
-  try { if (await refresh()) schedule(); }
+  try { if (await refresh()) poll.arm(); }
   catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<p class="err">Lỗi: ${esc(e.message)}</p>`; }
 })();

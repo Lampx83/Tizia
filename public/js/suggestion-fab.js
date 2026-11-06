@@ -14,6 +14,7 @@
 import { getPlayerName } from './api.js';
 import { renderRequestThread } from './request-thread.js?v=no-icons2';
 import { boardIcon } from './ai-board-icons.js';
+import { createPoll } from './poll.js';
 
 const TYPES = [
   { v: 'game',   label: 'Thêm trò chơi / mini-game' },
@@ -825,13 +826,12 @@ function bind(root) {
       loadInbox();
     });
   }
-  const inboxPoll = setInterval(() => {
-    if (!root.isConnected) { clearInterval(inboxPoll); return; }
+  createPoll(() => {
     // Đang trả lời Ban điều hành thì không tự tải lại: panel nháy và mất chỗ đang gõ.
-    if (!modal.hidden && !paneMine.hidden && !document.hidden && clarifyBox.hidden
+    if (!modal.hidden && !paneMine.hidden && clarifyBox.hidden
       && !inbox.contains(document.activeElement) && !inbox.querySelector('[data-armed]')
       && ![...inbox.querySelectorAll('textarea')].some(input => input.value.trim())) loadInbox(true);
-  }, 5000);
+  }, () => (root.isConnected ? 5000 : null)).arm();
 
   let pendingRequestKey = null;
   form.addEventListener('submit', async (e) => {
