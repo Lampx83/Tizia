@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     oracle_css_size: bool = False
     compile_prose_verify: bool = False
     stop_report_v2: bool = False
+    call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
 
     # mode
     tool_loop: Literal["", "1", "auto"] = ""

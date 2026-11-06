@@ -10,6 +10,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from providers.routing import ModelRouter
+from runtime.meter import measure
+from runtime.root_allowance import current
 from settings import get_settings
 
 # Gateway dùng chung thỉnh thoảng trả 5xx (đổi model, thiếu VRAM): thử lại 3 lần, nghỉ 3 s rồi 8 s. Lỗi 4xx và timeout không thử lại.
@@ -326,7 +328,6 @@ class OllamaClient:
                 req.add_header('x-ollama-seckey', self.seckey)
         for pause in ((*RETRY_PAUSES_S, None) if retry else (None,)):
             timeout = self.remaining_s()
-            from runtime.root_allowance import current
             root = current() if path.endswith(('/generate', '/chat/completions')) else None
             attempt, body = None, None
             provider = self.route_label if self.protocol == 'vllm' else 'ollama'
@@ -347,7 +348,6 @@ class OllamaClient:
                     raise
             finally:
                 if attempt is not None:
-                    from runtime.meter import measure
                     root.settle(attempt, measure(provider, body if isinstance(body, dict) else {},
                                                 int((time.monotonic() - started) * 1000)))
             if self.deadline is not None and pause >= self.remaining_s():
