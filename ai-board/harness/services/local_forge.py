@@ -9,6 +9,8 @@ import tempfile
 import shutil
 from pathlib import Path
 
+from repositories import repo_at_commit
+
 _ENV = ["-c", "user.name=Local Forge", "-c", "user.email=forge@tizia.local"]
 
 
@@ -27,8 +29,10 @@ class LocalForge:
         return done.stdout.strip()
 
     def _sha(self, ref: str) -> str | None:
-        done = subprocess.run(["git", "-C", str(self.bare), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], capture_output=True, text=True)
-        return done.stdout.strip() or None
+        try:
+            return repo_at_commit.resolve(self.bare, ref)
+        except OSError:
+            return None
 
     def _load(self) -> list[dict]:
         return json.loads(self.state.read_text(encoding="utf-8")) if self.state.exists() else []

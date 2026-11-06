@@ -22,7 +22,7 @@ import candidate
 import classifier
 import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
-from repositories import server_hsm
+from repositories import repo_at_commit, server_hsm
 from runtime import levels
 from runtime.budget import BudgetExhausted
 
@@ -350,10 +350,11 @@ def _base_public_contacts(state: dict) -> set[str]:
     if not checkout or not base:
         return set()
     # ponytail: crude "@ or 9 digits" line prefilter, exact matching is contacts_in; fine while public/ stays small.
-    found = subprocess.run(["git", "grep", "-I", "-h", "-E", "@|[0-9]{9}", base, "--", "public"], cwd=checkout,
-                           capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           stdin=subprocess.DEVNULL)
-    return guard.contacts_in(found.stdout)  # exit 1 = no match, stdout empty
+    try:
+        out = repo_at_commit.grep(checkout, base, ["-I", "-h", "-E", "@|[0-9]{9}"], ("public",))
+    except OSError:
+        out = ""
+    return guard.contacts_in(out)
 
 
 def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict:

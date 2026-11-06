@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from budget import Budget
-from conftest import FakeModels, connect, deps_with, plan_with
+from conftest import FakeModels, connect, deps_with, fake_repo_tree, plan_with
 from gates import plan_validate
 from main import load_inbox, run_once
 
@@ -382,7 +382,7 @@ def test_retry_fix_resamples_a_truncated_validator_once(monkeypatch):
 def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
     seen = {}
     monkeypatch.setattr(plan_validate.file_context, 'excerpt', lambda text, words, *, budget, filename, pinned=(): seen.update(words=words, budget=budget) or '')
-    monkeypatch.setattr(plan_validate.code_index, 'git', lambda *a: b'abc' if a[1] == 'rev-parse' else b'x')
+    fake_repo_tree(monkeypatch, {'public/a.html': 'x'}, 'abc')
     plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'chứa "Tất cả"'}]}
     plan_validate.source_evidence({'subject': 's'}, plan, {'checkout_source': '.'})
     assert seen['budget'] == 3500 and 'tất cả' not in seen['words']
@@ -392,8 +392,8 @@ def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
 
 
 def test_named_request_file_is_loaded_even_when_the_plan_omits_it(monkeypatch):
-    monkeypatch.setattr(plan_validate.code_index, 'git',
-                        lambda *a: b'abc' if a[1] == 'rev-parse' else b'<section id="campus"></section>')
+    fake_repo_tree(monkeypatch, {'public/a.html': '<section id="campus"></section>',
+                                 'public/campus-proto/b-iso-canvas.html': '<section id="campus"></section>'}, 'abc')
     plan = {'subtasks': [{'file': 'public/a.html', 'title': 't', 'verify': 'x'}]}
     _, files, context = plan_validate.source_evidence(
         {'subject': 'them toa nha', 'body': 'layout trong public/campus-proto/b-iso-canvas.html'},

@@ -19,6 +19,7 @@ from pathlib import Path
 
 import path_policy
 from gates import implement
+from repositories import repo_at_commit
 
 _CONTRACT = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
                        .read_text(encoding="utf-8"))
@@ -256,8 +257,9 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
                 dst = implement._safe_join(checkout, rel)
                 if rel == test_file and dst.exists() and rel not in created:
                     raise ScopeViolation(f"test_file đã tồn tại trong checkout: {rel}")
-                content = subprocess.run(["git", "show", f"{item['commit']}:{rel}"], cwd=scratch, check=True,
-                                         capture_output=True, stdin=subprocess.DEVNULL).stdout
+                content = repo_at_commit.at(scratch, item["commit"]).read(rel)
+                if content is None:
+                    raise OSError(f"git show {item['commit']}:{rel}: không có file")
                 if rel == test_file and not path_policy.names_scope(content.decode("utf-8", "replace"), allowed):
                     raise ScopeViolation(f"child {index} test '{test_file}' không nêu file trong phạm vi")
                 dst.parent.mkdir(parents=True, exist_ok=True)

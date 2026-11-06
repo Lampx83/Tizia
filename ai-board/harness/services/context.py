@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from repositories import code_index
+from repositories import code_index, repo_at_commit
 from runtime import coverage, limits
 from services import file_context, skill_selection
 import tools
@@ -166,7 +166,7 @@ def pick_skill(text: str, rtype: str | None = None, file: str | None = None, exi
 
 def _commit(source, sha: str) -> str | None:
     try:
-        return code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+        return repo_at_commit.resolve(source, sha)
     except (OSError, ValueError):
         return None
 
@@ -187,10 +187,10 @@ def _mentioned_files(text: str, source, sha: str) -> list[str]:
     if not refs:
         return []
     try:
-        listing = code_index.git(source, "ls-tree", "-r", "--name-only", sha, "--", "public", "server/contexts")
+        files = sorted(repo_at_commit.at(source, sha).files())
     except OSError:
         return []
-    files = listing.decode("utf-8", "replace").splitlines()
+    files = [f for f in files if f.startswith(("public/", "server/contexts/"))]
     found = []
     for ref in refs:
         exact = [f for f in files if f == ref or f == f"public/{ref}"]

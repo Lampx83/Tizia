@@ -22,6 +22,7 @@ import context as repo_context
 import file_context
 import path_policy
 from gates import change_class, gate3_guards, subtask_contract
+from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, tool_loop
 from runtime.budget import BudgetExhausted
@@ -137,13 +138,12 @@ _DEP_MAX_CHARS = 6_000
 _HTML_PROLOG = re.compile(r"\s*(?:<!DOCTYPE|<!doctype|<html\b)")
 
 
-def _show_file(source, sha: str | None, path: str, limit: int = _EXEMPLAR_MAX_CHARS) -> str:
-    out = _git(["show", f"{sha}:{path}"], cwd=Path(source), text=True,
-               encoding="utf-8", errors="replace")
-    if out.returncode:
+def _show_file(source, sha: str | None, path: str, limit: int = _EXEMPLAR_MAX_CHARS) -> str | None:
+    blob = repo_at_commit.at(source, sha).read(path)
+    if blob is None:
         return None
     lines, used = [], 0
-    for line in out.stdout.splitlines():
+    for line in blob.decode("utf-8", "replace").splitlines():
         if used + len(line) > limit:
             lines.append(f"(bớt: chỉ trích {len(lines)} dòng đầu của mẫu)")
             break
@@ -293,40 +293,33 @@ def excerpt_context(subtask: dict, state: dict, current: str | None, siblings: l
     return context, lessons, ctx
 
 
-_TREES: dict[tuple, frozenset] = {}
-
-
 def _base_tree(state: dict) -> set[str]:
-    key = (str(state.get("checkout_source")), state.get("base_sha"))
-    if key not in _TREES:
-        listed = subprocess.run(["git", "ls-tree", "-r", "--name-only", str(key[1])], cwd=key[0], capture_output=True,
-                                text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL) if key[1] else None
-        _TREES[key] = frozenset(listed.stdout.splitlines()) if listed is not None and not listed.returncode else frozenset()
-    return set(_TREES[key])
+    key = (state.get("checkout_source"), state.get("base_sha"))
+    if not key[0] or not key[1]:
+        return set()
+    try:
+        return set(repo_at_commit.at(key[0], key[1]).files())
+    except OSError:
+        return set()
 
 
 def _siblings(source, sha: str, file: str) -> list[str]:
     """Tên file cùng thư mục với `file` ở base sha (rỗng nếu lỗi)."""
-    folder = posixpath.dirname(file)
-    listed = subprocess.run(["git", "ls-tree", "--name-only", sha, "--", f"{folder}/" if folder else "."],
-                            cwd=source, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                            stdin=subprocess.DEVNULL)
-    return [posixpath.basename(name) for name in listed.stdout.splitlines()] if not listed.returncode else []
+    try:
+        names = repo_at_commit.at(source, sha).children(posixpath.dirname(file))
+    except OSError:
+        return []
+    return [posixpath.basename(name) for name in names]
 
 
 def _existing_files(source, subtasks: list[dict]) -> tuple[str, dict[str, bytes]]:
     """(base sha, {file: bytes at base}) for targets already in checkout_source. Raise OSError if not a repo."""
-    base = subprocess.run(["git", "rev-parse", "--verify", "HEAD^{commit}"], cwd=source, capture_output=True,
-                          text=True, stdin=subprocess.DEVNULL)
-    if base.returncode:
-        raise OSError(f"checkout_source không đọc được: {base.stderr.strip()[:200]}")
-    sha = base.stdout.strip()
-    found = {}
-    for subtask in subtasks:
-        shown = subprocess.run(["git", "show", f"{sha}:{subtask['file']}"], cwd=source, capture_output=True,
-                               stdin=subprocess.DEVNULL)
-        if not shown.returncode:  # nonzero = file mới ở base
-            found[subtask["file"]] = shown.stdout
+    try:
+        sha = repo_at_commit.resolve(source)
+    except OSError as e:
+        raise OSError(f"checkout_source không đọc được: {e}") from e
+    blobs = repo_at_commit.at(source, sha).read_many(subtask["file"] for subtask in subtasks)
+    found = {path: blob for path, blob in blobs.items() if blob is not None}  # file mới ở base: không có
     return sha, found
 
 
@@ -523,7 +516,7 @@ def restore(state: dict, repo_dir: str | Path | None = None) -> None:
             "title": subtask.get("title"), "file": subtask["file"], "test_file": entry["test_file"],
             "model": entry.get("model"), "diff": diff_text,
             **({"verification": entry["verification"]} if entry.get("verification") else {}),
-            "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
+            "commit": repo_at_commit.resolve(repo),
         })
     if len(diffs) != len(subtasks):
         raise ValueError(f"gate 3 chua xong: {len(diffs)}/{len(subtasks)} child co diff")
@@ -937,7 +930,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text,
             **({'verification': out['verification']} if out.get('verification') else {}),
-            "commit": _git(["rev-parse", "HEAD"], cwd=repo, text=True).stdout.strip(),
+            "commit": repo_at_commit.resolve(repo),
         })
         diff_child.append(child)
         state.setdefault("produced", {})[subtask["file"]] = _progress_entry(
