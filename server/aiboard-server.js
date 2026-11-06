@@ -9,6 +9,7 @@ import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-boar
 import { attachRequesterThread } from './ai-board/api/requester-thread.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
+import { attachAiBoardDriverApi } from './contexts/ai-board-driver/index.js';
 
 export { HEADERS };
 
@@ -60,6 +61,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
   attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env });
   attachAiBoardShots(app, { db: handle.d, requireAuth, requireAdmin });
+  attachAiBoardDriverApi(app, { db: handle.d, requireAuth, requireAdmin });
 
   app.use((error, _req, res, _next) => {
     logger.warn?.(`[aiboard-server] ${error?.message || error}`);
