@@ -1,3 +1,4 @@
+import { createTransientRetryRepository } from '../server/ai-board/repositories/transient-retry.js';
 // Helper modules on the async board store: drafts, eval tasks, transient retry,
 // intake guard, classifier trace, screenshot retention. Asserts business outcomes and persisted rows.
 import test from 'node:test';
@@ -99,18 +100,18 @@ test('eval tasks, drafts (shots, retry streak, handoff), request retry', async (
 test('transient retry switch, intake flags and rejections, classifier trace', async () => {
   const { result: out } = await runBoard(async (store, d, { m, db }) => {
     const out = {};
-    out.stateDefault = await m.transientRetryState(db);
+    out.stateDefault = await m.transientRetryState(createTransientRetryRepository(db));
     await newRequest(store, { tag: 't' });
     const c = await claimAndRun(store, 'w1');
     await submit(store, c, planOf(), 'plan-aux-t');
     await verdict(store, c, blocked(5, 'transient'), 'verdict-aux-t');
-    out.blocked = await m.listTransientBlocked(db);
-    out.notBlocked = await failure(() => m.retryTransientTicket(db, 999));
-    out.retried = await m.retryTransientTicket(db, c.id);
-    out.retriedAgain = await failure(() => m.retryTransientTicket(db, c.id));
-    out.badSwitch = await failure(() => m.setTransientRetryEnabled(db, 'yes', 9));
-    out.on = await m.setTransientRetryEnabled(db, true, 9);
-    out.off = await m.setTransientRetryEnabled(db, false, null);
+    out.blocked = await m.listTransientBlocked(createTransientRetryRepository(db));
+    out.notBlocked = await failure(() => m.retryTransientTicket(createTransientRetryRepository(db), 999));
+    out.retried = await m.retryTransientTicket(createTransientRetryRepository(db), c.id);
+    out.retriedAgain = await failure(() => m.retryTransientTicket(createTransientRetryRepository(db), c.id));
+    out.badSwitch = await failure(() => m.setTransientRetryEnabled(createTransientRetryRepository(db), 'yes', 9));
+    out.on = await m.setTransientRetryEnabled(createTransientRetryRepository(db), true, 9);
+    out.off = await m.setTransientRetryEnabled(createTransientRetryRepository(db), false, null);
     // intake guard writes
     const req = await newRequest(store, { tag: 'i', title: 'Yêu cầu đáng ngờ' });
     await m.recordIntakeRejection(db, 1, { message: 'Yêu cầu bị từ chối', labels: ['prompt_injection'] });

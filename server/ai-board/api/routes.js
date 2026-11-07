@@ -1,3 +1,4 @@
+import { createTransientRetryRepository } from '../repositories/transient-retry.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from '../repositories/store-contract.js';
@@ -447,14 +448,14 @@ export function attachAiBoardRequestRoutes(router, {
 
   // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
   route.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, async (_req, res) => {
-    res.json({ ...(await aux.transientRetryState(store.db)), blocked: await aux.listTransientBlocked(store.db) });
+    res.json({ ...(await aux.transientRetryState(createTransientRetryRepository(store.db))), blocked: await aux.listTransientBlocked(createTransientRetryRepository(store.db)) });
   });
   route.post('/api/admin/ai-board/transient-retry/switch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
-    try { res.json(await aux.setTransientRetryEnabled(store.db, req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
+    try { res.json(await aux.setTransientRetryEnabled(createTransientRetryRepository(store.db), req.body?.enabled, req.user.id)); } catch (error) { folderError(res, error); }
   });
   route.post('/api/admin/ai-board/tickets/:id/retry-transient', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      const result = await aux.retryTransientTicket(store.db, req.params.id);
+      const result = await aux.retryTransientTicket(createTransientRetryRepository(store.db), req.params.id);
       await store.recordAdminAction({ ticketId: req.params.id }, req.user.id, 'retry_transient');
       res.json(result);
     } catch (error) { folderError(res, error); }

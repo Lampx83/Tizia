@@ -1,3 +1,4 @@
+import { createTransientRetryRepository } from '../server/ai-board/repositories/transient-retry.js';
 // Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (transient), mọi loại yêu cầu — không riêng self-improve.
 // Mặc định tắt: waiting_admin/transient_blocked, admin bấm "Chạy lại ngay" (retryTransientTicket). Bật: về
 // queued/authorized với lease_expires_at dời tới retry_after_ms — claimTransaction (nhánh PLAN_QUEUE, lease_expires_at
@@ -59,7 +60,7 @@ test('retry disabled (default): a transient block waits for the admin, listed fo
   await submit(transientVerdict(), now);
   const root = await db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id);
   assert.deepEqual({ ...root }, { status: 'waiting_admin', phase: 'transient_blocked' });
-  const blocked = await listTransientBlocked(db.d);
+  const blocked = await listTransientBlocked(createTransientRetryRepository(db.d));
   assert.equal(blocked.length, 1);
   assert.equal(blocked[0].id, ticket.id);
 });
@@ -67,7 +68,7 @@ test('retry disabled (default): a transient block waits for the admin, listed fo
 test('admin "Chạy lại ngay" requeues the ticket for the very next claim', async () => {
   const { db, store, submit, ticket } = await plannedRoot();
   await submit(transientVerdict(), Date.now());
-  const result = await retryTransientTicket(db.d, ticket.id);
+  const result = await retryTransientTicket(createTransientRetryRepository(db.d), ticket.id);
   assert.deepEqual(result, { ok: true, id: ticket.id, status: 'queued', phase: 'authorized' });
   // 1 request = 1 phiên worker (fair-queue): trả về đúng worker cũ trừ khi lease của nó đã quá hạn.
   const claimed = await store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
@@ -77,14 +78,14 @@ test('admin "Chạy lại ngay" requeues the ticket for the very next claim', as
 
 test('retrying a ticket that is not transient_blocked is rejected', async () => {
   const { db, ticket } = await plannedRoot();
-  await assert.rejects(async () => retryTransientTicket(db.d, ticket.id), (error) =>
+  await assert.rejects(async () => retryTransientTicket(createTransientRetryRepository(db.d), ticket.id), (error) =>
     error instanceof WorkerContractError && error.code === 'not_transient_blocked');
 });
 
 test('retry enabled: the ticket is not claimable before retry_after_ms, and is after', async () => {
   const { db, store, submit, ticket } = await plannedRoot();
   const now = Date.now();
-  await setTransientRetryEnabled(db.d, true, 9, now - 1000);
+  await setTransientRetryEnabled(createTransientRetryRepository(db.d), true, 9, now - 1000);
   await submit(transientVerdict(), now);
   const root = await db.prepare('SELECT status, phase, lease_expires_at FROM ai_tickets WHERE id=?').get(ticket.id);
   assert.equal(root.status, 'queued');
@@ -141,7 +142,7 @@ test('admin route: default off, only an admin can flip the switch', async () => 
   const f = await httpFixture();
   try {
     const state = await f.call('GET', '/api/admin/ai-board/transient-retry', { user: 9 });
-    assert.deepEqual(state.body, { ...await transientRetryState(f.db.d), blocked: [] });
+    assert.deepEqual(state.body, { ...await transientRetryState(createTransientRetryRepository(f.db.d)), blocked: [] });
     assert.equal((await f.call('POST', '/api/admin/ai-board/transient-retry/switch', { user: 1, body: { enabled: true } })).status, 403);
     const on = await f.call('POST', '/api/admin/ai-board/transient-retry/switch', { user: 9, body: { enabled: true } });
     assert.equal(on.status, 200);

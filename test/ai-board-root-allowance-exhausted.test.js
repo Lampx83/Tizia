@@ -1,3 +1,4 @@
+import { createTransientRetryRepository } from '../server/ai-board/repositories/transient-retry.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -32,7 +33,7 @@ for (const group of ['model_calls', 'tokens', 'semantic_repairs', 'quality_switc
     assert.equal(root.phase, 'root_allowance_exhausted');
     assert.equal(root.internal_reason, `root_allowance_exhausted:${group}:${limit}/${limit}`);
     assert.doesNotMatch(root.public_note, /hạ tầng|GPU/);
-    await assert.rejects(() => retryTransientTicket(db.d, ticket.id), (e) => e.code === 'not_transient_blocked');
+    await assert.rejects(() => retryTransientTicket(createTransientRetryRepository(db.d), ticket.id), (e) => e.code === 'not_transient_blocked');
   });
 }
 
