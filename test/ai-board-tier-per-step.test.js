@@ -1,3 +1,4 @@
+import { createPartialResumeRepository } from '../server/ai-board/repositories/partial-resume.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -165,7 +166,7 @@ test('mixed plan: surface steps run, admin authorizes the protected step, the ne
   // Approval wakes the protected step only; the partial request still needs the requester's "continue".
   assert.deepEqual({ ...(await db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id)) },
     { status: 'waiting_admin', phase: 'partial' });
-  await continuePartialRequest(db.d, (await db.prepare('SELECT source_request_id FROM ai_tickets WHERE id=?').get(ticket.id)).source_request_id, null);
+  await continuePartialRequest(createPartialResumeRepository(db.d), (await db.prepare('SELECT source_request_id FROM ai_tickets WHERE id=?').get(ticket.id)).source_request_id, null);
   assert.deepEqual({ ...(await db.prepare('SELECT status, phase FROM ai_tickets WHERE id=?').get(ticket.id)) },
     { status: 'queued', phase: 'authorized' });
 

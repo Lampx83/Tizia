@@ -1,3 +1,4 @@
+import { createPartialResumeRepository } from '../server/ai-board/repositories/partial-resume.js';
 ﻿// Yêu cầu dừng giữa plan nhưng đã xong một phần (LF/107): verdict blocked + failure_class='partial'
 // → waiting_admin/partial (giữ checkpoint), người gửi thấy "Hoàn thành một phần" và bấm "Tiếp tục" để
 // chạy nốt từ checkpoint — không mở plan mới, không tính là lượt hỏng.
@@ -97,7 +98,7 @@ test('the requester sees "edit", an admin sees "continue", and continue requeues
   assert.equal(ownerView.step, 'hoàn thành một phần, chờ tiếp tục');
   assert.equal((await requesterProgress(store, request.request_id, 1, true)).can_continue, true);  // admin
 
-  const result = await continuePartialRequest(db.d, request.request_id, null);  // admin
+  const result = await continuePartialRequest(createPartialResumeRepository(db.d), request.request_id, null);  // admin
   assert.equal(result.ok, true);
   assert.equal(result.id, request.request_id);
   assert.equal(result.root_ticket_id, ticket.id);
@@ -112,13 +113,13 @@ test('the requester sees "edit", an admin sees "continue", and continue requeues
 
 test('only the owner (or an admin) can continue, and only while the request is partial', async () => {
   const { db, submit, request } = await plannedRoot();
-  await assert.rejects(() => continuePartialRequest(db.d, request.request_id, 1),
+  await assert.rejects(() => continuePartialRequest(createPartialResumeRepository(db.d), request.request_id, 1),
     (error) => error instanceof WorkerContractError && error.code === 'not_partial');
 
   await submit(partialVerdict(), Date.now());
-  await assert.rejects(() => continuePartialRequest(db.d, request.request_id, 2),
+  await assert.rejects(() => continuePartialRequest(createPartialResumeRepository(db.d), request.request_id, 2),
     (error) => error instanceof WorkerContractError && error.code === 'not_owner');
-  assert.equal((await continuePartialRequest(db.d, request.request_id, null)).phase, 'authorized');  // admin
+  assert.equal((await continuePartialRequest(createPartialResumeRepository(db.d), request.request_id, null)).phase, 'authorized');  // admin
 });
 
 test('a partial failure class is only valid on a blocked gate 3', async () => {

@@ -1,3 +1,4 @@
+import { createPartialResumeRepository } from '../repositories/partial-resume.js';
 import { createTransientRetryRepository } from '../repositories/transient-retry.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
@@ -260,7 +261,7 @@ export function attachAiBoardRequestRoutes(router, {
   // không mở plan mới và không tính là lượt hỏng. CHỈ ADMIN: người gửi muốn thay đổi thì sửa yêu cầu.
   route.post('/api/requests/:id/continue', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      res.json(await aux.continuePartialRequest(store.db, req.params.id, null));
+      res.json(await aux.continuePartialRequest(createPartialResumeRepository(store.db), req.params.id, null));
     } catch (error) {
       if (error instanceof WorkerContractError) {
         return res.status(error.status).json({ error: error.code, message: error.message });
