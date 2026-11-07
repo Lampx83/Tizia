@@ -58,6 +58,7 @@ def loop(env=None) -> dict:
         "tool_calls": settings.loop_tool_calls or (moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
+        "observation_tokens": {k: v for k, v in spec["observation_tokens"].items() if not k.startswith("_")},
     }
 
 
@@ -99,7 +100,7 @@ def react_plan(env=None) -> dict:
         "model_calls": spec["model_calls"],
         "tool_calls": spec["tool_calls"],
         "max_tokens": spec["max_tokens"],
-        "observation_chars": spec["observation_chars"],
+        "observation_tokens": spec["observation_tokens"],
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],

@@ -63,6 +63,7 @@
     "loop": {
       "_why": "Tool-loop ceilings per subtask (runtime/tool_loop.py). AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS override for a measured run only.",
       "model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000,
+      "observation_tokens": { "_why": "Per-tool cap on what one observation hands back to the model, counted in Qwen tokens (services/token_count.py). read_file pages by start_line/end_line within its cap; default covers tools not listed.", "tree": 600, "outline": 800, "grep": 800, "read_file": 2000, "edit_file": 1000, "write_test": 150, "run_check": 1000, "finish": 150, "default": 1000 },
       "soft_start": 4, "soft_step": 2,
       "stuck": { "same_call_repeats": 3, "no_progress_steps": 4 },
       "flag": "AI_BOARD_ADAPTIVE_BUDGET", "default_enabled": false,
@@ -75,7 +76,7 @@
       "model_calls": 6,
       "tool_calls": 12,
       "max_tokens": 4096,
-      "observation_chars": 1500,
+      "observation_tokens": 500,
       "soft_start": 3,
       "soft_step": 1,
       "stuck": {
