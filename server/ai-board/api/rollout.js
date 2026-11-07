@@ -1,7 +1,7 @@
 // Candidate rollout: a verified candidate is served locally only inside the envelope or after an admin approval bound to its exact base/head/scope/audience.
 // A private preview grant never counts as approval; every decision is an appended row in ai_candidate_approvals.
 import { asyncRoutes } from './async-routes.js';
-import { getRelease, setReleaseStatus } from '../services/releases.js';
+import { createRolloutRepository } from '../repositories/rollout.js';
 
 const AUDIENCES = ['owner_only', 'school'];
 const SENSITIVE = [/^server\//, /^scripts\//, /^public\/js\/engine\//, /(^|\/)(auth|login|session|password|payment|billing|wallet|admin)/i,
@@ -33,18 +33,17 @@ export function decide({ verdict, tier, audience, disagreement, observedBase = n
 }
 
 export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, requireStrictCsrf }) {
-  const route = asyncRoutes(router), db = store.db;
+  const route = asyncRoutes(router), repo = createRolloutRepository(store.db);
 
   async function load(ticketId) {
-    const ticket = await db.get("SELECT id, tier, source_request_id FROM ai_tickets WHERE id=? AND kind='root'", [ticketId]);
+    const ticket = await repo.rootTicket(ticketId);
     if (!ticket) return null;
-    const run = await db.get(`SELECT id, evidence_json FROM ai_runs WHERE ticket_id=? AND evidence_json LIKE '%"candidate"%' ORDER BY id DESC LIMIT 1`, [ticket.id]);
+    const run = await repo.candidateRun(ticket.id);
     const verdict = parse(run?.evidence_json)?.verdict ?? null;
-    const folder = await db.get(`SELECT f.slug FROM requests r JOIN ai_feature_folders f ON f.id=r.folder_id WHERE r.id=?`, [ticket.source_request_id]);
-    const release = folder ? await getRelease(db, folder.slug) : null;
-    const disagreement = !!await db.get(`SELECT 1 FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
-      WHERE r.ticket_id=? AND g.gate=2.5 AND g.internal_reason LIKE 'validator_disagreement%' LIMIT 1`, [ticket.id]);
-    const rows = await db.all('SELECT * FROM ai_candidate_approvals WHERE ticket_id=? ORDER BY id', [ticket.id]);
+    const folder = await repo.folderSlug(ticket.source_request_id);
+    const release = folder ? await repo.getRelease(folder.slug) : null;
+    const disagreement = !!await repo.hasDisagreement(ticket.id);
+    const rows = await repo.approvals(ticket.id);
     const base = await store.latestBase();
     return { ticket, run, verdict, release, disagreement, rows, base };
   }
@@ -62,11 +61,10 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
       stale_decisions: s.rows.length - current.length,
     };
   };
-  const append = (s, decision, basis, audience, actor, reasons, note) => db.insert(
-    `INSERT INTO ai_candidate_approvals(ticket_id, run_id, base_sha, head_sha, scope_json, audience, decision, basis, reasons_json, actor_user_id, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [s.ticket.id, s.run.id, s.verdict.candidate.base_sha, s.verdict.candidate.head_sha, JSON.stringify(decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha }).files),
-      audience, decision, basis, JSON.stringify(reasons), actor, note ?? null, Date.now()]);
+  const append = (s, decision, basis, audience, actor, reasons, note) => repo.appendApproval({ ticketId: s.ticket.id, runId: s.run.id,
+    baseSha: s.verdict.candidate.base_sha, headSha: s.verdict.candidate.head_sha,
+    scopeJson: JSON.stringify(decide({ verdict: s.verdict, tier: s.ticket.tier, audience, disagreement: s.disagreement, observedBase: s.base?.sha }).files),
+    audience, decision, basis, reasonsJson: JSON.stringify(reasons), actorId: actor, note, now: Date.now() });
   const guard = async (req, res) => {
     const s = await load(Number(req.params.id));
     if (!s) { res.status(404).json({ error: 'ticket_not_found' }); return null; }
@@ -94,9 +92,9 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
 
   route.post('/api/admin/ai-board/tickets/:id/rollout/reject', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const s = await guard(req, res); if (!s) return;
-    await db.tx(async () => {
+    await repo.tx(async () => {
       await append(s, 'rejected', 'admin', audienceOf(req), req.user.id, ['rejected'], req.body?.note);
-      if (s.release && s.release.status !== 'off') await setReleaseStatus(db, s.release.slug, 'off', req.user.id);
+      if (s.release && s.release.status !== 'off') await repo.setReleaseStatus(s.release.slug, 'off', req.user.id);
     });
     res.json(view(await load(s.ticket.id)));
   });
@@ -114,8 +112,8 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
       && !(last && ['rejected', 'withdrawn'].includes(last.decision));
     if (d.mode === 'review' && !approved) return res.status(403).json({ error: 'review_required', reasons: d.reasons });
     if (last?.decision === 'rejected') return res.status(403).json({ error: 'rejected_candidate' });
-    await db.tx(async () => {
-      await setReleaseStatus(db, s.release.slug, audience, req.user.id);
+    await repo.tx(async () => {
+      await repo.setReleaseStatus(s.release.slug, audience, req.user.id);
       await append(s, 'served', d.mode === 'envelope' ? 'envelope' : 'admin', audience, req.user.id, d.reasons, req.body?.note);
     });
     res.json(view(await load(s.ticket.id), audience));
@@ -131,8 +129,8 @@ export function attachRolloutRoutes(router, { store, requireAuth, requireAdmin, 
   route.post('/api/admin/ai-board/tickets/:id/rollout/withdraw', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     const s = await guard(req, res); if (!s) return;
     if (!s.release) return res.status(409).json({ error: 'no_release' });
-    await db.tx(async () => {
-      await setReleaseStatus(db, s.release.slug, 'owner_only', req.user.id);
+    await repo.tx(async () => {
+      await repo.setReleaseStatus(s.release.slug, 'owner_only', req.user.id);
       await append(s, 'withdrawn', 'admin', 'owner_only', req.user.id, ['withdrawn'], req.body?.note);
     });
     res.json(view(await load(s.ticket.id)));
