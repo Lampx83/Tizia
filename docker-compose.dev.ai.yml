@@ -141,7 +141,6 @@ services:
     networks: !override [boardnet, sandbox-api]
     volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
       - sandbox-runner-state:/home/node/.microsandbox
-      - ./ai-board/sandbox-runner/sandbox-policy.large.yaml:/etc/sandbox/sandbox-policy.yaml:ro
     secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
 
   seaweedfs:
@@ -157,17 +156,15 @@ services:
   # UI SeaweedFS sau basic-auth; không publish cổng.
   seaweedfs-ui-auth:
     container_name: aiboard-seaweedfs-ui
-    image: node:24-alpine
+    image: aiboard-server:dev  # script nằm sẵn trong image web (COPY scripts/), không bind-mount từ repo
     profiles: [storage]
     restart: unless-stopped
-    depends_on: [seaweedfs]
+    depends_on: [seaweedfs, aiboard-server]
     command: sh -c 'export SEAWEED_UI_PASSWORD="${SEAWEED_UI_PASSWORD:-}"; node /app/scripts/seaweed-ui-auth.js'
     environment:
       SEAWEED_UI_USER: ${SEAWEED_UI_USER:-admin}
       SEAWEED_UI_PASSWORD: ${SEAWEED_UI_PASSWORD:-}
     networks: !override [boardnet]
-    volumes:
-      - ./scripts/seaweed-ui-auth.js:/app/scripts/seaweed-ui-auth.js:ro
 
   # Cầu TCP mở aiboard-server:8081 và seaweedfs:8333 ra IP nội bộ cho web khác host. Không có secret; HMAC vẫn áp dụng.
   # Compose không đổi ports theo profile trên cùng service nên cần service riêng. Bật cùng --profile ai-board --profile storage.
