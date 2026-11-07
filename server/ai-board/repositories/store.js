@@ -982,6 +982,24 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return await confirmClarificationTransaction(requestId, ownerUserId, text, complete !== false, Date.now());
   }
 
+  // Admin answer → root back to needs_replan (fresh plan). Returns null when the request has no root.
+  const answerClarificationTransaction = (requestId, text, now) => db.tx(async () => {
+    const root = await lockedRequestRoot(requestId);
+    if (!root) return null;
+    if (PHASES[root.phase]?.terminal) throw new WorkerContractError('request is closed', 409, 'request_closed');
+    await db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+      VALUES (?, 'admin', 'Quản trị viên', ?, '[]', ?)`, [requestId, text, now]);
+    if (root.plan_hash) await invalidateCurrentPlan(root, now);
+    await requeueForReplan(root.id, { publicNote: 'Người gửi đã trả lời; lập kế hoạch lại.' }, now);
+    await db.run("DELETE FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [root.id]);
+    return { ok: true, status: 'queued', phase: 'needs_replan' };
+  });
+
+  const answerClarification = (requestId, answer) => {
+    const text = String(answer ?? '').trim().slice(0, 4000);
+    return answerClarificationTransaction(Number(requestId), text, Date.now());
+  };
+
   const handoffClarification = (requestId, ownerUserId, reason) => db.tx(async () => {
     const { request } = await getClarification(requestId, ownerUserId);
     const root = await db.get('SELECT * FROM ai_tickets WHERE id=?', [request.root_id]);
@@ -2694,6 +2712,7 @@ function resumeSummary(journal) {
     countClarifyTurns,
     listPendingClarifications,
     confirmClarification,
+    answerClarification,
     handoffClarification,
     requestWorkerClarification,
     authorizePlan,
