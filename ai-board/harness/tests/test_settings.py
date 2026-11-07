@@ -8,9 +8,6 @@ import settings
 from settings import Settings, get_settings
 
 AI_BOARD = Path(__file__).resolve().parents[2]
-# Giới hạn số: contract.json qua limits.py/tool_loop.py, không thuộc Settings.
-NUMERIC = {"AI_BOARD_LOOP_MODEL_CALLS", "AI_BOARD_LOOP_TOOL_CALLS", "AI_BOARD_FANOUT_MAX", "AI_BOARD_CHECKPOINT_TTL_DAYS",
-           "AI_BOARD_SKILL_PAD_CHARS"}
 # Script chạy trong image python trần, không có pydantic.
 BARE_SCRIPTS = {"real-gate5.py"}
 
@@ -63,6 +60,26 @@ def test_bad_value_names_variable(name, value):
         get_settings({f"AI_BOARD_{name}": value})
 
 
+def test_numeric_caps_and_fanout():
+    s = get_settings({"AI_BOARD_LOOP_MODEL_CALLS": "12", "AI_BOARD_LOOP_TOOL_CALLS": "0", "AI_BOARD_FANOUT_MAX": "9",
+                      "AI_BOARD_CHECKPOINT_TTL_DAYS": "-1", "AI_BOARD_SKILL_PAD_CHARS": "300"})
+    assert s.loop_model_calls == 12 and s.loop_tool_calls is None and s.fanout_max == 4
+    assert s.checkpoint_ttl_days == 30.0 and s.skill_pad_chars == 300
+    assert get_settings({"AI_BOARD_FANOUT_MAX": "0"}).fanout_max == 1
+
+
+@pytest.mark.parametrize("name,value", [("FANOUT_MAX", "two"), ("LOOP_MODEL_CALLS", "1.5"), ("SKILL_PAD_CHARS", "-3"),
+                                       ("EXPLORE_LOW_CONFIDENCE", "maybe")])
+def test_bad_numeric_names_variable(name, value):
+    with pytest.raises(ValueError, match=f"AI_BOARD_{name}"):
+        get_settings({f"AI_BOARD_{name}": value})
+
+
+def test_pr_base_empty_is_default():
+    assert settings.pr_base({}) == "dev" and settings.pr_base({"PR_BASE_BRANCH": ""}) == "dev"
+    assert settings.pr_base({"PR_BASE_BRANCH": "release"}) == "release"
+
+
 def test_paths_and_secret():
     s = get_settings({"AI_BOARD_REPO_DIR": "/r", "AI_BOARD_INTERNAL_KEY": "k" * 30})
     assert s.repo_dir == Path("/r") and s.internal_key.get_secret_value() == "k" * 30 and "kkk" not in repr(s)
@@ -105,6 +122,5 @@ def test_no_scattered_env_reads():
         if "tests" in parts or "node_modules" in parts or ".venv" in parts or path.name in {"settings.py", "conftest.py"} | BARE_SCRIPTS:
             continue
         for line, name in _env_reads(path):
-            if name not in NUMERIC:
-                offenders.append(f"{path.relative_to(AI_BOARD)}:{line} {name}")
+            offenders.append(f"{path.relative_to(AI_BOARD)}:{line} {name}")
     assert not offenders, "đọc AI_BOARD_* ngoài settings.py: " + ", ".join(offenders)

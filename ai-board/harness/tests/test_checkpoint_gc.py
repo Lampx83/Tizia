@@ -107,7 +107,9 @@ def test_run_without_scope_is_grouped_by_its_own_key(dsn):
 
 def test_ttl_env_parsing():
     assert ttl_days({}) == 30 and ttl_days({"AI_BOARD_CHECKPOINT_TTL_DAYS": "7"}) == 7
-    assert ttl_days({"AI_BOARD_CHECKPOINT_TTL_DAYS": "x"}) == 30 and ttl_days({"AI_BOARD_CHECKPOINT_TTL_DAYS": "0"}) == 30
+    assert ttl_days({"AI_BOARD_CHECKPOINT_TTL_DAYS": "0"}) == 30
+    with pytest.raises(ValueError, match="AI_BOARD_CHECKPOINT_TTL_DAYS"):
+        ttl_days({"AI_BOARD_CHECKPOINT_TTL_DAYS": "x"})
 
 
 def test_cli_is_dry_run_unless_apply(dsn, monkeypatch, capsys):

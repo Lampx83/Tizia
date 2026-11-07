@@ -312,8 +312,12 @@ def test_child_caps_follow_the_environment_and_stop_the_loop_at_the_raised_cap(m
     monkeypatch.delenv("AI_BOARD_LOOP_TOOL_CALLS", raising=False)
     assert tool_loop.child_caps() == {"max_model_calls": 10, "max_tool_calls": 30}
     monkeypatch.setenv("AI_BOARD_LOOP_MODEL_CALLS", "20")
-    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "oops")
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "0")
     assert tool_loop.child_caps() == {"max_model_calls": 20, "max_tool_calls": 30}
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "oops")
+    with pytest.raises(ValueError, match="AI_BOARD_LOOP_TOOL_CALLS"):
+        tool_loop.child_caps()
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "")
     monkeypatch.setenv("AI_BOARD_LOOP_MODEL_CALLS", "3")
     deps = Deps([{"tool": "tree", "arguments": {"path": "public"}}])
     out = tool_loop.run_subtask(SUBTASK, PAGE, deps=deps, budget=Budget(), model="m", source=".", sha="abc", check=lambda _o: None)

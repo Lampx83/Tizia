@@ -20,6 +20,7 @@ from pathlib import Path
 import path_policy
 from gates import implement
 from repositories import repo_at_commit
+from settings import DEFAULT_PR_BASE, pr_base
 
 _CONTRACT = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
                        .read_text(encoding="utf-8"))
@@ -27,7 +28,7 @@ BRANCH_PREFIX = _CONTRACT["branch_prefix"]
 BRANCH_SLUG_MAX = _CONTRACT["branch_slug_max"]
 BRANCH_PATTERN = re.compile(_CONTRACT["branch_pattern"])
 _AUTHOR = ["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local"]
-PR_BASE = "dev"  # AI Board PRs only ever target dev; nothing here merges, approves or pushes dev/main
+PR_BASE = DEFAULT_PR_BASE  # AI Board PRs only ever target dev; nothing here merges, approves or pushes dev/main
 # Credential helper reads the token from the git child's env: never in argv, a file or this process's env.
 _CREDENTIAL = "!f() { echo username=x-access-token; echo \"password=$AI_BOARD_PUSH_TOKEN\"; }; f"
 
@@ -393,7 +394,7 @@ class Candidates:
         để người mở PR; PR đã merge thì revert đúng merge commit của nó (nhận cả squash nhiều commit).
         Return {outcome: discarded|revert_ready, detail, revert?}."""
         repo, head = self.repo, candidate["head_sha"]
-        base = os.getenv("PR_BASE_BRANCH", "dev")
+        base = pr_base()
         refs = [ref for name in dict.fromkeys((base, "main")) for ref in (f"origin/{name}", name)]
         pr = self.github.pull(pull_request["number"]) if pull_request and self.github else None
         merge_commit = pr.get("merge_commit_sha") if pr and pr.get("merged") else None

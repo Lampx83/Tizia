@@ -242,8 +242,9 @@ def test_fan_out_spends_the_same_budget_ledger_as_sequential_and_keeps_the_promp
 
 def test_fanout_limit_reads_the_env_and_never_exceeds_one_workload(monkeypatch):
     assert implement.fanout_limit({}) == 2
-    assert implement.fanout_limit({implement.FANOUT_ENV: "1"}) == 1
-    assert implement.fanout_limit({implement.FANOUT_ENV: "9"}) == 4
-    assert implement.fanout_limit({implement.FANOUT_ENV: "nonsense"}) == 2
-    monkeypatch.setenv(implement.FANOUT_ENV, "1")
+    assert implement.fanout_limit({"AI_BOARD_FANOUT_MAX": "1"}) == 1
+    assert implement.fanout_limit({"AI_BOARD_FANOUT_MAX": "9"}) == 4
+    with pytest.raises(ValueError, match="AI_BOARD_FANOUT_MAX"):
+        implement.fanout_limit({"AI_BOARD_FANOUT_MAX": "nonsense"})
+    monkeypatch.setenv("AI_BOARD_FANOUT_MAX", "1")
     assert implement.fanout_limit() == 1

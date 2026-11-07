@@ -32,6 +32,7 @@ def enabled() -> bool:
 
 def exploration_enabled() -> bool:
     """Gate-1 exploration is on unless AI_BOARD_REACT_PLAN is explicitly off; the same limits.react_plan block caps it."""
+    # Khác contract default_enabled=false cố ý: exploration mặc định bật, chỉ tắt khi flag = 0.
     return get_settings().react_plan is not False
 
 

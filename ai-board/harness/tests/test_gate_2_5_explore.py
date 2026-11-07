@@ -69,7 +69,7 @@ def _run(repo, models, plan=None, request=None):
 
 
 def test_flag_off_never_explores(repo, monkeypatch):
-    monkeypatch.delenv(plan_validate.EXPLORE_FLAG, raising=False)
+    monkeypatch.delenv("AI_BOARD_EXPLORE_LOW_CONFIDENCE", raising=False)
     models = _Scripted(_plan(), {"op": "finish", "target": OTHER})
 
     out = _run(repo, models)
@@ -79,7 +79,7 @@ def test_flag_off_never_explores(repo, monkeypatch):
 
 
 def test_flag_on_returns_in_scope_target_as_evidence_and_still_blocks(repo, monkeypatch):
-    monkeypatch.setenv(plan_validate.EXPLORE_FLAG, '1')
+    monkeypatch.setenv("AI_BOARD_EXPLORE_LOW_CONFIDENCE", '1')
     models = _Scripted(_plan(), {"op": "grep", "pattern": "<h1>Trang</h1>"}, {"op": "finish", "target": TARGET})
 
     out = _run(repo, models)
@@ -91,7 +91,7 @@ def test_flag_on_returns_in_scope_target_as_evidence_and_still_blocks(repo, monk
 
 @pytest.mark.parametrize("target", ["server/index.js", "../etc/passwd", "public/missing.html", "ai-board/harness/gates/plan_validate.py"])
 def test_out_of_scope_or_missing_target_is_rejected(repo, monkeypatch, target):
-    monkeypatch.setenv(plan_validate.EXPLORE_FLAG, '1')
+    monkeypatch.setenv("AI_BOARD_EXPLORE_LOW_CONFIDENCE", '1')
     models = _Scripted(_plan(), {"op": "finish", "target": target})
 
     out = _run(repo, models)
@@ -105,7 +105,7 @@ def test_read_outside_scope_returns_notice_not_content(repo):
 
 
 def test_exploration_respects_existing_tool_and_model_caps(repo, monkeypatch):
-    monkeypatch.setenv(plan_validate.EXPLORE_FLAG, '1')
+    monkeypatch.setenv("AI_BOARD_EXPLORE_LOW_CONFIDENCE", '1')
     monkeypatch.setenv('AI_BOARD_LOOP_MODEL_CALLS', '2')
     monkeypatch.setenv('AI_BOARD_LOOP_TOOL_CALLS', '2')
     models = _Scripted(_plan(), *[{"op": "grep", "pattern": "<h1>Trang</h1>"}] * 10)
@@ -117,7 +117,7 @@ def test_exploration_respects_existing_tool_and_model_caps(repo, monkeypatch):
 
 
 def test_ai_board_path_is_blocked_before_any_exploration(repo, monkeypatch):
-    monkeypatch.setenv(plan_validate.EXPLORE_FLAG, '1')
+    monkeypatch.setenv("AI_BOARD_EXPLORE_LOW_CONFIDENCE", '1')
     target = "ai-board/harness/gates/plan_validate.py"
     models = _Scripted(_plan(target), {"op": "finish", "target": TARGET})
 

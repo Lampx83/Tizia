@@ -10,7 +10,6 @@ manual() = prompts/AIBOARD.md (luật repo cho model local, kiểu CLAUDE.md). K
 from __future__ import annotations
 
 import fnmatch
-import os
 import posixpath
 import re
 from dataclasses import dataclass
@@ -110,7 +109,7 @@ SKILLS = {s.name: s for s in (parse_skill(p.read_text(encoding="utf-8"))
 def skill_text(skill: Skill, gate: int) -> str:
     """Skill section; AI_BOARD_SKILL_PAD_CHARS=N pads it to N chars with other skills' sections (length ablation)."""
     text = skill.sections.get(gate, "").strip()
-    target = int(os.environ.get("AI_BOARD_SKILL_PAD_CHARS") or 0)
+    target = get_settings().skill_pad_chars
     filler = "\n\n".join(t.strip() for n, s in sorted(SKILLS.items()) if n != skill.name and n not in VARIANT_FILES for _, t in sorted(s.sections.items()))
     while len(text) < target and filler:
         text += "\n\n" + filler

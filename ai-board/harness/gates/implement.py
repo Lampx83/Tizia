@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import difflib
 import json
-import os
 import posixpath
 import re
 import subprocess
@@ -578,19 +577,12 @@ def _checkpoint_store(state: dict, db_path, proposal_id, child: int):
     return PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None
 
 
-FANOUT_ENV = "AI_BOARD_FANOUT_MAX"
-DEFAULT_FANOUT = 2
 PROGRESS_CAP = 150_000  # ký tự JSON tiến độ cổng 3 giữ được trong checkpoint (server cắt ledger ở 200 KB)
 
 
 def fanout_limit(env=None) -> int:
     """Số model call song song trong 1 lớp DAG: 1 = tuần tự, trần 4 (một workload vLLM, không mở workload thứ hai)."""
-    raw = (os.environ if env is None else env).get(FANOUT_ENV, DEFAULT_FANOUT)
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_FANOUT
-    return min(max(value, 1), 4)
+    return get_settings(env).fanout_max
 
 
 def _progress_store(state: dict):

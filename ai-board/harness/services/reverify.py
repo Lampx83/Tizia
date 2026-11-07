@@ -2,11 +2,11 @@
 A conflict (or a candidate already contained in the base) leaves nothing behind."""
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 
 from services import candidate as candidates
+from settings import pr_base
 
 
 class Conflict(RuntimeError):
@@ -19,7 +19,7 @@ class Conflict(RuntimeError):
 
 def base_tip(repo, base: str | None = None) -> str | None:
     """Current tip of the PR base branch (PR_BASE_BRANCH, else dev; remote-tracking ref first), or None when neither exists."""
-    name = base or os.getenv("PR_BASE_BRANCH") or candidates.PR_BASE
+    name = base or pr_base()
     for ref in (f"origin/{name}", name):
         sha = candidates._ref_sha(repo, ref)
         if sha:

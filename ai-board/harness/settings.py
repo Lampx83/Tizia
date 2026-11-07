@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Annotated, Literal, Mapping
 from urllib.parse import urlparse
 
-from pydantic import SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_GATE25_FIXES = frozenset({"quotes", "ellipsis"})
+DEFAULT_PR_BASE = "dev"  # AI Board PRs only ever target dev
+DEFAULT_TTL_DAYS = 30.0
 
 
 def _csv(value):
@@ -56,6 +58,14 @@ class Settings(BaseSettings):
     compile_prose_verify: bool = False
     stop_report_v2: bool = False
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
+    explore_low_confidence: bool = False
+
+    # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
+    loop_model_calls: int | None = None
+    loop_tool_calls: int | None = None
+    fanout_max: int = 2  # số model call song song mỗi lớp DAG, kẹp 1..4
+    checkpoint_ttl_days: float = DEFAULT_TTL_DAYS
+    skill_pad_chars: int = Field(default=0, ge=0)
 
     # mode
     tool_loop: Literal["", "1", "auto"] = ""
@@ -102,6 +112,21 @@ class Settings(BaseSettings):
         if not 1.0 <= value <= 300.0:
             raise ValueError("must be within 1..300 seconds")
         return value
+
+    @field_validator("loop_model_calls", "loop_tool_calls", mode="after")
+    @classmethod
+    def _loop_cap(cls, value):
+        return value if value is None or value > 0 else None
+
+    @field_validator("checkpoint_ttl_days", mode="after")
+    @classmethod
+    def _ttl(cls, value):
+        return value if value > 0 else DEFAULT_TTL_DAYS
+
+    @field_validator("fanout_max", mode="after")
+    @classmethod
+    def _fanout(cls, value):
+        return min(max(value, 1), 4)
 
     @field_validator("tool_loop", mode="before")
     @classmethod
@@ -164,6 +189,12 @@ def retrieval_choice(env: Mapping[str, str] | None = None) -> str:
         return ""
     value = str(src["AI_BOARD_RETRIEVAL"] or "").strip().lower()
     return value if value in ("literal", "model") else "off"
+
+
+def pr_base(env: Mapping[str, str] | None = None) -> str:
+    """PR_BASE_BRANCH (không prefix AI_BOARD_); rỗng = mặc định dev."""
+    src = os.environ if env is None else env
+    return src.get("PR_BASE_BRANCH") or DEFAULT_PR_BASE
 
 
 def get_settings(env: Mapping[str, str] | None = None) -> Settings:

@@ -41,26 +41,21 @@ def _num(env, key, default, cast):
     return default if raw in (None, "") else cast(raw)
 
 
-def _int_or(env, key, default):
-    try:
-        value = _num(env, key, default, int)
-    except ValueError:
-        return default
-    return value if value > 0 else default
+def tri_state(value, spec):
+    """Tri-state flag: None = contract default_enabled."""
+    return spec["default_enabled"] if value is None else value
 
 
 def loop(env=None) -> dict:
-    """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override, sai kiểu thì lấy mặc định.
+    """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override.
     Bật progress loop thì trần mềm nâng theo limits.progress: bước còn tiến bộ không bị cắt, còn trần thật là
     budget/wall clock/quyền."""
-    env = os.environ if env is None else env
+    settings = get_settings(env)
     spec = _parsed()["limits"]["loop"]
     moving = progress(env)
     return {
-        "model_calls": _int_or(env, "AI_BOARD_LOOP_MODEL_CALLS",
-                               moving["loop_model_calls"] if moving["enabled"] else spec["model_calls"]),
-        "tool_calls": _int_or(env, "AI_BOARD_LOOP_TOOL_CALLS",
-                              moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
+        "model_calls": settings.loop_model_calls or (moving["loop_model_calls"] if moving["enabled"] else spec["model_calls"]),
+        "tool_calls": settings.loop_tool_calls or (moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
     }
@@ -72,7 +67,7 @@ def loop_adaptive(env=None) -> dict:
     spec = _parsed()["limits"]["loop"]
     flag = get_settings(env).adaptive_budget
     return {
-        "enabled": (spec["default_enabled"] if flag is None else flag) or progress(env)["enabled"],
+        "enabled": tri_state(flag, spec) or progress(env)["enabled"],
         "soft_start": spec["soft_start"],
         "soft_step": spec["soft_step"],
         "same_call_repeats": spec["stuck"]["same_call_repeats"],
@@ -85,15 +80,14 @@ def progress(env=None) -> dict:
     spec = _parsed()["limits"]["progress"]
     flag = get_settings(env).progress_loop
     return {**{k: v for k, v in spec.items() if not k.startswith("_")},
-            "enabled": spec["default_enabled"] if flag is None else flag}
+            "enabled": tri_state(flag, spec)}
 
 
 def repair_agent(env=None) -> dict:
     """Repair agent role + caps; flag AI_BOARD_MODEL_REPAIR (contract default) gates their use."""
     spec = _parsed()["limits"]["repair_agent"]
     flag = get_settings(env).model_repair
-    return {**{k: v for k, v in spec.items() if not k.startswith("_")},
-            "enabled": spec["default_enabled"] if flag is None else flag}
+    return {**{k: v for k, v in spec.items() if not k.startswith("_")}, "enabled": tri_state(flag, spec)}
 
 
 def react_plan(env=None) -> dict:
@@ -101,7 +95,7 @@ def react_plan(env=None) -> dict:
     spec = _parsed()["limits"]["react_plan"]
     flag = get_settings(env).react_plan
     return {
-        "enabled": spec["default_enabled"] if flag is None else flag,
+        "enabled": tri_state(flag, spec),
         "model_calls": spec["model_calls"],
         "tool_calls": spec["tool_calls"],
         "max_tokens": spec["max_tokens"],

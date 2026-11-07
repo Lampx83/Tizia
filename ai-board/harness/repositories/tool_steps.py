@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 
 from repositories.dbconn import harness_db
+from settings import get_settings
 
 DDL = """
 CREATE TABLE IF NOT EXISTS tool_run (
@@ -46,8 +46,6 @@ END $$;
 # status: intent (ghi trước khi chạy) | done | unknown (dừng chờ đối chiếu) | applied | void | compensate (kết quả đối chiếu)
 RESOLUTIONS = {"applied": "applied", "not_applied": "void", "compensate": "compensate"}
 OPEN_STATUSES = ("intent", "unknown", "compensate")  # chưa chốt: không dọn, resume không đi tiếp
-TTL_ENV = "AI_BOARD_CHECKPOINT_TTL_DAYS"
-DEFAULT_TTL_DAYS = 30.0
 
 
 def identity(proposal_id: int, child: int, step: int, tool: str, args: dict) -> str:
@@ -218,12 +216,8 @@ class Checkpoint:
 
 
 def ttl_days(env=None) -> float:
-    """TTL checkpoint (ngày) từ AI_BOARD_CHECKPOINT_TTL_DAYS; thiếu/sai/không dương → 30."""
-    try:
-        value = float((os.environ if env is None else env).get(TTL_ENV, DEFAULT_TTL_DAYS))
-    except ValueError:
-        return DEFAULT_TTL_DAYS
-    return value if value > 0 else DEFAULT_TTL_DAYS
+    """TTL checkpoint (ngày) từ AI_BOARD_CHECKPOINT_TTL_DAYS; không dương → 30."""
+    return get_settings(env).checkpoint_ttl_days
 
 
 def purge_checkpoints(dsn, *, ticket_id: int | None = None, ttl: float | None = None, apply: bool = False,

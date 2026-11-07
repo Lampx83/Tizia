@@ -22,7 +22,7 @@ def enabled(env=None) -> bool:
     """Flag AI_BOARD_SKILL_SELECT; absent = contract default (off, so prompts stay byte-identical)."""
     spec = limits.contract()["limits"]["skills"]["selection_node"]
     flag = get_settings(env).skill_select
-    return bool(spec["default_enabled"] if flag is None else flag)
+    return bool(limits.tri_state(flag, spec))
 
 
 def build(role: str, context: dict | None = None) -> Selection:

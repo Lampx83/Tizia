@@ -633,6 +633,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None) -> int:
     else:
         load_dotenv(ENV_FILE)
 
+    get_settings()  # bad AI_BOARD_* fail here, before any gate runs
     if os.environ.get("DRY_RUN") != "1":
         print("[harness] ticket 04 chỉ chạy nhánh DRY_RUN=1 — đặt DRY_RUN=1 rồi chạy lại", file=sys.stderr)
         return 2

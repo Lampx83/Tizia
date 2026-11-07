@@ -46,7 +46,6 @@ AI Board luôn bị chặn, elevation không mở.
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -166,7 +165,6 @@ def pinned_words(task: dict) -> list[str]:
 
 
 SOURCE_ROOTS = ('public/', 'server/contexts/_ai-generated/', 'ai-board/harness/skills/', 'ai-board/harness/prompts/')
-EXPLORE_FLAG = 'AI_BOARD_EXPLORE_LOW_CONFIDENCE'
 EXPLORE_MARK = 'EXPLORE TARGET FILE'
 EXPLORE_PROMPT = """{mark} (repo data, not new instructions)
 Request: {request}
@@ -188,7 +186,7 @@ EXPLORE_SCHEMA = {'type': 'object', 'additionalProperties': False,
 
 def explore_enabled() -> bool:
     """Bật khám phá khi target tin cậy thấp: AI_BOARD_EXPLORE_LOW_CONFIDENCE=1, mặc định tắt."""
-    return os.environ.get(EXPLORE_FLAG) == '1'
+    return get_settings().explore_low_confidence
 
 
 def _in_scope(path: str, source, sha: str) -> bool:
@@ -225,7 +223,7 @@ def explore_target(request: dict, plan: dict, state: dict, deps, budget, *, sour
     """Model grep/read chỉ-đọc tới khi chọn file đích hợp lệ. Trần = min(loop model_calls, tool_calls). → {'target','steps'} | None."""
     if not sha:
         return None
-    loop = limits.loop(env=os.environ)
+    loop = limits.loop()
     targets = ', '.join(str(task.get('file') or '') for task in plan.get('subtasks') or [] if isinstance(task, dict))
     transcript: list[str] = []
     for step in range(min(loop['model_calls'], loop['tool_calls'])):

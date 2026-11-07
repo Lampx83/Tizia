@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import posixpath
 import re
 import sys
@@ -66,14 +65,6 @@ def enabled() -> bool:
 
 def verified_enabled() -> bool:
     return get_settings().verified_loop
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        value = int(os.environ.get(name, ""))
-    except ValueError:
-        return default
-    return value if value > 0 else default
 
 
 def child_caps() -> dict:
