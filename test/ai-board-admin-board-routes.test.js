@@ -15,6 +15,10 @@ async function serve(overrides = {}) {
       ? { id: 22, domain: 'it', type: 'ui', title: 'Thêm bảng FAQ', status: 'pending', student: 'localtest', detail: 'x', created_at: 1, updated_at: 2 }
       : { id: 80 }),
     queryAll: async () => [{ id: 1, role: 'student', author_name: 'localtest', body: 'nội dung', attachments: '[]', created_at: 3 }],
+    answerClarification: async (id, answer) => {
+      runs.push(['answer', id, answer]);
+      return String(id) === '404' ? null : { ok: true, status: 'queued', phase: 'needs_replan' };
+    },
     ...overrides,
   };
   const app = express();
@@ -67,15 +71,13 @@ test('an admin answer is stored and the root is queued for a new plan', async ()
     const good = await srv.post('/api/admin/ai-board/requests/22/clarify', { answer: 'Chỉ cần migration và API.' });
     assert.equal(good.status, 200);
     assert.deepEqual(await good.json(), { ok: true, status: 'queued', phase: 'needs_replan' });
-    assert.equal(srv.runs.length, 3);
-    assert.match(String(srv.runs[1][0]), /UPDATE ai_tickets SET status='queued'/);
+    assert.deepEqual(srv.runs, [['answer', '22', 'Chỉ cần migration và API.']]);
   } finally { await srv.close(); }
 });
 
 test('a missing board request is refused, not queued', async () => {
-  const srv = await serve({ queryGet: async () => null });
+  const srv = await serve();
   try {
     assert.equal((await srv.post('/api/admin/ai-board/requests/404/clarify', { answer: 'đủ dài' })).status, 404);
-    assert.equal(srv.runs.length, 0);
   } finally { await srv.close(); }
 });

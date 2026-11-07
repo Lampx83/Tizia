@@ -15,7 +15,7 @@ import math
 import re
 from pathlib import Path
 
-from repositories import code_index
+from repositories import code_index, repo_at_commit
 from services import file_context
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -51,7 +51,7 @@ def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHT
     """File liên quan tới câu hỏi, file khớp nhất trước rồi hàng xóm import của nó. Rỗng khi không khớp gì.
     Câu về backend/db (CODE_INTENT) → chỉ mục code xếp trước, chấm trên mọi từ của câu. Câu không có dấu
     hiệu đó → chỉ mục code chỉ nhận từ public/ không có, nên câu hỏi UI trả đúng danh sách như trước."""
-    commit = code_index.git(source, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip()
+    commit = repo_at_commit.resolve(source, sha)
     terms = _tokens(question)
     intent = bool(CODE_INTENT.search(f" {file_context.fold(question)} "))
     ui = code_index.ui_index(source, commit)

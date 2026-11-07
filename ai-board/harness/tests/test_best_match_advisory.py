@@ -141,7 +141,8 @@ def test_gate25_advisory_still_blocks_missing_evidence_and_renderer_constraint(m
 
 def test_literal_fix_blocks_advisory_when_user_text_lives_in_the_best_match_file(monkeypatch):
     from gates import plan_validate as pv
-    monkeypatch.setattr(pv.code_index, 'git', lambda *a: b'<a>\xe2\x86\x90 Quay l\xe1\xba\xa1i</a>')
+    from conftest import fake_repo_tree
+    fake_repo_tree(monkeypatch, {'public/ghep.html': '<a>← Quay lại</a>'}, 'sha')
     request = {'subject': "đổi chữ '← Quay lại'", 'body': ''}
     plan_files = {'public/js/auth-header.js': 'export const x = 1'}
     assert pv.literal_contradicts(request, 'public/ghep.html', plan_files, '.', 'sha') is False

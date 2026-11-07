@@ -30,7 +30,7 @@ import shlex
 import unicodedata
 from pathlib import Path
 
-import code_index
+from repositories import repo_at_commit
 import context
 import functional
 from gates import best_match, grounding_paths, react_plan
@@ -243,11 +243,10 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
         if pending:
             raise levels.ElevationRequired(levels.requirements(plan, read), plan)
         return
-    try:  # 1 tiến trình git cho mọi file
-        found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *must_exist)
-                    .decode("utf-8", "replace").splitlines()) if must_exist else set()
-        existing_migrations = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *db_files)
-                                  .decode("utf-8", "replace").splitlines()) if db_files else set()
+    try:
+        tree = repo_at_commit.at(source, sha)
+        found = {f for f in must_exist if tree.exists(f)}
+        existing_migrations = {f for f in db_files if tree.exists(f)}
     except OSError:
         found, existing_migrations = set(), set()
     missing = [f for f in must_exist if f not in found]
@@ -289,11 +288,10 @@ def new_files(plan: dict, source, sha: str | None) -> set[str]:
     if sha is None or not files:
         return set()
     try:
-        found = set(code_index.git(source, "ls-tree", "--name-only", sha, "--", *files)
-                    .decode("utf-8", "replace").splitlines())
+        tree = repo_at_commit.at(source, sha)
     except OSError:
         return set()
-    return {f for f in files if f not in found}
+    return {f for f in files if not tree.exists(f)}
 
 
 def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,

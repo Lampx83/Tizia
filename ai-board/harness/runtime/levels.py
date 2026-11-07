@@ -147,19 +147,21 @@ def source_reader(source, sha: str | None = None):
     Không phải repo/không đọc được thì trả None để caller quay về mức suy từ path."""
     if not source:
         return None
-    import code_index
+    from repositories import repo_at_commit
 
     if sha is None:
         try:
-            sha = code_index.git(source, "rev-parse", "HEAD").decode().strip()
+            sha = repo_at_commit.resolve(source)
         except OSError:
             return None
+    tree = repo_at_commit.at(source, sha)
 
     def read(path) -> str | None:
         try:
-            return code_index.git(source, "show", f"{sha}:{path}").decode("utf-8", "replace")
+            blob = tree.read(path)
         except OSError:
             return None
+        return None if blob is None else blob.decode("utf-8", "replace")
 
     return read
 

@@ -194,6 +194,12 @@ class Deps:
         if not budget.tick() or not budget.can_request():
             # Nêu đúng cap đã chạm để admin/worker biết đường nới (budget visibility).
             raise BudgetExhausted(f"budget exhausted before model call (request token bound): {budget.exhausted() or 'can_request'}")
+        from settings import get_settings
+        if get_settings().call_executor:
+            return self._call_unified(model, prompt, gate=gate, budget=budget, db_path=db_path, proposal_id=proposal_id,
+                                      format=format, prompt_name=prompt_name, child=child, iteration=iteration,
+                                      options=options, extra=extra, role=role or self.model_role,
+                                      exclude=exclude_candidates, reason=route_reason)
         if getattr(self.models, 'routing', None):
             return self._call_routed(model, prompt, gate=gate, budget=budget, db_path=db_path,
                                      proposal_id=proposal_id, format=format, prompt_name=prompt_name,
@@ -319,6 +325,89 @@ class Deps:
         if last_error:
             raise last_error
         raise RuntimeError(f'No reviewed, compatible and available candidate for {role}')
+
+    def _check_wait(self, wait_s):
+        deadline = getattr(self.models, 'deadline', None)
+        if deadline is not None and wait_s >= self.models.remaining_s():
+            raise TimeoutError('Model request deadline exceeded')
+
+    def _settle_attempt(self, *, gate, model, prompt, prompt_name, budget, provider, body, error, started,
+                        child, iteration, request, db_path=None, proposal_id=None):
+        metrics = meter.measure(provider, body, int((time.monotonic() - started) * 1000))
+        n = meter.units(provider, metrics)
+        budget.spend('model_calls')
+        if provider == 'api' and error is None:
+            budget.spend('tokens', int(body.get('prompt_eval_count') or 0) + int(body.get('eval_count') or 0))
+        budget.spend('units', n)
+        if error is None and db_path is not None and proposal_id is not None:
+            gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate, model=model, prompt=prompt, body=body)
+        result = ('timeout' if isinstance(error, TimeoutError) else 'http_error') if error else 'ok'
+        self._trace(gate, model, prompt, prompt_name, '' if error else body.get('response', ''), metrics, n,
+                    result, str(error) if error else None, child, iteration, provider=provider, request=request)
+        return metrics
+
+    def _call_unified(self, model, prompt, *, gate, budget, db_path, proposal_id, format, prompt_name, child,
+                      iteration, options, extra, role, exclude, reason):
+        """call_model under runtime.call_executor (AI_BOARD_CALL_EXECUTOR): one attempt cap, failover, metering."""
+        from providers.routing import ModelRouter
+        from runtime import call_executor
+        routing = getattr(self.models, 'routing', None)
+        resolved = ModelRouter.role(gate, model, self.models, explicit=role, extra=extra)
+        prompt, extra, options = _split_call(prompt, resolved, routing, extra, options, format)
+        sent = {}
+        if routing:
+            pool = [c for c in routing.candidates(resolved, exclude=exclude)
+                    if not (self.model_candidate and resolved == self.model_role and c['id'] != self.model_candidate)]
+            empty = f'No reviewed, compatible and available candidate for {resolved}'
+
+            def attempt(candidate):
+                evidence = routing.evidence(resolved, candidate, reason if candidate is pool[0] else 'infrastructure_failover')
+                if self.trace:
+                    self.trace.note('tool', 'model routing', f"{resolved}: {candidate['id']} ({evidence['reason']})", evidence)
+                client = routing.client(candidate, self.models)
+                call_extra, call_options = extra, options
+                if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
+                    think = bool((extra or {}).get('force_thinking', routing.reasoning(resolved)))
+                    call_extra = {**{k: v for k, v in (extra or {}).items() if k not in ('force_thinking', 'max_total_output_tokens')}, 'thinking': think}
+                    if think:
+                        call_options = {**options, 'num_predict': (extra or {}).get('max_total_output_tokens',
+                                        int(options.get('num_predict') or 0) + routing.reasoning_tokens())}
+                sent.update(evidence=evidence, extra=call_extra, options=call_options)
+                return client.generate(candidate['model'], prompt, format=format, extra=call_extra,
+                                       _single_attempt=True, **call_options)
+
+            def record(candidate, body, error, started):
+                provider = candidate['provider'] if candidate['provider'] in ('vllm', 'api') else 'ollama'
+                metrics = self._settle_attempt(gate=gate, model=candidate['model'], prompt=prompt, prompt_name=prompt_name,
+                                               budget=budget, provider=provider, body=body, error=error, started=started,
+                                               child=child, iteration=iteration, db_path=db_path, proposal_id=proposal_id,
+                                               request=_request_attrs(sent['options'], sent['extra'], body, resolved))
+                if error is None:
+                    body.update(_metrics=metrics, _route=sent['evidence'], _model=candidate['model'])
+            on_failed = routing.failed
+        else:
+            provider = ('vllm' if getattr(self.models, 'protocol', '') == 'vllm'
+                        or getattr(self.models, 'vllm_url', '') and resolved == 'gate3_heavy'
+                        else self.provider)
+            pool, empty, on_failed = [{'id': resolved}], 'no model candidate', None
+
+            def attempt(candidate):
+                if hasattr(self.models, 'generate_for'):
+                    return self.models.generate_for(resolved, model, prompt, format=format, extra=extra, _single_attempt=True, **options)
+                return (self.models.generate(model, prompt, format=format, extra=extra, _single_attempt=True, **options) if extra
+                        else self.models.generate(model, prompt, format=format, _single_attempt=True, **options))
+
+            def record(candidate, body, error, started):
+                metrics = self._settle_attempt(gate=gate, model=model, prompt=prompt, prompt_name=prompt_name,
+                                               budget=budget, provider=provider, body=body, error=error, started=started,
+                                               child=child, iteration=iteration, db_path=db_path, proposal_id=proposal_id,
+                                               request=_request_attrs(options, extra, body, resolved))
+                if error is None:
+                    body['_metrics'] = metrics
+        _, body = call_executor.run(pool, attempt, record, budget=budget, sleep=self.sleep, check_wait=self._check_wait,
+                                    retryable=_retryable_model_error, empty_msg=empty,
+                                    stop_on_error=self.stop_on_model_error, on_failed=on_failed)
+        return body
 
     def _trace(self, gate, model, prompt, prompt_name, output, metrics, n, result, error, child, iteration,
                provider=None, request=None):
