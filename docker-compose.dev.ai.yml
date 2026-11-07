@@ -37,6 +37,9 @@ services:
       AI_BOARD_MODEL_ROUTING: ${AI_BOARD_MODEL_ROUTING:-true}  # false/trống = /ollama/api/generate fallback → gateway 404
       AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-}
     ports: !override []
+    volumes: !override  # base mount token bị bỏ; token qua secret
+      - pharmacysim-data:/data
+    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
     networks: !override
       boardnet: {}
       tizia-bridge:
@@ -84,6 +87,10 @@ services:
       aiboard-server: { condition: service_healthy }
       sandbox-runner: { condition: service_healthy }
     networks: !override [boardnet, sandbox-api]
+    volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
+      - ai-board-repo:/repo
+      - ai-board-memory:/opt/ai-board/ai-board/memory
+    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
     environment:
       AI_BOARD_SERVER_URL: http://aiboard-server:8081
       # Mặc định demo/dev cho vLLM dùng chung; ghi đè bằng env của stack/Portainer.
@@ -121,7 +128,6 @@ services:
     volumes: !override
       - ai-board-repo-2:/repo
       - ai-board-memory-2:/opt/ai-board/ai-board/memory
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
 
   image-registry:
     extends: { file: docker-compose.yml, service: image-registry }
@@ -133,6 +139,10 @@ services:
     image: tizia-sandbox-runner:dev
     container_name: aiboard-sandbox-runner
     networks: !override [boardnet, sandbox-api]
+    volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
+      - sandbox-runner-state:/home/node/.microsandbox
+      - ./ai-board/sandbox-runner/sandbox-policy.large.yaml:/etc/sandbox/sandbox-policy.yaml:ro
+    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
 
   seaweedfs:
     extends: { file: docker-compose.yml, service: seaweedfs }
@@ -176,6 +186,10 @@ services:
       - "${AI_BOARD_BIND_IP:-127.0.0.1}:8333:8333"
     networks: [boardnet]
     logging: *logging
+
+secrets:
+  sandbox_runner_token:
+    environment: SANDBOX_RUNNER_TOKEN  # chuỗi ngẫu nhiên dài; đặt trong env của stack
 
 networks:
   boardnet: {}

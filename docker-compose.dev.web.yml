@@ -3,7 +3,7 @@
 # Cùng host với stack AI: tạo một lần `docker network create tizia-bridge` (tên đổi bằng TIZIA_BRIDGE_NETWORK).
 # Khác host: không cần cầu chung; đặt AI_BOARD_SERVER_URL và AI_BOARD_SHOTS_S3_ENDPOINT trỏ tới IP nội bộ của host AI
 # (production cross-host cần TLS và firewall, xem header của docker-compose.dev.ai.yml).
-# Chỉ tizia-dev publish cổng (8041).
+# Chỉ tizia-dev publish cổng: host 8000 (đổi bằng WEB_PUBLISH_PORT) -> container 8041.
 # Bí mật đưa bằng env của stack (Portainer), không đặt trong repo: POSTGRES_USER/PASSWORD/DB, AI_BOARD_INTERNAL_SECRET
 # (HMAC web<->board). File .env là tùy chọn (required: false).
 services:
@@ -14,7 +14,7 @@ services:
     depends_on: !override  # app cần PostgreSQL lúc boot
       tizia-postgres: { condition: service_healthy }
     ports: !override
-      - "${PORT:-8041}:8041"  # cửa duy nhất: web
+      - "${WEB_PUBLISH_PORT:-8000}:8041"  # cửa duy nhất: web; app lắng nghe 8041 trong container
     env_file:
       - path: .env
         required: false
