@@ -8,6 +8,7 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { listUnknownWrites, reconcileWrite } from '../server/ai-board/services/write-reconcile.js';
+import { createWriteReconcileRepository } from '../server/ai-board/repositories/write-reconcile.js';
 
 const ID_A = 'a'.repeat(32);
 const ID_B = 'b'.repeat(32);
@@ -58,15 +59,15 @@ test('lists open unknown writes of the ticket only', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_A);
   await seed(ID_B, { scope: 'ticket-99999:zzz', key: 2 });
-  const listed = await listUnknownWrites(db.d, ticket.id);
+  const listed = await listUnknownWrites(createWriteReconcileRepository(db.d), ticket.id);
   assert.deepEqual(listed.open.map((w) => w.identity), [ID_A]);
   assert.deepEqual(listed.resolved, []);
 });
 
 test('no harness tables yet: empty lists, reconcile is 404', async () => {
   const { db, ticket } = await fixture({ tables: false });
-  assert.deepEqual(await listUnknownWrites(db.d, ticket.id), { open: [], resolved: [] });
-  await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
+  assert.deepEqual(await listUnknownWrites(createWriteReconcileRepository(db.d), ticket.id), { open: [], resolved: [] });
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
     404, 'unknown_write_not_found');
 });
 
@@ -75,15 +76,15 @@ test('tables from an older worker (no run_scope / resolved_at): empty lists, rec
   await db.d.exec(`CREATE TABLE tool_run (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, pins_json TEXT NOT NULL, ledger_json TEXT, updated_at BIGINT NOT NULL);
     CREATE TABLE tool_step (proposal_id BIGINT NOT NULL, child INTEGER NOT NULL, step INTEGER NOT NULL, identity TEXT NOT NULL, tool TEXT NOT NULL,
       args_json TEXT NOT NULL, status TEXT NOT NULL, kind TEXT, observation TEXT, resolved_by TEXT, updated_at BIGINT NOT NULL);`);
-  assert.deepEqual(await listUnknownWrites(db.d, ticket.id), { open: [], resolved: [] });
-  await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
+  assert.deepEqual(await listUnknownWrites(createWriteReconcileRepository(db.d), ticket.id), { open: [], resolved: [] });
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
     404, 'unknown_write_not_found');
 });
 
 test('a 60-bit proposal id (beyond Number precision) reconciles by step identity', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_A, { key: '410869396543484539' });
-  const out = await reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE, user: admin });
+  const out = await reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE, user: admin });
   assert.equal(out.status, 'applied');
   assert.equal((await stepRow(db, ID_A)).status, 'applied');
 });
@@ -91,7 +92,7 @@ test('a 60-bit proposal id (beyond Number precision) reconciles by step identity
 test('admin decision updates the step and leaves actor, reason, evidence in the step row and ai_events', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_A);
-  const out = await reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE, user: admin });
+  const out = await reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE, user: admin });
   assert.deepEqual(out, { ok: true, identity: ID_A, decision: 'applied', status: 'applied', remaining_open: 0, resumed: false });
   const row = await stepRow(db, ID_A);
   assert.deepEqual([row.status, row.resolved_by, row.resolution_reason], ['applied', 'admin:9', 'bản ghi đã có']);
@@ -99,8 +100,8 @@ test('admin decision updates the step and leaves actor, reason, evidence in the 
   const event = await db.d.get(`SELECT * FROM ai_events WHERE event_type='unknown_write_reconciled'`);
   assert.deepEqual([event.ticket_id, event.actor_type, event.actor_id], [ticket.id, 'admin', '9']);
   assert.deepEqual(JSON.parse(event.internal_detail), { identity: ID_A, tool: 'edit_file', step: 0, from: 'unknown', decision: 'applied', status: 'applied', reason: 'bản ghi đã có', evidence: EVIDENCE });
-  assert.equal((await listUnknownWrites(db.d, ticket.id)).resolved[0].resolved_by, 'admin:9');
-  await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'not_applied', reason: 'r', evidence: EVIDENCE, user: admin }),
+  assert.equal((await listUnknownWrites(createWriteReconcileRepository(db.d), ticket.id)).resolved[0].resolved_by, 'admin:9');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'not_applied', reason: 'r', evidence: EVIDENCE, user: admin }),
     409, 'not_reconcilable');
 });
 
@@ -108,18 +109,18 @@ test('decision needs a known value, a reason and evidence', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_A);
   const base = { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin };
-  await rejects(reconcileWrite(db.d, { ...base, decision: 'guess' }), 400, 'invalid_decision');
-  await rejects(reconcileWrite(db.d, { ...base, reason: '  ' }), 400, 'reason_required');
-  await rejects(reconcileWrite(db.d, { ...base, evidence: {} }), 400, 'evidence_required');
-  await rejects(reconcileWrite(db.d, { ...base, evidence: undefined }), 400, 'evidence_required');
-  await rejects(reconcileWrite(db.d, { ...base, identity: 'nope' }), 400, 'invalid_identity');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...base, decision: 'guess' }), 400, 'invalid_decision');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...base, reason: '  ' }), 400, 'reason_required');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...base, evidence: {} }), 400, 'evidence_required');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...base, evidence: undefined }), 400, 'evidence_required');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...base, identity: 'nope' }), 400, 'invalid_identity');
   assert.equal((await stepRow(db, ID_A)).status, 'unknown');
 });
 
 test('a step of another ticket is not found', async () => {
   const { db, ticket, seed } = await fixture();
   await seed(ID_B, { scope: 'ticket-99999:zzz', key: 2 });
-  await rejects(reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_B, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_B, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin }),
     404, 'unknown_write_not_found');
 });
 
@@ -127,9 +128,9 @@ test('actor without current authority is rejected even if the session still says
   const { db, ticket, seed } = await fixture();
   await seed(ID_A);
   const args = { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE };
-  await rejects(reconcileWrite(db.d, { ...args, user: { id: 1, role: 'admin' } }), 403, 'not_authorized'); // học sinh, session cũ ghi admin
-  await rejects(reconcileWrite(db.d, { ...args, user: { id: 404 } }), 403, 'not_authorized');
-  await rejects(reconcileWrite(db.d, { ...args, user: null }), 403, 'not_authorized');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...args, user: { id: 1, role: 'admin' } }), 403, 'not_authorized'); // học sinh, session cũ ghi admin
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...args, user: { id: 404 } }), 403, 'not_authorized');
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...args, user: null }), 403, 'not_authorized');
   assert.equal((await stepRow(db, ID_A)).status, 'unknown');
   assert.equal((await db.d.get(`SELECT COUNT(*) AS n FROM ai_events WHERE event_type='unknown_write_reconciled'`)).n, 0);
 });
@@ -142,7 +143,7 @@ test('revoke committing first wins: the waiting reconcile re-reads the role and 
     await client.query('BEGIN');
     await client.query(`UPDATE users SET role='student' WHERE id=9`);
     let settled = false;
-    const pending = reconcileWrite(db.d, { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin })
+    const pending = reconcileWrite(createWriteReconcileRepository(db.d), { ticketId: ticket.id, identity: ID_A, decision: 'applied', reason: 'r', evidence: EVIDENCE, user: admin })
       .finally(() => { settled = true; });
     pending.catch(() => {});
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -157,14 +158,14 @@ test('compensate keeps the ticket blocked until closed; resume requeues the same
   const { db, store, ticket, seed, planHash } = await fixture();
   await seed(ID_A);
   const args = { ticketId: ticket.id, identity: ID_A, reason: 'hoàn tác tay', evidence: EVIDENCE, user: admin, resume: true };
-  const first = await reconcileWrite(db.d, { ...args, decision: 'compensate' });
+  const first = await reconcileWrite(createWriteReconcileRepository(db.d), { ...args, decision: 'compensate' });
   assert.deepEqual([first.status, first.remaining_open, first.resumed], ['compensate', 1, false]);
-  await rejects(reconcileWrite(db.d, { ...args, decision: 'compensate' }), 409, 'not_reconcilable');
-  assert.deepEqual((await listUnknownWrites(db.d, ticket.id)).open.map((w) => w.status), ['compensate']);
+  await rejects(reconcileWrite(createWriteReconcileRepository(db.d), { ...args, decision: 'compensate' }), 409, 'not_reconcilable');
+  assert.deepEqual((await listUnknownWrites(createWriteReconcileRepository(db.d), ticket.id)).open.map((w) => w.status), ['compensate']);
   const root = () => db.d.get('SELECT status, phase FROM ai_tickets WHERE id=?', [ticket.id]);
   assert.deepEqual({ ...await root() }, { status: 'waiting_admin', phase: 'critical_violation' });
 
-  const closed = await reconcileWrite(db.d, { ...args, decision: 'not_applied', reason: 'đã bù trừ xong' });
+  const closed = await reconcileWrite(createWriteReconcileRepository(db.d), { ...args, decision: 'not_applied', reason: 'đã bù trừ xong' });
   assert.deepEqual([closed.status, closed.remaining_open, closed.resumed], ['void', 0, true]);
   assert.deepEqual({ ...await root() }, { status: 'queued', phase: 'authorized' });
   assert.equal((await stepRow(db, ID_A)).status, 'void');
@@ -183,8 +184,8 @@ test('resume stays off unless asked and while another step is still open', async
   await seed(ID_A);
   await seed(ID_B, { step: 1 });
   const args = { ticketId: ticket.id, reason: 'r', evidence: EVIDENCE, user: admin, resume: true };
-  assert.equal((await reconcileWrite(db.d, { ...args, identity: ID_A, decision: 'applied' })).resumed, false); // còn ID_B
-  assert.equal((await reconcileWrite(db.d, { ...args, identity: ID_B, decision: 'applied', resume: false })).resumed, false);
+  assert.equal((await reconcileWrite(createWriteReconcileRepository(db.d), { ...args, identity: ID_A, decision: 'applied' })).resumed, false); // còn ID_B
+  assert.equal((await reconcileWrite(createWriteReconcileRepository(db.d), { ...args, identity: ID_B, decision: 'applied', resume: false })).resumed, false);
   assert.equal((await db.d.get('SELECT status FROM ai_tickets WHERE id=?', [ticket.id])).status, 'waiting_admin');
 });
 

@@ -4,6 +4,7 @@ import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrai
 import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
 import * as asyncAux from '../services/aux-service.js';
 import { createDraftRepository } from '../repositories/drafts.js';
+import { createWriteReconcileRepository } from '../repositories/write-reconcile.js';
 import { asyncRoutes } from './async-routes.js';
 import { checkIntake, publicMessage, readOnlyVerificationText } from '../security/intake-guard.js';
 import { checkLanguage } from '../language-guard.js';
@@ -461,11 +462,11 @@ export function attachAiBoardRequestRoutes(router, {
 
   // ── Đối chiếu bước ghi chưa rõ của tool-loop (unknown write): người vận hành chốt, có lý do + evidence + audit ──
   route.get('/api/admin/ai-board/tickets/:id/unknown-writes', requireAuth, requireAdmin, async (req, res) => {
-    try { res.json(await aux.listUnknownWrites(store.db, req.params.id)); } catch (error) { folderError(res, error); }
+    try { res.json(await aux.listUnknownWrites(createWriteReconcileRepository(store.db), req.params.id)); } catch (error) { folderError(res, error); }
   });
   route.post('/api/admin/ai-board/tickets/:id/unknown-writes/:identity/reconcile', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
-      res.json(await aux.reconcileWrite(store.db, {
+      res.json(await aux.reconcileWrite(createWriteReconcileRepository(store.db), {
         ticketId: req.params.id, identity: req.params.identity, decision: req.body?.decision, reason: req.body?.reason,
         evidence: req.body?.evidence, resume: req.body?.resume === true, user: req.user,
       }));
