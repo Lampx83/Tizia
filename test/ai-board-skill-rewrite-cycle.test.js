@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openBoard } from './support/ai-board-db.js';
 import { createSkillService, REWRITE_LIMITS } from '../server/ai-board/services/skills.js';
+import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
 const ADMIN = { id: 9, role: 'admin' };
 const ADMIN2 = { id: 10, role: 'admin' };
@@ -9,7 +10,7 @@ const draft = (name) => ({ name, task_types: ['test'], original_text: `---\nname
 
 async function fixture(names = ['rw-cycle']) {
   const db = await openBoard({ users: [[9, 'admin', 'Admin', 'admin', null], [10, 'admin2', 'Admin2', 'admin', null]] });
-  const skills = createSkillService(db.d);
+  const skills = createSkillService(createSkillRepository(db.d));
   const made = [];
   for (const name of names) made.push(await skills.upload(ADMIN, draft(name)));
   return { db, skills, made };

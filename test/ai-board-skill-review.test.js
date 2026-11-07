@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { openBoard } from './support/ai-board-db.js';
 import { setup, text as fixtureText } from './support/ai-board-skills-fixture.js';
 import { createSkillService } from '../server/ai-board/services/skills.js';
+import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
 const ADMIN = { id: 9, role: 'admin' };
 const text = (body, name = 'review-skill') => `---\nname: ${name}\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n${body}\n`;
@@ -15,7 +16,7 @@ const benign = () => ({ model: 'fake', escalate: false, reject: false, labels: [
 
 async function fixture(review) {
   const db = await openBoard({ users: [[9, 'admin', 'Admin', 'admin', null]] });
-  return { db, skills: createSkillService(db.d, { reviewText: review }) };
+  return { db, skills: createSkillService(createSkillRepository(db.d), { reviewText: review }) };
 }
 const alerts = db => db.d.all("SELECT * FROM ai_alerts WHERE category='skill_flagged' ORDER BY id");
 const approved = (db, versionId) => db.d.get('SELECT approved_by, approved_at FROM ai_skill_versions WHERE id=?', [versionId]);

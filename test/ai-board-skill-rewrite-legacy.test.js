@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, text } from './support/ai-board-skills-fixture.js';
 import { createSkillService } from '../server/ai-board/services/skills.js';
+import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
 const ADMIN = { id: 9, role: 'admin' };
 const LEGACY = '---\nname: frontend-example\ndescription: UI guidance\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Keep labels clear; name each label by its action.';
@@ -17,7 +18,7 @@ test('legacy rewrite becomes a child version with the next version number; sourc
   const t = await setup();
   try {
     const up = await draftWithLegacyRewrite(t);
-    const skills = createSkillService(t.db.d);
+    const skills = createSkillService(createSkillRepository(t.db.d));
     const out = await skills.promoteLegacyRewrite(ADMIN, up.version.id);
     assert.equal(out.promoted, true);
     const read = await skills.read(up.skill.id);
@@ -36,7 +37,7 @@ test('approved or rejected source is skipped and nothing is created', async () =
   try {
     const up = await draftWithLegacyRewrite(t);
     await t.db.d.run('UPDATE ai_skill_versions SET approved_at=? WHERE id=?', [Date.now(), up.version.id]);
-    const skills = createSkillService(t.db.d);
+    const skills = createSkillService(createSkillRepository(t.db.d));
     assert.deepEqual(await skills.promoteLegacyRewrite(ADMIN, up.version.id), { promoted: false, reason: 'source_approved_or_rejected' });
     assert.equal((await skills.read(up.skill.id)).versions.length, 1);
   } finally { await t.close(); }
@@ -46,7 +47,7 @@ test('non-admin cannot promote', async () => {
   const t = await setup();
   try {
     const up = await draftWithLegacyRewrite(t);
-    const skills = createSkillService(t.db.d);
+    const skills = createSkillService(createSkillRepository(t.db.d));
     await assert.rejects(skills.promoteLegacyRewrite({ id: 1, role: 'pupil' }, up.version.id), (e) => e.status === 403);
   } finally { await t.close(); }
 });

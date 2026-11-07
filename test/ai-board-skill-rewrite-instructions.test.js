@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openBoard } from './support/ai-board-db.js';
 import { createSkillService } from '../server/ai-board/services/skills.js';
+import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 import { checkIntake } from '../server/ai-board/security/intake-guard.js';
 
 const ADMIN = { id: 9, role: 'admin' };
@@ -9,7 +10,7 @@ const draft = () => ({ name: 'rw-instructions', task_types: ['test'], original_t
 
 async function fixture() {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'pupil', 'primary'], [9, 'admin', 'Admin', 'admin', null]] });
-  const skills = createSkillService(db.d);
+  const skills = createSkillService(createSkillRepository(db.d));
   const made = await skills.upload(ADMIN, draft());
   return { db, skills, id: made.skill.id, versionId: made.version.id };
 }

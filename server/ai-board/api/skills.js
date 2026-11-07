@@ -1,9 +1,10 @@
 import { createSkillService } from '../services/skills.js';
+import { createSkillRepository } from '../repositories/skills.js';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { asyncRoutes } from './async-routes.js';
 
 export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, requireStrictCsrf, classifySkillText }) {
-  const route = asyncRoutes(router), skills = createSkillService(store.db, { reviewText: classifySkillText });
+  const route = asyncRoutes(router), skills = createSkillService(createSkillRepository(store.db), { reviewText: classifySkillText });
   const actor = req => ({ id:req.user.id, role:req.user.role, sessionToken:req.user.token });
   const handle = fn => async (req,res,next) => {
     try { res.json(await fn(req)); }
@@ -22,7 +23,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
 }
 
 export function attachWorkerSkillRoutes(route, { store, authenticate, handle, classifySkillText }) {
-  const skills = createSkillService(store.db, { reviewText: classifySkillText });
+  const skills = createSkillService(createSkillRepository(store.db), { reviewText: classifySkillText });
   route.post('/api/ai-board/worker/tickets/:id/skills', authenticate, handle(async (req,res) => {
     await store.assertLease(req.params.id,req.body?.worker_id,req.body?.lease_token);
     res.json({ skills: await skills.active(req.body?.task_type,req.body?.role) });

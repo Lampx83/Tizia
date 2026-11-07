@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openBoard } from './support/ai-board-db.js';
 import { createSkillService } from '../server/ai-board/services/skills.js';
+import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 import { checkIntake } from '../server/ai-board/security/intake-guard.js';
 
 const ADMIN = { id: 9, role: 'admin' };
@@ -13,7 +14,7 @@ const draft = (name, body = '1. Chạy kiểm thử.') => ({ name, task_types: [
 
 async function fixture(name = 'save-guard') {
   const db = await openBoard({ users: [[9, 'admin', 'Admin', 'admin', null]] });
-  const skills = createSkillService(db.d);
+  const skills = createSkillService(createSkillRepository(db.d));
   const made = await skills.upload(ADMIN, draft(name));
   return { db, skills, id: made.skill.id, versionId: made.version.id };
 }
@@ -25,7 +26,7 @@ test('the guard blocks injection-like skill text', () => {
 
 test('uploading a skill whose text trips the guardrail is refused and nothing is stored', async () => {
   const db = await openBoard({ users: [[9, 'admin', 'Admin', 'admin', null]] });
-  const skills = createSkillService(db.d);
+  const skills = createSkillService(createSkillRepository(db.d));
   await assert.rejects(skills.upload(ADMIN, draft('bad-upload', `1. ${INJECTION}`)),
     (e) => e.status === 400 && e.code === 'skill_blocked' && !e.message.includes('Ignore'));
   assert.equal(await count(db), 0);
