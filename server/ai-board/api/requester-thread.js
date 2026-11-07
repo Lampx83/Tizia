@@ -5,6 +5,7 @@ import { checkLanguage } from '../language-guard.js';
 import { checkIntake } from '../security/intake-guard.js';
 import { checkGibberish } from '../gibberish.js';
 import { checkContentSafety } from '../../contexts/safety/profanity-vi.js';
+import { studentMessageCount } from '../repositories/request-views.js';
 
 export function attachRequesterThread(router, { requests, store, db, requireAuth }) {
   // GET trả { request, messages }. messages[0] = tin mở đầu dựng từ chính nội dung yêu cầu (không lưu lặp).
@@ -65,9 +66,7 @@ export function attachRequesterThread(router, { requests, store, db, requireAuth
       }
       const gibberish = checkGibberish(body);
       if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
-      const recent = Number((await db.get(
-        "SELECT COUNT(*) AS n FROM request_messages WHERE role='student' AND created_at >= ?",
-        [Date.now() - 60_000]))?.n || 0);
+      const recent = Number((await studentMessageCount(db, Date.now() - 60_000))?.n || 0);
       if (recent >= LIMITS.global_rate.messages_per_minute) {
         return res.status(429).json({ error: 'rate_limited',
           message: 'Bạn đang gửi khá nhanh. Chờ khoảng một phút rồi trao đổi tiếp nhé.' });

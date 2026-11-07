@@ -1,3 +1,4 @@
+import { createRequestViewRepository } from '../repositories/request-views.js';
 import { createElevationRiskRepository } from '../repositories/elevation-risk.js';
 import { createPartialResumeRepository } from '../repositories/partial-resume.js';
 import { createTransientRetryRepository } from '../repositories/transient-retry.js';
@@ -136,7 +137,7 @@ export function attachAiBoardRequestRoutes(router, {
     const windowStart = Date.now() - 60_000;
     let recentRequests = 0;
     try {
-      recentRequests = Number((await store.queryGet('SELECT COUNT(*) AS n FROM requests WHERE created_at >= ?', [windowStart]))?.n || 0);
+      recentRequests = Number((await createRequestViewRepository(store).recentRequestCount(windowStart))?.n || 0);
     } catch { /* đếm lỗi: không chặn người dùng, để store báo lỗi thật khi ghi */ }
     if (recentRequests >= LIMITS.global_rate.requests_per_minute) {
       return res.status(429).json({ error: 'rate_limited',
@@ -178,7 +179,7 @@ export function attachAiBoardRequestRoutes(router, {
         // Gửi lại cùng Idempotency-Key: trả đúng trạng thái đã tạo lần đầu, không theo lần phân loại này.
         // Request 'queue' không có root (LF/99) → không có phase để suy ra clarify.
         clarify = result.root_ticket_id
-          ? clarifyFromPhase((await store.queryGet('SELECT phase FROM ai_tickets WHERE id=?', [result.root_ticket_id]))?.phase)
+          ? clarifyFromPhase((await createRequestViewRepository(store).ticketPhase(result.root_ticket_id))?.phase)
           : { needed: false };
       }
       res.json({ ok: true, ...result, id: result.request_id, createdAt: Date.now(), clarify });
@@ -359,8 +360,7 @@ export function attachAiBoardRequestRoutes(router, {
 
   route.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, async (req, res) => {
     res.json({ tickets: await store.listAdminQueue(req.query.limit), workers: await store.listWorkers(),
-      intake_rejections: await store.queryAll(`SELECT id, created_at, public_message, internal_detail FROM ai_alerts
-        WHERE category='intake_rejected' ORDER BY id DESC LIMIT 50`) });
+      intake_rejections: await createRequestViewRepository(store).intakeRejections() });
   });
 
   // One source of truth for the admin suggestion list: the board DB, not the web DB.
@@ -369,11 +369,9 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   route.get('/api/admin/ai-board/requests/:requestId/thread', requireAuth, requireAdmin, async (req, res) => {
-    const row = await store.queryGet(`SELECT id, domain, type, title, status, student, detail, attachments, created_at, updated_at
-      FROM requests WHERE id=?`, [Number(req.params.requestId)]);
+    const row = await createRequestViewRepository(store).requestDetail(Number(req.params.requestId));
     if (!row) return res.status(404).json({ error: 'not_found' });
-    const messages = await store.queryAll(`SELECT id, role, author_name, body, attachments, created_at
-      FROM request_messages WHERE request_id=? ORDER BY created_at, id`, [row.id]);
+    const messages = await createRequestViewRepository(store).requestMessages(row.id);
     const first = { id: 0, request_id: row.id, role: 'student', author_name: row.student,
       body: row.detail || row.title, attachments: row.attachments, created_at: row.created_at };
     res.json({ request: { ...row, votes: 0 }, messages: [first, ...messages] });
@@ -738,8 +736,7 @@ export function attachAiBoardWorkerRoutes(router, {
 
   // Kế hoạch xin quyền chạm mức trên 'surface' (protected/core) cho chính lượt này; quản trị viên quyết ở tab yêu cầu.
   route.post('/api/ai-board/worker/tickets/:id/elevation', authenticate, handle(async (req, res) => {
-    const root = await store.queryGet('SELECT source_request_id FROM ai_tickets WHERE id=? AND parent_id IS NULL',
-      [Number(req.params.id)]);
+    const root = await createRequestViewRepository(store).ticketSourceRequest(Number(req.params.id));
     if (!root) return res.status(404).json({ error: 'request_not_found' });
     res.json(await store.requestElevation(root.source_request_id, {
       paths: req.body?.paths ?? req.body?.scope ?? req.body?.required, levels: req.body?.levels, reason: req.body?.reason,

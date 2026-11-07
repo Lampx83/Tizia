@@ -4,6 +4,7 @@
 // nhãn còn lại (chính trị/chủ quyền, quyền hạn, gian lận…) → nhận, ghi event + tag để admin thấy.
 // Worker tự chạy lại cùng từ điển (intake_guard.py) nên định tuyến human_review không phụ thuộc cờ này.
 import fs from 'node:fs';
+import { createIntakeGuardRepository } from '../repositories/intake-guard.js';
 
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
 const BLOCKING = new Set(['reject', 'critical']);
@@ -59,10 +60,9 @@ export function checkSkillText(text) {
 export async function recordIntakeRejection(db, userId, intake) {
   if (!db) return;
   const now = Date.now();
-  await db.run(`INSERT INTO ai_alerts(severity, category, public_message, internal_detail, created_at, updated_at)
-    VALUES ('high', 'intake_rejected', ?, ?, ?, ?)`, [intake.message,
-      JSON.stringify({ gate: 'intake', user_id: Number(userId), labels: intake.labels,
-        reason: intake.reason || 'deterministic request-content rule matched before model/code generation' }), now, now]);
+  await createIntakeGuardRepository(db).insertRejectionAlert(intake.message,
+    JSON.stringify({ gate: 'intake', user_id: Number(userId), labels: intake.labels,
+      reason: intake.reason || 'deterministic request-content rule matched before model/code generation' }), now);
 }
 
 /** Ghi cờ human_review cho yêu cầu vừa tạo: 1 ai_events + tag guard:*. Không có db/nhãn → bỏ qua. Không bao giờ throw. */
@@ -70,16 +70,10 @@ export async function recordIntakeFlags(db, rootTicketId, labels) {
   if (!db || !rootTicketId || !labels?.length) return;
   try {
     const now = Date.now();
-    await db.tx(async () => {
-      await db.run(`
-        INSERT INTO ai_events (
-          ticket_id, event_type, actor_type, actor_id, transition,
-          public_message, internal_detail, idempotency_key, created_at
-        ) VALUES (?, 'intake_flagged', 'system', 'intake-guard', NULL, NULL, ?, ?, ?)
-        ON CONFLICT DO NOTHING
-      `, [rootTicketId, `intake_guard: ${labels.join(', ')} → human_review`, `intake-guard:${rootTicketId}`, now]);
-      const tag = 'INSERT INTO ai_ticket_tags(ticket_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING';
-      for (const name of ['guard:human_review', ...labels.map((label) => `guard:${label}`)]) await db.run(tag, [rootTicketId, name]);
+    const repo = createIntakeGuardRepository(db);
+    await repo.tx(async () => {
+      await repo.insertFlagEvent(rootTicketId, `intake_guard: ${labels.join(', ')} → human_review`, `intake-guard:${rootTicketId}`, now);
+      for (const name of ['guard:human_review', ...labels.map((label) => `guard:${label}`)]) await repo.insertTag(rootTicketId, name);
     });
   } catch (error) {
     console.warn('[ai-board] intake flag failed:', error.message);
