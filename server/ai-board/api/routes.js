@@ -25,6 +25,7 @@ import { createGateProofRepository } from '../repositories/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
+import { createFeatureLifecycleRepository } from '../repositories/feature-lifecycle.js';
 import { createRootAllowanceService } from '../services/root-allowance.js';
 import { createTraceReadModel } from '../services/trace-read-model.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
@@ -308,7 +309,7 @@ export function attachAiBoardRequestRoutes(router, {
     if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
     throw error;
   };
-  const lifecycle = createFeatureLifecycle(store);
+  const lifecycle = createFeatureLifecycle(store, createFeatureLifecycleRepository(store.db));
   route.get('/api/admin/ai-board/folders/:id/lifecycle', requireAuth, requireAdmin, async (req, res) => {
     try { res.json(await lifecycle.state(req.params.id, req.user.id)); } catch (error) { folderError(res, error); }
   });
