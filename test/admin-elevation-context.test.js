@@ -1,3 +1,4 @@
+import { createElevationRiskRepository } from '../server/ai-board/repositories/elevation-risk.js';
 // Elevation approval context: what the worker asks, whether the request justifies it, and the cached risk
 // assessment. Runs on the throwaway PostgreSQL fixture (TEST_PG_URL); the model is always a fake.
 import test from 'node:test';
@@ -186,7 +187,7 @@ test('one model call per plan_hash + scope, then the cached verdict', async () =
       calls.push({ url, body: JSON.parse(options.body) });
       return llmReply(RISK_BODY);
     };
-    const first = await assessElevationRisk({ db: db.d, context, env: MODEL_ENV, fetchImpl });
+    const first = await assessElevationRisk({ risks: createElevationRiskRepository(db.d), context, env: MODEL_ENV, fetchImpl });
     assert.equal(first.level, 'medium');
     assert.equal(first.source, 'model');
     assert.equal(first.model, 'qwen3.5-35b-a3b-int4');
@@ -196,7 +197,7 @@ test('one model call per plan_hash + scope, then the cached verdict', async () =
     assert.equal(calls[0].body.messages[0].role, 'system');
     assert.match(calls[0].body.messages[1].content, /CONTEXT:/);
 
-    const second = await assessElevationRisk({ db: db.d, context, env: MODEL_ENV, fetchImpl });
+    const second = await assessElevationRisk({ risks: createElevationRiskRepository(db.d), context, env: MODEL_ENV, fetchImpl });
     assert.equal(second.source, 'cached');
     assert.equal(second.cached, true);
     assert.equal(calls.length, 1, 'the second read is served from ai_elevation_risks');
@@ -209,16 +210,16 @@ test('a missing or failing model degrades to unknown and is not cached', async (
   const { db } = await fixture();
   try {
     const context = { plan: { plan_hash: 'hash-u' }, elevation: { scope: [{ path: CONTENT, level: 'protected' }] }, flags: {} };
-    const offline = await assessElevationRisk({ db: db.d, context, env: {}, fetchImpl: async () => { throw new Error('must not call'); } });
+    const offline = await assessElevationRisk({ risks: createElevationRiskRepository(db.d), context, env: {}, fetchImpl: async () => { throw new Error('must not call'); } });
     assert.equal(offline.level, 'unknown');
     assert.equal(offline.source, 'unknown');
     assert.equal(offline.recommendation, 'review');
     assert.match(offline.reasons[0], /Chưa cấu hình/);
-    const failing = await assessElevationRisk({ db: db.d, context, env: MODEL_ENV,
+    const failing = await assessElevationRisk({ risks: createElevationRiskRepository(db.d), context, env: MODEL_ENV,
       fetchImpl: async () => { throw new Error('timeout'); } });
     assert.equal(failing.level, 'unknown');
     assert.match(failing.reasons[0], /Không gọi được model/);
-    const badBody = await assessElevationRisk({ db: db.d, context, env: MODEL_ENV,
+    const badBody = await assessElevationRisk({ risks: createElevationRiskRepository(db.d), context, env: MODEL_ENV,
       fetchImpl: async () => llmReply('không phải JSON') });
     assert.equal(badBody.level, 'unknown');
     assert.equal(await db.d.get('SELECT 1 FROM ai_elevation_risks'), undefined);

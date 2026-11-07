@@ -138,11 +138,10 @@ const unavailable = (reason, extra = {}) => ({
   source: 'unknown', model: null, cached: false, ...extra,
 });
 
-async function cachedRisk(db, key) {
-  if (!db) return null;
+async function cachedRisk(risks, key) {
+  if (!risks) return null;
   try {
-    const row = await db.get('SELECT level, payload_json, model, created_at FROM ai_elevation_risks WHERE plan_hash=? AND scope_hash=?',
-      [key.plan_hash, key.scope_hash]);
+    const row = await risks.cached(key);
     if (!row) return null;
     const payload = JSON.parse(row.payload_json);
     if (!LEVELS.includes(payload.level) || !Array.isArray(payload.reasons)) return null;
@@ -151,12 +150,10 @@ async function cachedRisk(db, key) {
   } catch { return null; }
 }
 
-async function storeRisk(db, key, risk, model, now) {
-  if (!db) return;
+async function storeRisk(risks, key, risk, model, now) {
+  if (!risks) return;
   try {
-    await db.run(`INSERT INTO ai_elevation_risks(plan_hash, scope_hash, level, payload_json, model, created_at)
-      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (plan_hash, scope_hash) DO NOTHING`,
-    [key.plan_hash, key.scope_hash, risk.level, JSON.stringify(risk), model ?? null, now]);
+    await risks.store(key, risk, model, now);
   } catch { /* cache write is best effort: the assessment still renders */ }
 }
 
@@ -164,10 +161,10 @@ async function storeRisk(db, key, risk, model, now) {
  * Một lần gọi model cho plan_hash + scope. Không có model/URL hoặc lỗi → level 'unknown' (không cache),
  * vì admin vẫn phải thấy là chưa đánh giá được thay vì một mức thấp giả.
  */
-export async function assessElevationRisk({ db = null, context, env = environment(), fetchImpl = fetch,
+export async function assessElevationRisk({ risks = null, context, env = environment(), fetchImpl = fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS, now = Date.now() } = {}) {
   const key = elevationRiskKey(context);
-  const cached = await cachedRisk(db, key);
+  const cached = await cachedRisk(risks, key);
   if (cached) return applyRiskFloor(cached, context?.flags);
   let candidate = null;
   try { candidate = resolveCandidates('elevation_risk', { catalog: loadCatalog(), env })[0] ?? null; }
@@ -196,6 +193,6 @@ export async function assessElevationRisk({ db = null, context, env = environmen
     return applyRiskFloor(unavailable('Model trả lời không đúng định dạng đánh giá; cần người xem.'), context?.flags);
   }
   const risk = { ...parsed, source: 'model', model: candidate.model, cached: false, assessed_at: now };
-  await storeRisk(db, key, { ...risk, cached: false }, candidate.model, now);
+  await storeRisk(risks, key, { ...risk, cached: false }, candidate.model, now);
   return applyRiskFloor(risk, context?.flags);
 }

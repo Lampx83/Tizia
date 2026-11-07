@@ -1,3 +1,4 @@
+import { createElevationRiskRepository } from '../repositories/elevation-risk.js';
 import { createPartialResumeRepository } from '../repositories/partial-resume.js';
 import { createTransientRetryRepository } from '../repositories/transient-retry.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -509,7 +510,7 @@ export function attachAiBoardRequestRoutes(router, {
       let risk = null;
       if (context.elevation.state === 'requested') {
         try {
-          risk = applyRiskFloor(await assessElevation({ db: store.db, context }), context.flags);
+          risk = applyRiskFloor(await assessElevation({ risks: createElevationRiskRepository(store.db), context }), context.flags);
         } catch {
           risk = applyRiskFloor({ level: 'unknown', reasons: ['Không đánh giá được rủi ro; cần người xem.'],
             recommendation: 'review', questions: [], source: 'unknown', cached: false }, context.flags);
