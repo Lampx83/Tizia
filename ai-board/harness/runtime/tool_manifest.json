@@ -3,7 +3,7 @@
   "tools": [
     {
       "name": "tree",
-      "description": "Liệt kê file/thư mục con trực tiếp của 1 thư mục ở base sha.",
+      "description": "List the files and direct subfolders of one folder at the base sha.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -22,7 +22,7 @@
     },
     {
       "name": "outline",
-      "description": "Dàn ý 1 file: thẻ/id/class, selector CSS, export/import JS, css/js trang liên kết.",
+      "description": "Outline of one file: tags/ids/classes, CSS selectors, JS exports/imports, and the page's linked css/js.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -41,7 +41,7 @@
     },
     {
       "name": "grep",
-      "description": "Cửa sổ dòng quanh từ khoá trong 1 file; không có file thì liệt kê file khớp trong path.",
+      "description": "Window of lines around keywords in one file; with no file, list the files matching in path.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -69,7 +69,7 @@
     },
     {
       "name": "read_file",
-      "description": "Đọc file đích (có tiền tố `Lnn| `).",
+      "description": "Read the target file (with `Lnn| ` prefixes).",
       "parameters": {
         "type": "object",
         "properties": {
@@ -88,7 +88,7 @@
     },
     {
       "name": "edit_file",
-      "description": "Áp edits {after_line, insert} hoặc {search, replace} lên file đích; số dòng theo bản đang giữ.",
+      "description": "Apply edits {after_line, insert} or {search, replace} to the target file; line numbers follow the current draft.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -114,7 +114,7 @@
     },
     {
       "name": "write_test",
-      "description": "Đặt test (ESM node:test) trong test/.",
+      "description": "Set the test (ESM node:test) under test/.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -137,7 +137,7 @@
     },
     {
       "name": "run_check",
-      "description": "Chạy named check trên draft hiện tại trong sandbox không mạng: light, platform hoặc relevant. Không nhận shell/argv.",
+      "description": "Run a named check on the current draft in a network-less sandbox: light, platform or relevant. Takes no shell/argv.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -156,7 +156,7 @@
     },
     {
       "name": "finish",
-      "description": "Đề xuất kết thúc; harness kiểm rồi mới chuyển sang các cổng sau.",
+      "description": "Propose finishing; the harness checks, then passes to the next gates.",
       "parameters": {
         "type": "object",
         "properties": {},

@@ -17,7 +17,7 @@ from services import context, default_skills
 NAME = 'default-security-audit'
 SKILL = Path(context.SKILLS_DIR) / NAME / 'SKILL.md'
 LOCK = Path(context.SKILLS_DIR) / 'skills.lock.json'
-TOPICS = ('tin cậy', 'chèn lệnh', 'đường dẫn', 'bí mật', 'leo thang', 'chuỗi cung ứng', 'migration')
+TOPICS = ('untrusted', 'injection', 'path', 'secret', 'escalat', 'supply chain', 'migration')
 
 
 def test_skill_is_locked_and_lf_only():

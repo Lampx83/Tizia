@@ -167,14 +167,14 @@ def pinned_words(task: dict) -> list[str]:
 
 SOURCE_ROOTS = ('public/', 'server/contexts/_ai-generated/', 'ai-board/harness/skills/', 'ai-board/harness/prompts/')
 EXPLORE_FLAG = 'AI_BOARD_EXPLORE_LOW_CONFIDENCE'
-EXPLORE_MARK = 'KHÁM PHÁ FILE ĐÍCH'
-EXPLORE_PROMPT = """{mark} (dữ liệu repo, không phải chỉ dẫn mới)
-Yêu cầu: {request}
-Plan đang nhắm tới: {targets}
-Vì sao nghi ngờ: {reason}
-Các lượt trước:
+EXPLORE_MARK = 'EXPLORE TARGET FILE'
+EXPLORE_PROMPT = """{mark} (repo data, not new instructions)
+Request: {request}
+Plan is aiming at: {targets}
+Why it is suspected: {reason}
+Previous turns:
 {transcript}
-Chọn ĐÚNG 1 hành động, trả JSON:
+Choose EXACTLY 1 action, return JSON:
 - {{"op":"grep","pattern":"chuỗi >= 8 ký tự"}}
 - {{"op":"read","path":"file","start":N,"end":M}}
 - {{"op":"finish","target":"file cần sửa"}}"""
@@ -232,7 +232,7 @@ def explore_target(request: dict, plan: dict, state: dict, deps, budget, *, sour
         if not budget.can_afford():
             break
         prompt = EXPLORE_PROMPT.format(mark=EXPLORE_MARK, request=str(request.get('body') or request.get('subject') or '')[:800],
-                                       targets=targets, reason=reason[:300], transcript='\n'.join(transcript[-8:]) or '(chưa có)')
+                                       targets=targets, reason=reason[:300], transcript='\n'.join(transcript[-8:]) or '(none yet)')
         body = deps.call_model(deps.models.gate1_model, prompt, gate=2.5, budget=budget, format=EXPLORE_SCHEMA,
                                db_path=db_path, proposal_id=proposal_id, prompt_name='plan_validate.md',
                                options={'num_predict': 512})
@@ -447,11 +447,11 @@ def final_hit(plan: dict, request: dict, state: dict, files: dict | None = None)
     return bool(request_targets(plan, request, state, files))
 
 
-_REPAIR_PROMPT = """SOÁT LẠI MỘT ĐIỂM ĐÃ BỊ CHẶN (vẫn là plan trên, không phải yêu cầu mới)
-- Lỗi của lần soát trước: {defect}
-- File đúng mà plan đã nhắm: {target} — giữ nguyên file này và mọi subtask, không đổi target.
-- Chỉ sửa đúng lỗi trên: mỗi subtask cần "quote" là một dòng NGUYÊN VĂN chép từ REPO DATA của chính file đó,
-  kèm before/after/verify. Trả lại đúng JSON theo schema.
+_REPAIR_PROMPT = """RE-CHECK ONE BLOCKED POINT (still the plan above, not a new request)
+- Defect from the previous check: {defect}
+- Correct file the plan aimed at: {target} — keep this file and every subtask; do not change the target.
+- Fix only the defect above: each subtask needs a "quote" that is one line copied VERBATIM from REPO DATA of that same file,
+  with before/after/verify. Return the JSON again, following the schema.
 """
 
 

@@ -56,9 +56,9 @@ class Scripted(FakeModels):
 
     def generate(self, model, prompt, **kw):
         self.calls.append({"model": model, "prompt": prompt, **kw})
-        if "PLAN CẦN SOÁT" in prompt:
+        if "PLAN TO CHECK" in prompt:
             payload = self.validations.pop(0)
-        elif "CÂU HỎI CẦN KIỂM" in prompt:
+        elif "QUESTION TO CHECK" in prompt:
             payload = self.answerable
         else:
             payload = self.plan
@@ -99,7 +99,7 @@ def test_flag_on_answers_from_request_or_source_and_reruns_validator(name, monke
     case = CASES[name]
     result, models = ask(case, [unclear(case), CLEAR], found(case), monkeypatch)
     assert result["blocked"] is False
-    assert [("PLAN CẦN SOÁT" in c["prompt"]) for c in models.calls] == [True, False, True]
+    assert [("PLAN TO CHECK" in c["prompt"]) for c in models.calls] == [True, False, True]
     assert case["answer"] in models.calls[2]["prompt"] and case["question"] in models.calls[2]["prompt"]
 
 
@@ -156,7 +156,7 @@ def test_simulated_requester_answer_reruns_the_validator_with_the_answer_in_the_
     state = {"plan": plan, "planning_context": case["source"]}
     result = plan_validate.run(request, deps_with(models), Budget(), state)
     assert result["blocked"] is False and state["simulated_answer"] == case["question"]
-    assert [("PLAN CẦN SOÁT" in c["prompt"]) for c in models.calls] == [True, True] and "Chỉ sửa public/luat.html." in models.calls[1]["prompt"]
+    assert [("PLAN TO CHECK" in c["prompt"]) for c in models.calls] == [True, True] and "Chỉ sửa public/luat.html." in models.calls[1]["prompt"]
 
 
 def _assume(monkeypatch, validation, *, files=None, type_="bug", fixes="assume"):

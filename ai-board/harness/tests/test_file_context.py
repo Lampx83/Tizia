@@ -77,7 +77,7 @@ def test_ambiguous_search_hint_tells_the_model_to_extend_search_with_the_listed_
     error = "edit 1: search khớp 2 chỗ, cần đoạn dài hơn để chỉ khớp 1 chỗ. Các chỗ khớp:\nL1| x\nL2| foo();\nL3| y"
     for iteration in (0, 1):
         hint = implement.retry_hint(error, iteration)
-        assert "liền kề" in hint and "after_line" in hint
+        assert "adjacent" in hint and "after_line" in hint
 
 
 def test_search_that_matches_nothing_points_at_the_closest_real_line():

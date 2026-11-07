@@ -13,7 +13,7 @@ def test_gate_25_validator_never_sees_the_plan_repair_hint():
 
     plan_validate.run(request, deps_with(models), Budget(), {"plan": plan})
 
-    validator_calls = [c for c in models.calls if "PLAN CẦN SOÁT" in c["prompt"]]
+    validator_calls = [c for c in models.calls if "PLAN TO CHECK" in c["prompt"]]
     assert validator_calls and all(HINT not in c["prompt"] for c in validator_calls)
 
 

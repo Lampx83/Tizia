@@ -18,7 +18,7 @@ body: {body}
 thread: {thread}
 >>>
 
-CÂU HỎI CẦN KIỂM
+QUESTION TO CHECK
 <<<
 {question}
 >>>
