@@ -162,6 +162,8 @@ class OllamaClient:
             messages = [{'role': 'user', 'content': content}]
             if extra and extra.get('system'):
                 messages.insert(0, {'role': 'system', 'content': extra['system']})
+            if extra and extra.get('messages'):  # native tool loop: assistant/tool turns after the task prompt
+                messages += extra['messages']
             payload = {'model': model, 'messages': messages, 'stream': False}
             for source, target in [('num_predict', 'max_tokens'), ('temperature', 'temperature'),
                                    ('top_p', 'top_p'), ('top_k', 'top_k'), ('presence_penalty', 'presence_penalty'),
@@ -207,6 +209,8 @@ class OllamaClient:
                     '_provider': self.route_label, **({'tool_calls': tool_calls} if tool_calls else {})}
         if not isinstance(prompt, str):  # content parts (vision) exist only on the vLLM chat route
             raise ValueError('content parts need the vLLM protocol')
+        if (extra or {}).get('messages'):
+            raise ValueError('message history needs the vLLM protocol')
         images = len((extra or {}).get('images') or ())  # /api/generate has no vision part: skip, but say so
         payload = {
             "model": model,
