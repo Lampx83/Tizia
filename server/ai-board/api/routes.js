@@ -18,6 +18,7 @@ import { attachAppealRoutes } from './appeals.js';
 import { attachRolloutRoutes } from './rollout.js';
 import { createSpanService } from '../services/spans.js';
 import { EDITABLE_PHASES, editRequestAndReplan } from '../services/requester-edit.js';
+import { createRequesterEditRepository } from '../repositories/requester-edit.js';
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
@@ -282,7 +283,7 @@ export function attachAiBoardRequestRoutes(router, {
     const gibberish = checkGibberish(detail || title);
     if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
     try {
-      res.json(await editRequestAndReplan(store.db, req.params.id, {
+      res.json(await editRequestAndReplan(createRequesterEditRepository(store.db), req.params.id, {
         ownerUserId: req.user.id, title, detail, authorName: req.user.display_name || req.user.displayName,
       }));
     } catch (error) {

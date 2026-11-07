@@ -71,7 +71,7 @@ test('admin clarify handler holds no SQL: the transition lives in the store', ()
   assert.doesNotMatch(handler, /\b(SELECT|INSERT|UPDATE|DELETE)\b|store\.db|queryGet|needs_replan/);
 });
 
-test('only the store writes the needs_replan phase in SQL (requester-edit is the known remaining writer)', () => {
+test('only the store and the requester-edit repository write the needs_replan phase in SQL', () => {
   const root = new URL('../server/ai-board/', import.meta.url);
   const writers = [];
   const walk = (dir) => {
@@ -82,5 +82,5 @@ test('only the store writes the needs_replan phase in SQL (requester-edit is the
     }
   };
   walk(root);
-  assert.deepEqual(writers.sort(), ['repositories/store.js', 'services/requester-edit.js']);
+  assert.deepEqual(writers.sort(), ['repositories/requester-edit.js', 'repositories/store.js']);
 });

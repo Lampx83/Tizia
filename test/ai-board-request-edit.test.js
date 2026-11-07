@@ -1,3 +1,4 @@
+import { createRequesterEditRepository } from '../server/ai-board/repositories/requester-edit.js';
 // Người gửi dừng rồi sửa yêu cầu và gửi lại: chỉ khi không ai chạy (không lease sống), chỉ chủ yêu cầu,
 // và "Tiếp tục" (resume) không dành cho người gửi.
 import test from 'node:test';
@@ -33,7 +34,7 @@ async function stoppedRequest({ phase = 'precheck_blocked', live = false } = {})
 test('the owner edits a stopped request: text replaced, spec dropped, root back to needs_replan', async () => {
   const { db, created, ticket } = await stoppedRequest();
 
-  const out = await editRequestAndReplan(db.d, created.request_id, {
+  const out = await editRequestAndReplan(createRequesterEditRepository(db.d), created.request_id, {
     ownerUserId: 1, title: 'Thêm hai trang ôn tập', detail: 'bản mới: hai trang độc lập', authorName: 'Lan',
   });
 
@@ -51,12 +52,12 @@ test('the owner edits a stopped request: text replaced, spec dropped, root back 
 test('only the owner edits, and only while nothing is running', async () => {
   const { db, created } = await stoppedRequest();
   await assert.rejects(
-    () => editRequestAndReplan(db.d, created.request_id, { ownerUserId: 2, title: 'Đổi tiêu đề', detail: 'x' }),
+    () => editRequestAndReplan(createRequesterEditRepository(db.d), created.request_id, { ownerUserId: 2, title: 'Đổi tiêu đề', detail: 'x' }),
     (error) => error instanceof WorkerContractError && error.code === 'not_owner');
 
   const live = await stoppedRequest({ phase: 'executing', live: true });
   await assert.rejects(
-    () => editRequestAndReplan(live.db.d, live.created.request_id, { ownerUserId: 1, title: 'Đổi tiêu đề', detail: 'x' }),
+    () => editRequestAndReplan(createRequesterEditRepository(live.db.d), live.created.request_id, { ownerUserId: 1, title: 'Đổi tiêu đề', detail: 'x' }),
     (error) => error instanceof WorkerContractError && error.code === 'not_stopped');
 });
 
