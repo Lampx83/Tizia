@@ -2,6 +2,7 @@
 // lời model không chứng minh được validity. Proof không cấp quyền hay chứng nhận release; lease hiện tại luôn kiểm trước.
 import { createHash, randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
+import { createGateProofRepository } from '../repositories/gate-proofs.js';
 
 // Cổng có hợp đồng reuse. Cổng khác (vd Gate 5 microVM) luôn kiểm thật cho tới khi có hợp đồng riêng.
 export const REUSABLE_GATES = new Map([[4, { pins: ['candidate', 'plan', 'base', 'harness', 'prompt', 'tool', 'model', 'oracle'] }]]);
@@ -26,13 +27,10 @@ function pinsOf(gate, raw) {
   return pins;
 }
 
-export function createGateProofService(store) {
-  const db = store.db;
-
+export function createGateProofService(store, repo = createGateProofRepository(store.db)) {
   async function event(ticketId, type, detail) {
     const now = Date.now();
-    await db.run(`INSERT INTO ai_events(ticket_id, event_type, actor_type, actor_id, transition, public_message, internal_detail, idempotency_key, created_at)
-      VALUES (?, ?, 'worker', NULL, NULL, NULL, ?, ?, ?)`, [ticketId, type, JSON.stringify(detail), `${type}:${ticketId}:${now}:${randomBytes(4).toString('hex')}`, now]);
+    await repo.insertEvent({ ticketId, type, detail, key: `${type}:${ticketId}:${now}:${randomBytes(4).toString('hex')}`, now });
   }
 
   const ops = {
@@ -41,16 +39,13 @@ export function createGateProofService(store) {
       if (!result || typeof result !== 'object' || result.blocked !== false) throw bad('only a passed gate leaves a proof', 'proof_requires_pass');
       const resultJson = JSON.stringify(result);
       if (resultJson.length > MAX_RESULT) throw bad('result too large');
-      await db.run(`INSERT INTO ai_gate_proofs(ticket_id, gate, run_id, pins_json, result_json, result_digest, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (ticket_id, gate) DO UPDATE SET run_id=EXCLUDED.run_id, pins_json=EXCLUDED.pins_json, result_json=EXCLUDED.result_json,
-          result_digest=EXCLUDED.result_digest, created_at=EXCLUDED.created_at`,
-        [ticketId, gate, Number(body.run_id) || null, canon(pins), resultJson, sha(resultJson), Date.now()]);
+      await repo.upsertProof({ ticketId, gate, runId: Number(body.run_id) || null, pinsJson: canon(pins), resultJson,
+        digest: sha(resultJson), now: Date.now() });
       return { ok: true };
     },
     async check(ticketId, body) {
       const gate = Number(body.gate), pins = pinsOf(gate, body.pins);
-      const proof = await db.get('SELECT * FROM ai_gate_proofs WHERE ticket_id=? AND gate=?', [ticketId, gate]);
+      const proof = await repo.proof(ticketId, gate);
       const invalid = async (reason, drift = []) => {
         await event(ticketId, 'gate_proof_invalidated', { gate, reason, drift, proof_run_id: proof?.run_id ?? null });
         return { reuse: false, reason, drift };
@@ -68,7 +63,7 @@ export function createGateProofService(store) {
   /** record | check của ticket; lease sai/cũ → stale_lease trước khi đọc proof. */
   async function apply(ticketId, op, body = {}) {
     if (!Object.hasOwn(ops, op)) throw bad('unknown gate proof operation', 'unknown_operation', 404);
-    return db.tx(async () => {
+    return repo.tx(async () => {
       await store.assertLease(ticketId, body.worker_id, body.lease_token);
       return ops[op](Number(ticketId), body);
     });

@@ -21,6 +21,7 @@ import { createToolCheckpointService } from '../services/tool-checkpoint.js';
 import { createToolCheckpointRepository } from '../repositories/tool-checkpoint.js';
 import { createEvalTaskRepository } from '../repositories/eval-tasks.js';
 import { createGateProofService } from '../services/gate-proofs.js';
+import { createGateProofRepository } from '../repositories/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
@@ -616,7 +617,7 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/tool-manifest', authenticate, handle(async (req,res) => {
     res.json(await hsm.reportToolManifest(req.params.id,req.body || {}));
   }));
-  const gateProofs = createGateProofService(store);
+  const gateProofs = createGateProofService(store, createGateProofRepository(store.db));
   route.post('/api/ai-board/worker/tickets/:id/gate-proof/:op', authenticate, handle(async (req,res) => {
     res.json(await gateProofs.apply(req.params.id, req.params.op, req.body || {}));
   }));
