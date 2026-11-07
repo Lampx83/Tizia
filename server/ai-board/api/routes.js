@@ -18,6 +18,7 @@ import { EDITABLE_PHASES, editRequestAndReplan } from '../services/requester-edi
 import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
+import { createToolCheckpointRepository } from '../repositories/tool-checkpoint.js';
 import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
@@ -623,7 +624,7 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/spans', authenticate, handle(async (req,res) => {
     res.json(await spanService.record(req.params.id, req.body || {}));
   }));
-  const toolCheckpoint = createToolCheckpointService(store);
+  const toolCheckpoint = createToolCheckpointService(store, createToolCheckpointRepository(store.db));
   const rootAllowance = createRootAllowanceService(store);
   route.post('/api/ai-board/worker/tickets/:id/allowance/:op', authenticate, handle(async (req, res) => {
     res.json(await rootAllowance.apply(req.params.id, req.params.op, req.body || {}));

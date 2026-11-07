@@ -2,6 +2,7 @@
 // worker không cần DATABASE_URL. Bảng tool_run/tool_step cùng hình dạng với ai-board/harness/repositories/tool_steps.py.
 import { createHash } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
+import { createToolCheckpointRepository } from '../repositories/tool-checkpoint.js';
 
 const STATUSES = new Set(['intent', 'done', 'unknown', 'applied', 'void', 'compensate']);
 const RESOLUTIONS = { applied: 'applied', not_applied: 'void', compensate: 'compensate' };
@@ -25,10 +26,8 @@ const json = (value, name) => {
   return text;
 };
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
-const marks = (list) => list.map(() => '?').join(',');
 
-export function createToolCheckpointService(store) {
-  const db = store.db;
+export function createToolCheckpointService(store, repo = createToolCheckpointRepository(store.db)) {
   const scopeOf = (ticketId) => `ticket-${Number(ticketId)}:`;
 
   // Graph thread = one LangGraph run; plan_hash pins it: a changed plan or base cannot resume the old checkpoints.
@@ -54,12 +53,12 @@ export function createToolCheckpointService(store) {
   };
   const graphRow = (row) => ({ checkpoint_id: row.checkpoint_id, parent_id: row.parent_id, type: row.type, checkpoint: row.checkpoint, metadata: row.metadata });
   async function pinGraph(thread, pin) {
-    const row = await db.get('SELECT plan_hash FROM graph_checkpoint WHERE thread_id=? LIMIT 1', [thread]);
+    const row = await repo.graphPlanHash(thread);
     if (row && row.plan_hash !== pin) throw bad('graph plan changed since the checkpoint', 'graph_drift', 409);
   }
 
   async function ownedRun(ticketId, { proposalId, child }) {
-    const run = await db.get('SELECT * FROM tool_run WHERE proposal_id=? AND child=?', [proposalId, child]);
+    const run = await repo.run(proposalId, child);
     if (run && !String(run.run_scope || '').startsWith(scopeOf(ticketId))) throw bad('checkpoint belongs to another ticket', 'scope_mismatch', 409);
     return run;
   }
@@ -74,8 +73,7 @@ export function createToolCheckpointService(store) {
   const ops = {
     async load(ticketId, body) {
       const k = key(body), run = await ownedRun(ticketId, k);
-      const rows = run ? await db.all(`SELECT step, identity, tool, args_json, status, kind, observation, observation_digest
-        FROM tool_step WHERE proposal_id=? AND child=? ORDER BY step`, [k.proposalId, k.child]) : [];
+      const rows = run ? await repo.steps(k.proposalId, k.child) : [];
       return {
         pins: run ? parse(run.pins_json) : null, ledger: run?.ledger_json ? parse(run.ledger_json) : null,
         steps: rows.map(({ args_json, observation_digest, ...row }) => ({
@@ -86,24 +84,21 @@ export function createToolCheckpointService(store) {
     async pins(ticketId, body) {
       const k = key(body), scope = String(body.run_scope || '');
       if (!scope.startsWith(scopeOf(ticketId))) throw bad('run_scope must start with the ticket scope', 'scope_mismatch', 409);
-      await db.run(`INSERT INTO tool_run(proposal_id, child, pins_json, updated_at, run_scope) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT DO NOTHING`, [k.proposalId, k.child, json(body.pins, 'pins'), Date.now(), scope]);
+      await repo.insertRun({ proposalId: k.proposalId, child: k.child, pins: json(body.pins, 'pins'), now: Date.now(), scope });
       return { ok: true };
     },
     async ledger(ticketId, body) {
       const k = key(body);
       await needRun(ticketId, k);
-      await db.run('UPDATE tool_run SET ledger_json=?, updated_at=? WHERE proposal_id=? AND child=?',
-        [json(body.snapshot, 'ledger'), Date.now(), k.proposalId, k.child]);
+      await repo.setLedger({ proposalId: k.proposalId, child: k.child, ledger: json(body.snapshot, 'ledger'), now: Date.now() });
       return { ok: true };
     },
     async intent(ticketId, body) {
       const k = key(body);
       await needRun(ticketId, k);
       try {
-        await db.run(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'intent', ?)`, [k.proposalId, k.child, Number(body.step), identityOf(body),
-          String(body.tool).slice(0, 60), json(body.args, 'args'), Date.now()]);
+        await repo.insertIntent({ proposalId: k.proposalId, child: k.child, step: Number(body.step), identity: identityOf(body),
+          tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), now: Date.now() });
       } catch (error) {
         if (/duplicate key|unique/i.test(String(error?.message))) throw bad('step already has an intent', 'step_conflict', 409);
         throw error;
@@ -115,33 +110,29 @@ export function createToolCheckpointService(store) {
       await needRun(ticketId, k);
       const observation = String(body.observation ?? '');
       if (observation.length > MAX_OBSERVATION) throw bad('observation too large');
-      await db.run(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, kind, observation, observation_digest, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'done', ?, ?, ?, ?)
-        ON CONFLICT (proposal_id, child, step) DO UPDATE SET status='done', kind=EXCLUDED.kind, observation=EXCLUDED.observation,
-          observation_digest=EXCLUDED.observation_digest, updated_at=EXCLUDED.updated_at`,
-        [k.proposalId, k.child, Number(body.step), identityOf(body), String(body.tool).slice(0, 60), json(body.args, 'args'),
-          String(body.kind || '').slice(0, 40), observation, digest(observation), Date.now()]);
+      await repo.upsertDone({ proposalId: k.proposalId, child: k.child, step: Number(body.step), identity: identityOf(body),
+        tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), kind: String(body.kind || '').slice(0, 40),
+        observation, digest: digest(observation), now: Date.now() });
       return { ok: true };
     },
     async mark(ticketId, body) {
       const k = key(body);
       if (!STATUSES.has(body.status)) throw bad('invalid status');
       await needRun(ticketId, k);
-      await db.run('UPDATE tool_step SET status=?, updated_at=? WHERE proposal_id=? AND child=? AND step=?',
-        [body.status, Date.now(), k.proposalId, k.child, Number(body.step)]);
+      await repo.setStepStatus({ proposalId: k.proposalId, child: k.child, step: Number(body.step), status: body.status, now: Date.now() });
       return { ok: true };
     },
     async reset(ticketId, body) {
       // A stale dependency: forget the recorded steps and re-pin, but keep the ledger so accounting never goes back.
       const k = key(body);
       await needRun(ticketId, k);
-      await db.run('DELETE FROM tool_step WHERE proposal_id=? AND child=?', [k.proposalId, k.child]);
-      await db.run('UPDATE tool_run SET pins_json=?, updated_at=? WHERE proposal_id=? AND child=?', [json(body.pins, 'pins'), Date.now(), k.proposalId, k.child]);
+      await repo.deleteSteps(k.proposalId, k.child);
+      await repo.resetPins({ proposalId: k.proposalId, child: k.child, pins: json(body.pins, 'pins'), now: Date.now() });
       return { ok: true };
     },
     async drop(ticketId, body) {
       const k = key(body);
-      if (await ownedRun(ticketId, k)) await db.run('DELETE FROM tool_step WHERE proposal_id=? AND child=? AND step=?', [k.proposalId, k.child, Number(body.step)]);
+      if (await ownedRun(ticketId, k)) await repo.deleteStep(k.proposalId, k.child, Number(body.step));
       return { ok: true };
     },
     async reconcile(ticketId, body) {
@@ -149,10 +140,9 @@ export function createToolCheckpointService(store) {
       if (!status) throw bad('invalid resolution');
       await needRun(ticketId, k);
       const allowed = status === 'compensate' ? ['unknown'] : ['unknown', 'compensate'], now = Date.now();
-      const hit = await db.run(`UPDATE tool_step SET status=?, resolved_by=?, resolution_reason=?, resolution_evidence=?, resolved_at=?, updated_at=?
-        WHERE proposal_id=? AND child=? AND step=? AND status IN (${marks(allowed)})`,
-        [status, String(body.by || '').slice(0, 80), body.reason == null ? null : String(body.reason).slice(0, 2000),
-          json(body.evidence || {}, 'evidence'), now, now, k.proposalId, k.child, Number(body.step), ...allowed]);
+      const hit = await repo.reconcileStep({ proposalId: k.proposalId, child: k.child, step: Number(body.step), status,
+        by: String(body.by || '').slice(0, 80), reason: body.reason == null ? null : String(body.reason).slice(0, 2000),
+        evidence: json(body.evidence || {}, 'evidence'), now, allowed });
       if (!hit?.changes) throw bad(`step is not ${allowed.join('/')}`, 'step_not_open', 409);
       return { ok: true };
     },
@@ -160,39 +150,34 @@ export function createToolCheckpointService(store) {
       const ids = Array.isArray(body.proposal_ids) ? body.proposal_ids.map(String).filter((id) => /^\d{1,19}$/.test(id)) : [];
       // Scopes an earlier worker created for this same run (another process, another attempt) are not in this worker's key set.
       if (typeof body.run_scope === 'string' && body.run_scope.startsWith(scopeOf(ticketId))) {
-        for (const row of await db.all('SELECT DISTINCT CAST(proposal_id AS TEXT) AS id FROM tool_run WHERE run_scope=?', [body.run_scope])) ids.push(row.id);
+        for (const row of await repo.runScopeIds(body.run_scope)) ids.push(row.id);
       }
       for (const id of ids) {
         const like = `${scopeOf(ticketId)}%`;
-        const owned = await db.get('SELECT 1 AS n FROM tool_run WHERE proposal_id=? AND run_scope LIKE ? LIMIT 1', [id, like]);
-        const open = await db.get(`SELECT 1 AS n FROM tool_step s JOIN tool_run r ON r.proposal_id=s.proposal_id AND r.child=s.child
-          WHERE s.proposal_id=? AND r.run_scope LIKE ? AND s.status IN ('intent','unknown','compensate') LIMIT 1`, [id, like]);
+        const owned = await repo.ownedByScope(id, like);
+        const open = await repo.openStepInScope(id, like);
         if (!owned || open) continue; // bước chưa chốt không bao giờ bị dọn
-        await db.run('DELETE FROM tool_step WHERE proposal_id=?', [id]);
-        await db.run('DELETE FROM tool_run WHERE proposal_id=?', [id]);
+        await repo.deleteAllSteps(id);
+        await repo.deleteAllRuns(id);
       }
       return { ok: true };
     },
     async graph_put(ticketId, body) {
       const thread = graphThread(ticketId, body), pin = graphPin(body), ns = String(body.checkpoint_ns ?? '');
       await pinGraph(thread, pin);
-      await db.run(`INSERT INTO graph_checkpoint(thread_id, checkpoint_ns, checkpoint_id, parent_id, type, checkpoint, metadata, plan_hash, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id) DO UPDATE SET checkpoint=EXCLUDED.checkpoint, metadata=EXCLUDED.metadata,
-          updated_at=EXCLUDED.updated_at`,
-        [thread, ns, graphId(body.checkpoint_id), body.parent_id == null ? null : String(body.parent_id), String(body.type || '').slice(0, 40),
-          graphBlob(body.checkpoint, 'checkpoint'), graphBlob(body.metadata, 'metadata'), pin, Date.now()]);
+      await repo.upsertGraph({ thread, ns, id: graphId(body.checkpoint_id), parentId: body.parent_id == null ? null : String(body.parent_id),
+        type: String(body.type || '').slice(0, 40), checkpoint: graphBlob(body.checkpoint, 'checkpoint'),
+        metadata: graphBlob(body.metadata, 'metadata'), pin, now: Date.now() });
       return { ok: true };
     },
     async graph_get(ticketId, body) {
       const thread = graphThread(ticketId, body), ns = String(body.checkpoint_ns ?? '');
       await pinGraph(thread, graphPin(body));
       const row = body.checkpoint_id
-        ? await db.get(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id=?`, [thread, ns, graphId(body.checkpoint_id)])
-        : await db.get(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? ORDER BY checkpoint_id DESC LIMIT 1`, [thread, ns]);
+        ? await repo.graphAt(thread, ns, graphId(body.checkpoint_id))
+        : await repo.graphLatest(thread, ns);
       if (!row) return { checkpoint: null, writes: [] };
-      const writes = await db.all(`SELECT task_id, idx, channel, type, value FROM graph_write
-        WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id=? ORDER BY task_id, idx`, [thread, ns, row.checkpoint_id]);
+      const writes = await repo.graphWrites(thread, ns, row.checkpoint_id);
       return { checkpoint: graphRow(row), writes };
     },
     async graph_list(ticketId, body) {
@@ -200,15 +185,14 @@ export function createToolCheckpointService(store) {
       await pinGraph(thread, graphPin(body));
       const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 100);
       const rows = body.before
-        ? await db.all(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? AND checkpoint_id < ? ORDER BY checkpoint_id DESC LIMIT ?`,
-          [thread, ns, graphId(body.before), limit])
-        : await db.all(`SELECT * FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=? ORDER BY checkpoint_id DESC LIMIT ?`, [thread, ns, limit]);
+        ? await repo.graphBefore(thread, ns, graphId(body.before), limit)
+        : await repo.graphRecent(thread, ns, limit);
       return { checkpoints: rows.map(graphRow) };
     },
     async graph_purge(ticketId, body) {
       const thread = graphThread(ticketId, body), ns = String(body.checkpoint_ns ?? '');
-      await db.run('DELETE FROM graph_write WHERE thread_id=? AND checkpoint_ns=?', [thread, ns]);
-      await db.run('DELETE FROM graph_checkpoint WHERE thread_id=? AND checkpoint_ns=?', [thread, ns]);
+      await repo.purgeGraphWrites(thread, ns);
+      await repo.purgeGraphCheckpoints(thread, ns);
       return { ok: true };
     },
     async graph_writes(ticketId, body) {
@@ -218,11 +202,8 @@ export function createToolCheckpointService(store) {
       if (writes.length > MAX_GRAPH_WRITES) throw bad('too many pending writes');
       const id = graphId(body.checkpoint_id), task = graphId(body.task_id);
       for (const write of writes) {
-        await db.run(`INSERT INTO graph_write(thread_id, checkpoint_ns, checkpoint_id, task_id, idx, channel, type, value)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (thread_id, checkpoint_ns, checkpoint_id, task_id, idx) DO UPDATE SET channel=EXCLUDED.channel, type=EXCLUDED.type, value=EXCLUDED.value`,
-          [thread, ns, id, task, Number(write.idx), String(write.channel || '').slice(0, 80), write.type == null ? null : String(write.type).slice(0, 40),
-            graphBlob(write.value, 'write')]);
+        await repo.upsertGraphWrite({ thread, ns, id, task, idx: Number(write.idx), channel: String(write.channel || '').slice(0, 80),
+          type: write.type == null ? null : String(write.type).slice(0, 40), value: graphBlob(write.value, 'write') });
       }
       return { ok: true };
     },
@@ -231,7 +212,7 @@ export function createToolCheckpointService(store) {
   /** Thao tác checkpoint của ticket; lease sai/cũ → stale_lease trước khi đụng dữ liệu. */
   async function apply(ticketId, op, body = {}) {
     if (!Object.hasOwn(ops, op)) throw bad('unknown checkpoint operation', 'unknown_operation', 404);
-    return db.tx(async () => {
+    return repo.tx(async () => {
       await store.assertLease(ticketId, body.worker_id, body.lease_token);
       return ops[op](ticketId, body);
     });
