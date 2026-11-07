@@ -11,94 +11,80 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LIMITS, WorkerContractError } from '../repositories/store-contract.js';
+import { createEvalTaskRepository } from '../repositories/eval-tasks.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const DAY_MS = 24 * 3600_000;
-const PASSING = "('ready_for_pr', 'needs_review')";
 const SAFE_PATH = /^[\w@-][\w@./-]{0,299}$/;
 const STATUSES = new Set(['candidate', 'labelled', 'retired']);
+const PR_STATES = new Set(['merged', 'closed']);
 
 const parse = (json, fallback = null) => { try { return JSON.parse(json) ?? fallback; } catch { return fallback; } };
 const view = ({ deleted_at: _d, ...t }) => ({ ...t, expected_files: parse(t.expected_files, []),
   must_contain: parse(t.must_contain), must_not_contain: parse(t.must_not_contain) });
 
-const RUN = `
-  SELECT r.id, r.ticket_id, r.plan_hash, r.evidence_json, q.id AS request_id, q.type, q.title, q.detail, q.clarified_spec
-  FROM ai_runs r JOIN ai_tickets t ON t.id = r.ticket_id JOIN requests q ON q.id = t.source_request_id WHERE r.id=?`;
-
 /** 1 task / (nguồn, lượt); đã có (kể cả đã xoá) → bỏ qua. */
-async function insertTask(db, run, verdict, { source = 'miss', trigger, gate = null, failureClass = null, files, labelled = false }, now) {
-  await db.run(`
-    INSERT INTO ai_eval_tasks(source, trigger, request_id, run_id, request_text, clarified_spec, base_sha,
-      gate, failure_class, skill, expected_files, status, created_at, labelled_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
-  `, [source, trigger, run.request_id, run.id, [run.title, run.detail].filter(Boolean).join('\n\n'),
-    run.clarified_spec ?? null, verdict.base_sha ?? verdict.candidate?.base_sha ?? null, gate, failureClass,
-    verdict.skill ?? null, JSON.stringify([...new Set(files)]), labelled ? 'labelled' : 'candidate', now, labelled ? now : null]);
+async function insertTask(repo, run, verdict, { source = 'miss', trigger, gate = null, failureClass = null, files, labelled = false }, now) {
+  await repo.insertTask({ source, trigger, requestId: run.request_id, runId: run.id, requestText: [run.title, run.detail].filter(Boolean).join('\n\n'),
+    clarifiedSpec: run.clarified_spec ?? null, baseSha: verdict.base_sha ?? verdict.candidate?.base_sha ?? null, gate, failureClass,
+    skill: verdict.skill ?? null, expectedFiles: JSON.stringify([...new Set(files)]), status: labelled ? 'labelled' : 'candidate',
+    now, labelledAt: labelled ? now : null });
 }
 
 /** Ghi lần hỏng của run thành task ứng viên. Lặp lại / đã có (kể cả đã xoá) → bỏ qua. Lỗi môi trường không tính. */
-export async function recordMiss(db, runId, trigger, now = Date.now()) {
-  const run = await db.get(RUN, [Number(runId)]);
+export async function recordMiss(repo, runId, trigger, now = Date.now()) {
+  const run = await repo.runRow(runId);
   if (!run || run.type === 'self') return; // lượt board tự sửa: cổng eval của self tự chấm, không phải lần hỏng production
   const verdict = parse(run.evidence_json, {}).verdict ?? {};
   if (verdict.failure_class === 'transient') return; // hạ tầng hỏng, không phải lỗi của board
   if (verdict.failure_class === 'partial') return; // dừng giữa plan để chạy nốt: chưa phải lượt hỏng
   const undo = trigger === 'undo';
-  const plan = run.plan_hash && parse((await db.get('SELECT plan_json FROM ai_plans WHERE root_ticket_id=? AND plan_hash=?', [run.ticket_id, run.plan_hash]))?.plan_json);
+  const plan = run.plan_hash && parse((await repo.planJson(run.ticket_id, run.plan_hash))?.plan_json);
   // Gợi ý nhãn: hoàn tác → file của commit bị hoàn tác; bị chặn → phạm vi plan đã nhắm.
   const files = undo ? (verdict.candidate?.commits ?? []).flatMap((c) => c.files) : plan?.allowed_scope ?? [];
-  await insertTask(db, run, verdict, { trigger, gate: undo ? null : verdict.gate_reached ?? null,
+  await insertTask(repo, run, verdict, { trigger, gate: undo ? null : verdict.gate_reached ?? null,
     failureClass: undo ? 'undone' : verdict.failure_class ?? null, files }, now);
 }
 
 /** "Thử cách khác" → lượt hỏng cuối; hoàn tác → lượt đạt cuối (thay đổi bị hoàn tác) của yêu cầu. */
-export async function recordRequestMiss(db, requestId, trigger, now = Date.now()) {
-  const run = await db.get(`
-    SELECT r.id FROM ai_runs r JOIN ai_tickets t ON t.id = r.ticket_id AND t.parent_id IS NULL
-    WHERE t.source_request_id=? AND r.outcome ${trigger === 'undo' ? `IN ${PASSING}` : "= 'blocked'"}
-    ORDER BY r.id DESC LIMIT 1
-  `, [Number(requestId)]);
-  if (run) await recordMiss(db, run.id, trigger, now);
+export async function recordRequestMiss(repo, requestId, trigger, now = Date.now()) {
+  const run = await repo.latestRequestRun(requestId, trigger === 'undo');
+  if (run) await recordMiss(repo, run.id, trigger, now);
 }
 
 // ponytail: quét mọi task còn sống ở mỗi lần đọc; vài trăm task thì rẻ, nhiều hơn thì nhớ sha HEAD đã kiểm.
-async function retire(db, now) {
-  await db.run(`UPDATE ai_eval_tasks SET status='retired', retired_at=? WHERE status != 'retired' AND created_at < ?`, [now, now - LIMITS.self_improve.retire_days * DAY_MS]);
-  const gone = `UPDATE ai_eval_tasks SET status='retired', retired_at=? WHERE id=?`;
-  for (const t of await db.all(`SELECT id, expected_files FROM ai_eval_tasks WHERE status != 'retired'`)) {
+async function retire(repo, now) {
+  await repo.retireOlderThan(now - LIMITS.self_improve.retire_days * DAY_MS, now);
+  for (const t of await repo.liveTasksWithFiles()) {
     const files = parse(t.expected_files, []);
-    if (files.length && files.every((f) => !fs.existsSync(path.join(REPO_ROOT, f)))) await db.run(gone, [now, t.id]);
+    if (files.length && files.every((f) => !fs.existsSync(path.join(REPO_ROOT, f)))) await repo.retireTask(t.id, now);
   }
 }
 
 // ── Bộ đánh giá đóng băng: chụp lúc bật vòng lần đầu (frozen_at, self-improve.js) +
 // mọi task gắn nhãn trong frozen_window_days ngày sau đó. Task đóng băng không bao giờ vào evalTaskSplit (hard
 // exclusion). Gọi lúc đọc (như retire): tất định, không cần cron; đã đóng băng thì không bao giờ bỏ cờ lại. ──
-async function freeze(db, now) {
-  const frozenAt = (await db.get('SELECT frozen_at FROM ai_self_improve_state WHERE id=1'))?.frozen_at;
+async function freeze(repo) {
+  const frozenAt = await repo.frozenAt();
   if (!frozenAt) return;
-  const deadline = frozenAt + LIMITS.self_improve.frozen_window_days * DAY_MS;
-  await db.run(`UPDATE ai_eval_tasks SET frozen=1 WHERE frozen=0 AND labelled_at IS NOT NULL AND labelled_at <= ?`, [deadline]);
+  await repo.freezeLabelledBefore(frozenAt + LIMITS.self_improve.frozen_window_days * DAY_MS);
 }
 
 /** Worker: task đóng băng đang labelled — dùng để đo lại sau mỗi lần merge self,
  * không bao giờ đưa cho người đề xuất hay dùng để chọn biến thể. */
-export async function frozenTasks(db, now = Date.now()) {
-  await freeze(db, now);
-  await retire(db, now);
-  return (await db.all(`SELECT * FROM ai_eval_tasks WHERE status='labelled' AND frozen=1 ORDER BY created_at, id`)).map(view);
+export async function frozenTasks(repo, now = Date.now()) {
+  await freeze(repo);
+  await retire(repo, now);
+  return (await repo.frozenLabelled()).map(view);
 }
 
 /** Admin: task theo trạng thái (mặc định ứng viên) + đếm mỗi trạng thái. */
-export async function listEvalTasks(db, status = 'candidate', now = Date.now()) {
+export async function listEvalTasks(repo, status = 'candidate', now = Date.now()) {
   if (!STATUSES.has(status)) throw new WorkerContractError('invalid status');
-  await freeze(db, now);
-  await retire(db, now);
-  const counts = Object.fromEntries((await db.all(`
-    SELECT status, COUNT(*) AS n FROM ai_eval_tasks WHERE deleted_at IS NULL GROUP BY status
-  `)).map((r) => [r.status, r.n]));
-  const tasks = (await db.all(`SELECT * FROM ai_eval_tasks WHERE status=? AND deleted_at IS NULL ORDER BY created_at, id`, [status])).map(view);
+  await freeze(repo);
+  await retire(repo, now);
+  const counts = Object.fromEntries((await repo.statusCounts()).map((r) => [r.status, r.n]));
+  const tasks = (await repo.tasksByStatus(status)).map(view);
   return { tasks, counts };
 }
 
@@ -109,80 +95,67 @@ const cleanStrings = (value) => {
 };
 
 /** Gắn nhãn: 1–50 file (đường dẫn tương đối trong repo), tuỳ chọn chuỗi phải có / không được có. */
-export async function labelEvalTask(db, id, { expected_files: files, must_contain: must, must_not_contain: mustNot } = {}, now = Date.now()) {
+export async function labelEvalTask(repo, id, { expected_files: files, must_contain: must, must_not_contain: mustNot } = {}, now = Date.now()) {
   const list = (Array.isArray(files) ? files : []).map((f) => String(f ?? '').trim().replace(/\\/g, '/'));
   if (!list.length || list.length > 50 || list.some((f) => !SAFE_PATH.test(f) || f.split('/').includes('..'))) {
     throw new WorkerContractError('expected_files must be 1–50 repo-relative paths', 400, 'invalid_label');
   }
-  const task = await db.get('SELECT status FROM ai_eval_tasks WHERE id=? AND deleted_at IS NULL', [Number(id)]);
+  const task = await repo.liveStatus(id);
   if (!task) throw new WorkerContractError('eval task not found', 404, 'eval_task_not_found');
   if (task.status === 'retired') throw new WorkerContractError('eval task is retired', 409, 'eval_task_retired');
-  await db.run(`UPDATE ai_eval_tasks SET expected_files=?, must_contain=?, must_not_contain=?, status='labelled', labelled_at=?
-    WHERE id=?`, [JSON.stringify([...new Set(list)]), cleanStrings(must), cleanStrings(mustNot), now, Number(id)]);
-  return view(await db.get('SELECT * FROM ai_eval_tasks WHERE id=?', [Number(id)]));
+  await repo.labelTask({ id, files: JSON.stringify([...new Set(list)]), mustContain: cleanStrings(must), mustNotContain: cleanStrings(mustNot), now });
+  return view(await repo.taskRow(id));
 }
 
 /** Xoá nội dung task (lời người dùng); giữ khoá để sự kiện sau của cùng lượt không tạo lại. */
-export async function deleteEvalTask(db, id, now = Date.now()) {
-  const info = await db.run(`
-    UPDATE ai_eval_tasks SET request_text='', clarified_spec=NULL, expected_files='[]', must_contain=NULL,
-      must_not_contain=NULL, status='retired', retired_at=COALESCE(retired_at, ?), deleted_at=?
-    WHERE id=? AND deleted_at IS NULL
-  `, [now, now, Number(id)]);
+export async function deleteEvalTask(repo, id, now = Date.now()) {
+  const info = await repo.eraseTask(id, now);
   if (!info.changes) throw new WorkerContractError('eval task not found', 404, 'eval_task_not_found');
   return { ok: true };
 }
 
 /** Worker: task đã gắn nhãn chia theo thời gian — cũ nhất (split) để học, mới nhất để kiểm tra. Task đóng băng
  * không bao giờ lọt vào đây — hard exclusion, kể cả khi đã labelled. */
-export async function evalTaskSplit(db, now = Date.now()) {
-  await freeze(db, now);
-  await retire(db, now);
+export async function evalTaskSplit(repo, now = Date.now()) {
+  await freeze(repo);
+  await retire(repo, now);
   const { min_labelled_tasks: min, learning_split: split } = LIMITS.self_improve;
-  const labelled = (await db.all(`SELECT * FROM ai_eval_tasks WHERE status='labelled' AND frozen=0 ORDER BY created_at, id`)).map(view);
+  const labelled = (await repo.labelledTrainable()).map(view);
   const cut = Math.floor(labelled.length * split);
   return { ready: labelled.length >= min, labelled: labelled.length, min_tasks: min, split,
     learning: labelled.slice(0, cut), test: labelled.slice(cut) };
 }
 
 // ── Trạng thái PR: worker hỏi GitHub các PR server còn coi là mở, báo lại khi đã đóng ──
-const prNumber = (db) => db.jsonNum('r.evidence_json', 'pull_request.number');
-const PR_STATES = new Set(['merged', 'closed']);
 
 /** Worker: PR server đã ghi mà chưa báo đóng — worker hỏi GitHub đúng các PR này. */
-export async function openPullRequests(db) {
-  const num = prNumber(db);
-  return await db.all(`
-    SELECT DISTINCT ${num} AS number, ${db.jsonText('r.evidence_json', 'pull_request.url')} AS url,
-      ${db.jsonText('r.evidence_json', 'pull_request.branch')} AS branch
-    FROM ai_runs r WHERE ${num} IS NOT NULL AND ${num} NOT IN (SELECT number FROM ai_pull_requests)
-    ORDER BY number
-  `);
+export async function openPullRequests(repo) {
+  return repo.openPullRequests();
 }
 
 /** Worker báo PR đã đóng: ghi trạng thái (lần báo đầu thắng); merged → task win có nhãn = file PR, đóng không
  * merge → task miss ứng viên. Báo lại không sinh trùng. Yêu cầu self: chỉ ghi trạng thái (cổng eval self chấm riêng). */
-export async function reportPullRequest(db, { number, state, closed_at: closedAt, files } = {}, now = Date.now()) {
+export async function reportPullRequest(repo, { number, state, closed_at: closedAt, files } = {}, now = Date.now()) {
   const closed = typeof closedAt === 'number' ? closedAt : Date.parse(String(closedAt ?? ''));
   if (!Number.isInteger(number) || number < 1 || !PR_STATES.has(state) || !Number.isFinite(closed)
     || !Array.isArray(files) || files.length > 3000) {
     throw new WorkerContractError('number, state merged|closed, closed_at and files[] required', 400, 'invalid_pr_state');
   }
   const prFiles = [...new Set(files.map((f) => String(f ?? '')).filter((f) => SAFE_PATH.test(f) && !f.split('/').includes('..')))];
-  return db.tx(async () => {
-    const runs = await db.all(`SELECT r.id FROM ai_runs r WHERE ${prNumber(db)} = ? ORDER BY r.id`, [number]);
+  return repo.tx(async () => {
+    const runs = await repo.runsForPr(number);
     if (!runs.length) throw new WorkerContractError('pull request not recorded', 404, 'pr_not_found');
-    await db.run(`INSERT INTO ai_pull_requests(number, state, closed_at, files, reported_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, [number, state, closed, JSON.stringify(prFiles), now]);
-    const row = await db.get('SELECT * FROM ai_pull_requests WHERE number=?', [number]);
+    await repo.insertPr({ number, state, closed, files: JSON.stringify(prFiles), now });
+    const row = await repo.prRow(number);
     const pr = { ...row, files: parse(row.files, []) };
     for (const { id } of runs) {
-      const run = await db.get(RUN, [id]);
+      const run = await repo.runRow(id);
       if (run.type === 'self') continue;
       const verdict = parse(run.evidence_json, {}).verdict ?? {};
       // PR folder gom nhiều lượt: mỗi lượt chỉ nhận file PR mà commit của chính nó đã đổi.
       const own = runs.length > 1 && new Set((verdict.candidate?.commits ?? []).flatMap((c) => c.files));
       const files = own ? pr.files.filter((f) => own.has(f)) : pr.files;
-      await insertTask(db, run, verdict, pr.state === 'merged'
+      await insertTask(repo, run, verdict, pr.state === 'merged'
         ? { source: 'win', trigger: 'pr_merged', files, labelled: files.length >= 1 && files.length <= 50 }
         : { trigger: 'pr_closed', failureClass: 'closed', files }, now);
     }

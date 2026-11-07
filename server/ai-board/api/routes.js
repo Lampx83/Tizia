@@ -19,6 +19,7 @@ import { attachWorkerLessonRoutes, attachLessonReviewRoutes } from './lessons.js
 import { createHsmStore } from '../hsm/store.js';
 import { createToolCheckpointService } from '../services/tool-checkpoint.js';
 import { createToolCheckpointRepository } from '../repositories/tool-checkpoint.js';
+import { createEvalTaskRepository } from '../repositories/eval-tasks.js';
 import { createGateProofService } from '../services/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { publicContract } from '../hsm/contract.js';
@@ -238,7 +239,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
     try {
       const result = await aux.retryRequest(store, req.params.id, req.user.id);
-      await aux.recordRequestMiss(store.db, req.params.id, 'retry');
+      await aux.recordRequestMiss(createEvalTaskRepository(store.db), req.params.id, 'retry');
       res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
@@ -408,7 +409,7 @@ export function attachAiBoardRequestRoutes(router, {
   route.post('/api/admin/ai-board/requests/:requestId/rollback', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
       const result = await store.requestRollback(req.params.requestId, { adminUserId: req.user.id, confirm: req.body?.confirm });
-      await aux.recordRequestMiss(store.db, req.params.requestId, 'undo');
+      await aux.recordRequestMiss(createEvalTaskRepository(store.db), req.params.requestId, 'undo');
       res.json(result);
     } catch (error) {
       if (error instanceof WorkerContractError) {
@@ -420,13 +421,13 @@ export function attachAiBoardRequestRoutes(router, {
 
   // ── Task eval từ lần hỏng ──
   route.get('/api/admin/ai-board/eval-tasks', requireAuth, requireAdmin, async (req, res) => {
-    try { res.json(await aux.listEvalTasks(store.db, req.query.status || undefined)); } catch (error) { folderError(res, error); }
+    try { res.json(await aux.listEvalTasks(createEvalTaskRepository(store.db), req.query.status || undefined)); } catch (error) { folderError(res, error); }
   });
   route.post('/api/admin/ai-board/eval-tasks/:id/label', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
-    try { res.json({ task: await aux.labelEvalTask(store.db, req.params.id, req.body || {}) }); } catch (error) { folderError(res, error); }
+    try { res.json({ task: await aux.labelEvalTask(createEvalTaskRepository(store.db), req.params.id, req.body || {}) }); } catch (error) { folderError(res, error); }
   });
   route.delete('/api/admin/ai-board/eval-tasks/:id', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
-    try { res.json(await aux.deleteEvalTask(store.db, req.params.id)); } catch (error) { folderError(res, error); }
+    try { res.json(await aux.deleteEvalTask(createEvalTaskRepository(store.db), req.params.id)); } catch (error) { folderError(res, error); }
   });
 
 
@@ -781,7 +782,7 @@ export function attachAiBoardWorkerRoutes(router, {
       idempotencyKey: req.body?.idempotency_key,
     });
     const notice = await aux.afterVerdict(store.db, req.params.id, verdict);
-    if (verdict.outcome === 'blocked') await aux.recordMiss(store.db, req.body.run_id, 'verdict_blocked');
+    if (verdict.outcome === 'blocked') await aux.recordMiss(createEvalTaskRepository(store.db), req.body.run_id, 'verdict_blocked');
     res.json({ verdict });
     if (notice && onVerdict) {
       try { await onVerdict(notice); } catch (error) { console.warn('[ai-board] verdict notification failed:', error.message); }
@@ -790,7 +791,7 @@ export function attachAiBoardWorkerRoutes(router, {
 
   // Task eval đã gắn nhãn: server chia học / kiểm tra theo thời gian, worker không tự chia.
   route.post('/api/ai-board/worker/eval-tasks', authenticate, handle(async (_req, res) => {
-    res.json(await aux.evalTaskSplit(store.db));
+    res.json(await aux.evalTaskSplit(createEvalTaskRepository(store.db)));
   }));
 
   // Board tự sửa đã tắt: luôn 403 self_request_disabled.
@@ -808,10 +809,10 @@ export function attachAiBoardWorkerRoutes(router, {
 
   // Trạng thái PR: worker hỏi GitHub các PR này rồi báo PR đã đóng; không webhook.
   route.post('/api/ai-board/worker/pull-requests/open', authenticate, handle(async (_req, res) => {
-    res.json({ pull_requests: await aux.openPullRequests(store.db) });
+    res.json({ pull_requests: await aux.openPullRequests(createEvalTaskRepository(store.db)) });
   }));
   route.post('/api/ai-board/worker/pull-requests/state', authenticate, handle(async (req, res) => {
-    res.json({ pull_request: await aux.reportPullRequest(store.db, req.body) });
+    res.json({ pull_request: await aux.reportPullRequest(createEvalTaskRepository(store.db), req.body) });
   }));
 
   // Ảnh bản nháp: auth trước rồi mới parse body lớn; content-type riêng để express.json chung bỏ qua.

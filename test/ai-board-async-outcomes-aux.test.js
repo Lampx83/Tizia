@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runBoard, failure } from './support/ai-board-parity.js';
+import { createEvalTaskRepository } from '../server/ai-board/repositories/eval-tasks.js';
 import {
   blocked, candidate, claimAndRun, gates, newRequest, planOf, submit, verdict,
 } from './support/ai-board-scenarios.js';
@@ -32,15 +33,15 @@ test('eval tasks, drafts (shots, retry streak, handoff), request retry', async (
       out.after1 = await m.afterVerdict(db, c.id, bad);
       out.afterMissing = await m.afterVerdict(db, 4242, bad);
       // eval tasks from the miss
-      await m.recordMiss(db, c.run.id, 'verdict_blocked');
-      await m.recordMiss(db, c.run.id, 'verdict_blocked');
-      await m.recordRequestMiss(db, a.request_id, 'retry');
-      out.badLabel = await failure(() => m.labelEvalTask(db, 1, { expected_files: ['../etc/passwd'] }));
-      out.label = await m.labelEvalTask(db, 1, { expected_files: ['package.json'], must_contain: ['x'], must_not_contain: ['y'] });
-      out.noTask = await failure(() => m.labelEvalTask(db, 99, { expected_files: ['package.json'] }));
-      out.tasks = await m.listEvalTasks(db);
-      out.badStatus = await failure(() => m.listEvalTasks(db, 'weird'));
-      out.split = await m.evalTaskSplit(db);
+      await m.recordMiss(createEvalTaskRepository(db), c.run.id, 'verdict_blocked');
+      await m.recordMiss(createEvalTaskRepository(db), c.run.id, 'verdict_blocked');
+      await m.recordRequestMiss(createEvalTaskRepository(db), a.request_id, 'retry');
+      out.badLabel = await failure(() => m.labelEvalTask(createEvalTaskRepository(db), 1, { expected_files: ['../etc/passwd'] }));
+      out.label = await m.labelEvalTask(createEvalTaskRepository(db), 1, { expected_files: ['package.json'], must_contain: ['x'], must_not_contain: ['y'] });
+      out.noTask = await failure(() => m.labelEvalTask(createEvalTaskRepository(db), 99, { expected_files: ['package.json'] }));
+      out.tasks = await m.listEvalTasks(createEvalTaskRepository(db));
+      out.badStatus = await failure(() => m.listEvalTasks(createEvalTaskRepository(db), 'weird'));
+      out.split = await m.evalTaskSplit(createEvalTaskRepository(db));
       // requester retry after the lease is released
       out.busy = await failure(() => m.retryRequest(store, a.request_id, 1));
       await store.releaseLease(c.id, { ...c.lease, outcome: 'planned', idempotencyKey: 'rel-aux-1' });
@@ -54,9 +55,9 @@ test('eval tasks, drafts (shots, retry streak, handoff), request retry', async (
       out.state2 = await m.retryState(db, c2.id, 'pre_pr_blocked');
       out.after2 = await m.afterVerdict(db, c2.id, bad);
       out.passingNotice = await m.afterVerdict(db, c2.id, { outcome: 'ready_for_pr' });
-      out.deleted = await m.deleteEvalTask(db, 1);
-      out.deletedAgain = await failure(() => m.deleteEvalTask(db, 1));
-      out.counts = (await m.listEvalTasks(db, 'retired')).counts;
+      out.deleted = await m.deleteEvalTask(createEvalTaskRepository(db), 1);
+      out.deletedAgain = await failure(() => m.deleteEvalTask(createEvalTaskRepository(db), 1));
+      out.counts = (await m.listEvalTasks(createEvalTaskRepository(db), 'retired')).counts;
       // screenshots older than the retention window are removed from the thread
       const backend = m.createLocalBackend(dir);
       out.purgeOff = await m.purgeExpiredScreenshots(db, backend, { days: 0 });
