@@ -29,6 +29,7 @@ import { createRootAllowanceService } from '../services/root-allowance.js';
 import { createTraceReadModel } from '../services/trace-read-model.js';
 import { attachSkillRoutes, attachWorkerSkillRoutes } from './skills.js';
 import { requesterProgress } from '../services/requester-progress.js';
+import { createRequesterProgressRepository } from '../repositories/requester-progress.js';
 import { classifierConfigured, environment, getSettings } from '../settings.js';
 import { assessElevationRisk, applyRiskFloor } from '../services/elevation-risk.js';
 
@@ -212,7 +213,7 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   route.get('/api/requests/:id/progress', requireAuth, async (req, res) => {
-    const progress = await requesterProgress(store, req.params.id, req.user.id, req.user.role === 'admin');
+    const progress = await requesterProgress(store, req.params.id, req.user.id, req.user.role === 'admin', createRequesterProgressRepository(store.db));
     if (!progress) return res.status(404).json({ error: 'request_not_found' });
     res.json(progress);
   });
