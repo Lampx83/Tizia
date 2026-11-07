@@ -72,6 +72,7 @@ const budgetLine = (budgets, method) => Object.entries(budgets).map(([node, b]) 
 const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở dữ liệu', review:'Review', test:'Kiểm thử', merge:'Hợp nhất', all:'Chung' };
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
 const NODE = { plan:'Lập plan', execute:'Viết code', verdict:'Kết luận' };
+const IMPORT_OUTCOME = { imported:'đã nhập', skipped:'bỏ qua (đã có, trùng nội dung)', conflict:'xung đột (khác nội dung, chưa ghi đè)', rejected:'bị từ chối' };
 const lineDiff = (a, b) => {
   const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
   for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i+1][j+1] + 1 : Math.max(t[i+1][j], t[i][j+1]);
@@ -122,6 +123,12 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
   host.innerHTML = `<section class="skills-panel">
     <div class="toolbar"><p class="meta skills-lead">Bản nháp chưa được nạp. Bản đã duyệt sẵn sàng cho lượt chạy được bật Skills; tính năng vẫn trong phạm vi thử nghiệm.</p><span class="spacer"></span><button type="button" class="btn" id="skill-add">Thêm skill</button></div>
     <p class="meta" data-stage-budgets>Ngân sách mỗi node: ${esc(budgetLine(result.data.stage_budgets ?? {}, result.data.token_method))}</p>
+    <details class="skill-import">
+      <summary>Nhập skill từ tệp JSON đã xuất</summary>
+      <label for="skill-import-file">Tệp bundle (.json)</label><input id="skill-import-file" type="file" accept=".json,application/json">
+      <label class="skill-type"><input id="skill-import-overwrite" type="checkbox"> Ghi đè skill trùng tên nhưng khác nội dung (tạo phiên bản mới)</label>
+      <ul class="meta" id="skill-import-report" role="status"></ul>
+    </details>
     <form id="skill-upload" class="skills-form" hidden>
       <h3>Thêm skill</h3>
       <label for="skill-name">Tên skill</label><input id="skill-name" name="name" required maxlength="64" pattern="[a-z][a-z0-9-]*" value="frontend-guide">
@@ -355,6 +362,23 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
   const form = host.querySelector('#skill-upload');
   const addButton = host.querySelector('#skill-add');
   const status = host.querySelector('#skill-upload-status');
+  host.querySelector('#skill-import-file').onchange = async event => {
+    const file = event.target.files[0], report = host.querySelector('#skill-import-report');
+    event.target.value = '';
+    if (!file) return;
+    report.innerHTML = '';
+    if (file.size > 2_000_000) { report.innerHTML = '<li>Tệp quá lớn (tối đa 2 MB).</li>'; return; }
+    let bundle;
+    try { bundle = JSON.parse(await file.text()); } catch { report.innerHTML = '<li>Tệp không phải JSON hợp lệ.</li>'; return; }
+    const overwrite = host.querySelector('#skill-import-overwrite').checked;
+    try {
+      const response = await api('/api/admin/ai-board/skills/import', { method:'POST', body: JSON.stringify({ bundle, overwrite }) });
+      if (!response.ok) { report.innerHTML = `<li>${esc(errorText(response, 'Không nhập được. Kiểm tra tệp rồi thử lại.'))}</li>`; return; }
+      report.innerHTML = response.data.results.map(r => `<li>${esc(r.name)}: ${esc(IMPORT_OUTCOME[r.outcome] ?? r.outcome)}${r.reason ? ` (${esc(r.reason)})` : ''}${r.message ? ` — ${esc(r.message)}` : ''}</li>`).join('')
+        || '<li>Tệp không có skill nào.</li>';
+      report.insertAdjacentHTML('afterbegin', `<li><strong>Tải lại trang để thấy thay đổi.</strong></li>`);
+    } catch (error) { report.innerHTML = `<li>${esc(error.message)}</li>`; }
+  };
   let saved = null, dirty = false;
   const setDirty = () => { dirty = true; };
   form.addEventListener('input', setDirty);

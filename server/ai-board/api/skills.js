@@ -15,6 +15,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
   route.get('/api/admin/ai-board/skills/proposals', requireAuth, requireAdmin, handle(() => skills.proposals()));
   route.get('/api/admin/ai-board/skills/:id', requireAuth, requireAdmin, handle(req => skills.read(req.params.id)));
   route.post('/api/admin/ai-board/skills', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.upload(actor(req),req.body || {})));
+  route.post('/api/admin/ai-board/skills/import', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.importBundle(actor(req),req.body || {})));
   for (const action of ['approve','disable']) route.post(`/api/admin/ai-board/skills/:id/${action}`, requireAuth, requireAdmin, requireStrictCsrf,
     handle(req => skills[action](actor(req),req.params.id,req.body || {})));
   route.post('/api/admin/ai-board/skills/:id/rollback', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.rollback(actor(req),req.params.id,req.body || {})));

@@ -1,0 +1,58 @@
+# Stack dev WEB: tizia-dev + PostgreSQL web. Stack riêng với docker-compose.dev.ai.yml.
+# Portainer: stack "tizia-dev-web", Git nhánh dev, file docker-compose.dev.web.yml, không profile.
+# Cùng host với stack AI: tạo một lần `docker network create tizia-bridge` (tên đổi bằng TIZIA_BRIDGE_NETWORK).
+# Khác host: không cần cầu chung; đặt AI_BOARD_SERVER_URL và AI_BOARD_SHOTS_S3_ENDPOINT trỏ tới IP nội bộ của host AI
+# (production cross-host cần TLS và firewall, xem header của docker-compose.dev.ai.yml).
+# Chỉ tizia-dev publish cổng: host 8000 (đổi bằng WEB_PUBLISH_PORT) -> container 8041.
+# Bí mật đưa bằng env của stack (Portainer), không đặt trong repo: POSTGRES_USER/PASSWORD/DB, AI_BOARD_INTERNAL_SECRET
+# (HMAC web<->board). File .env là tùy chọn (required: false).
+services:
+  tizia-dev:
+    extends: { file: docker-compose.yml, service: tizia }
+    image: tizia:dev
+    container_name: tizia-dev
+    depends_on: !override  # app cần PostgreSQL lúc boot
+      tizia-postgres: { condition: service_healthy }
+    ports: !override
+      - "${WEB_PUBLISH_PORT:-8000}:8041"  # cửa duy nhất: web; app lắng nghe 8041 trong container
+    env_file:
+      - path: .env
+        required: false
+    environment:  # chỉ nối dây trong container; cấu hình khác nằm trong .env
+      NODE_ENV: development
+      AI_BOARD_PREVIEW_BIND_HOST: 0.0.0.0
+      AI_BOARD_PRIVATE_PREVIEW_ENABLED: "false"  # preview phải đi qua 8041
+      BASE_PATH: !reset null
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@tizia-postgres:5432/${POSTGRES_DB}  # ghi đè DATABASE_URL trong .env (chạy ngoài container)
+      AI_BOARD_SERVER_URL: ${AI_BOARD_SERVER_URL:-http://aiboard-server:8081}
+      AI_BOARD_INTERNAL_SECRET: ${AI_BOARD_INTERNAL_SECRET:-}
+      AI_BOARD_SHOTS_S3_ENDPOINT: ${AI_BOARD_SHOTS_S3_ENDPOINT:-http://seaweedfs:8333}
+    volumes: !override
+      - tizia-dev-data:/data  # pg_dump + file tải lên; dữ liệu chính nằm trong PostgreSQL
+    networks: !override
+      - webnet
+      - tizia-bridge
+
+  # Chỉ trên mạng nội bộ, KHÔNG publish cổng.
+  tizia-postgres:
+    extends: { file: docker-compose.yml, service: postgres }
+    container_name: tizia-postgres
+    environment:  # bare = lấy từ env của stack
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
+    volumes:
+      - tizia-postgres-data:/var/lib/postgresql/data
+    networks: !override [webnet]
+
+networks:
+  webnet: {}
+  tizia-bridge:
+    name: ${TIZIA_BRIDGE_NETWORK:-tizia-bridge}
+    external: true
+
+volumes:
+  tizia-dev-data:
+    name: tizia_tizia-dev-data
+  tizia-postgres-data:
+    name: tizia_tizia-postgres-data

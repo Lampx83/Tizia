@@ -9,7 +9,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-COMPOSE=(docker compose -f docker-compose.dev.yml --profile ai-board)
+COMPOSE=(docker compose -f docker-compose.dev.ai.yml --profile ai-board)
 POLICY=ai-board/sandbox-runner/sandbox-policy.dev.yaml
 TOKEN=ai-board/sandbox-runner/secrets/runner-token
 HOST_ENV=ai-board-host.env
@@ -90,7 +90,7 @@ if [ ${#errors[@]} -gt 0 ]; then
 fi
 
 if [ "$build_guest" -eq 0 ]; then
-  echo "ready. Start: docker compose -f docker-compose.dev.yml ${env_args[*]} --profile ai-board up -d --build"
+  echo "ready. Start: docker compose -f docker-compose.dev.ai.yml ${env_args[*]} --profile ai-board up -d --build"
   echo "SeaweedFS (optional): add --profile storage"
   echo "Gate 5 guest still needs: scripts/ai-board-bootstrap.sh --build-guest"
   exit 0
