@@ -15,7 +15,7 @@ class CompactingDeps(Deps):
     def __init__(self, *, invalid=0, on_compact=lambda: None, notes='The three repository listings are read-only observations.'):
         reads = [{'tool': 'tree', 'arguments': {'path': f'public/p{i}'}} for i in range(3)]
         super().__init__([*reads, EDIT, TEST, FINISH])
-        self.models = SimpleNamespace(context_window=lambda *_args, **_kw: 28000, routing=None)
+        self.models = SimpleNamespace(context_window=lambda *_args, **_kw: 14000, routing=None)
         self.compactions, self.invalid, self.on_compact = [], invalid, on_compact
         self.notes = notes
 
@@ -120,7 +120,7 @@ def test_real_deps_and_tracer_can_record_a_compactor_generation():
         routing = None
         gate3_model = gate3_model_light = 'm'
         def context_window(self, *_args, **_kw):
-            return 28000
+            return 14000
         def generate(self, model, prompt, **kw):
             if '\nHISTORY_JSON\n' in prompt:
                 payload = json.loads(prompt.split('\nHISTORY_JSON\n')[1])
