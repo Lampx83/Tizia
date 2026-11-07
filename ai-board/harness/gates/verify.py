@@ -18,6 +18,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from gates import visual
+from gates.gate5_session import STAGE_CLASS, Compose, failure_class
 from verification import functional, style
 from meter import redact
 from settings import get_settings
@@ -466,23 +467,23 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
         return {"gate": 5, "blocked": True, "reason": "thiếu full_checkout cho Docker verify", "evidence": None,
-                "failure_class": "transient"}
+                "failure_class": STAGE_CLASS["preflight"]}
     checkout = Path(checkout)
     if not (checkout / "docker-compose.yml").is_file() or not (checkout / "Dockerfile").is_file():
         return {"gate": 5, "blocked": True, "reason": "full_checkout thiếu Dockerfile/docker-compose.yml", "evidence": None,
-                "failure_class": "transient"}
+                "failure_class": STAGE_CLASS["preflight"]}
 
     skill_id = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
-                "failure_class": "transient"}
+                "failure_class": STAGE_CLASS["preflight"]}
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
     pages = _public_paths(state.get("diffs") or [])
     if not pages:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
         return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
-                "evidence": None, "failure_class": "plan"}
+                "evidence": None, "failure_class": STAGE_CLASS["plan"]}
     html = [page for page in pages if page.endswith(".html")]
     # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
     primary = html[0] if html else _request_page(state.get("request_detail"))
@@ -494,7 +495,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     reason = None
     # Failure class by stage: before containers run = environment (transient, retried once);
     # isolation/secret checks = critical boundary violation; after = the candidate (ordinary).
-    kind = "transient"
+    stage = "boot"
     screenshot = None
     smoke_ok = False
     http_observed = False
@@ -509,31 +510,22 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         empty_env.write_text("", encoding="utf-8")
         compose = ["docker", "compose", "--env-file", str(empty_env), "-p", project, "-f", str(override)]
 
-        def command(args: list[str], *, env=None, log_output=True, timeout=None) -> subprocess.CompletedProcess:
-            result = runner(args, cwd=checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
-                            stdin=subprocess.DEVNULL, check=False, timeout=timeout)
-            output = "[output redacted]"
-            if log_output:
-                output = f"{result.stdout or ''}{result.stderr or ''}"
-                output = (redact(output.replace(password, "[synthetic credential]")).strip()[-4000:] or "(không có chi tiết lỗi)") if result.returncode else f"exit {result.returncode}"
-            logs.append(f"$ {' '.join(str(a) for a in args)}\n{output}")
-            if result.returncode:
-                raise RuntimeError(f"{' '.join(str(a) for a in args[:4])} exit {result.returncode}")
-            return result
+        owned = Compose(runner, checkout, project, password, compose, logs)
+        command = owned.command
 
         try:
             config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
-            kind = "critical"
+            stage = "config"
             _validate_config(config, project, password)
             internal = _internal()
-            kind = "transient"
+            stage = "boot"
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
             if internal:
                 # Address from the daemon, not from inside the candidate container.
                 cid = command([*compose, "ps", "-q", "tizia"]).stdout.strip()
                 ip_output = command(["docker", "inspect", "-f",
                                      "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", cid]).stdout
-                kind = "critical"
+                stage = "address"
                 try:
                     ip = ipaddress.ip_address((ip_output.split() or [""])[0])
                 except ValueError:
@@ -543,15 +535,15 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 base = f"http://{ip}:8041"
             else:
                 port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
-                kind = "critical"
+                stage = "address"
                 match = re.search(r":(\d+)\s*$", port_output)
                 if not match or int(match.group(1)) == 8041:
                     raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
                 base = f"http://127.0.0.1:{int(match.group(1))}"
 
-            kind = "transient"
+            stage = "boot"
             env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
-            kind = "critical"
+            stage = "env"
             container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
             leaked = sorted(name for name, value in container_env.items()
                             if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
@@ -560,7 +552,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             if leaked:
                 raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
             logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
-            kind = "ordinary"
+            stage = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
                                  if item.get("test_file")})
@@ -631,7 +623,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
             http_observed = True
-            kind = 'plan'
+            stage = 'plan'
             observed_pages = html or ([primary] if primary else [])
             functional_result = (functional_probe(base, probe_id) if functional_probe
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
@@ -651,7 +643,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     and test_files and not generated_ok):
                 functional_result = {**functional_result, 'needs_review': True, 'oracle_passed': True, 'disagree': True}
                 logs.append('Oracle từ diff đạt nhưng generated test đỏ: needs_review, admin xem xét, không tự đạt')
-            kind = 'ordinary'
+            stage = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
             shot_pages = _shot_pages(checkout, pages, primary)
             skipped = [page for page in html if page not in shot_pages]
@@ -674,7 +666,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                           "before": visual.changed_texts(state.get("full_diff"), "-")})
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
-                    kind = "plan" if isinstance(exc, ScreenshotTargetError) else "transient"
+                    stage = "plan" if isinstance(exc, ScreenshotTargetError) else "screenshot"
                     raise RuntimeError(f"thiếu screenshot bắt buộc cho thay đổi UI: {exc}") from exc
                 screenshot = next((s["path"] for s in shots
                                    if s["phase"] == "after" and s["page"] == primary and s["width"] == 1280), None)
@@ -691,17 +683,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             except (OSError, RuntimeError, subprocess.TimeoutExpired):
                 pass
             try:
-                command([*compose, "down", "-v"])
-                remaining = [command(["docker", resource, "ls", "--all", "--filter", f"{key}={value}", "--format", "{{.ID}}"], log_output=False).stdout.strip()
-                             for resource, key, value in (("container", "label", f"com.docker.compose.project={project}"),)]
-                remaining += [command(["docker", resource, "ls", "--filter", "name=" + project, "--format", "{{.Name}}"], log_output=False).stdout.strip()
-                              for resource in ("volume", "network")]
-                if any(remaining):
-                    raise RuntimeError("run resources remain after Compose down")
+                owned.down()
                 teardown_confirmed = True
             except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
                 reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
-                kind = "transient"  # leaked containers are the environment's problem, not the candidate's
+                stage = "teardown"  # leaked containers are the environment's problem, not the candidate's
 
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
@@ -710,4 +696,4 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
-            "failure_class": kind if reason else None}
+            "failure_class": failure_class(stage, reason)}

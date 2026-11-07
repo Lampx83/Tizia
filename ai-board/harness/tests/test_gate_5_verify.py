@@ -936,3 +936,16 @@ def test_a_trusted_oracle_pass_is_not_marked_for_review(tmp_path):
     assert out["blocked"] is False
     assert "needs_review" not in out["evidence"]["functional"]
     assert "oracle_passed" not in out["evidence"]["functional"]
+
+
+def test_teardown_runs_on_an_unexpected_exit_too(tmp_path):
+    class Interrupted(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if args[0] != "docker":
+                raise KeyboardInterrupt
+            return super().__call__(args, **kwargs)
+
+    runner = Interrupted()
+    with pytest.raises(KeyboardInterrupt):
+        verify.run(state(checkout(tmp_path)), runner=runner)
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
