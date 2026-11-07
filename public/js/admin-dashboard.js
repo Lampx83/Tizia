@@ -6,7 +6,7 @@
 import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
 import { askConfirm } from './confirm-dialog.js';
-import { mountSkillsTab } from './admin-skills.js?v=skills-ux1';
+import { mountSkillsTab } from './admin-skills.js?v=skills-import1';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 import { createPoll } from './poll.js';
 

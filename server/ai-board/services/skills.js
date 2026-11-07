@@ -8,6 +8,7 @@ import { checkSkillText, publicMessage } from '../security/intake-guard.js';
 import { essenceMissing } from '../security/essence.js';
 import { recordSkillFlag, reviewEvidence, reviewSkillText } from '../security/skill-review.js';
 import { tokenCounter } from './token-count.js';
+import { contentHash, servedText, validateBundle } from './skills-bundle.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -526,5 +527,44 @@ export function createSkillService(db, { reviewText = reviewSkillText } = {}) {
       return { token_count: Buffer.byteLength(text, 'utf8'), token_method: 'utf8_upper_bound' };
     }
   }
-  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro };
+  /** Import one exported bundle in one transaction; per-skill rejections roll back only that skill (savepoint). */
+  async function importOne(actor, item, overwrite) {
+    const base = { name: item.name, head_version: item.head_version };
+    const head = item.versions.find(v => v.version === item.head_version);
+    if (!head) return { ...base, outcome: 'rejected', reason: 'head_missing' };
+    const lint = lintSkill(head.text, { name: item.name });
+    if (!lint.ok) return { ...base, outcome: 'rejected', reason: 'lint_failed', message: lint.errors.join('; ') };
+    const existing = await db.get('SELECT id FROM ai_skills WHERE name=?', [item.name]);
+    if (existing) {
+      const known = await db.all('SELECT original_text,rewritten_text FROM ai_skill_versions WHERE skill_id=?', [existing.id]);
+      if (known.some(v => contentHash(servedText(v)) === head.hash)) return { ...base, outcome: 'skipped', reason: 'same_content', skill_id: existing.id };
+      if (!overwrite) return { ...base, outcome: 'conflict', reason: 'name_exists_different_content', skill_id: existing.id };
+    }
+    let made;
+    try {
+      await db.run('SAVEPOINT skill_import');
+      made = await upload(actor, { name: item.name, task_types: item.task_types, original_text: head.text });
+      await db.run('RELEASE SAVEPOINT skill_import');
+    } catch (error) {
+      await db.run('ROLLBACK TO SAVEPOINT skill_import');
+      if (error instanceof WorkerContractError) return { ...base, outcome: 'rejected', reason: error.code, message: error.message };
+      throw error;
+    }
+    const approved = item.status === 'approved';
+    if (approved) await approve(actor, made.skill.id, { version_id: made.version.id, confirmed: true });
+    return { ...base, outcome: 'imported', reason: null, skill_id: made.skill.id, version_id: made.version.id, status: approved ? 'approved' : 'draft' };
+  }
+  async function importBundle(actor, input) {
+    if (input.overwrite != null && typeof input.overwrite !== 'boolean') throw bad('overwrite must be boolean');
+    const check = validateBundle(input.bundle);
+    if (!check.ok) throw bad(check.error, 'invalid_bundle', 400);
+    return db.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const results = [];
+      for (const item of input.bundle.skills) results.push(await importOne(actor, item, input.overwrite === true));
+      const summary = Object.fromEntries(['imported', 'skipped', 'conflict', 'rejected'].map(k => [k, results.filter(r => r.outcome === k).length]));
+      return { summary, results };
+    });
+  }
+  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro, importBundle };
 }
