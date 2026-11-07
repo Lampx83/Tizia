@@ -39,5 +39,5 @@ docker build -t "$registry/gate5:overlay" "$stage"
 digest=$(docker push "$registry/gate5:overlay" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)
 [ -n "$digest" ] || { echo "push did not report a digest" >&2; exit 1; }
 node "$inputs" pin "$policy" "$digest"
-docker compose -f docker-compose.dev.yml --profile ai-board up -d --force-recreate sandbox-runner
+docker compose -f docker-compose.dev.ai.yml --profile ai-board up -d --force-recreate sandbox-runner
 echo "pinned $digest"
