@@ -36,20 +36,23 @@ def counter():
     return ByteCounter()
 
 
+CHARS_PER_TOKEN = 4  # pre-cut for char-budget tools; fit() does the exact cut
+
+
 @lru_cache(maxsize=1)
 def _shared():
     return counter()
 
 
 def measure(text):
-    """Token estimate for observation caps. Qwen tokenizer when present; else UTF-8 bytes / 3 (ponytail: coarse, exact once settings.qwen_tokenizer is set)."""
+    """Token count for observation caps."""
     shared = _shared()
     used = shared.count(text)
-    return used if shared.exact else -(-used // 3)
+    return used if shared.exact else -(-used // 3)  # ponytail: bytes/3 estimate without tokenizer file
 
 
 def fit(text, limit):
-    """Longest prefix of text within limit tokens."""
+    """Longest prefix within limit tokens."""
     if measure(text) <= limit:
         return text
     low, high = 0, len(text)

@@ -10,8 +10,6 @@ import path_policy
 import tools
 from services import token_count
 
-CHARS_PER_TOKEN = 4  # pre-cut for tools that budget in chars; token_count.fit does the exact cut
-
 SPECS = {
     "tree": ({"path": {"type": "string"}}, ()),
     "outline": ({"file": {"type": "string"}}, ("file",)),
@@ -56,7 +54,7 @@ class ReadOnlyTools:
             return tools.outline(self.source, self.sha, file=args["file"]) or "(rỗng)"
         if name == "grep":
             out = tools.grep(self.source, self.sha, words=args["words"], file=args.get("file"),
-                             path=args.get("path", "public"), budget=self.cap * CHARS_PER_TOKEN)
+                             path=args.get("path", "public"), budget=self.cap * token_count.CHARS_PER_TOKEN)
             if out.startswith("file khớp từ khoá: "):
                 hits = [h for h in out.split(": ", 1)[1].split(", ") if path_policy.check(re.sub(r" \(\d+\)$", "", h), "read")["allow"]]
                 out = "file khớp từ khoá: " + ", ".join(hits) if hits else ""

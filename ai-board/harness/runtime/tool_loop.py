@@ -29,7 +29,6 @@ from settings import get_settings
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
 OBSERVATION_TOKENS = _LOOP["observation_tokens"]
-CHARS_PER_TOKEN = 4  # pre-cut for tools that budget in chars; _fit does the exact cut
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
@@ -78,7 +77,7 @@ def _tool_schemas() -> list[dict]:
 
 
 def _native_turn(messages: list, n: int, call: tuple[str, dict] | None, observation: str, reply: dict | None = None) -> None:
-    """Append one exchange: assistant tool_calls + tool result when the request was a valid call, else the raw reply + a user error."""
+    """Append assistant tool_calls + tool result, or raw reply + user error when no valid call."""
     text = OBSERVATION.format(tool=call[0] if call else "lỗi", text=observation).lstrip()
     if call is None:
         messages += [{"role": "assistant", "content": (reply or {}).get("response") or "(no valid call)"}, {"role": "user", "content": text}]
@@ -300,7 +299,7 @@ class Workspace:
                     if len(hits) >= 20:
                         break
                 return _fit('\n'.join(hits), name)
-            return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * CHARS_PER_TOKEN), name) or "(không có kết quả)"
+            return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name) or "(không có kết quả)"
         if name == "read_file":
             if self.checks:
                 content = self._read(args['file'])
@@ -364,12 +363,12 @@ class Workspace:
 
 
 def _cap(name: str) -> int:
-    """Trần token quan sát của tool, từ contract limits.loop.observation_tokens."""
+    """Trần token quan sát, từ contract."""
     return OBSERVATION_TOKENS.get(name, OBSERVATION_TOKENS["default"])
 
 
 def _fit(text: str, name: str) -> str:
-    """Cắt quan sát theo trần token của tool; lỗi request (tên không phải tool) dùng trần ký tự chung."""
+    """Cắt theo trần token của tool; lỗi request dùng trần ký tự."""
     return token_count.fit(text, _cap(name)) if name in _specs() else text[:ERROR_CHARS]
 
 
@@ -384,7 +383,9 @@ def _read_window(content: str, start: int | None, end: int | None) -> str:
         raise ToolError(f"read_file: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
     cap = _cap("read_file")
     room = cap - PAGE_HINT_TOKENS
-    page = lambda last: "\n".join(f"L{n}| {rows[n - 1]}" for n in range(start, last + 1))  # noqa: E731
+    def page(last: int) -> str:
+        return "\n".join(f"L{n}| {rows[n - 1]}" for n in range(start, last + 1))
+
     if token_count.measure(page(end)) <= cap:
         return page(end)
     low, high = start, min(end, start + cap)

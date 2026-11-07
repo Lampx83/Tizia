@@ -162,7 +162,7 @@ class OllamaClient:
             messages = [{'role': 'user', 'content': content}]
             if extra and extra.get('system'):
                 messages.insert(0, {'role': 'system', 'content': extra['system']})
-            if extra and extra.get('messages'):  # native tool loop: assistant/tool turns after the task prompt
+            if extra and extra.get('messages'):
                 messages += extra['messages']
             payload = {'model': model, 'messages': messages, 'stream': False}
             for source, target in [('num_predict', 'max_tokens'), ('temperature', 'temperature'),
