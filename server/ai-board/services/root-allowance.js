@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { LIMITS, WorkerContractError } from '../repositories/store-contract.js';
+import { createRootAllowanceRepository } from '../repositories/root-allowance.js';
 
 const bad = (message, code = 'invalid_allowance', status = 400) => new WorkerContractError(message, status, code);
 const denial = (reason, message, code = 'root_allowance_exhausted') => Object.assign(bad(message, code, 409), { reason });
@@ -54,18 +55,19 @@ export function scaledRootLimit(cap, steps) {
   return Math.min(LIMITS.root_work[cap] + step * count, max);
 }
 
-async function planSteps(db, root) {
-  const ticket = await db.get('SELECT plan_hash FROM ai_tickets WHERE id=?', [root]);
+async function planSteps(repo, root) {
+  const ticket = await repo.ticketPlanHash(root);
   if (!ticket?.plan_hash) return 0;
-  const plan = await db.get('SELECT plan_json FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? ORDER BY revision DESC LIMIT 1', [root, ticket.plan_hash]);
+  const plan = await repo.latestPlan(root, ticket.plan_hash);
   try { return JSON.parse(plan?.plan_json ?? 'null')?.steps?.length ?? 0; } catch { return 0; }
 }
 
 export async function readRootAllowance(db, root, bucket = 'execute') {
-  const row = await db.get('SELECT * FROM ai_root_allowances WHERE root_ticket_id=?', [root]);
+  const repo = createRootAllowanceRepository(db);
+  const row = await repo.allowanceRow(root);
   if (!row) return null;
   const stored = row.limits_json ? JSON.parse(row.limits_json) : {};
-  const steps = await planSteps(db, root);
+  const steps = await planSteps(repo, root);
   const floorAtStored = limits => Object.fromEntries(Object.entries(limits).map(([k, v]) => [k, Math.max(v, stored[k] ?? 0)]));
   const planLimits = floorAtStored(LIMITS.root_work);
   const executeLimits = floorAtStored({ ...LIMITS.root_work, ...Object.fromEntries(bucketed.map(cap => [cap, scaledRootLimit(cap, steps)])) });
@@ -73,9 +75,7 @@ export async function readRootAllowance(db, root, bucket = 'execute') {
   const zero = () => ({ model_calls: 0, tool_calls: 0, tokens: 0, metered_tokens: 0, semantic_repairs: 0, quality_switches: 0 });
   const used = zero(), planUsed = zero();
   const byProvider = Object.create(null);
-  const reservations = await db.all(`SELECT r.*, p.phase AS bucket FROM ai_work_reservations r
-    LEFT JOIN ai_work_reservation_phases p ON p.root_ticket_id=r.root_ticket_id AND p.attempt_key=r.attempt_key
-    WHERE r.root_ticket_id=? ORDER BY r.created_at, r.attempt_key`, [root]);
+  const reservations = await repo.reservations(root);
   for (const r of reservations) {
     const cap = kinds[r.kind];
     const spent = r.tokens_used ?? r.tokens_reserved;
@@ -104,25 +104,22 @@ export async function readRootAllowance(db, root, bucket = 'execute') {
 
 /** Root-owned work is reserved before I/O; unknown attempts keep their full token reservation. */
 export function createRootAllowanceService(store) {
-  const db = store.db;
-  const state = (root, bucket) => readRootAllowance(db, root, bucket);
+  const repo = createRootAllowanceRepository(store.db);
+  const state = (root, bucket) => readRootAllowance(store.db, root, bucket);
 
   async function apply(ticketId, op, body = {}) {
     if (!['read', 'reserve', 'settle'].includes(op)) throw bad('unknown allowance operation', 'unknown_operation', 404);
-    return db.tx(async () => {
+    return repo.tx(async () => {
       // Same admission lock/order as claim; release before any provider I/O.
-      if (op === 'reserve' && body.kind === 'model') await db.get('SELECT pg_advisory_xact_lock(hashtext(current_schema()),7000103)');
+      if (op === 'reserve' && body.kind === 'model') await repo.admissionLock();
       const root = await store.assertLease(ticketId, String(body.worker_id || ''), String(body.lease_token || ''));
-      await db.run(`INSERT INTO ai_root_allowances(root_ticket_id, limits_json, blocked_reason, created_at)
-        SELECT ?, ?, CASE WHEN EXISTS(SELECT 1 FROM ai_gate_traces g JOIN ai_runs r ON r.id=g.run_id
-          WHERE r.ticket_id=? AND g.status='model_call') THEN 'legacy_allowance_unknown' ELSE NULL END, ? ON CONFLICT DO NOTHING`,
-        [root.id, null, root.id, Date.now()]);
+      await repo.insertLegacyAllowance(root.id, Date.now());
       const bucket = bucketOf(root);
       const current = await state(root.id, bucket);
       if (op === 'read') return current;
       if (typeof body.idempotency_key !== 'string' || !keyPattern.test(body.idempotency_key)) throw bad('invalid attempt key');
       const params = [root.id, body.idempotency_key];
-      const prior = await db.get('SELECT * FROM ai_work_reservations WHERE root_ticket_id=? AND attempt_key=?', params);
+      const prior = await repo.priorAttempt(...params);
       if (op === 'reserve') {
         if (prior) throw denial('attempt_already_reserved', 'attempt already reserved; do not repeat remote work', 'attempt_already_reserved');
         if (current.blocked_reason) throw bad('root allowance needs review', current.blocked_reason, 409);
@@ -134,9 +131,8 @@ export function createRootAllowanceService(store) {
         if (model) await store.assertModelResourceAdmission(root);
         const reason = rootDenial(current, body.kind, tokens, model ? body.provider : 'api');
         if (reason) throw denial(reason, 'root work allowance exhausted');
-        await db.run(`INSERT INTO ai_work_reservations(root_ticket_id, attempt_key, kind, provider, lease_hash, tokens_reserved, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`, [...params, body.kind, model ? body.provider : null, leaseHash(body.lease_token), tokens, Date.now()]);
-        await db.run('INSERT INTO ai_work_reservation_phases(root_ticket_id, attempt_key, phase) VALUES (?, ?, ?)', [...params, bucket]);
+        await repo.insertReservation(...params, body.kind, model ? body.provider : null, leaseHash(body.lease_token), tokens, Date.now());
+        await repo.insertPhase(...params, bucket);
       } else {
         if (!prior || prior.kind !== 'model') throw bad('no model reservation', 'reservation_missing', 409);
         if (prior.lease_hash !== leaseHash(body.lease_token)) throw bad('reservation belongs to an older lease', 'stale_reservation', 409);
@@ -151,10 +147,9 @@ export function createRootAllowanceService(store) {
         }
         const tokens = metrics.tokens_in == null || metrics.tokens_out == null ? null : metrics.tokens_in + metrics.tokens_out;
         if (tokens != null && !integer(tokens)) throw bad('invalid token total');
-        await db.run(`UPDATE ai_work_reservations SET tokens_used=?, metrics_json=?, settled_at=? WHERE root_ticket_id=? AND attempt_key=?`,
-          [tokens, encoded, Date.now(), ...params]);
+        await repo.settleReservation(...params, tokens, encoded, Date.now());
         if (prior.provider === 'api' && tokens > prior.tokens_reserved) {
-          await db.run("UPDATE ai_root_allowances SET blocked_reason='model_token_bound_violation' WHERE root_ticket_id=?", [root.id]);
+          await repo.markTokenViolation(root.id);
         }
       }
       return state(root.id, bucket);
