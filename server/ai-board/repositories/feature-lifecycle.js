@@ -4,7 +4,6 @@ import { setReleaseStatus } from '../services/releases.js';
 export function createFeatureLifecycleRepository(db) {
   return {
     tx: fn => db.tx(fn),
-    lockRow: db.lockRow,
     adminRole: actorId => db.get('SELECT role FROM users WHERE id=? FOR SHARE', [actorId]),
     folder: (id, lock) => db.get(`SELECT * FROM ai_feature_folders WHERE id=?${lock ? db.lockRow : ''}`, [id]),
     openIncident: folderId => db.get('SELECT * FROM ai_feature_incidents WHERE folder_id=? AND resolved_at IS NULL', [folderId]),
