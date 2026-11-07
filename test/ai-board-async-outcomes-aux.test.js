@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runBoard, failure } from './support/ai-board-parity.js';
+import { createDraftRepository } from '../server/ai-board/repositories/drafts.js';
 import { createEvalTaskRepository } from '../server/ai-board/repositories/eval-tasks.js';
 import {
   blocked, candidate, claimAndRun, gates, newRequest, planOf, submit, verdict,
@@ -28,10 +29,10 @@ test('eval tasks, drafts (shots, retry streak, handoff), request retry', async (
         images: [{ png_base64: PNG, phase: 'before', width: 375, page: '/gioi-thieu.html' }, { png_base64: PNG, phase: 'after', focus: true, page: '/gioi-thieu.html' }] });
       out.shotsDup = await m.saveDraftScreenshots(store, c.id, { ...c.lease, runId: c.run.id, uploadsDir: dir, images: [{ png_base64: PNG }] });
       out.shotsBad = await failure(() => m.saveDraftScreenshots(store, c.id, { ...c.lease, runId: c.run.id + 99, uploadsDir: dir, images: [{ png_base64: 'xx' }] }));
-      out.streak = await m.failedRunStreak(db, c.id);
-      out.state1 = await m.retryState(db, c.id, 'pre_pr_blocked');
-      out.after1 = await m.afterVerdict(db, c.id, bad);
-      out.afterMissing = await m.afterVerdict(db, 4242, bad);
+      out.streak = await m.failedRunStreak(createDraftRepository(db), c.id);
+      out.state1 = await m.retryState(createDraftRepository(db), c.id, 'pre_pr_blocked');
+      out.after1 = await m.afterVerdict(createDraftRepository(db), c.id, bad);
+      out.afterMissing = await m.afterVerdict(createDraftRepository(db), 4242, bad);
       // eval tasks from the miss
       await m.recordMiss(createEvalTaskRepository(db), c.run.id, 'verdict_blocked');
       await m.recordMiss(createEvalTaskRepository(db), c.run.id, 'verdict_blocked');
@@ -52,9 +53,9 @@ test('eval tasks, drafts (shots, retry streak, handoff), request retry', async (
       const c2 = await claimAndRun(store, 'w1');
       await submit(store, c2, planOf(), 'plan-aux-2');
       await verdict(store, c2, bad, 'verdict-aux-2');
-      out.state2 = await m.retryState(db, c2.id, 'pre_pr_blocked');
-      out.after2 = await m.afterVerdict(db, c2.id, bad);
-      out.passingNotice = await m.afterVerdict(db, c2.id, { outcome: 'ready_for_pr' });
+      out.state2 = await m.retryState(createDraftRepository(db), c2.id, 'pre_pr_blocked');
+      out.after2 = await m.afterVerdict(createDraftRepository(db), c2.id, bad);
+      out.passingNotice = await m.afterVerdict(createDraftRepository(db), c2.id, { outcome: 'ready_for_pr' });
       out.deleted = await m.deleteEvalTask(createEvalTaskRepository(db), 1);
       out.deletedAgain = await failure(() => m.deleteEvalTask(createEvalTaskRepository(db), 1));
       out.counts = (await m.listEvalTasks(createEvalTaskRepository(db), 'retired')).counts;

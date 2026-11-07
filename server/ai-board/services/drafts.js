@@ -9,6 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { createLocalBackend } from '../repositories/shot-storage.js';
+import { createDraftRepository } from '../repositories/drafts.js';
 
 // Khớp ai-board/worker.py (SHOTS_TYPE, MAX_SHOT_BYTES, MAX_SHOTS).
 export const SHOTS_TYPE = 'application/vnd.tizia.screenshots+json'; // tránh express.json 64kb chung
@@ -42,13 +43,12 @@ const label = (image) => {
 };
 
 /** Lưu ảnh bản nháp của lượt runId + 1 tin AI trong thread. Lặp lại cùng run → trả tin cũ, không ghi thêm. */
-export async function saveDraftScreenshots(store, ticketId, { workerId, leaseToken, runId, images, uploadsDir, backend = createLocalBackend(uploadsDir), now = Date.now() }) {
-  const { db } = store;
+export async function saveDraftScreenshots(store, ticketId, { workerId, leaseToken, runId, images, uploadsDir, backend = createLocalBackend(uploadsDir), now = Date.now(), repo = createDraftRepository(store.db) }) {
   const root = await store.assertLease(ticketId, workerId, leaseToken, now);
-  const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(runId), root.id]);
+  const run = await repo.runInTicket(Number(runId), root.id);
   if (!run) throw new WorkerContractError('run does not belong to ticket');
   const idem = `draft-shots:${run.id}`;
-  const prior = await db.get('SELECT internal_detail FROM ai_events WHERE ticket_id=? AND idempotency_key=?', [root.id, idem]);
+  const prior = await repo.draftEvent(root.id, idem);
   if (prior) return { ...JSON.parse(prior.internal_detail), duplicate: true };
   if (!Array.isArray(images) || !images.length || images.length > MAX_SHOTS) {
     throw new WorkerContractError(`images must be 1–${MAX_SHOTS} PNG`, 400, 'invalid_screenshots');
@@ -62,77 +62,59 @@ export async function saveDraftScreenshots(store, ticketId, { workerId, leaseTok
     attachments.push({ url: `/uploads/requests/${day}/${fname}`, name: label(images[i]), mime: 'image/png',
       size: buf.length, kind: 'screenshot' });
   }
-  return db.tx(async () => {
-    const again = await db.get('SELECT internal_detail FROM ai_events WHERE ticket_id=? AND idempotency_key=?', [root.id, idem]);
+  return repo.tx(async () => {
+    const again = await repo.draftEvent(root.id, idem);
     if (again) return { ...JSON.parse(again.internal_detail), duplicate: true };
-    const message = await db.insert(`
-      INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at) VALUES (?, 'ai', ?, ?, ?, ?)
-    `, [root.source_request_id, DRAFT_AUTHOR,
+    const message = await repo.insertDraftMessage(root.source_request_id, DRAFT_AUTHOR,
       'Bản nháp sau lượt này (ảnh điện thoại 375px và máy tính 1280px; "Trước" là bản đang chạy; "vùng thay đổi" là ảnh cận cảnh phần đã sửa).',
-      JSON.stringify(attachments), now]);
-    await db.run('UPDATE requests SET updated_at=? WHERE id=?', [now, root.source_request_id]);
+      JSON.stringify(attachments), now);
+    await repo.touchRequest(root.source_request_id, now);
     const out = { message_id: message, stored: attachments.length };
-    await db.run(`
-      INSERT INTO ai_events(ticket_id, run_id, event_type, actor_type, actor_id, transition,
-        public_message, internal_detail, idempotency_key, created_at)
-      VALUES (?, ?, 'draft_screenshots', 'worker', ?, NULL, NULL, ?, ?, ?)
-    `, [root.id, run.id, workerId, JSON.stringify(out), idem, now]);
+    await repo.insertDraftEvent({ rootId: root.id, runId: run.id, workerId, detail: JSON.stringify(out), idem, now });
     return out;
   });
 }
 
 /** Số lượt hỏng liên tiếp gần nhất của root (tính từ lượt đạt cuối). Dừng giữa plan (partial) không tính. */
-export async function failedRunStreak(db, rootId) {
-  const failureClass = db.jsonText('evidence_json', 'verdict.failure_class');
-  return (await db.get(`
-    SELECT COUNT(*) AS n FROM ai_runs WHERE ticket_id=? AND outcome='blocked'
-      AND COALESCE(${failureClass}, 'ordinary') <> 'partial' AND id > COALESCE(
-      (SELECT MAX(id) FROM ai_runs WHERE ticket_id=? AND outcome IN ('ready_for_pr', 'needs_review')), 0)
-  `, [Number(rootId), Number(rootId)])).n;
+export async function failedRunStreak(repo, rootId) {
+  return (await repo.failedRunCount(Number(rootId))).n;
 }
 
 /** Nút trên thẻ yêu cầu: 'retry' (Thử cách khác) | 'admin' (đã chuyển quản trị viên) | null. */
-export async function retryState(db, rootId, phase) {
+export async function retryState(repo, rootId, phase) {
   if (!rootId || !RETRY_PHASES.has(phase)) return null;
-  return await failedRunStreak(db, rootId) >= MAX_FAILED_RUNS ? 'admin' : 'retry';
+  return await failedRunStreak(repo, rootId) >= MAX_FAILED_RUNS ? 'admin' : 'retry';
 }
 
 /** Sau verdict: hỏng lượt thứ MAX_FAILED_RUNS → root chờ admin. Trả dữ liệu chuông (kind draft|retry|handoff|admin|partial). */
-export async function afterVerdict(db, ticketId, verdict, now = Date.now()) {
-  const root = await db.get(`
-    SELECT t.id, t.phase, r.id AS request_id, r.title, r.domain, r.student
-    FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id WHERE t.id=? AND t.parent_id IS NULL
-  `, [Number(ticketId)]);
+export async function afterVerdict(repo, ticketId, verdict, now = Date.now()) {
+  const root = await repo.rootForTicket(Number(ticketId));
   if (!root) return null;
   if (PASSING.has(verdict?.outcome)) return { ...root, kind: 'draft' };
   // Dừng giữa plan nhưng đã xong một phần: không phải lượt hỏng, chuông mời người gửi bấm "Tiếp tục".
   if (verdict?.failure_class === 'partial') return { ...root, kind: 'partial' };
-  const state = await retryState(db, root.id, root.phase);
+  const state = await retryState(repo, root.id, root.phase);
   if (state === 'admin') {
-    await db.run(`UPDATE ai_tickets SET status='waiting_admin', public_note=?, updated_at=? WHERE id=?`, [HANDOFF_NOTE, now, root.id]);
+    await repo.markWaitingAdmin(root.id, HANDOFF_NOTE, now);
   }
   return { ...root, kind: state === 'retry' ? 'retry' : state === 'admin' ? 'handoff' : 'admin' };
 }
 
 /** Người gửi bấm "Thử cách khác": root hỏng của chính họ → hàng đợi, lập plan mới. */
-export function retryRequest(store, requestId, ownerUserId, now = Date.now()) {
-  const { db } = store;
-  return db.tx(async () => {
-    const row = await db.get(`
-      SELECT r.id, r.owner_user_id, t.id AS root_id, t.status, t.phase, t.lease_token, t.lease_expires_at
-      FROM requests r JOIN ai_tickets t ON t.source_request_id = r.id AND t.parent_id IS NULL WHERE r.id=?
-    `, [Number(requestId)]);
+export function retryRequest(store, requestId, ownerUserId, now = Date.now(), repo = createDraftRepository(store.db)) {
+  return repo.tx(async () => {
+    const row = await repo.requestRoot(Number(requestId));
     // Yêu cầu của người khác trông như không tồn tại.
     if (!row || row.owner_user_id !== Number(ownerUserId)) throw new WorkerContractError('request not found', 404, 'request_not_found');
     if (row.lease_token && row.lease_expires_at > now) {
       throw new WorkerContractError('AI Board is working on this request', 409, 'ticket_busy');
     }
-    const state = row.status === 'cancelled' ? null : await retryState(db, row.root_id, row.phase);
+    const state = row.status === 'cancelled' ? null : await retryState(repo, row.root_id, row.phase);
     if (state === 'admin') throw new WorkerContractError('handed to an admin after repeated failures', 409, 'admin_handoff');
     if (state !== 'retry' || !await store.invalidatePlanForRequest(row.id, 'requester_retry')) {
       throw new WorkerContractError('request is not in a failed state', 409, 'not_retryable');
     }
-    await db.run('UPDATE ai_tickets SET public_note=? WHERE id=?', ['Ban sẽ thử một cách khác.', row.root_id]);
+    await repo.setRootNote(row.root_id, 'Ban sẽ thử một cách khác.');
     return { ok: true, status: 'queued' };
   });
 }

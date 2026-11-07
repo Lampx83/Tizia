@@ -13,6 +13,7 @@ import { attachAiBoardRequestRoutes } from '../server/ai-board/routes.js';
 import { requesterProgress } from '../server/ai-board/services/requester-progress.js';
 import { continuePartialRequest } from '../server/ai-board/services/partial-resume.js';
 import { afterVerdict, failedRunStreak } from '../server/ai-board/services/drafts.js';
+import { createDraftRepository } from '../server/ai-board/repositories/drafts.js';
 
 const FILES = ['public/the.html', 'public/the-2.html', 'public/the-3.html'];
 
@@ -75,14 +76,14 @@ test('a partial gate 3 waits for the requester in phase partial, not as a failur
   const repairs = await db.prepare("SELECT COUNT(*) AS n FROM ai_tickets WHERE parent_id=? AND kind='review_fix'").get(ticket.id);
   assert.equal(Number(repairs.n), 0);
   // Và không tính vào chuỗi lượt hỏng (2 lượt hỏng mới chuyển admin) hay hàng task eval.
-  assert.equal(Number(await failedRunStreak(db.d, ticket.id)), 0);
+  assert.equal(Number(await failedRunStreak(createDraftRepository(db.d), ticket.id)), 0);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM ai_eval_tasks').get().then((r) => Number(r.n)), 0);
 });
 
 test('the bell for a partial verdict invites the requester to continue instead of handing off', async () => {
   const { db, submit, ticket } = await plannedRoot();
   await submit(partialVerdict(), Date.now());
-  const notice = await afterVerdict(db.d, ticket.id, { outcome: 'blocked', failure_class: 'partial' });
+  const notice = await afterVerdict(createDraftRepository(db.d), ticket.id, { outcome: 'blocked', failure_class: 'partial' });
   assert.equal(notice.kind, 'partial');
 });
 

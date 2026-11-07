@@ -3,6 +3,7 @@ import express from 'express';
 import { ADMIN_REQUEST_STATUSES, assertConfirmed, LEASE_MS, LIMITS, PlanGuardrailError, RequestValidationError, WorkerContractError } from '../repositories/store-contract.js';
 import { SHOTS_BODY_LIMIT, SHOTS_TYPE } from '../services/drafts.js';
 import * as asyncAux from '../services/aux-service.js';
+import { createDraftRepository } from '../repositories/drafts.js';
 import { asyncRoutes } from './async-routes.js';
 import { checkIntake, publicMessage, readOnlyVerificationText } from '../security/intake-guard.js';
 import { checkLanguage } from '../language-guard.js';
@@ -204,7 +205,7 @@ export function attachAiBoardRequestRoutes(router, {
     const isAdmin = req.user.role === 'admin';
     const items = [];
     for (const item of await store.listRequestsForOwner(req.user.id, domain, req.query.limit)) {
-      items.push({ ...item, retry: await aux.retryState(store.db, item.root_ticket_id, item.phase),
+      items.push({ ...item, retry: await aux.retryState(createDraftRepository(store.db), item.root_ticket_id, item.phase),
         can_continue: isAdmin && item.phase === 'partial',
         can_edit: !isAdmin && EDITABLE_PHASES.has(item.phase) });
     }
@@ -241,7 +242,7 @@ export function attachAiBoardRequestRoutes(router, {
         message: `Bạn đang có ${pendingCap} yêu cầu chờ Ban xử lý. Đợi một yêu cầu xong rồi thử lại nhé!` });
     }
     try {
-      const result = await aux.retryRequest(store, req.params.id, req.user.id);
+      const result = await aux.retryRequest(store, req.params.id, req.user.id, Date.now(), createDraftRepository(store.db));
       await aux.recordRequestMiss(createEvalTaskRepository(store.db), req.params.id, 'retry');
       res.json(result);
     } catch (error) {
@@ -784,7 +785,7 @@ export function attachAiBoardWorkerRoutes(router, {
       verdict: req.body?.verdict,
       idempotencyKey: req.body?.idempotency_key,
     });
-    const notice = await aux.afterVerdict(store.db, req.params.id, verdict);
+    const notice = await aux.afterVerdict(createDraftRepository(store.db), req.params.id, verdict);
     if (verdict.outcome === 'blocked') await aux.recordMiss(createEvalTaskRepository(store.db), req.body.run_id, 'verdict_blocked');
     res.json({ verdict });
     if (notice && onVerdict) {
@@ -826,7 +827,7 @@ export function attachAiBoardWorkerRoutes(router, {
       try {
         const lease = leaseInput(req.body);
         res.json(await aux.saveDraftScreenshots(store, req.params.id, {
-          ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir, backend: shotBackend,
+          ...lease, runId: req.body?.run_id, images: req.body?.images, uploadsDir, backend: shotBackend, repo: createDraftRepository(store.db),
         }));
       } catch (error) {
         if (error instanceof WorkerContractError) return res.status(error.status).json({ error: error.code, message: error.message });
