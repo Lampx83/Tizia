@@ -512,19 +512,19 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
     if (!head) return { ...base, outcome: 'rejected', reason: 'head_missing' };
     const lint = lintSkill(head.text, { name: item.name });
     if (!lint.ok) return { ...base, outcome: 'rejected', reason: 'lint_failed', message: lint.errors.join('; ') };
-    const existing = await db.get('SELECT id FROM ai_skills WHERE name=?', [item.name]);
+    const existing = await repo.skillIdByName(item.name);
     if (existing) {
-      const known = await db.all('SELECT original_text,rewritten_text FROM ai_skill_versions WHERE skill_id=?', [existing.id]);
+      const known = await repo.knownVersionTexts(existing.id);
       if (known.some(v => contentHash(servedText(v)) === head.hash)) return { ...base, outcome: 'skipped', reason: 'same_content', skill_id: existing.id };
       if (!overwrite) return { ...base, outcome: 'conflict', reason: 'name_exists_different_content', skill_id: existing.id };
     }
     let made;
     try {
-      await db.run('SAVEPOINT skill_import');
+      await repo.savepoint('SAVEPOINT skill_import');
       made = await upload(actor, { name: item.name, task_types: item.task_types, original_text: head.text });
-      await db.run('RELEASE SAVEPOINT skill_import');
+      await repo.savepoint('RELEASE SAVEPOINT skill_import');
     } catch (error) {
-      await db.run('ROLLBACK TO SAVEPOINT skill_import');
+      await repo.savepoint('ROLLBACK TO SAVEPOINT skill_import');
       if (error instanceof WorkerContractError) return { ...base, outcome: 'rejected', reason: error.code, message: error.message };
       throw error;
     }
@@ -536,7 +536,7 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
     if (input.overwrite != null && typeof input.overwrite !== 'boolean') throw bad('overwrite must be boolean');
     const check = validateBundle(input.bundle);
     if (!check.ok) throw bad(check.error, 'invalid_bundle', 400);
-    return db.tx(async () => {
+    return repo.tx(async () => {
       await requireCurrentAdmin(actor);
       const results = [];
       for (const item of input.bundle.skills) results.push(await importOne(actor, item, input.overwrite === true));

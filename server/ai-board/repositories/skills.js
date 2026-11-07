@@ -22,6 +22,8 @@ export function createSkillRepository(db) {
     skillRow: id => one('SELECT * FROM ai_skills WHERE id=?', [id]),
     lockSkill: id => one(`SELECT id FROM ai_skills WHERE id=?${lock()}`, [id]),
     skillIdByName: name => one('SELECT id FROM ai_skills WHERE name=?', [name]),
+    knownVersionTexts: skillId => many('SELECT original_text,rewritten_text FROM ai_skill_versions WHERE skill_id=?', [skillId]),
+    savepoint: sql => exec(sql),
     lockSkillByName: name => one(`SELECT * FROM ai_skills WHERE name=?${lock()}`, [name]),
     insertSkillIfAbsent: ({ name, taskTypes, actorId, now }) => exec(`INSERT INTO ai_skills(name,task_types_json,created_by,updated_by,created_at,updated_at)
       VALUES(?,?,?,?,?,?) ON CONFLICT(name) DO NOTHING`, [name, JSON.stringify(taskTypes), actorId, actorId, now, now]),
