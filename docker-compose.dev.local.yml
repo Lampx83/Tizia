@@ -1,8 +1,23 @@
-# LF/110 - Overlay test cục bộ trên MỘT host (Windows Docker Desktop hoặc Linux). Không phải stack riêng.
-# Dùng kèm hai file dev, không thay thế:
-# docker network create tizia-bridge   (một lần)
-# docker compose -f docker-compose.dev.web.yml -f docker-compose.dev.ai.yml -f docker-compose.dev.local.yml --profile ai-board --profile storage up -d
-# Overlay này chỉ thêm: UI SeaweedFS chỉ nghe loopback host (127.0.0.1:9333, 8888).
+# Chạy cả web + AI board + storage trên MỘT máy local chỉ với file này:
+#   docker compose -f docker-compose.dev.local.yml up --build -d
+# Mạng tizia-bridge do compose tự tạo (không cần docker network create). Mọi profile của stack AI được bật sẵn.
+# Server demo dùng riêng docker-compose.dev.web.yml và docker-compose.dev.ai.yml, không dùng file này.
+include:
+  - docker-compose.dev.web.yml
+  - docker-compose.dev.ai.yml
+
+networks:
+  tizia-bridge: !override
+    name: ${TIZIA_BRIDGE_NETWORK:-tizia-bridge}
+
 services:
+  aiboard-server: { profiles: !reset [] }
+  aiboard-postgres: { profiles: !reset [] }
+  ai-board-worker: { profiles: !reset [] }
+  image-registry: { profiles: !reset [] }
+  sandbox-runner: { profiles: !reset [] }
+  online-runner: { profiles: !reset [] }
+  seaweedfs: { profiles: !reset [] }
   seaweedfs-ui-auth:
-    ports: !override ["127.0.0.1:9333:9333", "127.0.0.1:8888:8888"]
+    profiles: !reset []
+    ports: !override ["127.0.0.1:9333:9333", "127.0.0.1:8888:8888"]  # UI SeaweedFS chỉ nghe loopback host
