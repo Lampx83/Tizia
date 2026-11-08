@@ -180,7 +180,7 @@
         "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
         "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)", "biến môi trường", "bien moi truong", "khóa bí mật", "khoa bi mat", "khóa api", "khoa api", "quyền (giáo viên|giảng viên)", "quyen (giao vien|giang vien)", "kiểm tra quyền", "kiem tra quyen", "tôi là (admin|quản trị viên)", "toi la (admin|quan tri vien)",
         "mat khau", "phan quyen", "thanh toan", "nap tien", "chuyen khoan", "sua diem", "hack diem",
-        "password", "oauth", "csrf", "session", "cookie", "admin", "payment", "hack",
+        "password", "oauth", "csrf", "session", "cookie", "(giả|mạo|chiếm|leo thang|bypass|vượt|đăng nhập bằng|dùng) (quyền )?admin", "admin (password|token|secret|key|session|cookie)", "(become|impersonate|escalate to|elevate to) admin", "đặc quyền admin", "payment", "hack",
         "rate limit", "captcha", "api key", "secret key", "\\.env"
       ]
     },

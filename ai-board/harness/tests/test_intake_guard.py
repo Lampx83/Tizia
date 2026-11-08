@@ -188,3 +188,34 @@ def test_classifier_error_verdict_is_not_cached():
     deps = llm(["ok"])
     out = intake_guard.run("Thêm trang", "một yêu cầu bình thường", deps, Budget(max_model_calls=0))
     assert "classifier_error" in out["labels"] and not intake_guard._CACHE
+
+
+def _arbiter(monkeypatch, flag, safe, labels, text="Sửa trang tiến độ", escalate=False):
+    from settings import get_settings
+    monkeypatch.setattr(intake_guard.classifier, "danger", lambda *a, **k: {"probs": {"safe": safe}, "escalate": escalate, "labels": []})
+    cfg = get_settings().model_copy(update={"gate1_arbiter": flag})
+    monkeypatch.setattr("settings.get_settings", lambda *a, **k: cfg)
+    return intake_guard._run(text, "Hiển thị tiến độ.", llm(labels), Budget())
+
+
+def test_arbiter_off_keeps_llm_block(monkeypatch):
+    assert _arbiter(monkeypatch, False, 0.99, ["privileged_area"])["verdict"] == "human_review"
+
+
+def test_arbiter_clears_soft_llm_label_when_classifier_confident(monkeypatch):
+    out = _arbiter(monkeypatch, True, 0.99, ["privileged_area"])
+    assert out["verdict"] == "allow" and out["arbitrated"] == ["privileged_area"]
+    assert _arbiter(monkeypatch, True, 0.90, ["privileged_area"])["verdict"] == "human_review"
+
+
+def test_arbiter_never_clears_hard_labels_keywords_or_escalation(monkeypatch):
+    assert _arbiter(monkeypatch, True, 0.999, ["money"])["verdict"] == "human_review"
+    assert _arbiter(monkeypatch, True, 0.999, ["privileged_area"], escalate=True)["verdict"] == "human_review"
+    out = _arbiter(monkeypatch, True, 0.999, ["ok"], text="Sửa điểm bài kiểm tra cho em")
+    assert out["verdict"] == "human_review" and "arbitrated" not in out
+
+
+def test_bare_admin_word_is_not_a_hit_but_escalation_phrases_are():
+    assert "privileged_area" not in intake_guard.deterministic("Sửa admin-board-requests.html cho gọn.")
+    for text in ("Giả quyền admin để vào bảng điều khiển", "Dùng admin password của hệ thống", "become admin"):
+        assert "privileged_area" in intake_guard.deterministic(text), text

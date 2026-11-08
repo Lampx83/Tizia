@@ -71,6 +71,18 @@ def readonly_verification_text(text: str) -> str:
     return "\n".join(clauses)
 
 
+_ARBITRABLE = {"privileged_area", "prompt_injection"}
+
+
+def _arbiter_clears(llm_labels, scored) -> bool:
+    """Flag gate1_arbiter: nhãn LLM mềm + từ khóa sạch + classifier p(safe) cao → bỏ chặn. Không động tới từ khóa/escalate."""
+    from settings import get_settings
+    cfg = get_settings()
+    bad = [x for x in llm_labels if x != "ok"]
+    return bool(cfg.gate1_arbiter and bad and all(x in _ARBITRABLE for x in bad)
+                and (scored.get("probs") or {}).get("safe", 0) >= cfg.gate1_arbiter_min)
+
+
 def parse_labels(text: str, allowed=LABELS) -> list[str]:
     """Parse {"labels": [...]} từ model. Raise ValueError nếu không phải JSON/nhãn ngoài tập đóng/rỗng."""
     try:
@@ -148,6 +160,7 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
     không nhắc lại nội dung) + internal_reason (cho admin, không gửi học viên)."""
     title, detail = request_title or "", request_detail or ""
     hits = deterministic(f"{title}\n{detail}")
+    keyword_clear, arbitrated = not hits, None
     verdict = _worst(hits.values())
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []
     scored = None
@@ -165,6 +178,10 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
             verdict = _worst([verdict, "human_review"])
             hits.update({f"model_{key}": "human_review" for key in scored["labels"]})
             reasons.append(f"logprob: {', '.join(scored['labels'])}")
+        elif scored and keyword_clear and _arbiter_clears(llm, scored):
+            verdict, arbitrated = "allow", [x for x in llm if x != "ok"]
+            hits = {k: v for k, v in hits.items() if k not in arbitrated}
+            reasons.append(f"arbiter: classifier p(safe)={scored['probs'].get('safe', 0):.3f} xoá {', '.join(arbitrated)}")
     messages = guard.LEXICON["public_messages"]
     if verdict == "allow":
         public = None
@@ -176,6 +193,8 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
         public = messages[verdict]
     out = {"verdict": verdict, "labels": list(hits) or ["ok"], "public_message": public,
            "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
+    if arbitrated:
+        out["arbitrated"] = arbitrated
     if scored:
         out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard
     if readonly_verification_text(f"{title}\n{detail}") != f"{title}\n{detail}":

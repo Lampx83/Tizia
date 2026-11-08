@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
     explore_low_confidence: bool = False
     state_file: bool = False
+    gate1_arbiter: bool = False
+    gate1_arbiter_min: float = Field(default=0.97, ge=0.5, le=1.0)
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None
