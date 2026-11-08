@@ -27,6 +27,24 @@ services:
       AI_BOARD_SERVER_URL: ${AI_BOARD_SERVER_URL:-http://aiboard-server:8081}
       AI_BOARD_INTERNAL_SECRET: ${AI_BOARD_INTERNAL_SECRET:-}
       AI_BOARD_SHOTS_S3_ENDPOINT: ${AI_BOARD_SHOTS_S3_ENDPOINT:-http://seaweedfs:8333}
+      # dòng trần = lấy từ env của stack; Portainer không có env_file nên phải khai tên ở đây mới tới container
+      LOG_LEVEL:
+      LOG_REQUESTS:
+      EXIT_ON_UNCAUGHT:
+      ADMIN_PROMOTE_USERNAME:
+      ADMIN_PROMOTE_PASSWORD:
+      AI_BOARD_KEY:
+      AI_BOARD_MODEL_ROUTING:
+      AI_BOARD_CLASSIFIER_MODEL:
+      GATE1_MODEL:
+      VLLM_URL:
+      VLLM_SECKEY:
+      OLLAMA_URL:
+      OLLAMA_SECKEY:
+      AI_BOARD_SHOTS_S3_BUCKET:
+      AI_BOARD_SHOTS_S3_ACCESS_KEY:
+      AI_BOARD_SHOTS_S3_SECRET_KEY:
+      AI_BOARD_SHOTS_S3_CREATE_BUCKET:
       AI_BOARD_ONLINE_BACKEND_SCRIPTS: ${AI_BOARD_ONLINE_BACKEND_SCRIPTS:-true}  # false = tắt backend sinh tự động
       ONLINE_RUNNER_URL: ${ONLINE_RUNNER_URL:-http://online-runner:8090}
       ONLINE_RUNNER_TOKEN_FILE: /run/secrets/online-runner-token
