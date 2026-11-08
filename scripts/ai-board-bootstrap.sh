@@ -19,10 +19,12 @@ REGISTRY=localhost:5000
 GUEST_TAG=tizia-gate5-guest:dev
 
 build_guest=0
+start_stack=0
 warm_dir=
 while [ $# -gt 0 ]; do
   case $1 in
     --build-guest) build_guest=1 ;;
+    --up) start_stack=1 ;;
     --warm-dir) warm_dir=${2:?--warm-dir needs a directory}; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -100,6 +102,11 @@ if [ ${#errors[@]} -gt 0 ]; then
   echo "ai-board-bootstrap: ${#errors[@]} problem(s):" >&2
   printf '  - %s\n' "${errors[@]}" >&2
   exit 1
+fi
+
+if [ "$start_stack" -eq 1 ]; then
+  "${COMPOSE[@]}" "${env_args[@]}" up -d --build
+  exit 0
 fi
 
 if [ "$build_guest" -eq 0 ]; then
