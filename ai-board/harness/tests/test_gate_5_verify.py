@@ -2,6 +2,7 @@
 from dataclasses import replace
 from pathlib import Path
 import json
+import shlex
 import shutil
 import subprocess
 import unicodedata
@@ -518,6 +519,42 @@ def test_shell_metacharacters_in_literal_stay_inert(tmp_path):
     literal = "Thuốc $(touch pwned) `touch pwned2` ; x"
     assert _grep_exit(tmp_path, f"<h1>{VI_TEXT}</h1>", literal) == 1
     assert not (tmp_path / "pwned").exists() and not (tmp_path / "pwned2").exists()
+
+
+def _sh_exit(tmp_path, page, cmd):
+    (tmp_path / "page.html").write_text(page, encoding="utf-8")
+    return subprocess.run(["sh", "-c", verify.expand_nfd_literals(cmd)], cwd=tmp_path, capture_output=True).returncode
+
+
+@needs_sh
+def test_planner_generated_grep_with_double_dash_matches_nfd_page(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    cmd = f"grep -qF -- {shlex.quote(VI_TEXT)} page.html"
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", cmd) == 0
+
+
+@needs_sh
+def test_planner_generated_absence_check_sees_nfd_text(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    cmd = f"! grep -qF -- {shlex.quote(VI_TEXT)} page.html"
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", cmd) == 1
+
+
+@needs_sh
+def test_double_quoted_literal_matches_nfd_page(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", f'grep -q "{VI_TEXT}" page.html') == 0
+
+
+def test_double_quoted_literal_with_expansion_is_left_alone():
+    cmd = r'grep -q "Thuốc $(date) `id` \x" page.html'
+    assert verify.expand_nfd_literals(cmd) == cmd
+
+
+@needs_sh
+def test_explicit_dash_e_pattern_matches_nfd_page(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", f"grep -q -e '{VI_TEXT}' page.html") == 0
 
 
 def test_ascii_command_is_byte_identical():

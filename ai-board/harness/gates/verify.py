@@ -37,20 +37,21 @@ def acceptance_commands(state: dict) -> list[str]:
     return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
 
 
-_GREP_LITERAL = re.compile(r"(\bgrep(?:\s+-[A-Za-z]+)*)\s+'([^']*)'")
+_GREP_LITERAL = re.compile(r"""(\bgrep(?:\s+(?:-[A-Za-z]+|--))*)\s+(?:'([^']*)'|"([^"$`\\!]*)")""")
 
 
 def expand_nfd_literals(item: str) -> str:
     """Rewrite grep '<non-ASCII>' to match its NFC and NFD forms; other commands unchanged."""
-    # ponytail: only single-quoted grep patterns; mixed-form text and double quotes still byte-match.
+    # ponytail: quoted grep patterns only; mixed-form text and patterns with shell expansion still byte-match.
     def swap(match: re.Match) -> str:
-        literal = match.group(2)
+        literal = match.group(2) if match.group(2) is not None else match.group(3)
         if literal.isascii():
             return match.group(0)
         nfc, nfd = unicodedata.normalize("NFC", literal), unicodedata.normalize("NFD", literal)
         if "'" in nfc or "'" in nfd:
             return match.group(0)
-        return f"{match.group(1)} -e '{nfc}' -e '{nfd}'"
+        flags = re.sub(r"\s+(?:--|-e)$", "", match.group(1))
+        return f"{flags} -e '{nfc}' -e '{nfd}'"
     return _GREP_LITERAL.sub(swap, item)
 
 
