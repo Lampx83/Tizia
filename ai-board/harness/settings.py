@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     stop_report_v2: bool = False
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
     explore_low_confidence: bool = False
+    state_file: bool = False
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None
