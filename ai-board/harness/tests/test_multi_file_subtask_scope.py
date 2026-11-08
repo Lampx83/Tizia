@@ -203,6 +203,20 @@ def test_gate4_passes_planned_extras(on, tmp_path):
     assert not static_check.run(state, check_size=False)["blocked"]
 
 
+def test_dotfiles_are_not_mangled(on):
+    from runtime import subtask_files
+    st = task(files=["./.github/workflows/a.yml", ".env"])
+    assert subtask_files.files_of(st) == ["public/a.js", ".github/workflows/a.yml", ".env"]
+
+
+def test_unplanned_dotenv_is_rejected_by_candidate_and_gate4(on, tmp_path, source):
+    state = multi_state(tmp_path, {".env": "SECRET=1\n"}, {"files": ["public/b.js"]})
+    with pytest.raises(candidate.ScopeViolation, match=r"\.env"):
+        candidate.create(state, source)
+    result = static_check.run(state, check_size=False)
+    assert result["blocked"] and ".env" in result["reason"]
+
+
 def test_gate4_lints_extra_file_syntax(on, tmp_path):
     state = multi_state(tmp_path, {"public/b.js": "export const = ;\n"}, {"files": ["public/b.js"]})
     result = static_check.run(state, check_size=False)

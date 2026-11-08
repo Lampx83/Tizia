@@ -18,7 +18,7 @@ def limit() -> int:
 
 
 def _norm(path: str) -> str:
-    return posixpath.normpath(unicodedata.normalize("NFC", path.strip()).replace("\\", "/").lstrip("./"))
+    return posixpath.normpath(unicodedata.normalize("NFC", path.strip()).replace("\\", "/"))
 
 
 def _extras(task: dict) -> list[str]:
