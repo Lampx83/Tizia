@@ -91,3 +91,22 @@ def test_history_observation_is_capped_by_tokens():
 
 def test_react_plan_cap_is_tokens():
     assert limits.react_plan()["observation_tokens"] == 500 and "observation_chars" not in limits.react_plan()
+
+
+def test_single_line_longer_than_the_page_is_cut_with_an_explicit_note(monkeypatch):
+    long = "x" * 60000
+    out = tool_loop._read_window(f"{long}\nsecond", None, None)
+    assert out.startswith("L1| ") and "dòng 1 dài hơn trần" in out and "start_line=2" in out
+    assert tokens(out) <= CAPS["read_file"]
+
+
+def test_manifest_char_backstop_applies_on_top_of_the_token_cap():
+    spec = tool_loop.MANIFEST.tools["write_test"]
+    assert len(tool_loop._fit("x " * 5000, "write_test")) <= spec.max_output_chars
+
+def test_read_file_page_keeps_its_continue_hint_under_the_char_backstop(monkeypatch):
+    import dataclasses
+    specs = {**tool_loop.MANIFEST.tools, "read_file": dataclasses.replace(tool_loop.MANIFEST.tools["read_file"], max_output_chars=300)}
+    monkeypatch.setattr(tool_loop, "_specs", lambda: specs)
+    page = tool_loop._read_window("\n".join("a" * 90 for _ in range(400)), None, None)
+    assert len(page) > 300 and "start_line=" in tool_loop._fit(page, "read_file").splitlines()[-1]

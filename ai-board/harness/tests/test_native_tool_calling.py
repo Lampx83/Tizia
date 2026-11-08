@@ -73,9 +73,9 @@ def test_native_call_carries_manifest_tools_and_message_history(on):
     assert all(t["type"] == "function" and t["function"]["parameters"]["type"] == "object" for t in first["tools"])
     assert deps.calls[0]["prompt"] == deps.calls[1]["prompt"] == deps.calls[2]["prompt"]
     assistant, result = second["messages"]
-    assert assistant["role"] == "assistant" and assistant["tool_calls"][0]["id"] == "c0"
+    assert assistant["role"] == "assistant" and assistant["tool_calls"][0]["id"] == "call_0"
     assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == EDIT["arguments"]
-    assert result["role"] == "tool" and result["tool_call_id"] == "c0" and "đã áp 1 edit" in result["content"]
+    assert result["role"] == "tool" and result["tool_call_id"] == "call_0" and "đã áp 1 edit" in result["content"]
     assert len(third["messages"]) == 4
 
 
@@ -85,7 +85,7 @@ def test_two_calls_in_one_reply_is_a_fixable_error_and_loop_continues(on):
     assert out["status"] == "proposed"
     reply = deps.calls[1]["extra"]["messages"]
     assert reply[0]["role"] == "assistant" and "tool_calls" not in reply[0]
-    assert reply[1]["role"] == "user" and "MỘT tool" in reply[1]["content"]
+    assert reply[1]["role"] == "user" and "MỘT tool" in reply[1]["content"] and "nhận 2" in reply[1]["content"]
 
 
 def test_text_json_reply_still_works_inside_native_mode(on):
@@ -136,3 +136,39 @@ def test_client_vllm_sends_tools_and_history(monkeypatch):
 def test_client_ollama_refuses_history():
     with pytest.raises(ValueError):
         OllamaClient(base_url="http://127.0.0.1:11434", protocol="ollama").generate("m", "hi", extra={"messages": [{"role": "user", "content": "x"}]})
+
+
+class Crash(Exception):
+    pass
+
+
+class CrashingDeps(Deps):
+    def __init__(self, script):
+        super().__init__(script)
+        self.left = len(script)
+
+    def call_model(self, model, prompt, *, budget, **kw):
+        self.left -= 1
+        if self.left < 0:
+            self.calls.append({"prompt": prompt, **kw})
+            raise Crash
+        return super().call_model(model, prompt, budget=budget, **kw)
+
+
+def test_resume_replay_rebuilds_the_live_native_history(on):
+    from test_tool_checkpoint import MemSteps
+    bad_args = {"tool": "tree", "arguments": {"path": 5}}
+    two = {"response": "", "tool_calls": native(EDIT)["tool_calls"] * 2}
+    bad_range = {"tool": "read_file", "arguments": {"file": "public/a.html", "start_line": 99}}
+    shared = {"pins": None, "ledger": None, "steps": {}}
+    live = CrashingDeps([bad_args, two, bad_range, native(EDIT, 7), native(TEST, 8)])
+    with pytest.raises(Crash):
+        tool_loop.run_subtask(SUBTASK, PAGE, deps=live, budget=Budget(), model="m", source=".", sha="abc",
+                              check=lambda o: None, store=MemSteps(shared=shared))
+    resumed = Deps([native(FINISH, 9)])
+    out = tool_loop.run_subtask(SUBTASK, PAGE, deps=resumed, budget=Budget(), model="m", source=".", sha="abc",
+                                check=lambda o: None, store=MemSteps(shared=shared))
+    assert out["status"] == "proposed"
+    history = live.calls[-1]["extra"]["messages"]
+    assert len(history) == 10 and resumed.calls[0]["extra"]["messages"] == history
+    assert [m["tool_call_id"] for m in history if m["role"] == "tool"] == ["call_3", "call_4"]

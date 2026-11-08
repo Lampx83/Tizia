@@ -76,16 +76,15 @@ def _tool_schemas() -> list[dict]:
             for name, spec in _specs().items()]
 
 
-def _native_turn(messages: list, n: int, call: tuple[str, dict] | None, observation: str, reply: dict | None = None) -> None:
-    """Append assistant tool_calls + tool result, or raw reply + user error when no valid call."""
-    text = OBSERVATION.format(tool=call[0] if call else "lỗi", text=observation).lstrip()
-    if call is None:
-        messages += [{"role": "assistant", "content": (reply or {}).get("response") or "(no valid call)"}, {"role": "user", "content": text}]
+def _native_turn(messages: list, n: int, name: str, args: dict, observation: str) -> None:
+    """Append assistant tool_calls + tool result, or placeholder reply + user error when `name` is no tool. Uses checkpointed fields only, so live and resume match."""
+    text = OBSERVATION.format(tool=name, text=observation).lstrip()
+    if name not in _specs():
+        messages += [{"role": "assistant", "content": "(no valid call)"}, {"role": "user", "content": text}]
         return
-    sent = ((reply or {}).get("tool_calls") or [{}])[0]
-    cid = sent.get("id") or f"call_{n}"
+    cid = f"call_{n}"
     messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": cid, "type": "function",
-                  "function": {"name": call[0], "arguments": json.dumps(call[1], ensure_ascii=False)}}]},
+                  "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]},
                  {"role": "tool", "tool_call_id": cid, "content": text}]
 
 
@@ -116,7 +115,7 @@ def parse_request(body: dict) -> tuple[str, dict]:
     native = body.get("tool_calls")
     if native:
         if len(native) != 1:
-            raise ToolError("chỉ được gọi MỘT tool mỗi lượt")
+            raise ToolError(f"chỉ được gọi MỘT tool mỗi lượt (nhận {len(native)})")
         call = native[0].get("function", native[0])
         name, args = call.get("name"), call.get("arguments", {})
     else:
@@ -369,7 +368,10 @@ def _cap(name: str) -> int:
 
 def _fit(text: str, name: str) -> str:
     """Cắt theo trần token của tool; lỗi request dùng trần ký tự."""
-    return token_count.fit(text, _cap(name)) if name in _specs() else text[:ERROR_CHARS]
+    specs = _specs()
+    if name not in specs:
+        return text[:ERROR_CHARS]
+    return token_count.fit(text if name == "read_file" else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
 
 
 def _read_window(content: str, start: int | None, end: int | None) -> str:
@@ -392,7 +394,10 @@ def _read_window(content: str, start: int | None, end: int | None) -> str:
     while low < high:
         mid = (low + high + 1) // 2
         low, high = (mid, high) if token_count.measure(page(mid)) <= room else (low, mid - 1)
-    return f"{token_count.fit(page(low), room)}\n[dòng {start}-{low}/{total}; đọc tiếp: read_file start_line={low + 1}]"
+    body = token_count.fit(page(low), room)
+    if low == start and body != page(low):
+        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: read_file start_line={start + 1}]"
+    return f"{body}\n[dòng {start}-{low}/{total}; đọc tiếp: read_file start_line={low + 1}]"
 
 
 def _tool_list() -> str:
@@ -500,7 +505,7 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
         if history is not None:
             history.add(n, name, _fit(observation, name))
         elif messages is not None:
-            _native_turn(messages, n, (name, args) if name in _specs() else None, _fit(observation, name))
+            _native_turn(messages, n, name, args, _fit(observation, name))
         else:
             prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
     return prompt, steps, rejected, None
@@ -653,12 +658,11 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         if not loop_budget.tick():
             return _result('paused', f'loop dừng: {loop_budget.exhausted()}', 'budget', steps=steps)
         rejected = False
-        n, args, kind, sig, call = len(steps), {}, "ok", None, None
+        n, args, kind, sig = len(steps), {}, "ok", None
         started_ms = int(time.time() * 1000)
         try:
             name, args = parse_request(body)
             validate(name, args)
-            call = (name, args)
             sig = None if name == "finish" else json.dumps([name, args], sort_keys=True, ensure_ascii=False)
             server_hsm.authorize_action(name, tool_manifest=MANIFEST.hash)
             loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
@@ -719,7 +723,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         if history is not None:
             history.add(n, name, _fit(observation, name))
         elif messages is not None:
-            _native_turn(messages, n, call, _fit(observation, name), body)
+            _native_turn(messages, n, name, args, _fit(observation, name))
         else:
             prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
 
