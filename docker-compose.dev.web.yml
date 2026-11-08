@@ -5,7 +5,7 @@
 # (production cross-host cần TLS và firewall, xem header của docker-compose.dev.ai.yml).
 # Chỉ tizia-dev publish cổng: host 8000 (đổi bằng WEB_PUBLISH_PORT) -> container 8041.
 # Bí mật đưa bằng env của stack (Portainer), không đặt trong repo: POSTGRES_USER/PASSWORD/DB, AI_BOARD_INTERNAL_SECRET
-# (HMAC web<->board). File .env là tùy chọn (required: false).
+# (HMAC web<->board), ONLINE_RUNNER_TOKEN (cùng giá trị stack AI). File .env là tùy chọn (required: false).
 services:
   tizia-dev:
     extends: { file: docker-compose.yml, service: tizia }
@@ -27,6 +27,10 @@ services:
       AI_BOARD_SERVER_URL: ${AI_BOARD_SERVER_URL:-http://aiboard-server:8081}
       AI_BOARD_INTERNAL_SECRET: ${AI_BOARD_INTERNAL_SECRET:-}
       AI_BOARD_SHOTS_S3_ENDPOINT: ${AI_BOARD_SHOTS_S3_ENDPOINT:-http://seaweedfs:8333}
+      AI_BOARD_ONLINE_BACKEND_SCRIPTS: ${AI_BOARD_ONLINE_BACKEND_SCRIPTS:-true}  # false = tắt backend sinh tự động
+      ONLINE_RUNNER_URL: ${ONLINE_RUNNER_URL:-http://online-runner:8090}
+      ONLINE_RUNNER_TOKEN_FILE: /run/secrets/online-runner-token
+    secrets: [{ source: online_runner_token, target: online-runner-token }]
     volumes: !override
       - tizia-dev-data:/data  # pg_dump + file tải lên; dữ liệu chính nằm trong PostgreSQL
     networks: !override
@@ -44,6 +48,10 @@ services:
     volumes:
       - tizia-postgres-data:/var/lib/postgresql/data
     networks: !override [webnet]
+
+secrets:
+  online_runner_token:
+    environment: ONLINE_RUNNER_TOKEN  # cùng giá trị với stack AI
 
 networks:
   webnet: {}

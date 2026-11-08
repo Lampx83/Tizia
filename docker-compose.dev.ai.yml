@@ -10,7 +10,8 @@
 # cửa sổ thời gian 60 s (server/ai-board/internal-auth.js). Không có TLS thì traffic lộ nội dung.
 # Chỉ aiboard-server/seaweedfs/sandbox nối với nhau qua boardnet, sandbox-api; không có cổng publish mặc định.
 # Bí mật đưa bằng env của stack (Portainer), không đặt trong repo: POSTGRES_USER/PASSWORD/DB, AI_BOARD_INTERNAL_SECRET,
-# AI_BOARD_KEY, AI_BOARD_WORKER_KEY, VLLM_URL/OLLAMA_URL + SECKEY, AI_BOARD_SHOTS_S3_*, SEAWEED_UI_PASSWORD.
+# AI_BOARD_KEY, AI_BOARD_WORKER_KEY, VLLM_URL/OLLAMA_URL + SECKEY, AI_BOARD_SHOTS_S3_*, SEAWEED_UI_PASSWORD,
+# SANDBOX_RUNNER_TOKEN, ONLINE_RUNNER_TOKEN.
 services:
   aiboard-server:
     extends: { file: docker-compose.yml, service: tizia }
@@ -143,6 +144,38 @@ services:
       - sandbox-runner-state:/home/node/.microsandbox
     secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
 
+  # Runner microVM không mạng cho backend sinh tự động của chức năng online. Web gọi http://online-runner:8090 qua tizia-bridge.
+  # Cần /dev/kvm và ONLINE_RUNNER_TOKEN (cùng giá trị với stack web). Web khác host: relay chưa mở cổng 8090.
+  online-runner:
+    container_name: aiboard-online-runner
+    build:
+      context: ai-board/sandbox-runner
+    image: tizia-sandbox-runner:dev
+    profiles: [ai-board]
+    restart: on-failure
+    user: node
+    devices:
+      - /dev/kvm
+    group_add:
+      - "${KVM_GID:-109}"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1
+    mem_limit: 1g
+    pids_limit: 256
+    logging: *logging
+    networks:
+      tizia-bridge:
+        aliases: [online-runner]
+    environment:
+      SANDBOX_POLICY_FILE: /etc/sandbox/sandbox-policy.online.yaml
+      SANDBOX_TOKEN_FILE: /run/secrets/online-runner-token
+      SANDBOX_RUNNER_ID: online-runner
+    volumes:
+      - online-runner-state:/home/node/.microsandbox
+    secrets: [{ source: online_runner_token, target: online-runner-token }]
+
   seaweedfs:
     extends: { file: docker-compose.yml, service: seaweedfs }
     container_name: aiboard-seaweedfs
@@ -187,6 +220,8 @@ services:
 secrets:
   sandbox_runner_token:
     environment: SANDBOX_RUNNER_TOKEN  # chuỗi ngẫu nhiên dài; đặt trong env của stack
+  online_runner_token:
+    environment: ONLINE_RUNNER_TOKEN  # khác SANDBOX_RUNNER_TOKEN; cùng giá trị trong env của stack web
 
 networks:
   boardnet: {}
@@ -210,6 +245,8 @@ volumes:
     name: tizia_ai-board-memory-2
   sandbox-runner-state:
     name: tizia_sandbox-runner-state
+  online-runner-state:
+    name: tizia_online-runner-state
   sandbox-registry:
     name: tizia_sandbox-registry
   seaweedfs-data:

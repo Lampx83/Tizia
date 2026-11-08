@@ -11,6 +11,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY src ./src
 # default policy baked in so Git-deployed stacks need no bind mount; compose may still mount another policy over it
 COPY sandbox-policy.large.yaml /etc/sandbox/sandbox-policy.yaml
+COPY sandbox-policy.online.yaml /etc/sandbox/sandbox-policy.online.yaml
 # volume mounted here inherits node ownership, so the non-root runner can keep images/state
 RUN mkdir -p /home/node/.microsandbox && chown node:node /home/node/.microsandbox
 USER node
