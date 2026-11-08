@@ -11,6 +11,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 COMPOSE=(docker compose -f docker-compose.dev.local.yml)
+# AI_BOARD_COMPOSE_OVERLAYS="a.yml b.yml": extra local override files merged after dev.local.yml (not tracked)
+for overlay in ${AI_BOARD_COMPOSE_OVERLAYS:-}; do COMPOSE+=(-f "$overlay"); done
 TOKEN=ai-board/sandbox-runner/secrets/runner-token
 HOST_ENV=ai-board-host.env
 REGISTRY=localhost:5000
