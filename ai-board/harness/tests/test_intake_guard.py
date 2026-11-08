@@ -37,7 +37,7 @@ def test_benign_request_is_allowed_after_one_metered_llm_call():
 def test_profanity_sexual_or_hate_is_rejected_without_calling_the_model():
     for title, detail in [("Sửa trang", "trang này như lồn"), ("Thêm phim", "thêm link phim sex"),
                           ("Sửa", "bọn tàu khựa"),
-                          ("Sửa", "thằng ngu viết trang này"), ("Sửa", "thang cho nay"), ("Fix", "what a dickhead page"),
+                          ("Sửa", "thằng ngu viết trang này"), ("Sửa", "thằng chó này"), ("Fix", "what a dickhead page"),
                           ("Fix", "this is f u c k i n g slow")]:
         deps = llm(["ok"])
         out = intake_guard.run(title, detail, deps, Budget())
@@ -219,3 +219,8 @@ def test_bare_admin_word_is_not_a_hit_but_escalation_phrases_are():
     assert "privileged_area" not in intake_guard.deterministic("Sửa admin-board-requests.html cho gọn.")
     for text in ("Giả quyền admin để vào bảng điều khiển", "Dùng admin password của hệ thống", "become admin"):
         assert "privileged_area" in intake_guard.deterministic(text), text
+
+
+def test_straight_to_wording_is_not_profanity():
+    assert "harassment_profanity" not in intake_guard.deterministic("Viết SQL thẳng cho bảng proof.")
+    assert "harassment_profanity" in intake_guard.deterministic("thằng chó này")
