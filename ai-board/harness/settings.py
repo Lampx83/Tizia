@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     multimodal: bool = False
     verified_loop: bool = False
     context_compaction: bool = False
+    tool_native: bool = False
     graph_persistence: bool = False
     plan_repair: bool = False
     prompt_role_split: bool = False

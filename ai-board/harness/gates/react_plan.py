@@ -82,7 +82,7 @@ def run(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None
     spec = limits.react_plan()
     loop = LoopBudget({key: spec[key] for key in ("soft_start", "soft_step", "same_call_repeats", "no_progress_steps")},
                       ceiling=spec["model_calls"])
-    reader = readonly.ReadOnlyTools(source, sha, observation_chars=spec["observation_chars"])
+    reader = readonly.ReadOnlyTools(source, sha, observation_tokens=spec["observation_tokens"])
     protocol = PROTOCOL.replace("<TOOLS>", readonly.schema_text()).replace(
         "<READS>", str(spec["tool_calls"])).replace("<CALLS>", str(spec["model_calls"]))
     trace = getattr(deps, "trace", None)
@@ -151,7 +151,7 @@ def explore(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=
     idle_cap = spec["no_progress_steps"]
     trace = getattr(deps, "trace", None)
     try:
-        reader = readonly.ReadOnlyTools(source, sha, observation_chars=spec["observation_chars"])
+        reader = readonly.ReadOnlyTools(source, sha, observation_tokens=spec["observation_tokens"])
         protocol = (EXPLORE_PROTOCOL.replace("<TOOLS>", readonly.schema_text())
                     .replace("<READS>", str(reads_cap)).replace("<CALLS>", str(calls_cap)))
         transcript, found, reads, idle = "", [], 0, 0

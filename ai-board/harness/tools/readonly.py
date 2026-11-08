@@ -8,6 +8,7 @@ import re
 
 import path_policy
 import tools
+from services import token_count
 
 SPECS = {
     "tree": ({"path": {"type": "string"}}, ()),
@@ -19,8 +20,8 @@ SPECS = {
 
 
 class ReadOnlyTools:
-    def __init__(self, source, sha: str, *, observation_chars: int = 1500):
-        self.source, self.sha, self.cap = source, sha, observation_chars
+    def __init__(self, source, sha: str, *, observation_tokens: int = 500):
+        self.source, self.sha, self.cap = source, sha, observation_tokens
 
     def run(self, name: str, args: dict) -> str:
         """Chạy 1 tool đọc. Raise ValueError nếu tên/tham số sai; path bị chặn → refusal."""
@@ -41,7 +42,7 @@ class ReadOnlyTools:
                 verdict = path_policy.check(args[key], "read")
                 if not verdict["allow"]:
                     return f"từ chối đọc {args[key]!r}: {verdict['reason']}"
-        return self._dispatch(name, args)[: self.cap]
+        return token_count.fit(self._dispatch(name, args), self.cap)
 
     def _dispatch(self, name: str, args: dict) -> str:
         if name == "tree":
@@ -53,7 +54,7 @@ class ReadOnlyTools:
             return tools.outline(self.source, self.sha, file=args["file"]) or "(rỗng)"
         if name == "grep":
             out = tools.grep(self.source, self.sha, words=args["words"], file=args.get("file"),
-                             path=args.get("path", "public"), budget=self.cap)
+                             path=args.get("path", "public"), budget=self.cap * token_count.CHARS_PER_TOKEN)
             if out.startswith("file khớp từ khoá: "):
                 hits = [h for h in out.split(": ", 1)[1].split(", ") if path_policy.check(re.sub(r" \(\d+\)$", "", h), "read")["allow"]]
                 out = "file khớp từ khoá: " + ", ".join(hits) if hits else ""

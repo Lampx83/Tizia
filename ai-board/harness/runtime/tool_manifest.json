@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "tools": [
     {
       "name": "tree",
@@ -17,7 +17,7 @@
       },
       "effect": "read",
       "max_arg_bytes": 1000,
-      "max_output_chars": 2000,
+      "max_output_chars": 16000,
       "max_seconds": 10
     },
     {
@@ -36,7 +36,7 @@
       },
       "effect": "read",
       "max_arg_bytes": 1000,
-      "max_output_chars": 2000,
+      "max_output_chars": 16000,
       "max_seconds": 10
     },
     {
@@ -64,17 +64,23 @@
       },
       "effect": "read",
       "max_arg_bytes": 2000,
-      "max_output_chars": 2000,
+      "max_output_chars": 16000,
       "max_seconds": 10
     },
     {
       "name": "read_file",
-      "description": "Read the target file (with `Lnn| ` prefixes).",
+      "description": "Read the target file (with `Lnn| ` prefixes). Optional start_line/end_line (1-based, inclusive) pick a window; without them you get the head plus the total line count and how to continue.",
       "parameters": {
         "type": "object",
         "properties": {
           "file": {
             "type": "string"
+          },
+          "start_line": {
+            "type": "integer"
+          },
+          "end_line": {
+            "type": "integer"
           }
         },
         "required": [
@@ -83,7 +89,7 @@
       },
       "effect": "read",
       "max_arg_bytes": 500,
-      "max_output_chars": 2000,
+      "max_output_chars": 16000,
       "max_seconds": 5
     },
     {
