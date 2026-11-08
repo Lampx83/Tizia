@@ -1,4 +1,4 @@
-"""Stop class + tried/blocked render (LF/162). Reporting only; flag AI_BOARD_STOP_REPORT_V2."""
+"""Stop class, tried/blocked render, next-step route, stop metrics. Reporting only; flag AI_BOARD_STOP_REPORT_V2."""
 from settings import get_settings
 
 CLASSES = ("human_review", "needs_clarification", "plan_invalid", "check_failed", "budget", "infra", "model_limit")
@@ -59,7 +59,9 @@ def render(report: dict) -> str:
 def stop_metrics(rows) -> dict:
     """Rows {should_stop, outcome, stop_class} -> correct-stop / wrong-ship / budget counts and rates."""
     should = [r for r in rows if r.get("should_stop")]
-    stopped = lambda r: r.get("outcome") in ("blocked", "needs_review")  # noqa: E731
+    def stopped(r):
+        return r.get("outcome") in ("blocked", "needs_review")
+
     budget = [r for r in rows if r.get("stop_class") == "budget"]
     correct = [r for r in should if stopped(r) and r.get("stop_class") != "budget"]
     wrong = [r for r in should if r.get("outcome") == "ready_for_pr"]

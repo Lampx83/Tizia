@@ -1,4 +1,4 @@
-"""Stop report v2 (LF/162): stable class + tried/blocked render, off by default."""
+"""Stop report v2: stable class + tried/blocked render, off by default."""
 import pytest
 
 from runtime import stop_report
