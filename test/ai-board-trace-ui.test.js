@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary, renderRootAllowance } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary, renderRootAllowance, renderStopReport } from '../public/js/ai-board-trace.js';
 import { visitedNodes } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
@@ -147,4 +147,16 @@ test('the graph diagram marks only nodes that events prove were reached', () => 
   const seen = visitedNodes([started(3), started(4), started(3, 1), { event_type: 'pre_pr_verdict' }, { event_type: 'gate_started', internal_detail: 'not json' }]);
   for (const id of ['gate_3', 'gate_4', 'attempt_open', 'repair', 'verdict', 'attempt_close']) assert.ok(seen.has(id), id);
   assert.equal(seen.has('gate_5'), false);
+});
+
+test('stop report panel shows tried gates, blocker and next step; escapes text; empty without report', () => {
+  assert.equal(renderStopReport({ runs: [{ id: 1 }] }), '');
+  const html = renderStopReport({ runs: [{ id: 4, stop_report: { class: 'check_failed', tried: [1, 2, 5], blocked_gate: 5,
+    reason: '<b>smoke</b> fail', next_step: { route: 'claude_code_queue', message: 'Chuyển hàng chờ Claude Code.' } } }] });
+  assert.match(html, /data-run="4"/);
+  assert.match(html, /cổng đã thử: 1, 2, 5/);
+  assert.match(html, /vướng ở cổng 5/);
+  assert.match(html, /Hàng chờ Claude Code/);
+  assert.match(html, /Chuyển hàng chờ Claude Code\./);
+  assert.doesNotMatch(html, /<b>smoke/);
 });

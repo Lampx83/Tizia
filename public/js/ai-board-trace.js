@@ -179,6 +179,15 @@ export function renderRunnerTrace(trace = {}) {
     return `<div class="g-runner meta" data-run="${esc(run.id)}">${stopped}${kept}</div>`;
   }).filter(Boolean).join('');
 }
+const STOP_ROUTE = { needs_review: 'Cần admin duyệt', claude_code_queue: 'Hàng chờ Claude Code', clarify: 'Cần người yêu cầu làm rõ', retry: 'Thử lại sau' };
+// Admin-only: per-run stop report (tried gates, blocker, next step). Empty unless flag AI_BOARD_STOP_REPORT_V2 stored one.
+export function renderStopReport(trace = {}) {
+  return (trace.runs || []).filter((run) => run.stop_report).map((run) => {
+    const s = run.stop_report, step = s.next_step || {};
+    return `<div class="g-stop meta" data-run="${esc(run.id)}"><p class="warn">Dừng (${esc(s.class)}): cổng đã thử: ${(s.tried || []).map(esc).join(', ')}; vướng ở cổng ${esc(s.blocked_gate)}${s.reason ? ` — ${esc(s.reason)}` : ''}</p>${step.route
+      ? `<p>Hướng đi tiếp: <b>${esc(STOP_ROUTE[step.route] || step.route)}</b>${step.message ? `. ${esc(step.message)}` : ''}</p>` : ''}</div>`;
+  }).join('');
+}
 export const TECHNICAL_EVENTS = new Set(['heartbeat', 'lease_released', 'gate_started', 'shadow_precheck_passed']);
 const AGENT_OUTCOMES = { applied: 'Đã áp dụng', denied: 'Bị từ chối', rejected: 'Sai định dạng', error: 'Lỗi model',
   stopped: 'Dừng thủ công' };
