@@ -202,7 +202,8 @@ class Tracer:
                  "gen_ai.response.finish_reasons": [done] if done else [], "tizia.gate": rec["gate"], "tizia.child": rec["child"],
                  "tizia.iteration": rec["iteration"], "tizia.call_id": rec["call_id"], "tizia.result": rec["result"],
                  "tizia.thinking": request.get("thinking"), "tizia.reasoning_chars": request.get("reasoning_chars"), "tizia.prompt_name": rec["prompt_name"],
-                 "tizia.role": request.get("role"), "tizia.prompt_roles": request.get("prompt_roles")}
+                 "tizia.role": request.get("role"), "tizia.prompt_roles": request.get("prompt_roles"),
+                 "tizia.thinking_truncated": request.get("thinking_truncated")}
         if request.get("skills"):
             attrs["tizia.skills.selected"] = [s["name"] for s in request["skills"]]
             attrs["tizia.skill.id"] = request["skills"][0]["name"]

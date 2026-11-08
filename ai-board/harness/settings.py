@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     verified_loop: bool = False
     context_compaction: bool = False
     tool_native: bool = False
+    thinking_budget: bool = False
     graph_persistence: bool = False
     plan_repair: bool = False
     prompt_role_split: bool = False

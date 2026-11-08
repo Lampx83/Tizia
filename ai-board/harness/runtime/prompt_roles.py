@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from providers import thinking
 from settings import get_settings
 
 SYSTEM = (Path(__file__).resolve().parent.parent / "prompts" / "system_roles.md").read_text(encoding="utf-8").strip()
 RESTATE = "\n\nReminder: reply in exactly the format requested above, with no text outside that format."
-TOOL_ROLES = ("gate3_light", "gate3_heavy")
-REASONING_ROLES = ("gate1", "gate4_review")
+TOOL_ROLES = thinking.TOOL_ROLES
+REASONING_ROLES = thinking.SPLIT_ON_ROLES
 # Dự phòng khi catalog thiếu role; số liệu theo manual (tool loop: thinking off, sampling non-thinking).
 DEFAULT_SAMPLING = {"thinking": False, "temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}
 REASONING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_penalty": 0, "num_predict": 16384}
@@ -28,9 +29,14 @@ def call_params(role: str, routing, *, structured: bool = False) -> tuple[dict, 
     if structured:
         return {"thinking": False, "force_thinking": False}, {"temperature": 0}
     if role in REASONING_ROLES:
-        return {"thinking": True, "force_thinking": True, "max_total_output_tokens": 16384}, dict(REASONING_SAMPLING)
+        sampling = dict(REASONING_SAMPLING)
+        if thinking.budget_enabled():  # answer cap stays the caller's; reasoning budget added downstream
+            sampling.pop("num_predict")
+            return {"thinking": True, "force_thinking": True}, sampling
+        return {"thinking": True, "force_thinking": True, "max_total_output_tokens": 16384}, sampling
     if role not in TOOL_ROLES:
         return {}, {}
     entry = {**DEFAULT_SAMPLING, **((routing.sampling(role) if routing else None) or {})}
-    thinking = bool(entry.pop("thinking"))
-    return {"thinking": thinking, "force_thinking": thinking}, entry
+    entry.pop("thinking")
+    think = thinking.effective(role, routing, split=True)
+    return {"thinking": think, "force_thinking": think}, entry
