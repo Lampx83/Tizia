@@ -621,3 +621,22 @@ def test_tool_loop_without_checkout_source_falls_back_to_one_shot(tmp_path, monk
                         repo_dir=tmp_path)
     assert not out.get("blocked"), out.get("reason")
     assert out["diffs"]
+
+
+def test_state_file_on_puts_run_state_in_every_subtask_prompt(tmp_path, monkeypatch):
+    from runtime import state_file
+    monkeypatch.setenv("AI_BOARD_STATE_FILE", "1")
+    plan = plan_with(["features"])
+    state = {"plan": plan, "acceptance": ["node --test x"], "state_dir": str(tmp_path / "st")}
+    state_file.write(state, {"subject": "Yêu cầu gốc", "body": "chi tiết"})
+    models = FakeModels(plan)
+    implement.run(state, deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path / "repo")
+    assert models.calls and all("RUN STATE" in c["prompt"] and "Yêu cầu gốc" in c["prompt"] for c in models.calls)
+
+
+def test_state_file_off_leaves_subtask_prompt_unchanged(tmp_path, monkeypatch):
+    monkeypatch.delenv("AI_BOARD_STATE_FILE", raising=False)
+    models = FakeModels(plan_with(["features"]))
+    implement.run({"plan": plan_with(["features"]), "state_file": str(tmp_path / "none.json")},
+                  deps_with(models), Budget(max_wall_clock_s=999), repo_dir=tmp_path)
+    assert models.calls and all("RUN STATE" not in c["prompt"] for c in models.calls)
