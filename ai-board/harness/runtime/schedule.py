@@ -6,6 +6,8 @@ các step (hai step không được cùng ghi một file, kể cả ở hai lớ
 """
 from __future__ import annotations
 
+from runtime import subtask_files
+
 
 def prepare(steps: list[dict]) -> list[dict]:
     """Gắn order 1-based + depends_on mặc định chuỗi cũ (bước trước) cho plan chưa khai DAG."""
@@ -43,7 +45,7 @@ def levels(steps: list[dict]) -> list[list[int]]:
 
 def target_files(step: dict) -> list[str]:
     """File đích của step: allowed_scope (plan server) hoặc file (subtask cổng 3)."""
-    scope = step.get("allowed_scope") or ([step["file"]] if step.get("file") else [])
+    scope = step.get("allowed_scope") or (subtask_files.files_of(step) if step.get("file") else [])
     return [str(item) for item in scope]
 
 

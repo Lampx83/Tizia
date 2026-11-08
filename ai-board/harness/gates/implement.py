@@ -23,7 +23,7 @@ import path_policy
 from gates import change_class, gate3_guards, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
-from runtime import limits, loop_guard, state_file, tool_loop
+from runtime import limits, loop_guard, state_file, subtask_files, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
@@ -481,10 +481,11 @@ def _safe_join(repo_dir: Path, rel: str) -> Path:
     return candidate
 
 
-def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str, test_code: str) -> str:
-    """Ghi code + test vào repo scratch, trả diff thật (git diff --cached), rồi
+def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str, test_code: str,
+                    extras: dict[str, str] | None = None) -> str:
+    """Ghi code + test (+ file phụ của subtask nhiều file) vào repo scratch, trả diff thật (git diff --cached), rồi
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
-    for rel, content in ((file_rel, code), (test_file_rel, test_code)):
+    for rel, content in ((file_rel, code), (test_file_rel, test_code), *(extras or {}).items()):
         path = _safe_join(repo_dir, rel)
         server_hsm.authorize_action('write_candidate')
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -510,10 +511,11 @@ def restore(state: dict, repo_dir: str | Path | None = None) -> None:
         entry = produced.get(subtask["file"])
         if not entry:
             continue
-        diff_text = _write_and_diff(repo, subtask["file"], entry["code"], entry["test_file"], entry["test"])
+        diff_text = _write_and_diff(repo, subtask["file"], entry["code"], entry["test_file"], entry["test"],
+                                    _allowed_extras(subtask, entry))
         diffs.append({
             "title": subtask.get("title"), "file": subtask["file"], "test_file": entry["test_file"],
-            "model": entry.get("model"), "diff": diff_text,
+            "model": entry.get("model"), "diff": diff_text, **_extra_marker(subtask, entry),
             **({"verification": entry["verification"]} if entry.get("verification") else {}),
             "commit": repo_at_commit.resolve(repo),
         })
@@ -621,7 +623,22 @@ def _save_progress(state: dict, saved: dict, *, trace) -> bool:
 def _progress_entry(out: dict, model: str) -> dict:
     """Phần tối thiểu để dựng lại 1 subtask đã xong mà không gọi model lần nữa."""
     return {"model": model, "test_file": out["test_file"], "code": out["code"], "test": out["test"],
+            **({"extra_files": out["extra_files"]} if out.get("extra_files") else {}),
             **({"verification": out["verification"]} if out.get("verification") else {})}
+
+
+def _allowed_extras(subtask: dict, out: dict) -> dict[str, str]:
+    """Extra files of a proposal, each required to be in the plan-approved list. Raise ValueError otherwise."""
+    extras = out.get("extra_files") or {}
+    allowed = set(subtask_files.files_of(subtask)[1:])
+    for path in extras:
+        if posixpath.normpath(path.replace("\\", "/")) not in allowed:
+            raise ValueError(f"file '{path}' ngoài danh sách file của subtask {sorted(allowed)}")
+    return extras
+
+
+def _extra_marker(subtask: dict, out: dict) -> dict:
+    return {"extra_files": sorted(out["extra_files"])} if out.get("extra_files") else {}
 
 
 def empty_context_stop(subtask: dict, ctx: dict | None = None) -> dict | None:
@@ -660,7 +677,12 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
                            "reason": f"budget cạn trước subtask '{subtask.get('title')}'"}
     if stop := empty_context_stop(subtask):
         return "blocked", stop
-    check_file_path(subtask["file"])
+    paths = subtask_files.files_of(subtask)
+    for path in paths:
+        check_file_path(path)
+    if len(paths) > 1 and not (state.get("checkout_source") and tool_loop.enabled()):
+        return "blocked", {"gate": 3, "blocked": True, "failure_class": "plan",
+                           "reason": f"subtask '{subtask.get('title')}' có nhiều file nhưng vòng tool không bật; không sửa được nhiều file"}
     model = model_for(subtask, deps.models)
     role = 'gate3_heavy' if subtask.get('size') == 'large' else 'gate3_light'
     words = file_context.keywords(subtask["title"], subtask["verify"], state.get("request_detail"))
@@ -720,6 +742,9 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         out, stop = run_loop()
         if stop:
             return "blocked", stop
+    if out is None and len(paths) > 1:
+        return "blocked", {"gate": 3, "blocked": True, "failure_class": "plan",
+                           "reason": f"subtask '{subtask.get('title')}' có nhiều file; chỉ vòng tool sửa được, không quay về một lượt"}
     for iteration in range(0 if out is not None else MAX_INNER_RETRIES + 1):
         routing_options = {'role': role}
         if routing:
@@ -917,16 +942,18 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
     child_of = {step["order"]: index for index, step in enumerate(prepared, start=1)}
 
     def write(child: int, subtask: dict, out: dict, model: str) -> None:
-        diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"])
+        diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"],
+                                    _allowed_extras(subtask, out))
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
-            "model": model, "diff": diff_text,
+            "model": model, "diff": diff_text, **_extra_marker(subtask, out),
             **({'verification': out['verification']} if out.get('verification') else {}),
             "commit": repo_at_commit.resolve(repo),
         })
         diff_child.append(child)
         state.setdefault("produced", {})[subtask["file"]] = _progress_entry(
-            {"test_file": out["test_file"], "code": out["code"], "test": out["test"]}, model)
+            {"test_file": out["test_file"], "code": out["code"], "test": out["test"],
+             **({"extra_files": out["extra_files"]} if out.get("extra_files") else {})}, model)
 
     def remember(child: int, out: dict, model: str) -> None:
         saved[str(child)] = _progress_entry(out, model)

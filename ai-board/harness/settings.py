@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     context_compaction: bool = False
     tool_native: bool = False
     thinking_budget: bool = False
+    multi_file_subtask: bool = False
+    multi_file_max: int = Field(default=3, ge=2, le=6)
     graph_persistence: bool = False
     plan_repair: bool = False
     prompt_role_split: bool = False
