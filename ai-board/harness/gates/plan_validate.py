@@ -56,7 +56,7 @@ import path_policy
 from dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
 from repositories import repo_at_commit
-from runtime import coverage, levels, limits
+from runtime import coverage, levels, limits, subtask_files
 from services import target_confidence
 from settings import DEFAULT_GATE25_FIXES, get_settings
 
@@ -566,8 +566,8 @@ def complexity_signals(plan: dict, elevated=frozenset()) -> list[str]:
     if len(caps) >= 2:
         signals.append(f"capabilities: {', '.join(caps)}")
     subtasks = plan.get("subtasks") or []
-    outside = sorted({st.get("file", "") for st in subtasks
-                      if not _SAFE_FILE_PREFIX.match(st.get("file", "")) and st.get("file", "") not in elevated})
+    outside = sorted({path for st in subtasks for path in ([st.get("file", "")] if not subtask_files.enabled() else subtask_files.files_of(st))
+                      if not _SAFE_FILE_PREFIX.match(path) and path not in elevated})
     if outside:
         signals.append(f"file ngoài vùng an toàn: {', '.join(outside)}")
     if len(subtasks) >= 4:

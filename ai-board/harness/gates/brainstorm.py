@@ -35,7 +35,7 @@ import context
 import functional
 from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
-from runtime import levels, limits
+from runtime import levels, limits, subtask_files
 from runtime.plan_merge import merge_same_file
 from settings import get_settings
 
@@ -174,6 +174,7 @@ def parse_plan(text: str) -> dict:
             raise ValueError(f"subtask[{i}].depends_on phải là mảng số thứ tự")
         st["depends_on"] = deps
     check_dag(subtasks)
+    subtask_files.validate(plan)
     acceptance = plan.get("acceptance")
     if acceptance is not None:
         if not isinstance(acceptance, list) or not acceptance or any(
@@ -200,6 +201,20 @@ def parse_plan(text: str) -> dict:
         raise ValueError("capabilities phải là mảng")
     plan["capabilities"] = caps
     return plan
+
+
+def _check_extra_file(file: str, scope, plan_hash: str) -> None:
+    """Extra file of a multi-file subtask: plain surface only, no elevation, no db/backend layer. Raise ValueError."""
+    import path_policy
+    decision = levels.write_check(file, scope, plan_hash)
+    if not decision["allow"] or decision["level"] != levels.SURFACE:
+        reason = path_policy.check(file, "write")["reason"] if not decision["allow"] else "cần elevation"
+        raise ValueError(f"file '{file}' của subtask nhiều file phải nằm trong vùng surface thường: {reason}")
+    layer = infer_layer(file)
+    if layer == "db":
+        raise ValueError(f"file '{file}': migrations không đi kèm trong subtask nhiều file — tách subtask db riêng")
+    if layer == "backend" and not file.startswith(GEN_CONTEXT):
+        raise ValueError(f"file '{file}': backend chỉ được trong {GEN_CONTEXT}")
 
 
 def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
@@ -238,6 +253,10 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
                 db_files.append(file)
         elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT) and file not in granted and file not in pending:
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
+    for st in plan["subtasks"]:
+        for extra in st.get("files") or []:
+            _check_extra_file(extra, scope, plan_hash)
+            seen.append(extra)
     must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
     if sha is None:
         if pending:

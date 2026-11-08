@@ -17,7 +17,7 @@ import posixpath
 from functools import lru_cache
 from pathlib import Path
 
-from runtime import levels
+from runtime import levels, subtask_files
 
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES_JS = ROOT / "server" / "contexts" / "capabilities.js"
@@ -85,8 +85,8 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None, catalog: d
     lớp rẻ chặn sớm, không phải lớp duy nhất."""
     names = names or load_capability_names()
     scope = list(scope)
-    files = [posixpath.normpath(str(task.get('file', '')).replace('\\', '/'))
-             for task in plan.get('subtasks') or []]
+    files = [posixpath.normpath(path.replace('\\', '/'))
+             for task in plan.get('subtasks') or [] for path in subtask_files.files_of(task)]
 
     def allowed(file, policy):
         return (policy.get('tier') == 'surface'

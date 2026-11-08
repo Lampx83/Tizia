@@ -15,6 +15,8 @@ import posixpath
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from runtime import subtask_files
+
 MAX_BLOCK_CHARS = 600
 MAX_EVIDENCE_CHARS = 1000
 MAX_FINDINGS = 4
@@ -88,7 +90,7 @@ def derive(plan: dict) -> list[dict]:
     for index, task in enumerate((plan or {}).get("subtasks") or [], 1):
         if not isinstance(task, dict):
             continue
-        steps.append({"n": index, "file": str(task.get("file") or ""), "layer": _layer(task),
+        steps.append({"n": index, "file": str(task.get("file") or ""), "files": subtask_files.files_of(task), "layer": _layer(task),
                       "routes": _routes(_text(task)), "tables": _tables(task), "names": _backticks(task)})
     return steps
 
@@ -230,25 +232,26 @@ def cross_check(state: dict) -> list[dict]:
     if len(steps) < 2:
         return []
     owners = _owners(steps)
-    by_file = {step["file"]: step for step in steps if step["file"]}
+    by_file = {path: step for step in steps if step["file"] for path in step["files"]}
     findings: list[dict] = []
     for step in steps:
-        code = _content(state, step["file"])
-        if not code:
-            continue
-        for name in sorted(owners):
-            if name.startswith("bảng:"):
-                table = name.split(":", 1)[1]
-                if step["file"] in owners[name] or not _mentions_table(code, table):
-                    continue
-                finding = _check_table(state, owners[name], step["file"], table)
-            else:
-                if step["file"] in owners[name] or name not in code:
-                    continue
-                finding = _check_route(state, owners[name], step["file"], name)
-            if finding:
-                findings.append(finding)
-        findings += _check_imports(state, step["file"], code, by_file)
+        for file in step["files"]:
+            code = _content(state, file)
+            if not code:
+                continue
+            for name in sorted(owners):
+                if name.startswith("bảng:"):
+                    table = name.split(":", 1)[1]
+                    if step["file"] in owners[name] or not _mentions_table(code, table):
+                        continue
+                    finding = _check_table(state, owners[name], file, table)
+                else:
+                    if step["file"] in owners[name] or name not in code:
+                        continue
+                    finding = _check_route(state, owners[name], file, name)
+                if finding:
+                    findings.append(finding)
+            findings += [item for item in _check_imports(state, file, code, by_file) if item["owner"] not in step["files"]]
         if len(findings) >= MAX_FINDINGS:
             break
     unique, seen = [], set()

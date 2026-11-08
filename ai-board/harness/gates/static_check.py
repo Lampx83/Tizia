@@ -23,7 +23,7 @@ import classifier
 import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import repo_at_commit, server_hsm
-from runtime import levels
+from runtime import levels, subtask_files
 from runtime.budget import BudgetExhausted
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -265,7 +265,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     if not plan or not diffs:
         return {"gate": 4, "blocked": True, "reason": "không có plan/diffs từ cổng 1/3", "needs_careful_review": True}
 
-    planned_files = {_posix(st["file"]) for st in plan["subtasks"]}
+    planned_files = {_posix(path) for st in plan["subtasks"] for path in subtask_files.files_of(st)}
     planned_tests = _planned_tests(plan)
     scratch_repo = state.get("scratch_repo")
     # Import đã có ở base không phải vi phạm: cổng chỉ chặn import MỚI (quyền mới).
@@ -292,9 +292,16 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             issues.append(f"file '{d['file']}' không có trong plan")
             needs_careful_review = True
 
+        extras = [_posix(path) for path in d.get("extra_files") or []]
+        stray = [path for path in extras if path not in planned_files]
+        if stray:
+            reason = f"file ngoài plan trong diff: {', '.join(stray)}"
+            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                    "issues": [*issues, reason], "failure_class": "critical"}
+
         if not scratch_repo:
             continue
-        for candidate in (file_path, _posix(d.get("test_file", ""))):
+        for candidate in (file_path, _posix(d.get("test_file", "")), *extras):
             if not candidate:
                 continue
             path = Path(scratch_repo) / candidate
@@ -307,7 +314,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                         "issues": [*issues, reason], "failure_class": "critical"}
             err = node_check(path)
-            if err and candidate != file_path:
+            if err and candidate != file_path and candidate not in extras:
                 oracle = functional.select(state)
                 if oracle or candidate not in planned_tests:
                     # Harness oracle or no plan entry: a model-invented test that cannot be parsed is dropped, never shipped.

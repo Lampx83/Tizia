@@ -8,7 +8,7 @@ from pathlib import Path
 import file_context
 from gates import change_class, gate3_guards, implement
 from repositories import server_hsm
-from runtime import prompt_roles
+from runtime import prompt_roles, subtask_files
 from services import candidate, default_skills
 
 MAX_CONTEXT_CHARS = 60_000  # listing của TẤT CẢ file đã chạm: mức 12000 làm reviewer fix skip
@@ -26,7 +26,7 @@ def allowed(state: dict) -> bool:
 def _in_scope(state: dict) -> set[str]:
     """Changed files that some subtask may write."""
     changed = {path.replace('\\', '/') for path, deleted, _ in change_class._files(state.get('full_diff') or []) if not deleted}
-    scope = {p.replace('\\', '/') for st in (state.get('plan') or {}).get('subtasks') or [] for p in st.get('allowed_scope') or [st['file']]}
+    scope = {p.replace('\\', '/') for st in (state.get('plan') or {}).get('subtasks') or [] for p in st.get('allowed_scope') or subtask_files.files_of(st)}
     return changed & scope
 
 

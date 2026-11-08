@@ -20,6 +20,7 @@ from pathlib import Path
 import path_policy
 from gates import implement
 from repositories import repo_at_commit
+from runtime import subtask_files
 from settings import DEFAULT_PR_BASE, pr_base
 
 _CONTRACT = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
@@ -246,14 +247,18 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
         commits = []
         for index, (subtask, item) in enumerate(zip(subtasks, diffs), start=1):
             allowed = {posixpath.normpath(p.replace("\\", "/"))
-                       for p in subtask.get("allowed_scope") or [subtask["file"]]}
+                       for p in subtask.get("allowed_scope") or subtask_files.files_of(subtask)}
             file = posixpath.normpath(item["file"].replace("\\", "/"))
             test_file = posixpath.normpath(item["test_file"].replace("\\", "/")) if item.get("test_file") else None  # None: dropped, an oracle verifies
             if file not in allowed:
                 raise ScopeViolation(f"child {index} ghi '{file}' ngoài allowed_scope {sorted(allowed)}")
             if test_file and not test_file.startswith(("test/", "tests/")):
                 raise ScopeViolation(f"child {index} ghi test '{test_file}' ngoài test/ hoặc tests/")
-            written = [rel for rel in (file, test_file) if rel]
+            extras = [posixpath.normpath(p.replace("\\", "/")) for p in item.get("extra_files") or []]
+            for extra in extras:
+                if extra not in allowed or extra == file:
+                    raise ScopeViolation(f"child {index} ghi '{extra}' ngoài allowed_scope {sorted(allowed)}")
+            written = [rel for rel in (file, test_file, *extras) if rel]
             for rel in written:
                 dst = implement._safe_join(checkout, rel)
                 if rel == test_file and dst.exists() and rel not in created:
