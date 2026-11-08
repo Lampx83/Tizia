@@ -23,7 +23,7 @@ import path_policy
 from gates import change_class, gate3_guards, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
-from runtime import limits, loop_guard, tool_loop
+from runtime import limits, loop_guard, state_file, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 import memory
@@ -671,7 +671,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
-    contract = subtask_contract.block(state.get("plan") or {})
+    contract = (subtask_contract.block(state.get("plan") or {}) or "") + state_file.block(state) or None
     prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons,
                              produced=sorted((state.get("produced") or {}).keys()), contract=contract)
     feedback = ""

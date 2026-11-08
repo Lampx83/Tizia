@@ -23,7 +23,7 @@ from runtime.budget import Budget, BudgetExhausted          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
-from runtime import meter, prompt_roles             # noqa: E402
+from runtime import meter, prompt_roles, state_file  # noqa: E402
 from services import context                     # noqa: E402
 from services import attachments                 # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
@@ -507,6 +507,7 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
         if span:
             trace.close_span(span, "error", {"tizia.gate.status": "error", "tizia.error.type": type(error).__name__})
         raise
+    state_file.write(state, request)
     if span:
         blocked = bool(result.get("blocked"))
         status = "stub" if result.get("stub") else "blocked" if blocked else "passed"
