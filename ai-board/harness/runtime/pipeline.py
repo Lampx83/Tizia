@@ -28,6 +28,7 @@ from services import context                     # noqa: E402
 from services import attachments                 # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
 from providers.client import OllamaClient    # noqa: E402
+from providers import thinking as thinking_policy  # noqa: E402
 from services import prescreen                   # noqa: E402
 from evaluation import self_eval                   # noqa: E402
 from settings import get_settings
@@ -106,6 +107,7 @@ def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, 
             "thinking": None if thinking is None else bool(thinking),
             "reasoning_chars": (body or {}).get("_reasoning_chars"), "role": role,
             "prompt_roles": "split" if extra.get("system") else "single",
+            **({'thinking_truncated': True} if thinking and (body or {}).get('done_reason') == 'length' else {}),
             **({'skills': extra['_skill_evidence'], 'skill_selection': extra['_skill_selection']} if extra.get('_skill_evidence') else {})}
 
 
@@ -284,11 +286,7 @@ class Deps:
                 try:
                     call_extra, call_options = extra, options
                     if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
-                        think = bool((extra or {}).get('force_thinking', router.reasoning(role)))  # one call can opt in without changing the role
-                        call_extra = {**{k: v for k, v in (extra or {}).items() if k not in ('force_thinking', 'max_total_output_tokens')}, 'thinking': think}
-                        if think:  # reasoning tokens count against max_tokens: leave room for the answer itself
-                            call_options = {**options, 'num_predict': (extra or {}).get('max_total_output_tokens',
-                                            int(options.get('num_predict') or 0) + router.reasoning_tokens())}
+                        call_extra, call_options = thinking_policy.apply(role, router, extra, options)  # reasoning tokens count against max_tokens
                     body = client.generate(candidate['model'], prompt, format=format, extra=call_extra,
                                            _single_attempt=True, **call_options)
                     if not isinstance(body, dict):
@@ -367,11 +365,7 @@ class Deps:
                 client = routing.client(candidate, self.models)
                 call_extra, call_options = extra, options
                 if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
-                    think = bool((extra or {}).get('force_thinking', routing.reasoning(resolved)))
-                    call_extra = {**{k: v for k, v in (extra or {}).items() if k not in ('force_thinking', 'max_total_output_tokens')}, 'thinking': think}
-                    if think:
-                        call_options = {**options, 'num_predict': (extra or {}).get('max_total_output_tokens',
-                                        int(options.get('num_predict') or 0) + routing.reasoning_tokens())}
+                    call_extra, call_options = thinking_policy.apply(resolved, routing, extra, options)
                 sent.update(evidence=evidence, extra=call_extra, options=call_options)
                 return client.generate(candidate['model'], prompt, format=format, extra=call_extra,
                                        _single_attempt=True, **call_options)
