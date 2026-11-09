@@ -21,6 +21,7 @@
 import express from 'express';
 import { scryptSync, randomBytes, timingSafeEqual, randomUUID } from 'node:crypto';
 import { db } from './db.js';
+import { loginGuard, LOGIN_LOCKED_MESSAGE } from './contexts/security/login-guard.js';
 
 const now = () => Date.now();
 const clean = (v, max = 120) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -140,13 +141,20 @@ export function attachPharmacyTeacher(r) {
     const username = clean(req.body?.username, 60).toLowerCase();
     const password = String(req.body?.password || '');
     if (!username || !password) return res.status(400).json({ error: 'Nhập tên đăng nhập và mật khẩu.' });
+    const wait = loginGuard.retryAfter(username);
+    if (wait) {
+      res.setHeader('Retry-After', String(wait));
+      return res.status(429).json({ error: LOGIN_LOCKED_MESSAGE });
+    }
     try {
       const t = await getTeacher.get(username);
       // Cùng một thông báo cho cả sai tên lẫn sai mật khẩu — không để lộ tài khoản nào có thật.
       if (!t || !verifyPassword(password, t.password_hash)) {
+        loginGuard.fail(username);
         await log(req, username, 'login_failed', 'sai tên đăng nhập hoặc mật khẩu');
         return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng.' });
       }
+      loginGuard.success(username);
       const token = randomUUID() + randomBytes(16).toString('hex');
       const exp = now() + SESSION_MS;
       await insSess.run({ token, username, t: now(), exp });
