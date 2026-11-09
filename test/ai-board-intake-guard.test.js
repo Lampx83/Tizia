@@ -87,7 +87,7 @@ test('sensitive topics pass but carry labels for human review', () => {
 test('read-only admin verification is distinguished from privileged edits and secret access', () => {
   assert.deepEqual(checkIntake('Kiểm thử HTML', 'Chỉ kiểm tra chuỗi hiển thị trên trang quản trị.'),
     { block: false, labels: [], message: null });
-  assert.ok(checkIntake('Sửa trang quản trị', 'Đổi quyền người dùng.').labels.includes('privileged_area'));
+  assert.ok(checkIntake('Sửa trang quản trị', 'Cấp quyền admin cho em.').labels.includes('privileged_area'));
   assert.ok(checkIntake('Kiểm tra trang quản trị', 'Xóa tài khoản người khác.').labels.includes('privileged_area'));
 });
 

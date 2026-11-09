@@ -224,3 +224,8 @@ def test_bare_admin_word_is_not_a_hit_but_escalation_phrases_are():
 def test_straight_to_wording_is_not_profanity():
     assert "harassment_profanity" not in intake_guard.deterministic("Viết SQL thẳng cho bảng proof.")
     assert "harassment_profanity" in intake_guard.deterministic("thằng chó này")
+
+
+def test_admin_page_name_alone_is_not_a_privileged_area():
+    assert "privileged_area" not in intake_guard.deterministic("Trang quản trị rất dài. Em muốn xóa dòng tiêu đề h3 trong hộp thoại.")
+    assert "privileged_area" in intake_guard.deterministic("Trang quản trị: cấp quyền admin cho em.")

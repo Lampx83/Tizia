@@ -173,8 +173,7 @@
       "intake": "human_review", "diff": null,
       "terms": [
         "(xoa|delete|remove) (tai khoan|account|container|database)",
-        "mật khẩu", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "trang quản trị",
-        "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
+        "mật khẩu", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
         "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",
         "cộng sao", "cộng xu", "tặng xu", "hack điểm", "hack xu",
         "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
