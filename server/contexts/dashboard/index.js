@@ -116,7 +116,7 @@ async function getRecommendation(userId, enrolledDomain) {
   const since = Date.now() - 30 * 86400_000;
   const rows = await db.prepare(`
     SELECT subject_id, COUNT(*) AS n,
-           SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
+           SUM(CASE WHEN correct <> 0 THEN 1 ELSE 0 END) AS c
       FROM question_attempts
      WHERE user_id = ? AND created_at >= ?
      GROUP BY subject_id
@@ -166,7 +166,7 @@ async function getActivityStats(userId) {
   const since7d = Date.now() - 7 * 86400_000;
   const since30d = Date.now() - 30 * 86400_000;
   const quiz7 = (await db.prepare(`
-    SELECT COUNT(*) AS n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
+    SELECT COUNT(*) AS n, SUM(CASE WHEN correct <> 0 THEN 1 ELSE 0 END) AS c
       FROM question_attempts WHERE user_id = ? AND created_at >= ?
   `).get(userId, since7d)) || { n: 0, c: 0 };
   const code7 = (await db.prepare(`

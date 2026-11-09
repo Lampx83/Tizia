@@ -32,6 +32,8 @@ ENV NODE_ENV=production \
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# Next ghi cache ISR vào .next khi chạy; thiếu quyền thì mọi lượt render đều lỗi EACCES và trang không được cache.
+RUN mkdir -p .next/cache && chown -R node:node .next
 USER node
 EXPOSE 3200
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

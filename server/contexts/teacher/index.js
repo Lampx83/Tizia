@@ -23,10 +23,7 @@ function teacherOnly(req, res, next) {
 }
 
 async function inClass(userId, classCode) {
-  const row = await db.prepare(`SELECT class_code FROM users WHERE id = ?`).get(userId);
-  // user.class_code không có sẵn — fallback: check qua attempts (chấp nhận
-  // user nào từng làm attempt với class_code này). MVP: cho tất cả pupil
-  // join nếu class_code hợp lệ.
+  // Bảng users không có class_code. MVP: cho mọi học sinh tham gia nếu mã lớp hợp lệ.
   return !!(await getClassByCode(classCode));
 }
 
@@ -80,7 +77,7 @@ export function attachTeacher(router) {
       INSERT INTO team_quest_contribs (team_quest_id, user_id, xp_contributed, last_at)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(team_quest_id, user_id) DO UPDATE SET
-        xp_contributed = xp_contributed + excluded.xp_contributed,
+        xp_contributed = team_quest_contribs.xp_contributed + excluded.xp_contributed,
         last_at = excluded.last_at
     `).run(id, req.user.id, xp, now);
     // Check completion
@@ -116,17 +113,15 @@ export function attachTeacher(router) {
     if (!cls) return res.status(404).json({ error: 'not_found' });
     // Lấy member của lớp qua attempts
     const memberRows = await db.prepare(`
-      SELECT DISTINCT u.id, u.display_name, u.role,
+      SELECT u.id, u.display_name, u.role,
              COALESCE(lm.week_xp, 0) AS week_xp,
              COALESCE(es.streak, 0) AS streak,
              (SELECT COUNT(*) FROM user_skills WHERE user_id = u.id) AS skills_earned
         FROM users u
-        LEFT JOIN attempts a ON a.player_id = u.id AND a.class_code = ?
         LEFT JOIN league_memberships lm ON lm.user_id = u.id
           AND lm.season_id = (SELECT id FROM league_seasons WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1)
         LEFT JOIN engagement_state es ON es.user_id = u.id
-       WHERE u.role = 'pupil'
-       GROUP BY u.id
+       WHERE EXISTS (SELECT 1 FROM attempts a WHERE a.player_name = u.display_name AND a.class_code = ?)
        ORDER BY week_xp DESC, skills_earned DESC
        LIMIT 50
     `).all(code);

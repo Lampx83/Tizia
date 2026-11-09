@@ -1265,27 +1265,18 @@ export async function getUserState(user_id) {
 // bắt error này, trả 413 cho client để client biết phải nén/chunk trước.
 const MAX_VALUE_BYTES = 32_000;
 
-export class UserStateValueTooLargeError extends Error {
-  constructor(key, size) {
-    super(`user_state value too large: key="${key}" size=${size} > ${MAX_VALUE_BYTES}`);
-    this.code = 'value_too_large';
-    this.key = key;
-    this.size = size;
-    this.maxBytes = MAX_VALUE_BYTES;
-  }
-}
-
 /**
  * Upsert nhiều key cùng lúc. `entries` là object { key: value, ... }; value
  * dạng string (client đã JSON.stringify). value rỗng/null → xoá row.
  *
- * Trả số key đã ghi để client biết quota còn lại.
- * Throw UserStateValueTooLargeError nếu bất kỳ value nào > 32KB.
+ * Trả { written, skipped }. Value > 32KB bị bỏ qua nguyên khoá (không cắt, vì JSON cắt giữa chừng sẽ hỏng khi hydrate)
+ * và KHÔNG làm hỏng các khoá khác trong cùng lần ghi; khoá đó vẫn nằm trong localStorage của người học.
  */
 export async function putUserState(user_id, entries) {
-  if (!entries || typeof entries !== 'object') return 0;
+  if (!entries || typeof entries !== 'object') return { written: 0, skipped: [] };
   const now = Date.now();
   let written = 0;
+  const skipped = [];
   const tx = db.transaction(async (items) => {
     for (const [k, v] of items) {
       const key = String(k || '').slice(0, 128);
@@ -1295,7 +1286,8 @@ export async function putUserState(user_id, entries) {
       } else {
         const value = String(v);
         if (value.length > MAX_VALUE_BYTES) {
-          throw new UserStateValueTooLargeError(key, value.length);
+          skipped.push({ key, size: value.length, maxBytes: MAX_VALUE_BYTES });
+          continue;
         }
         await _upsertUserStateStmt.run(Number(user_id), key, value, now);
       }
@@ -1303,7 +1295,7 @@ export async function putUserState(user_id, entries) {
     }
   });
   await tx(Object.entries(entries));
-  return written;
+  return { written, skipped };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -79,7 +79,7 @@ const _updateStmt = db.prepare(`
 
 const _bumpPlayStmt = db.prepare(`UPDATE ugc_quests SET plays = plays + 1 WHERE id = ?`);
 const _bumpLikeStmt = db.prepare(`UPDATE ugc_quests SET likes = likes + 1 WHERE id = ?`);
-const _decLikeStmt  = db.prepare(`UPDATE ugc_quests SET likes = MAX(0, likes - 1) WHERE id = ?`);
+const _decLikeStmt  = db.prepare(`UPDATE ugc_quests SET likes = GREATEST(0, likes - 1) WHERE id = ?`);
 const _bumpFlagStmt = db.prepare(`UPDATE ugc_quests SET flags = flags + 1 WHERE id = ?`);
 const _hideStmt     = db.prepare(`UPDATE ugc_quests SET status = 'hidden' WHERE id = ?`);
 

@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { db, initDb, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState, UserStateValueTooLargeError } from './db.js';
+import { db, initDb, insertAttempt, getLeaderboard, getStats, getRecent, getAllAttempts, getHistogram, getConfusion, getAchievements, unlockAchievement, createClass, getClassByCode, listClasses, getClassMembers, getClassAttempts, getPlayerAttempts, createRequest, listRequests, voteRequest, setRequestStatus, getRequestStats, getRequestById, addRequestMessage, listRequestMessages, reopenRequestIfClosed, listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead, getUserWallet, upsertUserWallet, getScenarioRunsForUser, recordScenarioRunDb, getUserState, putUserState } from './db.js';
 import { attachRoom } from './room.js';
 import { attachAi } from './ai.js';
 import { attachTts } from './tts.js';
@@ -269,9 +269,15 @@ app.use(['/api/auth/login', '/api/auth/register'], sensitiveAuthLimiter);
 // SEO: Content-Language vi cho mọi response (Tizia là sản phẩm VN), + X-Robots-Tag
 // noindex,nofollow cho trang nội bộ/quản trị/cast (backup ngoài auth gate + meta robots).
 // Áp sớm để cả file static lẫn route động đều nhận header.
+// Cả hai dạng URL: .html (trang legacy do Express phục vụ) và URL sạch (trang đã
+// migrate sang Next nhưng vẫn có thể rơi xuống Express qua fallback).
 const NOINDEX_HEADER_EXACT = new Set([
   '/admin.html', '/dashboard.html', '/family.html', '/teacher.html',
   '/complete-profile.html', '/lesson-builder.html', '/cast.html', '/devices.html',
+  '/admin', '/dashboard', '/family', '/teacher', '/teacher-live',
+  '/complete-profile', '/lesson-builder', '/cast', '/devices',
+  '/admin-curriculum.html', '/admin-grants.html',
+  '/pharmacomm-giang-vien.html', '/pharmacomm-ket-qua.html',
 ]);
 const NOINDEX_HEADER_PREFIXES = ['/admin/', '/parent/', '/gv/', '/live-quiz/', '/api/', '/sim/', '/uploads/'];
 app.use((req, res, next) => {
@@ -337,6 +343,9 @@ attachScoreUpWebhook(app);
 // + cùng whitelist '/api/webhooks/'. Fire khi Judge0 chấm xong submission Tizia.
 attachCodelabWebhook(app);
 
+// user-state đồng bộ nhiều khoá cùng lúc nên lớn hơn request thường; mỗi giá trị vẫn bị giới hạn 32KB ở putUserState.
+// Trước đây vượt 64KB là 413 ở tầng parser và client thử lại mãi, tiến độ không lưu được lên server.
+app.use(`${BASE_PATH}/api/user-state`, express.json({ limit: '1mb' }));
 app.use(express.json({ limit: '64kb' }));
 // CSRF double-submit (R4) — sau express.json (cần req.body cho fallback _csrf).
 // Log-only mặc định; CSRF_ENFORCE=1 để chặn (khi FE đã gửi header X-CSRF-Token).
@@ -566,17 +575,10 @@ async function _putUserStateHandler(req, res) {
     return res.status(413).json({ error: 'too many keys in one request (max 100)' });
   }
   try {
-    const n = await putUserState(req.user.id, body);
-    res.json({ ok: true, written: n });
+    const { written, skipped } = await putUserState(req.user.id, body);
+    if (skipped.length) console.warn('[user-state] bỏ qua khoá quá lớn', req.user.id, skipped);
+    res.json({ ok: true, written, skipped });
   } catch (e) {
-    // Value > 32KB: trả 413 + key + max để client biết phải chunk/nén thay vì
-    // truncate ngầm (truncate JSON giữa chừng → hỏng dữ liệu vĩnh viễn ở hydrate).
-    if (e instanceof UserStateValueTooLargeError) {
-      return res.status(413).json({
-        error: 'value_too_large',
-        key: e.key, size: e.size, maxBytes: e.maxBytes,
-      });
-    }
     console.warn('[user-state] write failed', e?.message);
     res.status(500).json({ error: 'db_error' });
   }

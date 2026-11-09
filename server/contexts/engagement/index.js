@@ -93,7 +93,7 @@ const upsertQuestStmt = db.prepare(`
 `);
 const bumpQuestProgressStmt = db.prepare(`
   UPDATE engagement_daily_quests
-     SET progress = MIN(target, progress + ?)
+     SET progress = LEAST(target, progress + ?)
    WHERE user_id = ? AND quest_date = ? AND kind = ? AND claimed = 0
 `);
 

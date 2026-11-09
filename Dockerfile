@@ -9,6 +9,8 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime: slim image ----
 FROM node:20-alpine
+# pg_dump/pg_restore cùng major với tizia-postgres (16) cho sao lưu trong trang Admin.
+RUN apk add --no-cache postgresql16-client
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8041 \

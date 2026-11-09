@@ -62,21 +62,21 @@ async function buildReport(childId, weekStartDate) {
   })();
   // Quiz attempts trong tuần
   const quizRows = (await db.prepare(`
-    SELECT COUNT(*) AS n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) AS c
+    SELECT COUNT(*) AS n, SUM(CASE WHEN correct <> 0 THEN 1 ELSE 0 END) AS c
       FROM question_attempts
-     WHERE user_id = ? AND attempted_at >= ? AND attempted_at < ?
+     WHERE user_id = ? AND created_at >= ? AND created_at < ?
   `).get(childId, wsMs, weMs)) || { n: 0, c: 0 };
   // Scenario runs
   const scenarioRows = (await db.prepare(`
     SELECT COUNT(*) AS n, AVG(best_score) AS avg
       FROM scenario_runs
-     WHERE user_id = ? AND created_at >= ? AND created_at < ?
+     WHERE user_id = ? AND last_ts >= ? AND last_ts < ?
   `).get(childId, wsMs, weMs)) || { n: 0, avg: 0 };
   // Codelab
   const codeRows = (await db.prepare(`
     SELECT COUNT(*) AS n, SUM(CASE WHEN status='accepted' THEN 1 ELSE 0 END) AS accepted
       FROM codelab_submissions
-     WHERE user_id = ? AND received_at >= ? AND received_at < ?
+     WHERE user_id = ? AND processed_at >= ? AND processed_at < ?
   `).get(childId, wsMs, weMs)) || { n: 0, accepted: 0 };
 
   // Đề xuất ngắn dựa trên data

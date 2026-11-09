@@ -114,7 +114,7 @@ const _getExposureStmt = db.prepare(`SELECT * FROM exposures WHERE user_id = ? A
 const _upsertExposureStmt = db.prepare(`
   INSERT INTO exposures (user_id, exp_key, variant, first_seen_at, seen_count)
   VALUES (?, ?, ?, ?, 1)
-  ON CONFLICT(user_id, exp_key) DO UPDATE SET seen_count = seen_count + 1
+  ON CONFLICT(user_id, exp_key) DO UPDATE SET seen_count = exposures.seen_count + 1
 `);
 
 export async function checkFlag(userId, key) {
