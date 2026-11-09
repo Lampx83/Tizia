@@ -42,7 +42,7 @@ try {
   await sh("cd /ctx/checkout && docker build -t warm-tizia:cache . 2>&1 | tail -15", "build");
   await sh("docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'; docker system df | head -6", "images");
   await sh("docker builder prune -af >/dev/null; docker system df | head -6", "prune");
-  await sh(`pkill dockerd; sleep 5; du -sh /var/lib/docker; tar -C /var/lib/docker -cf - . | gzip -1 > /out/${basename(outTar)} && ls -l /out/${basename(outTar)}`, "export");
+  await sh(`pkill dockerd; sleep 5; du -sh /var/lib/docker; tar -C /var/lib/docker -cf - . | gzip -1 | split -b 3000m -d - /out/${basename(outTar)}.part- && ls -l /out/`, "export");
   console.log("exported", outTar);
 } finally {
   await sb.stop();
