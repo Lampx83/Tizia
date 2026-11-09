@@ -83,6 +83,12 @@ def _arbiter_clears(llm_labels, scored) -> bool:
                 and (scored.get("probs") or {}).get("safe", 0) >= cfg.gate1_arbiter_min)
 
 
+def _trusts_requester(requester_role: str | None) -> bool:
+    """Admin đã xác thực ở server + cờ bật → nới privileged_area. Role lấy từ server, không từ chữ trong đề."""
+    from settings import get_settings
+    return bool(get_settings().admin_requester_trust and requester_role == "admin")
+
+
 def parse_labels(text: str, allowed=LABELS) -> list[str]:
     """Parse {"labels": [...]} từ model. Raise ValueError nếu không phải JSON/nhãn ngoài tập đóng/rỗng."""
     try:
@@ -138,15 +144,17 @@ _CACHE_MAX = 64
 
 
 def run(request_title: str, request_detail: str | None, deps, budget, *, db_path=None,
-        proposal_id: int | None = None) -> dict:
-    """Verdict như _run; cache theo hash(yêu cầu, model, config) trong process: vòng plan và admin rerun không gọi lại LLM. Không cache lỗi bộ phân loại."""
+        proposal_id: int | None = None, requester_role: str | None = None) -> dict:
+    """Verdict như _run; cache theo hash(yêu cầu, role, model, config) trong process: vòng plan và admin rerun không gọi lại LLM. Không cache lỗi bộ phân loại."""
     from runtime import limits
     models = getattr(deps, "models", None)
-    key = hashlib.sha256(json.dumps([request_title or "", request_detail or "", str(getattr(models, "gate1_model", "")),
+    key = hashlib.sha256(json.dumps([request_title or "", request_detail or "", requester_role or "",
+                                     str(getattr(models, "gate1_model", "")),
                                      str(getattr(models, "classifier_model", "")), limits.config_sha256()]).encode()).hexdigest()
     if key in _CACHE:
         return {**_CACHE[key], "cached": True}
-    out = _run(request_title, request_detail, deps, budget, db_path=db_path, proposal_id=proposal_id)
+    out = _run(request_title, request_detail, deps, budget, db_path=db_path, proposal_id=proposal_id,
+               requester_role=requester_role)
     if "classifier_error" not in out["labels"]:
         _CACHE[key] = out
         while len(_CACHE) > _CACHE_MAX:
@@ -155,11 +163,13 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
 
 
 def _run(request_title: str, request_detail: str | None, deps, budget, *, db_path=None,
-         proposal_id: int | None = None) -> dict:
+         proposal_id: int | None = None, requester_role: str | None = None) -> dict:
     """Verdict allow|needs_info|human_review|reject|critical + labels + public_message (tiếng Việt,
     không nhắc lại nội dung) + internal_reason (cho admin, không gửi học viên)."""
     title, detail = request_title or "", request_detail or ""
     hits = deterministic(f"{title}\n{detail}")
+    trusted = _trusts_requester(requester_role)
+    trusted_hit = bool(trusted and hits.pop("privileged_area", None))
     keyword_clear, arbitrated = not hits, None
     verdict = _worst(hits.values())
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []
@@ -167,6 +177,9 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
     if verdict in ("allow", "needs_info"):
         llm, why = classify(readonly_verification_text(title), readonly_verification_text(detail), deps, budget,
                             db_path=db_path, proposal_id=proposal_id)
+        if trusted and "privileged_area" in llm:
+            llm = [x for x in llm if x != "privileged_area"] or ["ok"]
+            trusted_hit = True
         llm_verdicts = ["allow" if x == "ok" else "needs_info" if x in _LLM_NEEDS_INFO else "human_review"
                         for x in llm]
         verdict = _worst([verdict, *llm_verdicts])
@@ -193,6 +206,9 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
         public = messages[verdict]
     out = {"verdict": verdict, "labels": list(hits) or ["ok"], "public_message": public,
            "internal_reason": "; ".join(reasons)[:1000] or "không có tín hiệu"}
+    if trusted_hit:
+        out["trusted_admin"] = True
+        out["internal_reason"] = (out["internal_reason"] + "; admin tin cậy: bỏ privileged_area")[:1000]
     if arbitrated:
         out["arbitrated"] = arbitrated
     if scored:

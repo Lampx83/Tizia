@@ -98,7 +98,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
     const language = checkLanguage(body.title, body.detail);
     if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
-    const intake = checkIntake(body.title, body.detail);
+    const intake = checkIntake(body.title, body.detail, req.user?.role);
     if (intake.block) {
       try { await aux.recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
       return res.status(422).json({ error: 'request_rejected', message: intake.message });
@@ -281,7 +281,7 @@ export function attachAiBoardRequestRoutes(router, {
     }
     const language = checkLanguage(detail || title);
     if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
-    const intake = checkIntake(title, detail);
+    const intake = checkIntake(title, detail, req.user?.role);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     const gibberish = checkGibberish(detail || title);
     if (gibberish) return res.status(422).json({ error: 'request_unclear', message: gibberish });
