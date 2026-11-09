@@ -817,55 +817,67 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_wh_active ON webhook_endpoints(active);
 
 -- ===== Foreign keys (deferred so table order is irrelevant) =====
--- Wrapped: skip if already present.
-DO $$ BEGIN
-  BEGIN ALTER TABLE bp_progress ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE bp_progress ADD FOREIGN KEY (season_id) REFERENCES bp_seasons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE daily_login ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE engagement_daily_quests ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE engagement_state ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE family_links ADD FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE family_links ADD FOREIGN KEY (child_user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE league_groups ADD FOREIGN KEY (season_id) REFERENCES league_seasons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE league_memberships ADD FOREIGN KEY (season_id) REFERENCES league_seasons(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE league_memberships ADD FOREIGN KEY (group_id) REFERENCES league_groups(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE league_memberships ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE league_user_tier ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE notif_subscriptions ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE oauth_identities ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE portal_apps ADD FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE question_attempts ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE scenario_runs ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE school_admins ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE school_admins ADD FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE sessions ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE skill_prereq ADD FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE skill_prereq ADD FOREIGN KEY (prereq_skill_id) REFERENCES skills(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE skills ADD FOREIGN KEY (competency_id) REFERENCES competencies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE srs_card_content ADD FOREIGN KEY (deck_id) REFERENCES srs_decks(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE srs_cards ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE srs_decks ADD FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE team_quest_contribs ADD FOREIGN KEY (team_quest_id) REFERENCES team_quests(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE team_quest_contribs ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE team_quests ADD FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_flags ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_flags ADD FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_likes ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_likes ADD FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_plays ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_plays ADD FOREIGN KEY (quest_id) REFERENCES ugc_quests(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE ugc_quests ADD FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_domain_grants ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_domain_grants ADD FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_inventory ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_inventory ADD FOREIGN KEY (item_id) REFERENCES shop_items(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_pet ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_skills ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_skills ADD FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_state ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_theta ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-  BEGIN ALTER TABLE user_wallets ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; WHEN others THEN NULL; END;
-END $$;
+-- schema.sql chạy lại ở MỖI lần khởi động. `ADD FOREIGN KEY` không đặt tên thì Postgres tự thêm hậu tố nên không bao giờ
+-- báo trùng: trước đây mỗi lần boot thêm 46 khoá (prod từng lên 7.407 khoá + 29.628 trigger). Vì vậy phải kiểm tra trước.
+-- Dữ liệu cũ vi phạm khoá thì bỏ qua khoá đó và ghi NOTICE, không chặn khởi động.
+CREATE OR REPLACE FUNCTION pg_temp.ensure_fk(t regclass, col text, ref regclass, refcol text, action text DEFAULT '')
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+     WHERE c.contype = 'f' AND c.conrelid = t AND c.confrelid = ref
+       AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = t AND attname = col)]
+  ) THEN RETURN; END IF;
+  EXECUTE format('ALTER TABLE %s ADD FOREIGN KEY (%I) REFERENCES %s(%I) %s', t, col, ref, refcol, action);
+EXCEPTION WHEN foreign_key_violation OR undefined_column OR undefined_table THEN
+  RAISE NOTICE 'ensure_fk: bỏ qua %.%: %', t, col, SQLERRM;
+END $fn$;
+SELECT pg_temp.ensure_fk('bp_progress', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('bp_progress', 'season_id', 'bp_seasons', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('daily_login', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('engagement_daily_quests', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('engagement_state', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('family_links', 'parent_user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('family_links', 'child_user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('league_groups', 'season_id', 'league_seasons', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('league_memberships', 'season_id', 'league_seasons', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('league_memberships', 'group_id', 'league_groups', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('league_memberships', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('league_user_tier', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('notif_subscriptions', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('oauth_identities', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('portal_apps', 'owner_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('question_attempts', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('scenario_runs', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('school_admins', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('school_admins', 'granted_by', 'users', 'id', 'ON DELETE SET NULL');
+SELECT pg_temp.ensure_fk('sessions', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('skill_prereq', 'skill_id', 'skills', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('skill_prereq', 'prereq_skill_id', 'skills', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('skills', 'competency_id', 'competencies', 'id', 'ON DELETE RESTRICT');
+SELECT pg_temp.ensure_fk('srs_card_content', 'deck_id', 'srs_decks', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('srs_cards', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('srs_decks', 'creator_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('team_quest_contribs', 'team_quest_id', 'team_quests', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('team_quest_contribs', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('team_quests', 'creator_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_flags', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_flags', 'quest_id', 'ugc_quests', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_likes', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_likes', 'quest_id', 'ugc_quests', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_plays', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_plays', 'quest_id', 'ugc_quests', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('ugc_quests', 'creator_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_domain_grants', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_domain_grants', 'granted_by', 'users', 'id', 'ON DELETE SET NULL');
+SELECT pg_temp.ensure_fk('user_inventory', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_inventory', 'item_id', 'shop_items', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_pet', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_skills', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_skills', 'skill_id', 'skills', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_state', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_theta', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
+SELECT pg_temp.ensure_fk('user_wallets', 'user_id', 'users', 'id', 'ON DELETE CASCADE');
 
 
 -- =====================================================================
@@ -1125,3 +1137,6 @@ CREATE TABLE IF NOT EXISTS tt_activity (
 );
 CREATE INDEX IF NOT EXISTS idx_tt_activity_code ON tt_activity(student_code, created_at);
 CREATE INDEX IF NOT EXISTS idx_tt_activity_sess ON tt_activity(session_id, created_at);
+
+-- Huy hiệu tra attempts theo tên người chơi ở mọi lần nộp bài.
+CREATE INDEX IF NOT EXISTS idx_attempts_player_created ON attempts (player_name, created_at DESC);
