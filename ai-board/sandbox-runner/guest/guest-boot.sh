@@ -2,7 +2,6 @@
 # Start the guest's own Docker daemon and wait until it answers. Run once per microVM before Gate 5.
 set -eu
 if ! docker info >/dev/null 2>&1; then
-  mkdir -p /etc/docker && printf '%s\n' '{"features":{"containerd-snapshotter":true}}' > /etc/docker/daemon.json
   (dockerd >/var/log/dockerd.log 2>&1 &)
 fi
 i=0
