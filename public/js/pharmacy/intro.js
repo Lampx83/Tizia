@@ -332,7 +332,7 @@ async function loadHistory(overlay) {
     const items = d.items || [];
     if (!items.length) { box.textContent = 'Chưa có lượt thực hành nào.'; return; }
     box.innerHTML = `<table class="pc-ht"><thead><tr><th>Mã lượt</th><th>Tình huống</th><th>Bắt đầu</th><th>Kết thúc</th><th>Điểm</th></tr></thead><tbody>${items.map((s) => `<tr>
-      <td><a href="/pharmacomm-ket-qua.html?session=${encodeURIComponent(s.session_id)}">${esc(String(s.session_id).slice(0, 8))}</a></td>
+      <td>${s.session_id ? `<a href="/pharmacomm-ket-qua.html?session=${encodeURIComponent(s.session_id)}">${esc(String(s.session_id).slice(0, 8))}</a>` : '—'}</td>
       <td>${esc(s.scenario_code)}</td><td>${vn(s.started_at)}</td><td>${vn(s.completed_at)}</td>
       <td>${s.status === 'completed' ? esc(s.total_score) : (s.status === 'in_progress' ? 'Chưa chấm' : esc(s.status))}</td></tr>`).join('')}</tbody></table>`;
   } catch { box.textContent = 'Không tải được lịch sử.'; }

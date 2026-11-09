@@ -128,6 +128,7 @@ function parseCookies(req) {
 
 function setCookie(res, name, value, { maxAge, path = '/', sameSite = 'Lax' } = {}) {
   const parts = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, 'HttpOnly', `SameSite=${sameSite}`];
+  if (process.env.NODE_ENV === 'production') parts.push('Secure');
   if (maxAge != null) parts.push(`Max-Age=${Math.floor(maxAge / 1000)}`);
   return parts.join('; ');
 }

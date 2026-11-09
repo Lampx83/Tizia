@@ -4,7 +4,7 @@
 // Dùng `pg_dump -Fc` (custom format, nén sẵn) để snapshot, `pg_restore
 // --clean --if-exists` để phục hồi. Không cần restart server — restore
 // chạy thẳng trên connection pool đang sống. File backup dạng .dump nằm
-// ở BACKUP_DIR/ (mặc định <cwd>/data/backups).
+// ở BACKUP_DIR/ (mặc định <DATA_DIR>/backups).
 //
 // Yêu cầu: binary `pg_dump` / `pg_restore` cùng major version với server
 // Postgres trong PATH. Local dev có sẵn Homebrew, prod cần cài
@@ -17,9 +17,10 @@ import { spawn } from 'node:child_process';
 import express from 'express';
 import { requireAdmin } from './index.js';
 
+// Mặc định nằm trong DATA_DIR (volume) — thư mục trong /app sẽ mất khi tạo lại container.
 const BACKUP_DIR = process.env.BACKUP_DIR
   ? path.resolve(process.env.BACKUP_DIR)
-  : path.resolve(process.cwd(), 'data', 'backups');
+  : path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'backups');
 
 // Magic header pg_dump custom format: bytes "PGDMP" tại offset 0.
 const PGDMP_MAGIC = Buffer.from('PGDMP', 'utf8');

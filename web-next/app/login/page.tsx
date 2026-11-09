@@ -34,7 +34,9 @@ function LoginForm() {
     const res = await loginRequest(username.trim(), password);
     if (res.ok) {
       // Trục 1: server tính redirectTo theo role/grade/major. ?return= ưu tiên.
-      window.location.replace(ret || res.redirectTo || '/');
+      // Chỉ nhận đường dẫn nội bộ: chặn link đăng nhập độc hại dạng ?return=https://... hoặc javascript:...
+      const safeRet = ret && /^\/(?![\/\\])/.test(ret) ? ret : null;
+      window.location.replace(safeRet || res.redirectTo || '/');
     } else {
       setErr(res.error || 'Đăng nhập thất bại');
       setBusy(false);

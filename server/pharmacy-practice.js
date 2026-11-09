@@ -15,7 +15,7 @@
 // mục 5 & 12: "Không cho sinh viên sửa hoặc xóa nội dung đã lưu").
 // =====================================================================
 import express from 'express';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { db } from './db.js';
 import { llmGenerate, LLM_MODEL } from './ai.js';
 import { SCENARIOS, SCENARIO_CARDS } from '../public/js/pharmacy/scenarios.js';
@@ -111,6 +111,22 @@ const recentForStudent = db.prepare(`
     FROM pharmacy_practice_session
    WHERE student_code = ? ORDER BY started_at DESC LIMIT 20
 `);
+
+// Cookie chứng minh trình duyệt này từng bắt đầu lượt thực hành với mã SV đó. Mã SV ai cũng có thể biết, nên
+// /history chỉ trả session_id (là "chìa khoá" đọc kết quả) cho đúng trình duyệt có cookie khớp.
+const OWNER_COOKIE = 'pc_owner';
+const OWNER_SECRET = process.env.SESSION_SECRET || process.env.DATABASE_URL || 'tizia-dev';
+const ownerSig = (code) => createHmac('sha256', OWNER_SECRET).update(String(code)).digest('hex').slice(0, 32);
+function setOwnerCookie(res, code) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.append('Set-Cookie', `${OWNER_COOKIE}=${encodeURIComponent(code)}.${ownerSig(code)}; Path=/api/pharmacy/practice; HttpOnly; SameSite=Lax${secure}; Max-Age=31536000`);
+}
+function ownsCode(req, code) {
+  const m = new RegExp(`(?:^|;\\s*)${OWNER_COOKIE}=([^;]+)`).exec(req.headers.cookie || '');
+  if (!m) return false;
+  const [c, sig] = decodeURIComponent(m[1]).split('.');
+  return c === code && sig === ownerSig(code);
+}
 
 // player_name từ session Tizia (chỉ đọc, không tin body).
 function userRef(req) {
@@ -663,6 +679,7 @@ export function attachPharmacyPractice(r) {
         try { await upsertStudent.run({ code: student_code, name: student_name, cls: class_name, t: now() }); }
         catch (e) { console.error('[pharmacy-practice] upsert hồ sơ SV lỗi:', e.message); }
       }
+      if (b.guest !== true) setOwnerCookie(res, student_code);
       res.json({ sessionId: session_id, scenarioCode: sc.code || moduleId, scenarioName: sc.title || null, sessionKind: session_kind });
     } catch (err) {
       console.error('[pharmacy-practice] create session failed:', err.message);
@@ -733,6 +750,8 @@ export function attachPharmacyPractice(r) {
     const { sessionId } = req.body || {};
     const row0 = await getSessionRow.get(String(sessionId || ''));
     if (!row0) return res.status(404).json({ error: 'Không tìm thấy phiên thực hành.' });
+    // Phiên đã có điểm thì không chấm lại: gọi lặp sẽ đổi điểm và tốn lượt AI.
+    if (row0.status === 'completed') return res.json({ ok: true, sessionId: row0.session_id, status: 'completed' });
     if (row0.status === 'scoring') return res.json({ ok: true, sessionId: row0.session_id, status: 'scoring' });
 
     const completedAt = row0.completed_at || now();
@@ -948,7 +967,8 @@ export function attachPharmacyPractice(r) {
     try {
       const code = clean(req.query.code, 40).toUpperCase();
       if (!code) return res.status(400).json({ error: 'Thiếu mã sinh viên.' });
-      res.json({ items: await recentForStudent.all(code) });
+      const items = await recentForStudent.all(code);
+      res.json({ items: ownsCode(req, code) ? items : items.map((s) => ({ ...s, session_id: null })) });
     } catch (err) {
       console.error('[pharmacy-practice] history failed:', err.message);
       res.status(500).json({ error: 'Không đọc được lịch sử.' });

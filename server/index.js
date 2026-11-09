@@ -888,6 +888,7 @@ r.get('/api/codelab/submissions/:id', requireAuth, async (req, res) => {
   if (!codelabReady(res)) return;
   try {
     const sub = await codelab.getSubmission(req.params.id);
+    if (sub.externalUserRef && sub.externalUserRef !== refOf(req)) return res.status(403).json({ error: 'forbidden_not_owner' });
     res.json(sub);
   } catch (e) { codelabFail(res, e); }
 });
@@ -1125,7 +1126,11 @@ r.get('/api/classes/:code', async (req, res) => {
   res.json(cls);
 });
 
-r.get('/api/classes/:code/members', async (req, res) => {
+// Vai trò giáo viên tự đăng ký được và lớp chưa gắn chủ, nên đây chỉ là chặn tạm cho người học; xem báo cáo rà soát.
+const requireStaff = (req, res, next) => (['teacher', 'admin'].includes(req.user?.role)
+  ? next() : res.status(403).json({ error: 'forbidden' }));
+
+r.get('/api/classes/:code/members', requireAuth, requireStaff, async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).json({ error: 'class not found' });
   res.json(await getClassMembers(req.params.code));
@@ -1138,7 +1143,7 @@ r.get('/api/classes/:code/attempts', async (req, res) => {
   res.json(await getClassAttempts(req.params.code, limit));
 });
 
-r.get('/api/classes/:code/export.csv', async (req, res) => {
+r.get('/api/classes/:code/export.csv', requireAuth, requireStaff, async (req, res) => {
   const cls = await getClassByCode(req.params.code);
   if (!cls) return res.status(404).send('class not found');
   const rows = await getClassAttempts(req.params.code, 5000);
@@ -1152,7 +1157,10 @@ r.get('/api/classes/:code/export.csv', async (req, res) => {
   res.send('﻿' + lines.join('\n'));
 });
 
-r.get('/api/players/:name/attempts', async (req, res) => {
+r.get('/api/players/:name/attempts', requireAuth, async (req, res) => {
+  // Lịch sử làm bài là dữ liệu cá nhân: chỉ của chính mình, hoặc giáo viên/admin.
+  const isSelf = [req.user.display_name, req.user.username].includes(req.params.name);
+  if (!isSelf && !['teacher', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'forbidden' });
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
   res.json(await getPlayerAttempts(req.params.name, limit));
 });
@@ -1379,8 +1387,16 @@ r.post('/api/requests/:id/status', requireAuth, requireAdmin, async (req, res) =
   res.json({ ok });
 });
 
+// Yêu cầu là riêng tư theo tài khoản (bảng yêu cầu chỉ lọc ra của chính mình); id lại là số tăng dần nên phải kiểm chủ.
+const isRequestOwnerOrAdmin = (req, row) => req.user.role === 'admin' || (!!req.user.display_name && req.user.display_name === row.student);
+async function canReadRequest(req) {
+  const row = await getRequestById(req.params.id);
+  return !!row && isRequestOwnerOrAdmin(req, row);
+}
+
 // Audit trail quyết định của AI Agent cho 1 góp ý (minh bạch + cho phép xem lại).
-r.get('/api/requests/:id/decisions', async (req, res) => {
+r.get('/api/requests/:id/decisions', requireAuth, async (req, res) => {
+  if (!(await canReadRequest(req))) return res.status(403).json({ error: 'forbidden' });
   res.json({ decisions: await getDecisionsForRequest(req.params.id) });
 });
 
@@ -1391,9 +1407,10 @@ r.get('/api/requests/:id/decisions', async (req, res) => {
 // GET trả { request, messages }. messages[0] = tin mở đầu dựng từ chính nội dung
 // yêu cầu (head, không lưu lặp ở request_messages). Yêu cầu cũ (trước tính năng
 // này) có admin_note nhưng chưa có message → bù 1 tin AI ảo để không mất phản hồi.
-r.get('/api/requests/:id/thread', async (req, res) => {
+r.get('/api/requests/:id/thread', requireAuth, async (req, res) => {
   const reqRow = await getRequestById(req.params.id);
   if (!reqRow) return res.status(404).json({ error: 'not_found' });
+  if (!isRequestOwnerOrAdmin(req, reqRow)) return res.status(403).json({ error: 'forbidden' });
   const msgs = await listRequestMessages(reqRow.id);
   const hasBoardMsg = msgs.some(m => m.role === 'ai' || m.role === 'admin');
   const thread = [{
@@ -1468,7 +1485,7 @@ r.post('/api/notifications/read-all', async (req, res) => {
   res.json({ ok: true, marked: n });
 });
 
-r.get('/api/export.csv', async (_req, res) => {
+r.get('/api/export.csv', requireAuth, requireAdmin, async (_req, res) => {
   const rows = await getAllAttempts();
   const esc = v => {
     if (v == null) return '';

@@ -792,8 +792,9 @@ export function attachAdmin(r) {
   // Trục 2: log prompt AI của HS — GV/admin xem được. ?blocked=1 lọc prompt đã bị filter chặn.
   r.get('/api/teacher/ai-prompts', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    if (!['teacher', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'forbidden', message: 'Chỉ giảng viên hoặc admin xem được' });
+    // Log này là của MỌI học sinh, gồm cả nội dung bị chặn (có thể liên quan tự hại), và vai trò giáo viên tự đăng ký được.
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden', message: 'Chỉ admin xem được' });
     }
     const blockedOnly = req.query.blocked === '1' || req.query.blocked === 'true';
     const limit = Number(req.query.limit) || 50;

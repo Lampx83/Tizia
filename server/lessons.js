@@ -32,13 +32,24 @@ function validateBlocks(blocks) {
   for (const b of blocks) {
     if (!b || typeof b !== 'object') return false;
     if (typeof b.type !== 'string' || b.type.length > 40) return false;
+    // URL trong block đi thẳng vào iframe/img ở trang bài giảng: chặn javascript:, data:... để không thành stored XSS.
+    for (const k of ['url', 'src', 'href']) {
+      if (b[k] != null && !/^(https:\/\/|\/(?![\/\\]))/i.test(String(b[k]).trim())) return false;
+    }
   }
   return true;
 }
 
+// Bảng lessons chưa có cột chủ bài nên mọi giáo viên đều sửa được bài của nhau; tối thiểu là chặn học sinh và khách.
+function requireLessonEditor(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
+  if (!['teacher', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'forbidden' });
+  next();
+}
+
 export function attachLessons(r) {
   // CREATE / UPDATE
-  r.post('/api/lessons', async (req, res) => {
+  r.post('/api/lessons', requireLessonEditor, async (req, res) => {
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 200);
     if (!title) return res.status(400).json({ error: 'title required' });
@@ -110,7 +121,7 @@ export function attachLessons(r) {
   });
 
   // DELETE
-  r.delete('/api/lessons/:slug', async (req, res) => {
+  r.delete('/api/lessons/:slug', requireLessonEditor, async (req, res) => {
     const slug = req.params.slug;
     await db.prepare('DELETE FROM lessons WHERE slug=?').run(slug);
     await db.prepare('DELETE FROM lesson_likes WHERE slug=?').run(slug);

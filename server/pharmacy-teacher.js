@@ -54,12 +54,13 @@ function readCookie(req, name) {
   }
   return null;
 }
+const SECURE_ATTR = process.env.NODE_ENV === 'production' ? '; Secure' : '';
 function setCookie(res, token, expiresAt) {
   res.setHeader('Set-Cookie',
-    `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor((expiresAt - now()) / 1000)}`);
+    `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${SECURE_ATTR}; Max-Age=${Math.floor((expiresAt - now()) / 1000)}`);
 }
 function clearCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax${SECURE_ATTR}; Max-Age=0`);
 }
 
 // ---- câu lệnh -------------------------------------------------------

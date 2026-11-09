@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: tizia
+          POSTGRES_PASSWORD: tizia
+          POSTGRES_DB: tizia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U tizia" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://tizia:tizia@localhost:5432/tizia
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Kiểm tra cú pháp server
+        run: find server scripts -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check
+      - name: Unit test
+        run: node --test tests/unit/
+      - name: Áp schema vào Postgres trống
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f server/schema.sql
+      - name: Kiểm tra kiểu mọi câu SQL tĩnh (PREPARE, không thực thi)
+        run: |
+          node scripts/check-sql.mjs --emit > /tmp/check.sql
+          psql "$DATABASE_URL" -q -f /tmp/check.sql > /tmp/check.out 2>&1 || true
+          node scripts/check-sql.mjs --report --baseline scripts/check-sql.baseline.txt < /tmp/check.out

@@ -274,8 +274,12 @@ export function attachPortalApps(r, { requireAuth, requireAdmin, basePath = '' }
   });
 
   // ── INSTALL: upload .zip (raw body) ──
+  // Chỉ admin: app cài vào chạy CÙNG origin với Tizia nên JS của nó dùng được phiên của người đang xem, kể cả admin.
   r.post('/api/portal-apps/install',
     requireAuth,
+    (req, res, next) => (req.user.role === 'admin'
+      ? next()
+      : res.status(403).json({ error: 'admin_only', message: 'Chỉ quản trị viên mới được cài app. Hãy gửi gói app cho quản trị viên.' })),
     express.raw({ type: () => true, limit: MAX_ZIP_BYTES }),
     async (req, res) => {
       const ownerId = req.user.id;

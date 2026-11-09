@@ -47,6 +47,10 @@ function buildPrompt(persona, history, userMessage) {
   return lines.join('\n');
 }
 
+// Các route chat không cần đăng nhập: GPT tốn tiền nên phải bật rõ ràng bằng env; câu người học được cắt độ dài.
+const GPT_ENABLED = process.env.PHARMACY_GPT_ENABLED === '1';
+const MAX_CHAT_CHARS = 1000;
+
 // Fallback NPC responses when the LLM is unavailable — mirrors src/lib/llm/stub.ts.
 function stubReply(moduleId) {
   if (moduleId === 'gpp') return 'Em vẫn cứ muốn xin ít kháng sinh thôi, khỏi nhanh em đi làm.';
@@ -553,9 +557,9 @@ export function attachPharmacy(r) {
     // Bộ chọn mô hình (chat UI): 'qwen' (mặc định, vLLM nội bộ) hoặc 'gpt' (OpenAI,
     // chỉ dùng khi ĐÃ cấu hình OPENAI_API_KEY — thiếu key thì tự rơi về Qwen).
     const provider = req.body?.provider === 'gpt' ? 'gpt' : 'qwen';
-    const useGpt = provider === 'gpt' && isOpenAIConfigured();
+    const useGpt = provider === 'gpt' && GPT_ENABLED && isOpenAIConfigured();
 
-    const text = String(message || '').trim();
+    const text = String(message || '').trim().slice(0, MAX_CHAT_CHARS);
     if (!text) return res.status(400).json({ error: 'empty message' });
     s.messages.push({ role: 'user', content: text, ts: Date.now() });
     updateMoodState(scenario, s, text);   // #117: cộng dồn cờ đồng cảm / giải thích
@@ -724,8 +728,8 @@ export function attachPharmacy(r) {
     const isPatient = scenario.npcKind !== 'professional';
     // Bộ chọn mô hình — xem chú thích tương tự ở /chat phía trên.
     const provider = req.body?.provider === 'gpt' ? 'gpt' : 'qwen';
-    const useGpt = provider === 'gpt' && isOpenAIConfigured();
-    const text = String(message || '').trim();
+    const useGpt = provider === 'gpt' && GPT_ENABLED && isOpenAIConfigured();
+    const text = String(message || '').trim().slice(0, MAX_CHAT_CHARS);
     if (!text) return res.status(400).json({ error: 'empty message' });
     s.messages.push({ role: 'user', content: text, ts: Date.now() });
     updateMoodState(scenario, s, text);   // 🪤 03/08: thiếu dòng này — máy trạng thái

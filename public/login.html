@@ -195,7 +195,10 @@
         // Ưu tiên ?return= (user click vào lesson rồi mới login → trả về lesson).
         // Không có ?return= → dùng redirectTo do server tính theo role+grade+major
         // (Trục 1: HS → trường phổ thông phù hợp, SV → trường ngành phù hợp).
-        const target = params.get('return') || res.redirectTo || returnTo;
+        // Chỉ nhận đường dẫn nội bộ: chặn link đăng nhập độc hại dạng ?return=https://... hoặc javascript:...
+        const ret = params.get('return');
+        const safeRet = ret && /^\/(?![\/\\])/.test(ret) ? ret : null;
+        const target = safeRet || res.redirectTo || returnTo;
         location.replace(target);
       } else {
         errEl.textContent = res?.error || 'Đăng nhập thất bại';

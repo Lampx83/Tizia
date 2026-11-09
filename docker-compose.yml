@@ -28,7 +28,8 @@ services:
       tizia-postgres:
         condition: service_healthy
     ports:
-      - "8041:8041"
+      # Chỉ nghe trên máy chủ: NPM và Next vào qua IP container 172.31.24.2, mở ra ngoài là lộ HTTP và lách được rate limit.
+      - "127.0.0.1:8041:8041"
     environment:
       NODE_ENV: production
       PORT: 8041

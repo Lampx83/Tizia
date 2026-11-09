@@ -75,7 +75,9 @@ export function attachPortalAgents(r, { requireAuth, requireAdmin, resolveAgent 
   });
 
   // ── REGISTER: alias + base_url (fetch /metadata để xác thực + điền name/desc) ──
+  // Chỉ admin: server sẽ gọi tới base_url này, mở cho mọi người là SSRF vào mạng nội bộ.
   r.post('/api/agents/register', requireAuth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin_only', message: 'Chỉ quản trị viên mới được đăng ký agent.' });
     const b = req.body || {};
     const alias = String(b.alias || '').trim().toLowerCase();
     const baseUrl = normalizeBase(b.baseUrl || b.base_url || '');

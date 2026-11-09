@@ -17,6 +17,17 @@ const nextConfig = {
   images: { unoptimized: true },
   ...(hasBasePath && { basePath: BASE_PATH, assetPrefix: BASE_PATH }),
   env: { ...(hasBasePath && { NEXT_PUBLIC_BASE_PATH: BASE_PATH }) },
+  // Khớp với header Express (contexts/security) để trang Next-native cũng chống clickjacking và đoán sai kiểu file.
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      ],
+    }];
+  },
   async redirects() {
     // URL .html cũ → URL SẠCH (308, giữ query). Ai vào /school.html?domain=x sẽ tự
     // nhảy sang /school?domain=x. CHỈ áp cho trang đã migrate — KHÔNG đụng .html của

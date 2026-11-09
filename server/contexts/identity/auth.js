@@ -10,6 +10,7 @@ import {
   listUserDomainGrants, listManagedDomains,
 } from '../../db.js';
 import { effectivePlan, effectivePlanWithFamily, meetsPlan, USER_PLANS } from '../billing/user-plans.js';
+import { loginGuard, LOGIN_LOCKED_MESSAGE } from '../security/login-guard.js';
 
 const COOKIE_NAME = 'tizia_sid';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 ngày
@@ -49,6 +50,7 @@ function parseCookies(req) {
 
 function buildSetCookie(name, value, { maxAge, expires, path = '/', sameSite = 'Lax' } = {}) {
   const parts = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, 'HttpOnly', `SameSite=${sameSite}`];
+  if (process.env.NODE_ENV === 'production') parts.push('Secure');
   if (maxAge != null) parts.push(`Max-Age=${Math.floor(maxAge / 1000)}`);
   if (expires) parts.push(`Expires=${new Date(expires).toUTCString()}`);
   return parts.join('; ');
@@ -545,10 +547,17 @@ export function attachAuth(r) {
     const b = req.body ?? {};
     const username = String(b.username || '').trim();
     const password = String(b.password || '');
+    const wait = loginGuard.retryAfter(username);
+    if (wait) {
+      res.setHeader('Retry-After', String(wait));
+      return res.status(429).json({ error: LOGIN_LOCKED_MESSAGE });
+    }
     const user = await getUserByUsername(username);
     if (!user || !verifyPassword(password, user.password_hash)) {
+      loginGuard.fail(username);
       return res.status(401).json({ error: 'tài khoản hoặc mật khẩu không đúng' });
     }
+    loginGuard.success(username);
     const token = randomBytes(32).toString('hex');
     const { expires_at } = await createSession({ token, user_id: user.id, ttlMs: SESSION_TTL_MS });
     await touchLogin(user.id);
