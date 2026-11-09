@@ -72,13 +72,16 @@ export function createRequestsPort(d) {
     async listBoardInbox(limit = 200) {
       const cap = Math.min(Math.max(Number(limit) || 200, 1), 500);
       const rows = await d.all(`
-        SELECT id, domain, type, title, detail, student, status, votes, admin_note, created_at, updated_at, attachments, execution_mode
-        FROM requests WHERE status IN ('pending', 'reviewing') ORDER BY votes DESC, created_at DESC LIMIT ?
+        SELECT r.id, r.domain, r.type, r.title, r.detail, r.student, r.status, r.votes, r.admin_note, r.created_at, r.updated_at,
+          r.attachments, r.execution_mode, u.role AS requester_role
+        FROM requests r LEFT JOIN users u ON u.id = r.owner_user_id
+        WHERE r.status IN ('pending', 'reviewing') ORDER BY r.votes DESC, r.created_at DESC LIMIT ?
       `, [cap]);
       const out = [];
       for (const r of rows) {
         out.push({
           id: `req-${r.id}`, db_id: r.id, from: r.student, domain: r.domain, type: r.type, subject: r.title, body: r.detail || '',
+          requester_role: r.requester_role || null,
           status: r.status, votes: r.votes, admin_note: r.admin_note || null, attachments: safeParseAtts(r.attachments),
           // LF/99: 'queue' = yêu cầu Claude Code xử lý (không qua worker vLLM); NULL/'now' như cũ.
           execution_mode: r.execution_mode || null,

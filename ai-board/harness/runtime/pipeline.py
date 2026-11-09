@@ -428,7 +428,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     request, attachment_report = attachments.enrich(request, models=deps.models, budget=budget)
     if attachment_report is not None:
         state["attachments"] = attachment_report
-    g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget, **trace)
+    g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget,
+                         requester_role=request.get("requester_role"), **trace)
     state["intake"] = g
     if g["verdict"] != "allow":
         return {"gate": 1, "blocked": True, "reason": f"intake_{g['verdict']}: {g['internal_reason']}"[:1000],
