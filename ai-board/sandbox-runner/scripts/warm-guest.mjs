@@ -41,6 +41,7 @@ try {
   await sh("docker pull node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 && docker pull postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36 && docker tag postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36 postgres:16-alpine 2>&1 | tail -15", "pull-base");
   await sh("cd /ctx/checkout && docker build -t warm-tizia:cache . 2>&1 | tail -15", "build");
   await sh("docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'; docker system df | head -6", "images");
+  await sh("docker builder prune -af >/dev/null; docker system df | head -6", "prune");
   await sh(`pkill dockerd; sleep 5; du -sh /var/lib/docker; tar -C /var/lib/docker -cf - . | gzip -1 > /out/${basename(outTar)} && ls -l /out/${basename(outTar)}`, "export");
   console.log("exported", outTar);
 } finally {
