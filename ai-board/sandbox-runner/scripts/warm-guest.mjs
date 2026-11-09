@@ -24,6 +24,7 @@ const egress = {
 };
 
 const name = "g5-warm";
+await Sandbox.remove(name).catch(() => {});
 const sb = await Sandbox.builder(name).image(policy.guest_image).registry((r) => r.insecure())
   .cpus(2).memory(Number(process.env.WARM_MEM_MIB || 3072)).rootDisk(16384).maxDuration(3300)
   .volume("/in", (m) => m.bind(dirname(checkoutTgz)).readonly()).volume("/out", (m) => m.bind(dirname(outTar))) // host dirs, no file streaming through node
