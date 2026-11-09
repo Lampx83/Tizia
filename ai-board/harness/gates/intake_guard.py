@@ -169,7 +169,7 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
     title, detail = request_title or "", request_detail or ""
     hits = deterministic(f"{title}\n{detail}")
     trusted = _trusts_requester(requester_role)
-    trusted_hit = bool(trusted and hits.pop("privileged_area", None))
+    trusted_hit = False
     keyword_clear, arbitrated = not hits, None
     verdict = _worst(hits.values())
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []

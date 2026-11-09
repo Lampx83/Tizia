@@ -35,20 +35,14 @@ const TOPICS = Object.entries(LEXICON.labels).map(([label, spec]) => ({
 
 export const publicMessage = (kind) => LEXICON.public_messages[kind];
 
-// Cùng biến với ai-board/harness/settings.py (pydantic bool).
-const adminRequesterTrust = () => /^(1|true|yes|on)$/i.test(String(process.env.AI_BOARD_ADMIN_REQUESTER_TRUST || '').trim());
-
-/** Nhãn trúng + có chặn không. message lịch sự, không nhắc lại nội dung, không lộ luật nào trúng.
- * requesterRole: role server xác thực; 'admin' + cờ bật → bỏ privileged_area (trustedAdmin=true). */
-export function checkIntake(title, detail, requesterRole = null) {
+/** Nhãn trúng + có chặn không. message lịch sự, không nhắc lại nội dung, không lộ luật nào trúng. */
+export function checkIntake(title, detail) {
   const text = readOnlyVerificationText(`${title ?? ''}\n${detail ?? ''}`);
   const exact = text.normalize('NFC').toLowerCase();
   const folded = fold(text);
-  let hits = TOPICS.filter(({ patterns }) => patterns.some(({ re, ascii }) => re.test(ascii ? folded : exact)));
-  const trustedAdmin = requesterRole === 'admin' && adminRequesterTrust() && hits.some(({ label }) => label === 'privileged_area');
-  if (trustedAdmin) hits = hits.filter(({ label }) => label !== 'privileged_area');
+  const hits = TOPICS.filter(({ patterns }) => patterns.some(({ re, ascii }) => re.test(ascii ? folded : exact)));
   const block = hits.some(({ verdict }) => BLOCKING.has(verdict));
-  return { block, labels: hits.map(({ label }) => label), ...(trustedAdmin ? { trustedAdmin } : {}), message: block
+  return { block, labels: hits.map(({ label }) => label), message: block
     ? LEXICON.public_messages[hits.some((h) => h.label === 'prompt_injection') ? 'prompt_injection' : 'reject'] : null };
 }
 
