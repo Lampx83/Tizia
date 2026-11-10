@@ -40,7 +40,8 @@ def test_recall_reports_files_gold_lines_and_section_costs_per_case_and_group_wi
     assert (tmp_path / "recall" / "latest.txt").read_text(encoding="utf-8").strip() == printed.strip()
 
 
-def test_changing_retrieval_weights_shows_a_recall_delta_with_a_bootstrap_interval(tmp_path):
+def test_changing_retrieval_weights_shows_a_recall_delta_with_a_bootstrap_interval(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE3_CONTEXT", "excerpt")  # hybrid gửi cả file nhỏ, weights không chạm dòng gold
     make_corpus(tmp_path)
     alt = tmp_path / "alt-weights.json"  # 1 từ khoá, đuôi 1 dòng: câu thay thế vẫn trúng (từ khoá đầu), câu chèn mất dòng neo
     alt.write_text(json.dumps({"max_keywords": {"value": 1}, "tail_lines": {"value": 1}, "radius": {"value": 1}}), encoding="utf-8")
