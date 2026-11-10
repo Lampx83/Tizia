@@ -986,3 +986,13 @@ def test_teardown_runs_on_an_unexpected_exit_too(tmp_path):
     with pytest.raises(KeyboardInterrupt):
         verify.run(state(checkout(tmp_path)), runner=runner)
     assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+
+
+def test_preloaded_base_pin_is_dropped_only_for_the_known_digest(tmp_path):
+    pin = "fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293"
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM node:20-alpine@sha256:{pin} AS deps\nFROM node:20-alpine@sha256:{'0' * 64}\nFROM alpine:3\n", encoding="utf-8")
+    assert verify._use_preloaded_bases(tmp_path) is True
+    assert (tmp_path / "Dockerfile").read_text(encoding="utf-8") == (
+        f"FROM node:20-alpine AS deps\nFROM node:20-alpine@sha256:{'0' * 64}\nFROM alpine:3\n")
+    assert verify._use_preloaded_bases(tmp_path) is False

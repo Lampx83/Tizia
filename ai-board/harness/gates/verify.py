@@ -75,6 +75,19 @@ def _internal() -> bool:
     return get_settings().verify_network == "internal"
 
 
+_PRELOADED_BASE = re.compile(r"^(\s*FROM\s+(?:--platform=\S+\s+)?node:20-alpine)@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293", re.I | re.M)
+
+
+def _use_preloaded_bases(checkout: Path) -> bool:
+    """Guest keeps node:20-alpine by tag only (docker load drops repo digests): drop that one pin in the guest's Dockerfile copy."""
+    path = checkout / "Dockerfile"
+    text = path.read_text(encoding="utf-8")
+    new = _PRELOADED_BASE.sub(r"\1", text)
+    if new != text:
+        path.write_text(new, encoding="utf-8")
+    return new != text
+
+
 def _guest_ca() -> Path | None:
     """Public interception CA supplied by Microsandbox to this guest, never from the candidate checkout."""
     for path in sorted(CA_DIR.glob('microsandbox-ca.*')):
@@ -520,6 +533,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             _validate_config(config, project, password)
             internal = _internal()
             stage = "boot"
+            if internal and get_settings().verify_preloaded_bases:
+                _use_preloaded_bases(checkout)
             command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
             if internal:
                 # Address from the daemon, not from inside the candidate container.
