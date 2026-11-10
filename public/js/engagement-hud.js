@@ -1,6 +1,7 @@
 // Engagement HUD — Streak · Hearts · Daily Quests (Trục A — Duolingo/Prodigy)
 // Auto-mount floating top-right. Tự ẩn cho guest (401). Mọi trang chỉ cần
 // import module này 1 lần (auth-header.js đã import sẵn).
+import { fetchMe } from './auth.js';
 
 const API = {
   state:  '/api/engagement/state',
@@ -286,6 +287,8 @@ class EngagementHUD {
 
   async refresh(silent = false) {
     try {
+      // Khách: không gọi API của tài khoản (chỉ ra 401 đỏ console), ẩn HUD luôn.
+      if (!(await fetchMe())) { this.hud.hidden = true; return; }
       const [stateRes, leagueRes] = await Promise.all([
         fetch(API.state,  { credentials: 'same-origin' }),
         fetch(API.league, { credentials: 'same-origin' }).catch(() => null),

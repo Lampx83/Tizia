@@ -35,13 +35,15 @@ type LeaderRow = {
 };
 
 // ── Lấy leaderboard từ server (gộp nhiều version) ──
-async function fetchLeaderboard(range: Range): Promise<Entry[]> {
+// 'login' = khách: API bảng xếp hạng cần đăng nhập, khác hẳn với "chưa có ai".
+async function fetchLeaderboard(range: Range): Promise<Entry[] | 'login'> {
   // range = 'week' | 'month' | 'all'  → filter client-side theo created_at
   const ranges: Record<Range, number> = { week: 7 * 86400000, month: 30 * 86400000, all: Infinity };
   const cutoff = Date.now() - ranges[range];
 
   const merged = new Map<string, Entry>(); // player → { score, runs, lastTs }
   let gotAny = false;
+  let needLogin = false;
 
   await Promise.all(
     VERSIONS.map(async (v) => {
@@ -49,6 +51,7 @@ async function fetchLeaderboard(range: Range): Promise<Entry[]> {
         const r = await fetch(`/api/leaderboard?version=${encodeURIComponent(v)}&limit=100`, {
           credentials: 'same-origin',
         });
+        if (r.status === 401) needLogin = true;
         if (!r.ok) return;
         const rows = (await r.json()) as unknown;
         if (!Array.isArray(rows)) return;
@@ -70,6 +73,7 @@ async function fetchLeaderboard(range: Range): Promise<Entry[]> {
     }),
   );
 
+  if (!gotAny && needLogin) return 'login';
   if (!gotAny || merged.size === 0) {
     // Không có data thật → trả mảng rỗng, UI hiển thị trạng thái trống.
     return [];
@@ -106,7 +110,7 @@ function makeStars() {
 export default function Leaderboard() {
   const [range, setRange] = useState<Range>('week');
   const [me, setMe] = useState<MeUser>(null);
-  const [entries, setEntries] = useState<Entry[] | null>(null); // null = loading
+  const [entries, setEntries] = useState<Entry[] | 'login' | null>(null); // null = loading
   const [moreOpen, setMoreOpen] = useState(false);
 
   // Sao bay: sinh 1 lần ở client (tránh mismatch SSR).
@@ -152,10 +156,11 @@ export default function Leaderboard() {
       !!my && my.toLowerCase() === playerName.toLowerCase();
   }, [me]);
 
-  const top3 = entries?.slice(0, 3) ?? [];
-  const mid = entries?.slice(3, 10) ?? [];
-  const tail = entries?.slice(10, 50) ?? [];
-  const maxScore = entries?.[0]?.score || 1;
+  const list = Array.isArray(entries) ? entries : [];
+  const top3 = list.slice(0, 3);
+  const mid = list.slice(3, 10);
+  const tail = list.slice(10, 50);
+  const maxScore = list[0]?.score || 1;
 
   const renderRow = (e: Entry, rank: number) => {
     const pct = maxScore ? Math.max(4, (e.score / maxScore) * 100) : 0;
@@ -250,6 +255,12 @@ export default function Leaderboard() {
               <div className="spinner" />
               <div>Đang tải bảng xếp hạng…</div>
             </div>
+          ) : entries === 'login' ? (
+            <div className="empty">
+              <div className="ic">🔐</div>
+              <p>Đăng nhập để xem các bạn đang dẫn đầu.</p>
+              <a href="/login?return=/bang-phong-than">Đăng nhập</a>
+            </div>
           ) : entries.length === 0 ? (
             <div className="empty">
               <div className="ic">🏜️</div>
@@ -292,7 +303,7 @@ export default function Leaderboard() {
         </div>
 
         <div className="foot">
-          Bảng cập nhật mỗi 5 phút · điểm = tổng best_score × stars trên các tuần đã hoàn thành.
+          Bảng cập nhật mỗi 5 phút · điểm cộng từ các tuần học đã hoàn thành (điểm cao nhất mỗi tuần × số sao).
           <br />
           Muốn lọt top? Hãy chinh phục thêm tuần học ở <a href="/space">Không gian học</a>!
         </div>

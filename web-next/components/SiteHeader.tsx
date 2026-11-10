@@ -101,7 +101,7 @@ export default function SiteHeader() {
         <div className="ml-auto flex items-center gap-2 sm:gap-2.5">
           {/* Chuông phản hồi Ban điều hành AI (ẩn với guest) — bản React,
               thay vanilla notifications-bell.js chèn qua nginx. */}
-          <NotificationsBell />
+          <NotificationsBell loggedIn={!!me} />
           {/* Bộ chọn giao diện sáng / tối / theo hệ thống — luôn hiển thị */}
           <ThemeToggle />
 

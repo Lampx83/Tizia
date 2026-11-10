@@ -71,10 +71,10 @@ function Column({ title, links }: { title: string; links: Array<[string, string]
   return (
     <div>
       <h2 className="mb-3 text-sm font-semibold text-foreground">{title}</h2>
-      <ul className="space-y-2 text-sm text-muted-foreground">
+      <ul className="space-y-1 text-sm text-muted-foreground">
         {links.map(([href, label]) => (
           <li key={href}>
-            <Link href={href} className="transition-colors hover:text-foreground">
+            <Link href={href} className="inline-block py-1 transition-colors hover:text-foreground">
               {label}
             </Link>
           </li>

@@ -34,7 +34,8 @@ function urlB64ToUint8(b64: string) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-export default function NotificationsBell() {
+// loggedIn do SiteHeader truyền vào (đã biết từ /api/auth/me): khách thì không gọi API thông báo, tránh 401 ở mọi trang.
+export default function NotificationsBell({ loggedIn }: { loggedIn: boolean }) {
   const [enabled, setEnabled] = useState(false); // probe OK mới hiện
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notif[]>([]);
@@ -56,6 +57,7 @@ export default function NotificationsBell() {
 
   // Probe 1 lần: guest (401) hoặc backend tắt → ẩn luôn.
   useEffect(() => {
+    if (!loggedIn) return;
     let alive = true;
     api('/api/notifications?limit=1').then((probe) => {
       if (!alive || !probe.ok) return;
@@ -66,7 +68,7 @@ export default function NotificationsBell() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [loggedIn]);
 
   // Polling nhẹ — refresh count mỗi 60s khi tab hiển thị.
   useEffect(() => {

@@ -6,6 +6,7 @@
 //   [data-feature-hide-if-locked] → ẩn hoàn toàn nếu locked (không show lock card)
 //
 // HUD/Pet/Daily auto-check khi mount.
+import { fetchMe } from './auth.js';
 
 const TTL_MS = 60_000;
 const KEY_CACHE = 'tizia.features.cache';
@@ -18,7 +19,8 @@ async function loadFeatures() {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const r = await fetch('/api/features/me', { credentials: 'same-origin' });
+      // Khách: /api/auth/me đã cho biết chưa đăng nhập, không gọi thêm API của tài khoản (chỉ ra 401 đỏ console).
+      const r = (await fetchMe()) ? await fetch('/api/features/me', { credentials: 'same-origin' }) : { status: 401 };
       if (r.status === 401) {
         // Guest: assume tier 0, no role-only features
         cached = { user_tier: 0, role: 'guest', features: {} };

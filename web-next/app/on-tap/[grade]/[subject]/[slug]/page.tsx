@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import JsonLd from '@/components/JsonLd';
 import { pageMeta, breadcrumbLd, absoluteUrl } from '@/lib/seo';
+import ChoiceCheck from './ChoiceCheck';
 import {
   findGrade, getLessonIndex, getScenario, subjectLabel, type LessonIndexItem,
 } from '@/lib/curriculum';
@@ -110,23 +111,16 @@ export default async function LessonPage({ params }: Params) {
       ) : (
         <ol className="space-y-5">
           {questions.map((q, i) => (
-            <li key={i} className="rounded-lg border border-foreground/15 p-4">
+            <li key={i} data-q className="rounded-lg border border-foreground/15 p-4">
               <p className="font-medium">
                 <span className="mr-1.5 text-muted-foreground">Câu {i + 1}.</span>
                 {q.stem}
               </p>
-              <ul className="mt-3 space-y-1.5 text-sm">
-                {q.choices?.map((c, j) => (
-                  <li key={j} className="flex gap-2">
-                    <span className="text-muted-foreground">{String.fromCharCode(65 + j)}.</span>
-                    <span>{c}</span>
-                  </li>
-                ))}
-              </ul>
+              {q.choices?.length ? <ChoiceCheck choices={q.choices} answer={q.answer ?? 0} /> : null}
               {/* <details> để người học tự nghĩ trước khi xem đáp án, nhưng chữ
                   vẫn nằm trong HTML nên công cụ tìm kiếm đọc được đầy đủ. */}
               <details className="mt-3 text-sm">
-                <summary className="cursor-pointer font-medium text-primary">Xem đáp án</summary>
+                <summary className="cursor-pointer py-1 font-medium text-primary">Xem đáp án</summary>
                 <div className="mt-2 space-y-1 text-muted-foreground">
                   <p>
                     <strong className="text-foreground">

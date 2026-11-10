@@ -261,9 +261,9 @@ const styles = `
   .ch-desc { font-size: 12.5px; opacity: 0.7; margin: 0 0 14px; }
   .ch-locknote { font-size: 12.5px; color: #cbd5e1; opacity: 0.85; margin-bottom: 10px; }
 
-  .lp-path { display: flex; flex-wrap: wrap; gap: 14px 10px; align-items: stretch; }
+  .lp-path { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px 10px; align-items: stretch; }
   .lp-node {
-    position: relative; width: 150px; min-height: 116px;
+    position: relative; min-width: 0; min-height: 116px;
     background: rgba(0,0,0,0.28); border: 2px solid rgba(255,255,255,0.16);
     border-radius: 14px; padding: 12px; text-decoration: none; color: #fff;
     display: flex; flex-direction: column; gap: 6px; transition: all .16s;
@@ -275,7 +275,7 @@ const styles = `
   .lp-title { font-size: 13px; font-weight: 700; line-height: 1.3; flex: 1; }
   .lp-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
   .lp-stars { color: #fbbf24; letter-spacing: 1px; }
-  .lp-tag { font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+  .lp-tag { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
 
   .lp-node.completed { border-color: #22c55e; background: rgba(34,197,94,0.16); }
   .lp-node.completed .lp-num { background: #22c55e; color: #06281a; }
