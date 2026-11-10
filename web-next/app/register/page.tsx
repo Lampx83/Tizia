@@ -13,7 +13,6 @@ import { UserPlus } from 'lucide-react';
 const ROLES = [
   { id: 'pupil', label: '🎒 Học sinh (K-12)' },
   { id: 'student', label: '🎓 Sinh viên' },
-  { id: 'teacher', label: '👩‍🏫 Giáo viên' },
 ];
 
 function RegisterForm() {
@@ -53,7 +52,7 @@ function RegisterForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {ROLES.map((r) => (
                 <button key={r.id} type="button" onClick={() => set('role', r.id)}
                         className={cn('rounded-md border px-2 py-2 text-xs font-medium transition',
@@ -62,6 +61,7 @@ function RegisterForm() {
                 </button>
               ))}
             </div>
+            <p className="-mt-2 text-xs text-muted-foreground">Giáo viên, giảng viên: tài khoản do quản trị Tizia cấp, không tự đăng ký.</p>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Tài khoản</label>
               <Input required minLength={3} maxLength={32} placeholder="a-z, 0-9, _ . -"

@@ -489,7 +489,12 @@ export function attachAuth(r) {
     const password = String(b.password || '');
     const display_name = String(b.displayName || b.display_name || username).trim().slice(0, 60);
     const roleRaw = String(b.role || 'student').toLowerCase();
-    const role = ['pupil', 'student', 'teacher'].includes(roleRaw) ? roleRaw : 'student';
+    // Giáo viên KHÔNG tự đăng ký được (từ 11/2026): vai trò này xem được dữ liệu học sinh
+    // nên phải do admin cấp (POST /api/admin/users hoặc /api/admin/users/:id/role).
+    if (roleRaw === 'teacher') {
+      return res.status(403).json({ error: 'Tài khoản giáo viên do quản trị viên cấp. Bạn hãy đăng ký là học sinh/sinh viên, hoặc liên hệ quản trị Tizia để được cấp quyền giáo viên.' });
+    }
+    const role = ['pupil', 'student'].includes(roleRaw) ? roleRaw : 'student';
     const ageRaw = Number(b.age);
     const age = Number.isFinite(ageRaw) ? Math.floor(ageRaw) : null;
 

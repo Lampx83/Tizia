@@ -56,7 +56,7 @@
   .pw-toggle .icon-off { display: none; }
   .pw-toggle.shown .icon-on { display: none; }
   .pw-toggle.shown .icon-off { display: block; }
-  .role-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .role-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
   @media (max-width: 480px) { .role-row { grid-template-columns: 1fr; } }
   .role-row label {
     margin: 0; padding: 10px 8px; border-radius: 10px; cursor: pointer; text-align: center;
@@ -181,12 +181,8 @@
       <span class="ico">🎓</span><b>Sinh viên</b>
       <small>Cao đẳng · Đại học · Sau ĐH</small>
     </label>
-    <label>
-      <input type="radio" name="role" value="teacher" />
-      <span class="ico">👨‍🏫</span><b>Giảng viên</b>
-      <small>Quản lý lớp, chấm bài, dashboard</small>
-    </label>
   </div>
+  <div class="hint">Giáo viên, giảng viên: tài khoản do quản trị Tizia cấp, không tự đăng ký.</div>
 
   <!-- Khối thông tin Học sinh — hiện khi chọn role=pupil -->
   <div class="role-fields" id="fields-pupil" data-role-fields="pupil">
@@ -242,11 +238,6 @@
     </div>
   </div>
 
-  <!-- Khối Giảng viên — chỉ school_name optional -->
-  <div class="role-fields" id="fields-teacher" data-role-fields="teacher">
-    <label for="school-teacher">Trường đang công tác <span style="opacity:0.6">(không bắt buộc)</span></label>
-    <input id="school-teacher" name="schoolName-teacher" maxlength="120" placeholder="VD: ĐH Kinh tế Quốc dân" />
-  </div>
 
   <button class="primary" type="submit" id="submit-btn">Đăng ký &amp; vào Tizia</button>
   <div class="err" id="err"></div>
@@ -297,7 +288,6 @@
   function getSchoolName(role) {
     if (role === 'pupil')   return form['schoolName-pupil']?.value || '';
     if (role === 'student') return form['schoolName-student']?.value || '';
-    if (role === 'teacher') return form['schoolName-teacher']?.value || '';
     return '';
   }
 
