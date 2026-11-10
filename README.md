@@ -194,7 +194,7 @@ Cần SSH alias `tizia-prod` trong `~/.ssh/config` (hoặc đặt `PROD_HOST`).
 | `DATA_DIR` | `./data` (host) / `/data` (Docker) | Thư mục SQLite |
 | `BASE_PATH` | `` | Path prefix (vd `/ps` cho `tizia.vn/ps`) |
 | `LLM_URL` | dev tunnel | Endpoint vLLM (OpenAI-compatible, `.../vllm/v1`) |
-| `LLM_SECKEY` | `tizia` | Header `x-ollama-seckey` (shared secret nội bộ) |
+| `LLM_SECKEY` | — (bắt buộc) | Header `x-ollama-seckey`, khoá do quản trị gateway cấp. Không có mặc định trong code |
 | `LLM_MODEL` | `qwen3.5-35b-a3b-int4` | Tên model |
 | `AI_BOARD_KEY` | *(trống)* | Bật `/api/ai-board/inbox`. ≥24 ký tự (`openssl rand -hex 32`); trống = route 404 |
 

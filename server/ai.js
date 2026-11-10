@@ -9,7 +9,7 @@
 // Cấu hình env:
 //   LLM_URL        — endpoint vLLM (OpenAI-compatible), mặc định = dev tunnel
 //                    http://101.96.66.232:8037/vllm/v1
-//   LLM_SECKEY     — Header x-ollama-seckey (shared secret với gateway nội bộ;
+//   LLM_SECKEY     — BẮT BUỘC. Header x-ollama-seckey (shared secret với gateway nội bộ;
 //                    tên header giữ nguyên "ollama" vì gateway kiểm theo tên này).
 //   LLM_MODEL      — Tên model (mặc định qwen3.5-35b-a3b-int4)
 //   LLM_TIMEOUT_MS — Timeout 1 yêu cầu (mặc định 60s)
@@ -28,13 +28,15 @@ import { saveAiQuestions, saveAiQa, getAiQuestions, getAiQa, getAiContentCounts 
 import { sendGA4Event } from './contexts/analytics/ga4-mp.js';
 
 const LLM_URL = (process.env.LLM_URL || 'http://101.96.66.232:8037/vllm/v1').replace(/\/+$/, '');
-const LLM_SECKEY = process.env.LLM_SECKEY || 'tizia';
+// Không có giá trị mặc định: repo công khai, khoá gateway chỉ nằm trong .env của máy chủ.
+const LLM_SECKEY = process.env.LLM_SECKEY || '';
+if (!LLM_SECKEY) console.warn('[ai] LLM_SECKEY chưa đặt — gateway LLM sẽ trả 401, các tính năng AI tạm tắt.');
 export const LLM_MODEL = process.env.LLM_MODEL || 'qwen3.5-35b-a3b-int4';
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60_000;
 
 const LLM_CFG = {
   url: `${LLM_URL}/chat/completions`,
-  headers: { 'x-ollama-seckey': LLM_SECKEY },
+  headers: LLM_SECKEY ? { 'x-ollama-seckey': LLM_SECKEY } : {},
   model: LLM_MODEL,
   timeoutMs: LLM_TIMEOUT_MS,
   label: 'LLM',
