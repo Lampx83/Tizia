@@ -157,7 +157,17 @@
       try { const d = await J('/api/tt/me?sessionId=' + encodeURIComponent(s.id)); start(s.id, d.identity); return; } catch (e) { if (e.status !== 401) { /* mạng lỗi: vẫn chặn, báo rõ */ } }
     }
     try { showLogin(await J('/api/tt/config')); }
-    catch (e) { document.body.classList.add('tt-locked'); const b = document.createElement('div'); b.id = 'ttLogin'; b.innerHTML = '<div class="tt-card"><h2>Không kết nối được máy chủ</h2><p class="tt-sub">Kiểm tra mạng rồi tải lại trang. (Nếu bạn chưa đăng nhập Tizia, hãy đăng nhập trước.)</p><button class="tt-go" onclick="location.reload()">Tải lại</button></div>'; if (!$('ttStyle')) { const st = document.createElement('style'); st.id = 'ttStyle'; st.textContent = CSS; document.head.appendChild(st); } document.body.appendChild(b); }
+    catch (e) {
+      document.body.classList.add('tt-locked');
+      const b = document.createElement('div'); b.id = 'ttLogin';
+      // 401 = chưa đăng nhập Tizia (trang này cần tài khoản), khác hẳn lỗi mạng: báo đúng và đưa thẳng tới trang đăng nhập.
+      const back = encodeURIComponent(location.pathname + location.search);
+      b.innerHTML = e.status === 401
+        ? '<div class="tt-card"><h2>Đăng nhập để vào nhà thuốc thực hành</h2><p class="tt-sub">Trang này dành cho người học đã có tài khoản Tizia. Đăng nhập xong bạn sẽ quay lại đúng trang này.</p><a class="tt-go" style="display:block;text-align:center;text-decoration:none" href="/login?return=' + back + '">Đăng nhập</a></div>'
+        : '<div class="tt-card"><h2>Không kết nối được máy chủ</h2><p class="tt-sub">Kiểm tra mạng rồi tải lại trang.</p><button class="tt-go" onclick="location.reload()">Tải lại</button></div>';
+      if (!$('ttStyle')) { const st = document.createElement('style'); st.id = 'ttStyle'; st.textContent = CSS; document.head.appendChild(st); }
+      document.body.appendChild(b);
+    }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
