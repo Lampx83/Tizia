@@ -129,13 +129,28 @@ export function scheduleAutoBackup() {
 // Restore: chạy pg_restore --clean --if-exists -1 (single transaction → rollback
 // trọn nếu lỗi giữa chừng → DB không bị half-state). --no-owner để không cố set
 // owner sang role không tồn tại trên cluster đích.
+// Bỏ các mục EXTENSION (citext) khỏi danh sách khôi phục: app chạy bằng role thường (tizia_app,
+// không superuser) nên không xoá/tạo lại được extension do superuser sở hữu — giữ nguyên extension
+// sẵn có của DB đích, chỉ khôi phục bảng/dữ liệu. Không lọc thì pg_restore exit 1 dù dữ liệu đã vào đủ.
 async function pgRestore(filePath) {
-  await runPg(PG_RESTORE_BIN, [
-    '--clean', '--if-exists',
-    '--no-owner', '--no-acl',
-    '-d', process.env.DATABASE_URL,
-    filePath,
-  ]);
+  let listing = '';
+  await runPg(PG_RESTORE_BIN, ['-l', filePath], {
+    stdoutPipe: (out) => out.on('data', (d) => { listing += d.toString(); }),
+  });
+  const kept = listing.split('\n').filter((l) => !/\bEXTENSION\b/.test(l)).join('\n');
+  const listFile = `${filePath}.list`;
+  fs.writeFileSync(listFile, kept);
+  try {
+    await runPg(PG_RESTORE_BIN, [
+      '--clean', '--if-exists',
+      '--no-owner', '--no-acl',
+      '-L', listFile,
+      '-d', process.env.DATABASE_URL,
+      filePath,
+    ]);
+  } finally {
+    try { fs.unlinkSync(listFile); } catch {}
+  }
 }
 
 export function attachBackup(r) {
