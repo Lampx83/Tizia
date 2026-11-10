@@ -15,6 +15,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { resolveDatabaseUrl, currentDbLabel } from './db-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -172,4 +173,46 @@ export async function initSchema() {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const sql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(sql);
+  await runMigrations();
+}
+
+// Migration có phiên bản — cho thay đổi CHỈ ĐƯỢC CHẠY 1 LẦN (đổi tên/xoá cột, chuyển dữ liệu,
+// sửa dữ liệu hàng loạt) mà schema.sql (chạy lại mỗi lần boot) không diễn đạt được.
+// File: server/migrations/NNNN-mo-ta.sql, chạy theo thứ tự tên, mỗi file 1 transaction, ghi vào
+// bảng schema_migrations. Lỗi → rollback file đó và DỪNG boot (đừng để app chạy trên schema dở).
+// Advisory lock để 2 tiến trình khởi động cùng lúc không chạy trùng. Xem server/migrations/README.md.
+const MIGRATION_LOCK = 727001;
+export async function runMigrations(dir = path.join(__dirname, 'migrations')) {
+  const files = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((f) => /^\d{4}-[a-z0-9-]+\.sql$/.test(f)).sort()
+    : [];
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK]);
+    await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at BIGINT NOT NULL)`);
+    const { rows } = await client.query('SELECT version, checksum FROM schema_migrations');
+    const done = new Map(rows.map((r) => [r.version, r.checksum]));
+    for (const f of files) {
+      const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+      const sum = createHash('sha256').update(sql).digest('hex').slice(0, 16);
+      if (done.has(f)) {
+        if (done.get(f) !== sum) console.warn(`[migrate] ${f} đã chạy nhưng nội dung file đã đổi — KHÔNG chạy lại; muốn sửa thì thêm file migration mới`);
+        continue;
+      }
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('INSERT INTO schema_migrations (version, checksum, applied_at) VALUES ($1, $2, $3)', [f, sum, Date.now()]);
+        await client.query('COMMIT');
+        console.log(`[migrate] đã chạy ${f}`);
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+        throw new Error(`[migrate] ${f} lỗi, đã rollback: ${e.message}`);
+      }
+    }
+  } finally {
+    try { await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK]); } catch { /* ignore */ }
+    client.release();
+  }
 }
