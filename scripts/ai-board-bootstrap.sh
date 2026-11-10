@@ -5,7 +5,7 @@
 # --build-guest: build the Gate 5 guest, push to image-registry, optional warm cache, pin digest in the dev policy.
 # Usage (repo root):
 #   scripts/ai-board-bootstrap.sh
-#   scripts/ai-board-bootstrap.sh --build-guest [--warm-dir DIR]   # DIR holds images.tar from scripts/warm-guest.mjs
+#   scripts/ai-board-bootstrap.sh --build-guest [--warm-dir DIR]   # DIR holds docker-data.tar.gz from scripts/warm-guest.mjs
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -116,8 +116,8 @@ if [ "$build_guest" -eq 0 ]; then
 fi
 
 command -v node >/dev/null 2>&1 || { echo "node required for --build-guest (guest-inputs.mjs)" >&2; exit 1; }
-if [ -n "$warm_dir" ] && [ ! -f "$warm_dir/images.tar" ]; then
-  echo "$warm_dir/images.tar not found (produce it with scripts/warm-guest.mjs inside a running runner)" >&2
+if [ -n "$warm_dir" ] && [ ! -f "$warm_dir/docker-data.tar.gz" ]; then
+  echo "$warm_dir/docker-data.tar.gz not found (produce it with scripts/warm-guest.mjs inside a running runner)" >&2
   exit 1
 fi
 

@@ -14,8 +14,5 @@ until docker info >/dev/null 2>&1; do
   fi
   sleep 1
 done
-if [ -f /opt/warm/images.tar ]; then
-  docker load -q -i /opt/warm/images.tar >/dev/null
-fi
 chmod 777 /workspace  # the gate user writes out/ here
 echo "dockerd ready"

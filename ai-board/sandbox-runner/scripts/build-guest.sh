@@ -1,9 +1,9 @@
 #!/bin/sh
 # Build the Gate 5 guest image, add the warm Docker cache and push it to the local registry.
-# Run from the repo root: sh ai-board/sandbox-runner/scripts/build-guest.sh <dir holding images.tar> [registry]
-# images.tar comes from scripts/warm-guest.mjs. Prints the guest_image line to review into the sandbox policy.
+# Run from the repo root: sh ai-board/sandbox-runner/scripts/build-guest.sh <dir holding docker-data.tar.gz> [registry]
+# docker-data.tar.gz comes from scripts/warm-guest.mjs. Prints the guest_image line to review into the sandbox policy.
 set -eu
-warm_dir=${1:?directory containing images.tar}
+warm_dir=${1:?directory containing docker-data.tar.gz}
 registry=${2:-localhost:5000}
 docker build -f ai-board/sandbox-runner/guest/Dockerfile -t tizia-gate5-guest:dev .
 docker build -f ai-board/sandbox-runner/guest/Dockerfile.warm -t "$registry/gate5:warm" "$warm_dir"
