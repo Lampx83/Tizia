@@ -23,7 +23,7 @@ const LD_HOWTO = {
     { '@type': 'HowToStep', name: 'Viết manifest.json', text: 'Khai alias và name cho app.' },
     { '@type': 'HowToStep', name: 'Build với đường dẫn tương đối', text: 'Đặt base là ./ để asset resolve đúng.' },
     { '@type': 'HowToStep', name: 'Đóng gói .zip', text: 'Nén manifest.json cùng thư mục public/.' },
-    { '@type': 'HowToStep', name: 'Cài vào Tizia', text: 'Kéo thả file .zip vào trang Portal Apps.' },
+    { '@type': 'HowToStep', name: 'Cài vào Tizia', text: 'Gửi file .zip cho quản trị viên Tizia cài qua trang Portal Apps.' },
   ],
 };
 
@@ -367,6 +367,7 @@ const ERRORS: [string, string, string][] = [
   ['bad_zip', '400', 'File tải lên không phải zip.'],
   ['too_many_files', '413', 'Quá 2000 file — thường do lỡ nén cả node_modules.'],
   ['too_large_uncompressed', '413', 'Giải nén vượt 100 MB.'],
+  ['admin_only', '403', 'Tài khoản không phải quản trị viên. Gửi file zip cho quản trị cài giúp.'],
   ['profile_incomplete', '403', 'Tài khoản chưa điền đủ hồ sơ. Vào trang cá nhân bổ sung rồi cài lại.'],
   ['unauthorized', '401', 'Chưa đăng nhập, hoặc cookie phiên đã hết hạn.'],
 ];
@@ -425,7 +426,7 @@ export default function DevPage() {
             href="/portal-apps"
             className="rounded-lg bg-primary px-3.5 py-2 text-[13.5px] font-bold text-primary-foreground hover:opacity-90"
           >
-            📥 Cài app của bạn
+            📥 Trang Portal Apps
           </Link>
           <Link
             href="/apps"
@@ -496,18 +497,18 @@ export default function DevPage() {
 </html>`}</Pre>
         <Pre label="Terminal">{`zip -r hello.zip manifest.json public/`}</Pre>
         <P>
-          Kéo <Code>hello.zip</Code> vào{' '}
+          Gửi <Code>hello.zip</Code> cho quản trị viên (tài khoản quản trị kéo thả vào{' '}
           <Link href="/portal-apps" className="text-primary hover:underline">
             trang Portal Apps
           </Link>
-          :
+          ):
         </P>
         <Figure
           src="/img/dev/portal-apps-dashboard.png"
           alt="Trang Portal Apps với vùng kéo thả file zip và danh sách app đã cài"
           width={1700}
           height={1124}
-          caption="Vùng kéo thả nằm ngay đầu trang. Cài xong, app hiện ngay ở mục “App của tôi” bên dưới."
+          caption="Màn hình của quản trị viên: vùng kéo thả ở đầu trang, app cài xong hiện ngay bên dưới."
         />
         <P>Mở app lên, nó chào đúng tên người đang đăng nhập — danh tính do Tizia đưa sang:</P>
         <Figure
@@ -522,7 +523,7 @@ export default function DevPage() {
       {/* 2 */}
       <Section id="tai-mau" title="2. Tải app mẫu về">
         <P>
-          Nhanh hơn nữa: tải một gói mẫu <b>đã đóng sẵn</b>, kéo thả vào Tizia để xem nó chạy, rồi giải
+          Nhanh hơn nữa: tải một gói mẫu <b>đã đóng sẵn</b>, mở thử trên máy để xem nó chạy, rồi giải
           nén ra sửa thành app của bạn. Mỗi gói là <b>một file HTML duy nhất</b>, không cần cài đặt gì,
           không cần build — mở bằng trình soạn thảo là đọc hiểu được ngay.
         </P>
@@ -552,13 +553,14 @@ export default function DevPage() {
           ))}
         </div>
         <Note kind="info" title="Cách dùng nhanh nhất">
-          Tải <Code>hello-tizia.zip</Code> → kéo thả vào{' '}
+          Tải <Code>hello-tizia.zip</Code>, giải nén, mở <Code>public/index.html</Code> trên máy để
+          thử. Sửa <Code>alias</Code> và <Code>name</Code> trong <Code>manifest.json</Code> thành của
+          bạn, sửa <Code>public/</Code> tuỳ ý, nén lại rồi gửi quản trị viên cài (hoặc cài đè bản cũ)
+          lên{' '}
           <Link href="/portal-apps" className="text-primary hover:underline">
             Portal Apps
-          </Link>{' '}
-          → mở app. Sau đó giải nén, sửa <Code>alias</Code> và <Code>name</Code> trong{' '}
-          <Code>manifest.json</Code> thành của bạn, sửa <Code>public/</Code> tuỳ ý, nén lại rồi
-          cài đè. Đó là toàn bộ vòng làm việc.
+          </Link>
+          .
         </Note>
       </Section>
 
@@ -786,8 +788,8 @@ export async function getSources() {
           loại khi build.
         </P>
         <Note kind="info" title="Thử nhanh cả vòng">
-          Cài đè mất vài giây, nên cách nhanh nhất để kiểm tra thật là: build → zip → kéo thả → mở app.
-          Lặp lại thoải mái, app cũ tự bị thay.
+          Thử trên máy trước (build rồi mở <Code>public/index.html</Code> qua một server tĩnh), xong mới
+          zip gửi quản trị cài. Cài đè cùng <Code>alias</Code> thì app cũ tự bị thay.
         </Note>
       </Section>
 
@@ -795,11 +797,13 @@ export async function getSources() {
       <Section id="cai-dat" title="10. Cài đặt, cập nhật, công khai">
         <Sub>Cài lần đầu</Sub>
         <P>
-          Kéo thả <Code>.zip</Code> vào{' '}
+          Quản trị viên kéo thả <Code>.zip</Code> vào{' '}
           <Link href="/portal-apps" className="text-primary hover:underline">
             trang Portal Apps
           </Link>
-          . Cần đăng nhập và hồ sơ đã điền đủ.
+          . Chỉ <b>quản trị viên</b> cài được: app chạy chung địa chỉ với Tizia nên JavaScript của nó
+          dùng được phiên đăng nhập của người đang xem. Bạn gửi file zip cho quản trị qua nút{' '}
+          <b>Đề nghị</b> (đính kèm file), quản trị cài giúp.
         </P>
         <Sub>Cập nhật</Sub>
         <P>
@@ -847,7 +851,7 @@ export async function getSources() {
         <Table
           head={['Endpoint', 'Việc']}
           rows={[
-            ['POST /api/portal-apps/install', 'Cài hoặc cài đè app của chính bạn.'],
+            ['POST /api/portal-apps/install', 'Cài hoặc cài đè app — chỉ quản trị viên.'],
             ['GET /api/portal-apps', 'Liệt kê app của bạn + app đã công khai + app có sẵn.'],
             ['DELETE /api/portal-apps/:id', 'Gỡ app (chủ app hoặc quản trị).'],
             ['POST /api/portal-apps/:id/publish', 'Công khai cho mọi người — cần quyền quản trị.'],
@@ -938,7 +942,7 @@ export async function getSources() {
             'Đọc được trên nền tối.',
             'alias, name, description, icon (emoji), version đã điền đúng.',
             'Zip không lẫn node_modules, không lẫn mã nguồn.',
-            'Cài thử lên tài khoản của mình và bấm hết các nút một lượt.',
+            'Mở thử trên máy (server tĩnh) và bấm hết các nút một lượt trước khi gửi quản trị cài.',
           ].map((line) => (
             <li key={line} className="flex gap-2.5">
               <span className="text-primary">☐</span>

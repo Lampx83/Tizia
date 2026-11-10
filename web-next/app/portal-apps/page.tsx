@@ -30,15 +30,19 @@ export default async function PortalAppsPage() {
           <Link href="/login" className="font-medium text-primary hover:underline">
             đăng nhập
           </Link>{' '}
-          để xem &amp; cài app.
+          để xem app.
         </div>
       </div>
     );
   }
 
   const { own = [], public: pub = [], builtin = [] } = res.data;
+  // Cài app chỉ dành cho admin (app chạy cùng origin, đọc được phiên người xem) — người khác
+  // không thấy ô kéo thả, thay vào đó là hướng dẫn gửi gói cho quản trị.
+  const me = await tiziaFetch<{ user: { role?: string } | null }>('/api/auth/me');
+  const canInstall = me.data?.user?.role === 'admin';
 
   return (
-    <PortalAppsClient own={own} publicApps={pub} builtin={builtin} />
+    <PortalAppsClient own={own} publicApps={pub} builtin={builtin} canInstall={canInstall} />
   );
 }

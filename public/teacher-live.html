@@ -267,9 +267,17 @@ function connect() {
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     handle(m);
   };
-  ws.onclose = () => {
-    $('conn').textContent = '⚫ Mất kết nối';
+  ws.onclose = (ev) => {
     $('conn').className = 'conn off';
+    if (ev.code === 4403) {
+      // Không phải tài khoản giáo viên → đừng tự kết nối lại vô hạn.
+      $('conn').textContent = '🔒 Cần tài khoản giáo viên';
+      $('dashboard').classList.remove('show');
+      $('setup').style.display = '';
+      alert('Chỉ tài khoản giáo viên mới điều khiển lớp được. Hãy đăng nhập bằng tài khoản giáo viên (do quản trị Tizia cấp).');
+      return;
+    }
+    $('conn').textContent = '⚫ Mất kết nối';
     setTimeout(connect, 2000);
   };
   ws.onerror = () => $('conn').className = 'conn off';

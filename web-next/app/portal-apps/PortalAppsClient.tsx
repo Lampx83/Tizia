@@ -123,10 +123,12 @@ export default function PortalAppsClient({
   own,
   publicApps,
   builtin,
+  canInstall,
 }: {
   own: PortalApp[];
   publicApps: PortalApp[];
   builtin: PortalApp[];
+  canInstall: boolean;
 }) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -203,8 +205,8 @@ export default function PortalAppsClient({
           Cài app SPA chuẩn <b>AI Portal</b> vào Tizia. Đóng gói{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">.zip</code> chứa{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">manifest.json</code> +{' '}
-          <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">public/</code> rồi kéo thả vào đây.
-          App của bạn được serve dưới{' '}
+          <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">public/</code> rồi quản trị viên cài vào đây.
+          App được serve dưới{' '}
           <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">
             /portal-apps/u/&lt;id&gt;/&lt;alias&gt;/
           </code>{' '}
@@ -219,7 +221,19 @@ export default function PortalAppsClient({
         </p>
       </div>
 
-      {/* Cài app mới */}
+      {/* Cài app mới — chỉ admin; người khác gửi gói cho quản trị cài */}
+      {!canInstall ? (
+        <div className="rounded-2xl border border-border bg-card/40 p-[18px] text-sm leading-relaxed text-muted-foreground">
+          <h2 className="mb-2 text-[17px] font-semibold text-foreground">📥 Muốn cài app của bạn?</h2>
+          App cài vào chạy chung địa chỉ với Tizia nên dùng được phiên đăng nhập của người đang xem. Vì vậy chỉ
+          quản trị viên được cài. Bạn đóng gói <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">.zip</code>{' '}
+          theo{' '}
+          <a href="/dev" className="font-semibold text-primary hover:underline">
+            hướng dẫn phát triển
+          </a>{' '}
+          rồi gửi cho quản trị qua nút <b>Đề nghị</b> (đính kèm file zip).
+        </div>
+      ) : (
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
         <h2 className="mb-2 text-[17px] font-semibold">
           📥 Cài app mới{' '}
@@ -325,6 +339,7 @@ export default function PortalAppsClient({
           </p>
         </details>
       </div>
+      )}
 
       {/* App của tôi */}
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
