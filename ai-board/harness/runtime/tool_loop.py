@@ -28,7 +28,6 @@ from settings import get_settings
 
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
-OBSERVATION_TOKENS = _LOOP["observation_tokens"]
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
@@ -378,7 +377,8 @@ class Workspace:
 
 def _cap(name: str) -> int:
     """Trần token quan sát, từ contract."""
-    return OBSERVATION_TOKENS.get(name, OBSERVATION_TOKENS["default"])
+    caps = limits.observation_tokens()
+    return caps.get(name, caps["default"])
 
 
 def _fit(text: str, name: str) -> str:

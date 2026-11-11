@@ -58,8 +58,18 @@ def loop(env=None) -> dict:
         "tool_calls": settings.loop_tool_calls or (moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
-        "observation_tokens": {k: v for k, v in spec["observation_tokens"].items() if not k.startswith("_")},
+        "observation_tokens": observation_tokens(env),
     }
+
+
+def observation_tokens(env=None) -> dict:
+    """Trần token quan sát theo tool; flag AI_BOARD_OBSERVATION_RAISE nới read_file và grep (contract loop.observation_raise)."""
+    spec = _parsed()["limits"]["loop"]
+    caps = {k: v for k, v in spec["observation_tokens"].items() if not k.startswith("_")}
+    raise_spec = spec["observation_raise"]
+    if tri_state(get_settings(env).observation_raise, raise_spec):
+        caps.update(raise_spec["observation_tokens"])
+    return caps
 
 
 def loop_adaptive(env=None) -> dict:
