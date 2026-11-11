@@ -9,7 +9,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-from runtime.limits import config_sha256
+from runtime.limits import config_sha256, scaled_limit
 from worker import (HarnessPlanner, HttpWorker, PlanBlockedError, WorkerClient, _duplicate_files, _execution_plan,
                     _merge_same_file, _non_runnable_layered, _plan_repairable, _plan_repair_note, _plan_rejection,
                     _repaired_snapshot, execute_pre_pr, main)
@@ -462,7 +462,7 @@ def test_planned_change_runs_gates_3_to_5_5_and_posts_http_verdict(tmp_path):
                       plan_hash=None, **_):
         assert plan_hash is None  # server sent none: no kwarg at all would also pass the strict signature
         assert should_stop() is False  # lease healthy while the heartbeat succeeds
-        assert max_units == 200 - 80  # per-run limit minus what planning spent
+        assert max_units == scaled_limit('units', 1) - 80  # scaled run cap minus planning spend
         assert (policy, accepted_policy_hash) == (POLICY, POLICY['hash'])
         return execute_pre_pr(
             plan, ticket_id=ticket_id, checkout_source=tmp_path,
