@@ -1826,7 +1826,8 @@ class HttpWorker:
             if self.change_runner and planned["status"] == "planned":
                 if type_kwargs:  # phần kiểm tra chỉ lấy sau khi đã có plan: người lập plan không bao giờ thấy
                     type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
-                limit = int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT)
+                limit = max(int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT),
+                            scaled_limit("units", len(plan.get("steps") or [])))  # cùng công thức store.js: snapshot chụp trước khi server nới trần
                 import memory
                 from repositories.server_memory import RemoteLessons
                 from repositories import server_hsm
