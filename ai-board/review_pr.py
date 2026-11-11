@@ -20,7 +20,7 @@ HARNESS = Path(__file__).resolve().parent / "harness"
 sys.path.insert(0, str(HARNESS))
 
 import candidate as candidates  # noqa: E402
-from settings import get_settings  # noqa: E402
+from settings import get_settings, pr_base  # noqa: E402
 
 EVIDENCE_DIR = Path(__file__).resolve().parent / "memory" / "reviews"
 
@@ -35,8 +35,8 @@ def _git(repo, *args) -> str:
 
 def check_pr(pr: dict) -> None:
     """Raise ReviewStop unless the PR is an open AI Board PR into dev."""
-    if pr.get("base", {}).get("ref") != candidates.PR_BASE:
-        raise ReviewStop(f"PR #{pr.get('number')} vào {pr.get('base', {}).get('ref')}, không phải {candidates.PR_BASE}")
+    if pr.get("base", {}).get("ref") != pr_base():
+        raise ReviewStop(f"PR #{pr.get('number')} vào {pr.get('base', {}).get('ref')}, không phải {pr_base()}")
     if not candidates.BRANCH_PATTERN.fullmatch(pr.get("head", {}).get("ref") or ""):
         raise ReviewStop(f"PR #{pr.get('number')} không phải nhánh AI Board")
 
@@ -44,19 +44,19 @@ def check_pr(pr: dict) -> None:
 def build(repo, number: int, head_sha: str) -> dict:
     """Fetch latest dev + the PR head, merge them in a fresh worktree. Return {base_sha, head_sha, candidate_sha,
     checkout}; the caller removes the worktree with cleanup(). Raise ReviewStop on a stale head or a conflict."""
-    _git(repo, "fetch", "-q", "origin", f"+refs/heads/{candidates.PR_BASE}:refs/remotes/origin/{candidates.PR_BASE}",
+    _git(repo, "fetch", "-q", "origin", f"+refs/heads/{pr_base()}:refs/remotes/origin/{pr_base()}",
          f"+refs/pull/{int(number)}/head:refs/remotes/origin/pr/{int(number)}")
     fetched = _git(repo, "rev-parse", f"refs/remotes/origin/pr/{int(number)}").strip()
     if fetched != head_sha:
         raise ReviewStop(f"head PR đã đổi: GitHub {head_sha[:10]}, fetch được {fetched[:10]}")
-    base_sha = _git(repo, "rev-parse", f"refs/remotes/origin/{candidates.PR_BASE}").strip()
+    base_sha = _git(repo, "rev-parse", f"refs/remotes/origin/{pr_base()}").strip()
     checkout = tempfile.mkdtemp(prefix="ai-board-review-")
     _git(repo, "worktree", "add", "-q", "--detach", checkout, base_sha)
     merged = subprocess.run(["git", *candidates._AUTHOR, "merge", "--no-ff", "--no-edit", "-q", head_sha],
                             cwd=checkout, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if merged.returncode:
         cleanup(repo, checkout)
-        raise ReviewStop(f"conflict khi merge head {head_sha[:10]} vào {candidates.PR_BASE} {base_sha[:10]}")
+        raise ReviewStop(f"conflict khi merge head {head_sha[:10]} vào {pr_base()} {base_sha[:10]}")
     return {"base_sha": base_sha, "head_sha": head_sha,
             "candidate_sha": _git(checkout, "rev-parse", "HEAD").strip(), "checkout": checkout}
 

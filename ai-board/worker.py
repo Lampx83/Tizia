@@ -28,7 +28,7 @@ sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
 from runtime import coverage, loop_guard, objection_repeat, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, contract, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
-from settings import get_settings  # noqa: E402
+from settings import get_settings, pr_base  # noqa: E402
 CONTRACT = contract()
 PLAN_GATES = tuple(CONTRACT["gates"]["plan"])
 PRE_PR_GATES = tuple(CONTRACT["gates"]["pre_pr"])
@@ -1313,7 +1313,7 @@ def observe_base(client: WorkerClient, repo) -> dict:
     tip = reverify.base_tip(repo)
     if not tip:
         return {"status": "no_base"}
-    return {"status": "observed", **client.post("/api/ai-board/worker/base", {"ref": candidate.PR_BASE, "sha": tip})}
+    return {"status": "observed", **client.post("/api/ai-board/worker/base", {"ref": pr_base(), "sha": tip})}
 
 
 def sync_pull_requests(client: WorkerClient, github) -> dict:
