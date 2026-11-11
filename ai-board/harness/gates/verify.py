@@ -62,10 +62,10 @@ def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_
     return bool(stated and generated_ok and smoke_ok and result.get("probe_id") and result.get("observations"))
 
 
-def no_oracle_review(generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
+def no_oracle_review(generated_ok: bool, smoke_ok: bool, result: dict, tests_absent_ok: bool = False) -> bool:
     """No harness oracle exists: green evidence keeps the change for an admin, never an automatic pass.
     The plan's acceptance commands cannot be unfinished here: a failing one already raised."""
-    return bool(generated_ok and smoke_ok and not result.get("probe_id")
+    return bool((generated_ok or tests_absent_ok) and smoke_ok and not result.get("probe_id")
                 and result.get("reason") == functional.NO_ORACLE)
 
 
@@ -572,7 +572,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
                                  if item.get("test_file")})
-            if not test_files and not probe_id:
+            review_any = get_settings().no_oracle_review_any
+            if not test_files and not probe_id and not review_any:
                 raise RuntimeError("không có generated test để chạy")
             if not test_files:
                 logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
@@ -649,7 +650,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
                                 + str(functional_result.get('reason')))
-                elif no_oracle_review(generated_ok, smoke_ok, functional_result):
+                elif no_oracle_review(generated_ok, smoke_ok, functional_result, review_any and not test_files):
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Không có oracle hành vi cho yêu cầu này; generated tests, smoke và acceptance của plan đều xanh: '
                                 'needs_review, admin xem xét, không tự đạt: ' + str(functional_result.get('reason')))

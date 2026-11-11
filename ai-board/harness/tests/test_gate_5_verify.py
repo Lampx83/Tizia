@@ -968,6 +968,43 @@ def test_no_oracle_review_needs_generated_tests_and_smoke():
     assert verify.no_oracle_review(True, True, dict(ORACLE_FAIL)) is False
 
 
+def _no_test_state(tmp_path, **extra):
+    base = _no_oracle_state(tmp_path, **extra)
+    return {**base, "diffs": [{**d, "test_file": None} for d in base["diffs"]]}
+
+
+def test_no_oracle_without_generated_test_is_needs_review_when_flag_on(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
+    monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "1")
+    out = verify.run(_no_test_state(tmp_path), runner=FakeRunner())
+    assert out["blocked"] is False
+    fr = out["evidence"]["functional"]
+    assert fr["passed"] is True and fr["needs_review"] is True and fr["oracle_passed"] is False
+
+
+def test_no_oracle_without_generated_test_still_blocks_when_flag_off(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
+    monkeypatch.delenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", raising=False)
+    assert verify.run(_no_test_state(tmp_path), runner=FakeRunner())["blocked"] is True
+
+
+def test_no_oracle_flag_on_still_blocks_on_smoke_or_generated_test_failure(tmp_path, monkeypatch):
+    import functional
+    monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
+    monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "1")
+    (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir()
+    assert verify.run(_no_oracle_state(tmp_path / "a"), runner=FakeRunner(fail="generated_test"))["blocked"] is True
+    assert verify.run(_no_test_state(tmp_path / "b"), runner=FakeRunner(fail="smoke"))["blocked"] is True
+
+
+def test_no_oracle_review_any_requires_smoke_and_no_unrun_test():
+    assert verify.no_oracle_review(False, True, dict(NO_ORACLE), tests_absent_ok=True) is True
+    assert verify.no_oracle_review(False, False, dict(NO_ORACLE), tests_absent_ok=True) is False
+    assert verify.no_oracle_review(False, True, dict(NO_ORACLE)) is False
+
+
 def test_a_trusted_oracle_pass_is_not_marked_for_review(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=FakeRunner())
     assert out["blocked"] is False
