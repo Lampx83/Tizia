@@ -112,3 +112,23 @@ def test_verdict_carries_the_loop_guard_reason():
     execution.verdict()
     assert execution.result["loop_guard"]["reason"] == "state_repeat"
     assert execution.result["reason"].startswith("loop stop state_repeat: same code | ")
+
+
+def test_repair_window_flag_adds_one_repair_before_stagnation(monkeypatch):
+    monkeypatch.setenv(loop_guard.REPAIR_WINDOW_FLAG, "3")
+    execution = _execution()
+    base = "+ const total = items.reduce((a, b) => a + b, 0);\n" * 30
+    assert _round(execution, base, 3)
+    assert _round(execution, base + "+ // tweak\n", 2)
+    assert _round(execution, base + "+ // tweak two\n", 1)
+    assert _round(execution, base + "+ // tweak three\n", 1) is False
+    assert execution.halt["reason"] == loop_guard.REASON_STAGNATION
+
+
+def test_repair_window_flag_off_keeps_default_window(monkeypatch):
+    monkeypatch.delenv(loop_guard.REPAIR_WINDOW_FLAG, raising=False)
+    execution = _execution()
+    base = "+ const total = items.reduce((a, b) => a + b, 0);\n" * 30
+    assert _round(execution, base, 3)
+    assert _round(execution, base + "+ // tweak\n", 2)
+    assert _round(execution, base + "+ // tweak two\n", 1) is False
