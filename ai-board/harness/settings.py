@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     private_preview_enabled: bool = False
     model_routing: bool = False
     oracle_css_size: bool = False
+    text_oracle_skip_selector: bool = False
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = False  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
     stop_report_v2: bool = False

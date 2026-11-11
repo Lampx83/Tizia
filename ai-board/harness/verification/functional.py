@@ -1,11 +1,12 @@
 """Harness-owned behavioral oracles. Candidate-authored tests are supplementary."""
 import json
-import os
 import re
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from settings import get_settings
 
 
 NO_ORACLE = 'No trusted behavioral oracle for this request'
@@ -53,7 +54,7 @@ _CSS_MARK = re.compile(r'[.#\[>+~:]')
 
 def _skip_selectors():
     """Flag AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR=1: CSS selectors in quotes are code, not visible text."""
-    return os.environ.get('AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR') == '1'
+    return get_settings().text_oracle_skip_selector
 
 
 def _is_css_selector(text):
