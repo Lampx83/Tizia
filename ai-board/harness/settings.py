@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     adaptive_budget: bool | None = None
     react_plan: bool | None = None
     progress_loop: bool | None = None
+    observation_raise: bool | None = None
     model_repair: bool | None = None
     repair_diagnose: bool = False
     sandbox_tool: bool = False
