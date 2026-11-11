@@ -47,6 +47,7 @@ GEN_CONTEXT = "server/contexts/_ai-generated/"
 DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 # Plan nhiều lớp: verify/acceptance phải là lệnh chạy được, không phải câu mô tả.
 RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
+READONLY_CHECK = re.compile(r"^(grep|rg)\s")
 # File chưa có ở base chỉ được là trang mới, module JS mới, plugin _ai-generated mới, hoặc migration mới.
 PROSE_CHECK = re.compile(r"(?P<path>\S+)\s+(?:chứa chuỗi|chứa|contains)\s+'(?P<text>.+?)'"
                          r"(?:\s+(?:và|and)\s+(?:không còn|no longer contains)\s+'(?P<gone>.+?)')?\.?")
@@ -120,6 +121,23 @@ def check_dag(subtasks: list[dict]) -> None:
         raise ValueError("depends_on tạo chu trình — DAG phải acyclic")
 
 
+def unified_verify() -> bool:
+    return bool(getattr(get_settings(), "gate1_unified_verify", False))
+
+
+def is_runnable(text: str) -> bool:
+    """RUNNABLE, hoặc grep/rg đọc file khi gate1_unified_verify bật."""
+    text = text.strip()
+    return bool(RUNNABLE.match(text) or (unified_verify() and READONLY_CHECK.match(text)))
+
+
+def is_feature_plan(plan: dict) -> bool:
+    """Plan nhiều lớp/có acceptance: verify và acceptance phải chạy được."""
+    subtasks = plan.get("subtasks") or []
+    return bool((plan.get("acceptance") is not None or any(st.get("layer") for st in subtasks))
+                and (len(subtasks) > 1 or any(st.get("layer") in ("db", "backend") for st in subtasks)))
+
+
 def compile_prose_verify(text: str, files: set[str]) -> str | None:
     """Prose 'path chứa 'x' [và không còn 'y'] → sh -c grep cmd. None nếu lạ form hoặc path ngoài files."""
     s = unicodedata.normalize("NFC", text.strip())
@@ -187,14 +205,12 @@ def parse_plan(text: str) -> dict:
         if acceptance is not None:
             acceptance = [compile_prose_verify(item, files) or item for item in acceptance]
             plan["acceptance"] = acceptance
-    feature_plan = ((acceptance is not None or any(st.get("layer") for st in subtasks))
-                    and (len(subtasks) > 1 or any(st.get("layer") in ("db", "backend") for st in subtasks)))
-    if feature_plan:
+    if is_feature_plan(plan):
         for i, st in enumerate(subtasks):
-            if not RUNNABLE.match(st["verify"].strip()):
+            if not is_runnable(st["verify"]):
                 raise ValueError(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
         for item in acceptance or []:
-            if not RUNNABLE.match(item.strip()):
+            if not is_runnable(item):
                 raise ValueError(f"acceptance phải là lệnh chạy được: {item[:80]}")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):

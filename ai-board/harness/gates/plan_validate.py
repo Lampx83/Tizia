@@ -686,8 +686,8 @@ PLAN_UNFIT = "plan_unfit"
 
 def _runnable(verify: str) -> bool:
     """Cùng định nghĩa 'lệnh chạy được' với cổng 1 (gates/brainstorm.RUNNABLE)."""
-    from gates.brainstorm import RUNNABLE
-    return bool(RUNNABLE.match(verify.strip()))
+    from gates.brainstorm import is_runnable
+    return is_runnable(verify)
 
 
 def unfit_issues(plan: dict) -> list[str]:

@@ -83,6 +83,9 @@ def has_runnable(plan):
 
 def non_runnable_layered(plan):
     """verify của subtask có `layer` phải là lệnh chạy được."""
+    from gates import brainstorm
+    if brainstorm.unified_verify() and not brainstorm.is_feature_plan(plan or {}):
+        return []
     return [f"{t.get('file')}: {str(t.get('verify') or '').strip()[:80]}" for t in (plan or {}).get("subtasks") or []
             if isinstance(t, dict) and t.get("layer") and not _RUNNABLE.match(str(t.get("verify") or "").strip())]
 
