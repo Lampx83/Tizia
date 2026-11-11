@@ -629,10 +629,11 @@ class _Execution:
         diff_text = chr(10).join(str(item.get("diff")) for item in (self.state or {}).get("diffs") or [])
         self.diff_texts.append(diff_text)
         guard = loop_limits()
-        low = loop_guard.stagnant(self.diff_texts, guard["similarity"], guard["similarity_window"], guard["similarity_max_chars"])
+        window = loop_guard.repair_window(guard["similarity_window"])
+        low = loop_guard.stagnant(self.diff_texts, guard["similarity"], window, guard["similarity_max_chars"])
         if low is not None:
             self.halt.update(reason=loop_guard.REASON_STAGNATION, node="repair_check",
-                             detail=f"{guard['similarity_window']} consecutive repairs with similarity {low:.3f} > {guard['similarity']}")
+                             detail=f"{window} consecutive repairs with similarity {low:.3f} > {guard['similarity']}")
             self.stop_note = f"{loop_guard.REASON_STAGNATION}: {self.halt['detail']}"
             return False
         self.repair_files = cls["files"]
