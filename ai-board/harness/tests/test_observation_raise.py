@@ -1,4 +1,4 @@
-"""LF/199: observation read_file/grep caps raised behind AI_BOARD_OBSERVATION_RAISE, contract default off."""
+"""Observation read_file/grep caps raised behind AI_BOARD_OBSERVATION_RAISE; contract default off."""
 import pytest
 
 import tools
@@ -59,3 +59,14 @@ def test_flag_on_read_page_holds_more_lines_within_raised_cap(monkeypatch):
     assert token_count.measure(on_page) <= 4000
     assert token_count.measure(off_page) <= 2000
     assert on_page.count("\nL") > off_page.count("\nL")
+
+
+def test_flag_on_grep_excerpt_keeps_more_hits_within_raised_cap(monkeypatch):
+    monkeypatch.setattr(tools, "_show", lambda *a: BIG)
+    raw = tools.grep(".", "abc", words=["dòng"], file="public/a.js", budget=6000)
+    off = tool_loop._fit(raw, "grep")
+    monkeypatch.setenv(FLAG, "1")
+    reset_settings()
+    on = tool_loop._fit(raw, "grep")
+    assert token_count.measure(off) <= 800 and token_count.measure(on) <= 1600
+    assert len(on) > len(off)
