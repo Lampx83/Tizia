@@ -327,3 +327,40 @@ def test_nfd_page_text_matches_nfc_expectation():
     assert nfd != nfc
     assert functional._norm(nfd) == functional._norm(nfc)
     assert functional._still_shown(nfc, [functional._norm(nfd)])
+
+
+# ---- CSS selector quoted in a request is code, not visible text (LF/195, flag AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR) ----
+SELECTOR_FLAG = 'AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR'
+REPLAY_SELECTOR = {'request_title': "Đổi màu chữ của '.types button' sang xanh lá #16a34a", 'request_detail': (
+    "Trang vẽ đồ thị có nhiều quy tắc màu. Em chỉ muốn chữ trên các nút chọn loại, selector '.types button', "
+    "đổi màu thành xanh lá #16a34a.")}
+
+
+@pytest.fixture
+def selector_flag_on(monkeypatch):
+    monkeypatch.setenv(SELECTOR_FLAG, '1')
+
+
+def test_flag_off_keeps_the_previous_text_expectation(monkeypatch):
+    monkeypatch.delenv(SELECTOR_FLAG, raising=False)
+    assert functional.text_expectation(REPLAY_SELECTOR) == {'present': ['.types button'], 'absent': []}
+
+
+def test_replay_selector_from_trial_is_not_demanded_as_visible_text(selector_flag_on):
+    assert functional.text_expectation(REPLAY_SELECTOR) == {'present': [], 'absent': []}
+    assert functional.select(REPLAY_SELECTOR) is None
+
+
+@pytest.mark.parametrize('selector', ['.types button', '#app .card > p', 'ul li:first-child', '[data-x] a', 'nav a:hover'])
+def test_css_selector_quotes_are_never_present_or_absent(selector, selector_flag_on):
+    for verb in (f"Đổi chữ '{selector}' thành xanh", f"Thêm '{selector}' vào trang", f"Bỏ '{selector}' ở đầu trang"):
+        assert functional.text_expectation(ASK(verb)) == {'present': [], 'absent': []}, verb
+
+
+def test_plain_label_next_to_a_selector_is_still_checked(selector_flag_on):
+    assert functional.text_expectation(ASK("Thêm 'Nộp bài' cho nút '.types button'")) == {'present': ['Nộp bài'], 'absent': []}
+
+
+@pytest.mark.parametrize('label', ['Tài liệu 1.2', 'Nộp bài', 'Tizia: bắt đầu', 'Next page'])
+def test_labels_that_only_look_like_punctuation_stay_visible(label, selector_flag_on):
+    assert functional.text_expectation(ASK(f"Thêm '{label}' vào trang")) == {'present': [label], 'absent': []}

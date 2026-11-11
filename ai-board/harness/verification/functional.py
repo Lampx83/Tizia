@@ -1,5 +1,6 @@
 """Harness-owned behavioral oracles. Candidate-authored tests are supplementary."""
 import json
+import os
 import re
 import unicodedata
 import urllib.error
@@ -45,6 +46,27 @@ def _quoted(raw):
     return out
 
 
+_CSS_SIMPLE = r'(?:[A-Za-z_*][\w-]*|[.#][A-Za-z_][\w-]*|\[[\w-]+(?:[~|^$*]?=[^\]]*)?\])(?:[.#][A-Za-z_][\w-]*|::?[a-z-]+|\[[^\]]*\])*'
+_CSS_SELECTOR = re.compile(rf'^{_CSS_SIMPLE}(?:\s*[>+~]?\s*{_CSS_SIMPLE})*$')
+_CSS_MARK = re.compile(r'[.#\[>+~:]')
+
+
+def _skip_selectors():
+    """Flag AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR=1: CSS selectors in quotes are code, not visible text."""
+    return os.environ.get('AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR') == '1'
+
+
+def _is_css_selector(text):
+    """Quote shaped like a CSS selector (ASCII only, has a marker like '.', '#', '>', ':')."""
+    return bool(_CSS_MARK.search(text) and _CSS_SELECTOR.match(text.strip()))
+
+
+def _text_quotes(raw):
+    """Quoted strings the oracle may treat as visible text (selectors dropped when the flag is on)."""
+    found = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw)]
+    return [q for q in found if not (_skip_selectors() and _is_css_selector(q))]
+
+
 def quoted(raw: str) -> list[str]:
     """Quoted strings in text (the _QUOTED notion above): any quote style, 2-120 chars."""
     return [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw or "")]
@@ -62,7 +84,7 @@ def text_expectation(state):
     Empty when the request does not pin the text down (no quotes, no intent verb, add and remove at once)."""
     raw = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
     raw = _PAGE_LINE.sub('', raw)  # the requester's own page, not words they asked for
-    quotes = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw)]
+    quotes = _text_quotes(raw)
     ignored = [t for t, label in _quoted(raw) if not label]
     words = unicodedata.normalize('NFC', raw.lower())
     add, remove, replace = _ADD.search(words), _REMOVE.search(words), _REPLACE.search(words)
@@ -72,8 +94,8 @@ def text_expectation(state):
     shown = lambda items: [t for t in items if t not in ignored]
     cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
     if cut and not remove:
-        head = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[:cut.start()])]
-        tail = [next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw[cut.end():])]
+        head = _text_quotes(raw[:cut.start()])
+        tail = _text_quotes(raw[cut.end():])
         if head and tail:
             return {'present': shown(head), 'absent': tail}
     if replace and len(quotes) >= 2:
