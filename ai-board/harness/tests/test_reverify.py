@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from services import reverify
-from services.candidate import PR_BASE
+from settings import DEFAULT_PR_BASE as PR_BASE
 
 BRANCH = 'ai-board/2026-10-17-ticket-9-abc123'
 

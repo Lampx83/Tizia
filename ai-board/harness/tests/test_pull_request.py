@@ -91,6 +91,25 @@ def test_existing_pr_with_a_wrong_base_is_rejected(repos):
         Candidates(clone, github=github(remote, api)).publish(cand, title='t', body='b')
 
 
+def test_pr_base_comes_from_the_one_setting(repos, monkeypatch):
+    monkeypatch.setenv('PR_BASE_BRANCH', 'release')
+    remote, clone, cand = repos
+    api = FakeApi(base='release', head_sha=cand['head_sha'])
+    result = Candidates(clone, github=github(remote, api)).publish(cand, title='t', body='b')
+    assert result['base'] == 'release'
+    assert api.calls[1][2]['base'] == 'release'
+
+
+def test_existing_pr_into_another_base_than_the_setting_is_rejected(repos, monkeypatch):
+    monkeypatch.setenv('PR_BASE_BRANCH', 'release')
+    remote, clone, cand = repos
+    api = FakeApi(base='dev', head_sha=cand['head_sha'])
+    api.pulls[BRANCH] = {'number': 9, 'html_url': 'https://github.com/Lampx83/Tizia/pull/9',
+                         'base': {'ref': 'dev'}, 'head': {'ref': BRANCH, 'sha': cand['head_sha']}}
+    with pytest.raises(ValueError, match='release'):
+        Candidates(clone, github=github(remote, api)).publish(cand, title='t', body='b')
+
+
 def test_pr_head_that_is_not_the_verified_head_is_stale(repos):
     remote, clone, cand = repos
     api = FakeApi(head_sha='f' * 40)

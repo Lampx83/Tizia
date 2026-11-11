@@ -21,7 +21,7 @@ import path_policy
 from gates import implement
 from repositories import repo_at_commit
 from runtime import subtask_files
-from settings import DEFAULT_PR_BASE, pr_base
+from settings import pr_base
 
 _CONTRACT = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
                        .read_text(encoding="utf-8"))
@@ -29,7 +29,6 @@ BRANCH_PREFIX = _CONTRACT["branch_prefix"]
 BRANCH_SLUG_MAX = _CONTRACT["branch_slug_max"]
 BRANCH_PATTERN = re.compile(_CONTRACT["branch_pattern"])
 _AUTHOR = ["-c", "user.name=AI Board", "-c", "user.email=ai-board@tizia.local"]
-PR_BASE = DEFAULT_PR_BASE  # AI Board PRs only ever target dev; nothing here merges, approves or pushes dev/main
 # Credential helper reads the token from the git child's env: never in argv, a file or this process's env.
 _CREDENTIAL = "!f() { echo username=x-access-token; echo \"password=$AI_BOARD_PUSH_TOKEN\"; }; f"
 
@@ -79,14 +78,15 @@ class GitHub:
         self._git_remote(repo, "--delete", f"refs/heads/{self._checked(branch)}")
 
     def open_pull(self, branch: str, *, title: str, body: str) -> dict:
-        """The open PR of this branch, else a new one into dev. Raise ValueError if it targets another base."""
+        """The open PR of this branch, else a new one into PR_BASE_BRANCH. Raise ValueError if it targets another base."""
+        base = pr_base()
         owner = self.repo.split("/")[0]
         head = urllib.parse.quote(f"{owner}:{branch}", safe=":/")
         found = self.transport("GET", f"/repos/{self.repo}/pulls?state=open&head={head}", None) or []
         pr = found[0] if found else self.transport("POST", f"/repos/{self.repo}/pulls", {
-            "title": title[:250], "head": branch, "base": PR_BASE, "body": body, "maintainer_can_modify": False})
-        if pr["base"]["ref"] != PR_BASE:
-            raise ValueError(f"PR #{pr['number']} không vào {PR_BASE} mà vào {pr['base']['ref']}")
+            "title": title[:250], "head": branch, "base": base, "body": body, "maintainer_can_modify": False})
+        if pr["base"]["ref"] != base:
+            raise ValueError(f"PR #{pr['number']} không vào {base} mà vào {pr['base']['ref']}")
         return pr
 
     def add_labels(self, number: int, labels: list[str]) -> None:
@@ -382,7 +382,7 @@ class Candidates:
                 self.github.add_labels(pr["number"], list(labels))
             except Exception as error:  # noqa: BLE001 — labels only help the reviewer sort
                 print(f"[candidate] gắn nhãn PR #{pr['number']} lỗi: {str(error)[:200]}")
-        return {"number": pr["number"], "url": pr["html_url"], "branch": candidate["branch"], "base": PR_BASE,
+        return {"number": pr["number"], "url": pr["html_url"], "branch": candidate["branch"], "base": pr_base(),
                 "base_sha": candidate["base_sha"], "head_sha": candidate["head_sha"]}
 
     def discard(self, candidate: dict | None) -> None:
