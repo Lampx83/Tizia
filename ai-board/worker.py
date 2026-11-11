@@ -219,6 +219,7 @@ class _Execution:
         self.grounded = (plan.get("grounding") or {}).get("sha")
         self.repairs: list[dict] = []
         self.repair_reason = None
+        self.repair_evidence: dict | None = None
         self.last_result: dict = {}
         self.produced: dict[str, dict] = {}
         self.repair_files: list[str] = []
@@ -259,6 +260,7 @@ class _Execution:
             cursor = self.checkpoint.load_cursor()
             if cursor and cursor.get("base") == self.grounded and isinstance(cursor.get("repairs"), list):
                 self.repairs, self.repair_reason = list(cursor["repairs"]), cursor.get("repair_reason")
+                self.repair_evidence = cursor.get("repair_evidence")
         self.resume_seed = self._prepare_resume()
         resume_nodes = (self.resume_seed or {}).get("resume_nodes")
         saver = self.checkpoint.graph_saver(f"{self.checkpoint.run_scope}@{self.grounded}") if self.graph_persistence() else None
@@ -368,6 +370,7 @@ class _Execution:
                 self._progress_window().tried = tried
             self.stop_note = repair_state.get("stop_note")
             self.repair_reason = repair_state.get("repair_reason")
+            self.repair_evidence = repair_state.get("repair_evidence")
             self.base_sha = base
             ledger = done.get("ledger") or {}
             if ledger:  # chi phi da tieu truoc khi kill: cong don, khong reset
@@ -404,6 +407,7 @@ class _Execution:
             "repair_state": {
                 "round_metrics": list(self.round_metrics), "progress_rounds": self.progress_rounds,
                 "no_progress": self.no_progress, "stop_note": self.stop_note, "repair_reason": self.repair_reason,
+                "repair_evidence": self.repair_evidence,
                 "diff_texts": [str(text)[-8000:] for text in self.diff_texts[-3:]],
                 "window_tried": list(self.progress_window.tried) if self.progress_window is not None else [],
             },
@@ -459,6 +463,7 @@ class _Execution:
             state["memory_path"] = str(self.memory_path)
         if self.repair_reason:
             state["repair_reason"] = self.repair_reason
+            state["repair_evidence"] = self.repair_evidence
         if self.reuse_next is not None:
             state["reuse"] = dict(self.reuse_next)  # the agent already wrote these files: rebuild, no model call
             self.reuse_next = None
@@ -576,6 +581,8 @@ class _Execution:
         self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
         tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
         self.repair_reason = f"cổng {last['gate']}{tag}: {last['reason']}"
+        from runtime import repair_session
+        self.repair_evidence = repair_session.compact(last.get("evidence"))
         return "repair"
 
     def _repair_allowed(self, last: dict) -> bool:
@@ -779,6 +786,7 @@ class _Execution:
         self._apply_agent(proposal, verdict["files"])
         self.repairs.append({"gate": last["gate"], "reason": f"repair agent: {proposal['diagnosis'][:160]}"})
         self.repair_reason = f"cổng {last['gate']} [repair_agent]: {proposal['diagnosis'][:160]}"
+        self.repair_evidence = None
         window.tried.append("repair_agent")
         steps = window.snapshot().get("window") or ()
         window.reset()
@@ -810,7 +818,7 @@ class _Execution:
     def repair(self) -> str:
         if self.checkpoint is not None:
             self.checkpoint.save_cursor({"base": self.grounded, "repairs": self.repairs, "repair_reason": self.repair_reason,
-                                         "graph": _dependency_graph(self.plan)})
+                                         "repair_evidence": self.repair_evidence, "graph": _dependency_graph(self.plan)})
         return "passed"
 
     def verdict(self) -> str:

@@ -579,6 +579,14 @@ def _checkpoint_store(state: dict, db_path, proposal_id, child: int):
     return PgSteps(db_path, proposal_id, child) if db_path is not None and proposal_id is not None else None
 
 
+def _earlier_sessions(state: dict, child: int) -> list:
+    """Stores of this subtask's earlier attempts, oldest first; [] unless a repair turn may continue them."""
+    cp, base = state.get("checkpoint"), state.get("base_sha")
+    if not (state.get("repair_reason") and base and cp is not None and getattr(cp, "n", 0)):
+        return []
+    return [cp.attempt(i).store(base, child) for i in range(cp.n)]
+
+
 PROGRESS_CAP = 150_000  # ký tự JSON tiến độ cổng 3 giữ được trong checkpoint (server cắt ledger ở 200 KB)
 
 
@@ -725,7 +733,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             role=role, db_path=db_path, proposal_id=proposal_id, child=child,
             store=_checkpoint_store(state, db_path, proposal_id, child),
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
-            contract=contract)
+            contract=contract, repair_evidence=state.get("repair_evidence"),
+            session_from=_earlier_sessions(state, child))
         if looped.get("stale_reset") and trace:
             trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
         receipts.extend(looped.get("sandbox_receipts", []))

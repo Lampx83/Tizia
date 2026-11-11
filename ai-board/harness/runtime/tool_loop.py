@@ -11,7 +11,7 @@ import time
 from contextvars import ContextVar
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import limits, meter, sandbox_tool, subtask_files, tool_manifest
+from runtime import limits, meter, repair_session, sandbox_tool, subtask_files, tool_manifest
 from runtime.budget import ChildBudget
 from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
@@ -383,6 +383,8 @@ def _cap(name: str) -> int:
 
 def _fit(text: str, name: str) -> str:
     """Cắt theo trần token của tool; lỗi request dùng trần ký tự."""
+    if name == FEEDBACK:
+        return text
     specs = _specs()
     if name not in specs:
         return text[:ERROR_CHARS]
@@ -430,6 +432,8 @@ def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
             "tools": MANIFEST.hash[:16], "verified_loop": ws.checks is not None, **(extra or {})}
 
 
+FEEDBACK = "gate_feedback"
+SESSION_PINS = ("session", "repair")
 STALE_DEPENDENCIES = {"file", "base", "subtask", "extras"}  # the rest of the pins identify the runtime and still pause
 KNOWN_STATUSES = ("done", "applied", "void", "intent", "unknown", "compensate")
 RESOLUTION_STATUS = {"applied": "applied", "not_applied": "void"}
@@ -452,12 +456,33 @@ def probe_write(name: str, args: dict, ws: Workspace, row: dict) -> tuple[str, d
     return probe(name, args, ws, row) if probe else None
 
 
-def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, history=None, messages=None) -> tuple:
-    """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None)."""
+def _prior_rows(stores, expected: dict) -> list | None:
+    """[(store, row)] of earlier attempts when they form one finished session on the same pins; None = start fresh."""
+    rows = []
+    for earlier in stores:
+        saved = earlier.load()
+        pins = saved["pins"]
+        if pins is None or not saved["steps"]:
+            return None
+        if any(pins.get(k) != v for k, v in expected.items() if k not in SESSION_PINS and k in pins):
+            return None
+        if any(row["status"] not in ("done", "applied") or row["kind"] == "forbidden" for row in saved["steps"]):
+            return None
+        rows += [(earlier, row) for row in saved["steps"]]
+    return rows if rows and rows[-1][1]["kind"] == "finish_ok" else None
+
+
+def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, history=None, messages=None,
+            prior=None, feedback=None) -> tuple:
+    """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None).
+
+    `prior` = hàng của các lần trước cùng phiên; `feedback` = lỗi gate nối cuối phiên (ghi 1 lần vào `store`)."""
     saved = store.load()
     if saved["pins"] is None:
         store.save_pins(pins)
-        return prompt, [], False, None
+        saved = {**saved, "pins": pins, "steps": []}
+        if not prior:
+            return prompt, [], False, None
     drift = sorted(k for k in pins.keys() | saved["pins"].keys() if pins.get(k) != saved["pins"].get(k))
     if saved["ledger"]:
         budget.absorb(saved["ledger"])
@@ -468,14 +493,17 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
         return prompt, [], False, None
     if drift:
         return prompt, [], False, _result("blocked", f"checkpoint không tương thích: {', '.join(drift)}", "critical")
+    rows = list(prior or []) + [(store, row) for row in saved["steps"]]
+    pending = feedback is not None and not any(
+        row["kind"] == FEEDBACK and row["args"].get("sha") == feedback["sha"] for _, row in rows)
     steps, rejected = [], False
-    for expected, row in enumerate(saved["steps"]):
+    for expected, (owner, row) in enumerate(rows):
         n, name, args, status, kind = row["step"], row["tool"], row["args"], row["status"], row["kind"]
         if n != expected:
             return prompt, steps, False, _result("blocked", f"checkpoint thiếu bước {expected} (có bước {n})", "critical", steps=steps)
         if row.get("digest_ok") is False:
             return prompt, steps, False, _result("blocked", f"kết quả đã lưu của bước {n} bị hỏng (digest không khớp)", "critical", steps=steps)
-        if row["identity"] != store.identity(n, name, args):
+        if row["identity"] != owner.identity(n, name, args):
             return prompt, steps, False, _result("blocked", f"identity bước {n} không khớp checkpoint", "critical")
         if status not in KNOWN_STATUSES:
             return prompt, steps, False, _result("blocked", f"bước {n} có trạng thái lạ: {status!r}", "critical", steps=steps)
@@ -485,17 +513,17 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
                 steps=steps, unknown_outcome={"step": n, "tool": name, "status": status})
         if status in ("intent", "unknown"):
             if name not in WRITE_TOOLS:
-                store.drop(n)
+                owner.drop(n)
                 break
             found = probe_write(name, args, ws, row)
             if not found:
-                store.mark(n, "unknown")
+                owner.mark(n, "unknown")
                 return prompt, steps, False, _result(
                     "blocked", f"kết quả bước {n} ({name}) chưa rõ; cần đối chiếu rồi mới resume", "critical",
                     steps=steps, unknown_outcome={"step": n, "tool": name, "status": "unknown"})
             resolution, evidence = found
-            store.mark(n, "unknown")
-            store.reconcile(n, resolution, PLATFORM_ACTOR, "đối chiếu tự động theo dữ liệu đã lưu", evidence)
+            owner.mark(n, "unknown")
+            owner.reconcile(n, resolution, PLATFORM_ACTOR, "đối chiếu tự động theo dữ liệu đã lưu", evidence)
             status = RESOLUTION_STATUS[resolution]
         observation = row["observation"] or ""
         if kind == "forbidden":
@@ -507,7 +535,7 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
                 observation = ws.run(name, args)
             except (ToolError, Forbidden) as error:
                 return prompt, steps, False, _result("blocked", f"replay bước {n} lệch: {error}", "critical", steps=steps)
-        elif kind == "finish_ok":
+        elif kind == "finish_ok" and expected == len(rows) - 1 and not pending:
             try:
                 out = ws.proposal()
                 check(out)
@@ -515,15 +543,29 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
                 return prompt, steps + [name], False, _result("proposed", out=out, steps=steps + [name])
             except (ValueError, Forbidden, ToolError) as error:
                 return prompt, steps, False, _result("blocked", f"replay finish lệch: {error}", "critical", steps=steps)
+        elif kind == "finish_ok":
+            observation = "đề xuất đã gửi sang cổng kiểm tra"
         steps.append(name)
         rejected = kind == "finish_rejected"
-        if history is not None:
-            history.add(n, name, _fit(observation, name))
-        elif messages is not None:
-            _native_turn(messages, n, name, args, _fit(observation, name))
-        else:
-            prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
+        prompt = _show_step(prompt, history, messages, n, name, args, observation)
+    if pending:
+        n = len(rows)
+        args = {"sha": feedback["sha"]}
+        store.done(n, FEEDBACK, args, feedback["text"], FEEDBACK)
+        steps.append(FEEDBACK)
+        prompt = _show_step(prompt, history, messages, n, FEEDBACK, args, feedback["text"])
     return prompt, steps, rejected, None
+
+
+def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, observation: str) -> str:
+    """Observation vào lịch sử hiện hành (compaction, native, hoặc nối prompt); trả prompt mới."""
+    if history is not None:
+        history.add(n, name, _fit(observation, name))
+    elif messages is not None:
+        _native_turn(messages, n, name, args, _fit(observation, name))
+    else:
+        prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
+    return prompt
 
 
 def check_command(argv: list[str]) -> None:
@@ -574,7 +616,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
-                sandbox_log: list | None = None) -> dict:
+                sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=()) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -613,7 +655,14 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         pins = {**(pins or {}), "contract": sha_of(contract)}
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
-    if repair_reason:
+    feedback, prior = None, None
+    if repair_reason and store and session_from and repair_session.enabled():
+        prior = _prior_rows(session_from, _pins(subtask, sha, ws, pins))
+    if prior:
+        text = repair_session.observation(repair_reason, repair_evidence)
+        feedback = {"text": text, "sha": sha_of(f"{len(session_from)}:{text}")}
+        pins = {**(pins or {}), "session": feedback["sha"]}
+    elif repair_reason:
         prompt += (f"\nLần làm trước bị loại ở bước kiểm tra: {repair_reason}\nLàm lại đầy đủ từ đầu như yêu cầu ở trên "
                    "(sửa file đích VÀ viết test bằng write_test trước khi finish), tránh đúng lỗi này.\n")
         pins = {**(pins or {}), "repair": sha_of(repair_reason)}
@@ -639,7 +688,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         pins = {**(pins or {}), 'compaction': pin()}
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
     if store:
-        prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check, history, messages)
+        prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check, history, messages,
+                                                  prior=prior, feedback=feedback)
         if stop:
             return stop
     while True:
@@ -744,12 +794,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             store.save_ledger(budget.snapshot())
         _tool_span(deps, name, n, child, kind, observation, started_ms)
         steps.append(name)
-        if history is not None:
-            history.add(n, name, _fit(observation, name))
-        elif messages is not None:
-            _native_turn(messages, n, name, args, _fit(observation, name))
-        else:
-            prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
+        prompt = _show_step(prompt, history, messages, n, name, args, observation)
 
 
 PROBE_CASES = (
