@@ -26,7 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
-from runtime import coverage, loop_guard, objection_repeat, progress, stop_report  # noqa: E402
+from runtime import coverage, feedback_cap, loop_guard, objection_repeat, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, contract, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings, pr_base  # noqa: E402
 CONTRACT = contract()
@@ -233,6 +233,7 @@ class _Execution:
         self.reuse_next = None
         self.halt: dict = {}
         self.stop_note: str | None = None
+        self.feedback_stop: dict | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
@@ -572,13 +573,23 @@ class _Execution:
             if agent.applies(last.get("repair_action")) and self._agent_available() and self._diagnose_routes(last):
                 return "agent"
             return "done"
+        entry = {"gate": last["gate"], "reason": last["reason"]}
+        if feedback_cap.enabled():
+            from runtime import repair_class
+            scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
+            entry["kind"] = repair_class.classify(self.last_result, self.produced, scope)["class"]
+            count = feedback_cap.prior(self.repairs, last["gate"], entry["kind"])
+            if count >= feedback_cap.CAP:
+                self.feedback_stop = feedback_cap.stop_fields(last["gate"], entry["kind"], count, last.get("evidence"))
+                self.stop_note = f"gate {last['gate']} {entry['kind']} lặp {count} lần phản hồi"
+                return "done"
         if not self.budget.tick():
             self.kind = "budget"
             return "done"
         from runtime.root_allowance import current as root_allowance
         if (get_settings().tool_loop == "1" or root_allowance() is not None) and not self.budget.spend_repair():
             return "done"
-        self.repairs.append({"gate": last["gate"], "reason": last["reason"]})
+        self.repairs.append(entry)
         tag = f" [{last['repair_class']}]" if last.get("repair_class") else ""
         self.repair_reason = f"cổng {last['gate']}{tag}: {last['reason']}"
         from runtime import repair_session
@@ -846,8 +857,11 @@ class _Execution:
         elif self.stop_note and not passed:
             reason = f"{reason} | repair stop: {self.stop_note}"
         stop = None
-        if not passed and stop_report.enabled():
+        if not passed and (stop_report.enabled() or self.feedback_stop):
             stop = stop_report.build(outcome, reason, last["gate"], kind, [g["gate"] for g in gates])
+            if self.feedback_stop:
+                stop.update(error_kind=self.feedback_stop["kind"], feedback_count=self.feedback_stop["count"],
+                            last_evidence=self.feedback_stop["evidence"])
             reason = stop_report.render(stop)
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
