@@ -74,8 +74,8 @@ def test_metacharacters_are_inert(tmp_path, text):
     (tmp_path / "public").mkdir()
     (tmp_path / path).write_text("plain", encoding="utf-8")
     cmd = compile_prose_verify(f"{path} chứa '{text}'", {path})
-    assert cmd is not None
-    _sh_run(cmd, tmp_path)
+    if cmd is not None:
+        _sh_run(cmd, tmp_path)
     assert not (tmp_path / "PWNED").exists()
 
 
@@ -97,6 +97,11 @@ def test_nfd_text_normalised_to_nfc():
     "public/other.html chứa 'x'",
     "public/a.html is wrong",
     "public/a.html chứa x",
+    "public/a.html chứa 'x' ngay sau 'y'",
+    "public/a.html chứa 'x' và 'y' ngay sau 'z'",
+    "public/a.html chứa 'x' rồi 'y'",
+    "public/a.html chứa 'x' và y",
+    "public/a.html chứa 'x' và không còn 'y' và 'z'",
 ])
 def test_out_of_form_or_out_of_scope_returns_none(bad):
     assert compile_prose_verify(bad, {"public/a.html"}) is None
@@ -133,3 +138,45 @@ def test_parse_plan_flag_on_still_rejects_unknown_prose(monkeypatch):
     monkeypatch.setattr(brainstorm, "get_settings", lambda: SimpleNamespace(compile_prose_verify=True))
     with pytest.raises(ValueError, match="verify phải là lệnh chạy được"):
         brainstorm.parse_plan(_plan("làm cho trang đẹp hơn"))
+
+
+MULTI = [
+    ("public/marketplace.html chứa 'Nhớ ôn bài đơn hàm' và 'Đang tải'", ["Nhớ ôn bài đơn hàm", "Đang tải"], None),
+    ("public/marketplace.html chứa 'a' and 'b' and 'c'.", ["a", "b", "c"], None),
+    ("public/marketplace.html chứa 'a' và 'b' và không còn 'x'", ["a", "b"], "x"),
+]
+
+
+@pytest.mark.parametrize("text,wanted,gone", MULTI)
+def test_multi_quoted_strings_compile_to_separate_checks(text, wanted, gone):
+    cmd = compile_prose_verify(text, {"public/marketplace.html"})
+    assert cmd is not None
+    assert cmd.count("grep -qF --") == len(wanted) + (gone is not None)
+    for w in wanted:
+        assert w in cmd
+    for connector in (" và ", " and ", " ngay sau "):
+        assert connector not in cmd.replace("không còn", "")
+
+
+@needs_sh
+def test_multi_checks_each_must_pass(tmp_path):
+    (tmp_path / "public").mkdir()
+    f = tmp_path / "public/marketplace.html"
+    cmd = compile_prose_verify("public/marketplace.html chứa 'AAA' và 'BBB'", {"public/marketplace.html"})
+    f.write_text("AAA BBB", encoding="utf-8")
+    assert _sh_run(cmd, tmp_path).returncode == 0
+    f.write_text("AAA", encoding="utf-8")
+    assert _sh_run(cmd, tmp_path).returncode != 0
+
+
+@needs_sh
+@pytest.mark.parametrize("text", [
+    "public/marketplace.html chứa 'Nhớ ôn bài đơn hàm' và 'Đang tải'",
+    "public/teacher-live.html chứa '<h3>Kiểm pha bài thành ôn.</h3>' ngay sau '<h3>📝 Mở quiz</h3>'",
+])
+def test_trial_sentences_never_emit_syntax_error(tmp_path, text):
+    path = text.split()[0]
+    cmd = compile_prose_verify(text, {path})
+    if cmd is not None:
+        r = _sh_run(cmd, tmp_path)
+        assert "syntax error" not in r.stderr and "Unterminated" not in r.stderr

@@ -49,8 +49,10 @@ DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/mi
 RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
 READONLY_CHECK = re.compile(r"^(grep|rg)\s")
 # File chưa có ở base chỉ được là trang mới, module JS mới, plugin _ai-generated mới, hoặc migration mới.
-PROSE_CHECK = re.compile(r"(?P<path>\S+)\s+(?:chứa chuỗi|chứa|contains)\s+'(?P<text>.+?)'"
-                         r"(?:\s+(?:và|and)\s+(?:không còn|no longer contains)\s+'(?P<gone>.+?)')?\.?")
+_Q = r"'[^']+'"
+_AND = r"\s+(?:và|and)\s+"
+PROSE_CHECK = re.compile(rf"(?P<path>\S+)\s+(?:chứa chuỗi|chứa|contains)\s+(?P<texts>{_Q}(?:{_AND}{_Q})*)"
+                         rf"(?:{_AND}(?:không còn|no longer contains)\s+(?P<gone>{_Q}))?\.?")
 _SAFE_PATH = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
@@ -139,7 +141,7 @@ def is_feature_plan(plan: dict) -> bool:
 
 
 def compile_prose_verify(text: str, files: set[str]) -> str | None:
-    """Prose 'path chứa 'x' [và không còn 'y'] → sh -c grep cmd. None nếu lạ form hoặc path ngoài files."""
+    """Prose "path chứa 'x' [và 'y']… [và không còn 'z']" → sh -c grep cmd. None nếu lạ form, nối khác và/and, path ngoài files."""
     s = unicodedata.normalize("NFC", text.strip())
     if any(c in s for c in "\r\n\x00"):
         return None
@@ -148,13 +150,14 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
         return None
     if any(part in (".", "..") for part in m["path"].split("/")):
         return None
-    texts = [m["text"]] + ([m["gone"]] if m["gone"] is not None else [])
-    if any(not t.strip() for t in texts):
+    present = re.findall(r"'([^']+)'", m["texts"])
+    gone = m["gone"][1:-1] if m["gone"] else None
+    if any(not t.strip() for t in present + ([gone] if gone else [])):
         return None
     path = m["path"]
-    cmds = [f"grep -qF -- {shlex.quote(m['text'])} {path}"]
-    if m["gone"] is not None:
-        cmds.append(f"! grep -qF -- {shlex.quote(m['gone'])} {path}")
+    cmds = [f"grep -qF -- {shlex.quote(t)} {path}" for t in present]
+    if gone is not None:
+        cmds.append(f"! grep -qF -- {shlex.quote(gone)} {path}")
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
