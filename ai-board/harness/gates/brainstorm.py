@@ -33,6 +33,7 @@ from pathlib import Path
 from repositories import repo_at_commit
 import context
 import functional
+import path_policy
 from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, subtask_files
@@ -43,7 +44,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SIZES = ("small", "large")
 SUBTASK_KEYS = ("title", "file", "verify", "size")
 LAYERS = ("db", "backend", "frontend", "wiring")
-GEN_CONTEXT = "server/contexts/_ai-generated/"
+GEN_CONTEXT = path_policy.GENERATED_ROOT
 DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 # Plan nhiều lớp: verify/acceptance phải là lệnh chạy được, không phải câu mô tả.
 RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
@@ -86,7 +87,7 @@ def infer_layer(file: str) -> str:
     """Suy ra lớp từ đường dẫn khi model không khai layer."""
     if DB_MIGRATION.match(file):
         return "db"
-    if file.startswith(GEN_CONTEXT):
+    if path_policy.may_edit(file):
         return "backend"
     if file.startswith("public/"):
         return "frontend"
@@ -232,7 +233,7 @@ def _check_extra_file(file: str, scope, plan_hash: str) -> None:
     layer = infer_layer(file)
     if layer == "db":
         raise ValueError(f"file '{file}': migrations không đi kèm trong subtask nhiều file — tách subtask db riêng")
-    if layer == "backend" and not file.startswith(GEN_CONTEXT):
+    if layer == "backend" and not path_policy.may_edit(file):
         raise ValueError(f"file '{file}': backend chỉ được trong {GEN_CONTEXT}")
 
 
@@ -270,7 +271,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
                 raise ValueError("subtask db phải là migration mới: {file} (mẫu server/contexts/_ai-generated/<name>/migrations/<file>.sql)")
             if DB_MIGRATION.match(file):
                 db_files.append(file)
-        elif st["layer"] == "backend" and not file.startswith(GEN_CONTEXT) and file not in granted and file not in pending:
+        elif st["layer"] == "backend" and not path_policy.may_edit(file) and file not in granted and file not in pending:
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
     for st in plan["subtasks"]:
         for extra in st.get("files") or []:

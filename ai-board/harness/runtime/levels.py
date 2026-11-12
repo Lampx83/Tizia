@@ -34,7 +34,6 @@ _SELF = tuple(re.compile(p, re.I) for p in (
     r"^public/js/ai-board-", r"^public/[^/]*ai-board", r"^public/[^/]*admin-request",
 ))
 # Plugin AI sinh: vùng surface được khai báo, kể cả migration additive của chính plugin đó.
-_GENERATED = "server/contexts/_ai-generated/"
 # Test của repo: code kiểm chứng, không có quyền chạy production — khai báo surface để plan
 # thêm/sửa test mà không phải xin elevation cho từng bước.
 _TEST = tuple(re.compile(p, re.I) for p in (r"^tests?/",))
@@ -74,7 +73,7 @@ def _classify(path) -> tuple[str, bool]:
         return CORE, False
     if any(pattern.search(normalized) for pattern in _SELF):
         return SELF, True
-    if normalized.startswith(_GENERATED):
+    if path_policy.may_edit(normalized):
         return SURFACE, True
     if any(pattern.search(normalized) for pattern in _TEST):
         return SURFACE, True

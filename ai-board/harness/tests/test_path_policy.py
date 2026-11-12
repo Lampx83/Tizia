@@ -63,3 +63,20 @@ def test_test_file_must_name_scope_file():
     assert path_policy.names_scope("import x from '../public/js/quiz.js';", ["public/js/quiz.js"])
     assert path_policy.names_scope("assert render_quiz_html()  # quiz.js", ["public/js/quiz.js"])
     assert not path_policy.names_scope("assert True", ["public/js/quiz.js"])
+
+
+@pytest.mark.parametrize("role", ["admin", "student"])
+@pytest.mark.parametrize("path,allowed", [
+    ("server/contexts/_ai-generated/pharmacy/index.js", True),
+    ("server/contexts/_ai-generated/pharmacy/migrations/001.sql", True),
+    ("server/contexts/_ai-generated/", True),
+    ("server/contexts/identity/index.js", False),
+    ("server/contexts/_ai-generated", False),
+    ("server/contexts/_ai-generated-x/a.js", False),
+    ("server/index.js", False),
+    ("public/js/app.js", False),
+    ("ai-board/harness/main.py", False),
+    ("", False),
+])
+def test_may_edit_table(path, allowed, role):
+    assert path_policy.may_edit(path, role) is allowed

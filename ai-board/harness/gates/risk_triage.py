@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import re
 
+import path_policy
 from gates import change_class
 
 TIERS = ("low", "medium", "high", "critical")
 _ROUTE = re.compile(r"\b(?:app|router)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
-_DOMAIN = re.compile(r"(?:^|/)(?:_ai-generated|domains)/([^/]+)/")
+_DOMAIN = re.compile(r"(?:^|/)(?:" + path_policy.GENERATED_DIR + r"|domains)/([^/]+)/")
 _TEST = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$")
 # catalog tier -> (privilege rank, risk it adds)
 _CATALOG_TIER = {"surface": (0, None), "protected": (1, "high"), "core": (2, "critical")}

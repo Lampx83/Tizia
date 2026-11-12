@@ -163,10 +163,10 @@ def _new_file_context(subtask: dict, state: dict, siblings: list[str]) -> str | 
     if target.startswith(("public/",)):
         groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),)
     elif target.startswith(("server/",)):
-        groups = (("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")),)
+        groups = (("mẫu context API THẬT", (path_policy.GENERATED_ROOT, "server/contexts/")),)
     else:
         groups = (("mẫu module frontend THẬT", ("public/js/features/", "public/js/")),
-                  ("mẫu context API THẬT", ("server/contexts/_ai-generated/", "server/contexts/")))
+                  ("mẫu context API THẬT", (path_policy.GENERATED_ROOT, "server/contexts/")))
     folder = posixpath.dirname(target)
     parts = [f"(file đích chưa tồn tại ở base — tạo file MỚI hoàn toàn; cùng thư mục {folder or '.'}/: "
              f"{', '.join(siblings[:40]) or '—'})\n"

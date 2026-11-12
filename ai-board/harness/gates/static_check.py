@@ -18,6 +18,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import path_policy
+
 import candidate
 import classifier
 import functional
@@ -46,7 +48,7 @@ OVERSIZE_MULTIPLIER = 2
 _IMPORT_PATH = re.compile(r"""(?:from\s+|import\(\s*|require\(\s*)['"]([^'"]+)['"]""")
 _CORE_ACCESS = re.compile(r"\bctx\.core\b")
 # 1 context KHÁC _ai-generated, dạng path đã resolve (vd 'server/contexts/admin/index.js').
-_OTHER_CONTEXT = re.compile(r"(^|/)contexts/(?!_ai-generated/)[^/]+/")
+_OTHER_CONTEXT = re.compile(r"(^|/)contexts/(?!" + path_policy.GENERATED_DIR + r"/)[^/]+/")
 _CONTEXT_ROOT = re.compile(r"(?:^|.*/)contexts/([^/]+)/")
 
 
