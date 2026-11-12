@@ -1033,3 +1033,32 @@ def test_preloaded_base_pin_is_dropped_only_for_the_known_digest(tmp_path):
     assert (tmp_path / "Dockerfile").read_text(encoding="utf-8") == (
         f"FROM node:20-alpine AS deps\nFROM node:20-alpine@sha256:{'0' * 64}\nFROM alpine:3\n")
     assert verify._use_preloaded_bases(tmp_path) is False
+
+
+def test_missing_acceptance_tool_is_infra_not_candidate_repair(tmp_path):
+    class NoCurl(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if "exec" in args and "sh" in args:
+                self.calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 1, "", "sh: 1: curl: not found\n")
+            return super().__call__(args, **kwargs)
+
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["curl -s http://127.0.0.1:8041/ | grep -q x"]},
+                     runner=NoCurl())
+
+    assert out["blocked"] is True
+    assert out["failure_class"] == "transient"
+    assert "curl" in out["reason"] and "thiếu công cụ" in out["reason"]
+
+
+def test_exit_127_acceptance_is_infra(tmp_path):
+    class Exit127(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if "exec" in args and "sh" in args:
+                self.calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 127, "", "")
+            return super().__call__(args, **kwargs)
+
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["curl -fsS http://127.0.0.1:8041/"]}, runner=Exit127())
+
+    assert out["failure_class"] == "transient" and "curl" in out["reason"]

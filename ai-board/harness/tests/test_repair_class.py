@@ -171,3 +171,10 @@ def test_a_no_oracle_run_reaches_the_verdict_as_needs_review_instead_of_a_replan
     assert result["outcome"] == "needs_review" and result["candidate"] is not None
     assert result["failure_class"] is None and "loop stop" not in result["reason"]
     assert result["reason"].startswith("needs_review") and "No trusted behavioral oracle" in result["reason"]
+
+
+def test_missing_tool_verdict_is_infra_retry_and_skips_repair():
+    result = {"gate": 5, "failure_class": "transient",
+              "reason": "thiếu công cụ trong container: curl (acceptance: curl -s $BASE/x | grep -q y)"}
+    out = repair_class.classify(result, PRODUCED, SCOPE)
+    assert (out["class"], out["action"], out["files"]) == ("infra_transient", "retry", [])

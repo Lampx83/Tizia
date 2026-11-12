@@ -18,7 +18,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from gates import visual
-from gates.gate5_session import STAGE_CLASS, Compose, failure_class
+from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
 from meter import redact
 from settings import get_settings
@@ -604,6 +604,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 try:
                     command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
+                    tool = missing_tool(getattr(exc, 'output', ''), getattr(exc, 'returncode', None), item)
+                    if tool:
+                        stage = 'tooling'
+                        raise RuntimeError(f"thiếu công cụ trong container: {tool} (acceptance: {item})") from exc
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
                     raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
                 logs.append(f"Feature acceptance passed: {item}")
