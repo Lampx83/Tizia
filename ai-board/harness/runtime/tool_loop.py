@@ -112,6 +112,13 @@ class Forbidden(Exception):
     """Vượt quyền (path, tool lạ về quyền): dừng trước side effect."""
 
 
+class ScopeMiss(Forbidden):
+    """File ngoài phạm vi subtask: cờ scope_first_warning bật thì lần đầu chỉ là observation."""
+
+
+SCOPE_WARNING = "scope_warning"
+
+
 def parse_request(body: dict) -> tuple[str, dict]:
     """(tên, tham số) từ tool_calls native hoặc JSON trong text. Raise ToolError nếu không đúng 1 lời gọi."""
     native = body.get("tool_calls")
@@ -186,6 +193,7 @@ class Workspace:
         self.content = current or ""
         self.test_file = self.test = None
         self.stale_reset = None
+        self.scope_warned = False
         self.checks, self.budget, self.proofs = checks, budget, {}
         self.trace = trace
         self.sandbox = sandbox
@@ -251,9 +259,9 @@ class Workspace:
         if reason := MANIFEST.policy.write_reason(path):
             raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
-            raise Forbidden(f"test chỉ được nằm trong test/: {path!r}")
+            raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}")
         if not test and path != self.file and path not in self.extra_content:
-            raise Forbidden(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
+            raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
         return path
 
     def _fresh(self) -> None:
@@ -530,6 +538,8 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
             return prompt, steps, False, _result("blocked", observation, "critical", steps=steps)
         if status == "void":
             observation = "bước này bị hủy khi đối chiếu; thử lại nếu cần"
+        elif kind == SCOPE_WARNING:
+            ws.scope_warned = True
         elif name in WRITE_TOOLS and (status == "applied" or kind == "ok"):
             try:
                 observation = ws.run(name, args)
@@ -746,6 +756,15 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         except ToolError as error:
             name, kind = "lỗi", "error"
             observation = f"{error} (tham số/định dạng sai; thử lại, không tính lượt sửa nội dung)"
+        except ScopeMiss as error:
+            if not get_settings().scope_first_warning or ws.scope_warned:
+                if store and name in WRITE_TOOLS:
+                    store.done(n, name, args, str(error), "forbidden")
+                _tool_span(deps, name, n, child, "forbidden", str(error), started_ms)
+                return _result("blocked", str(error), "critical", steps=steps)
+            ws.scope_warned = True
+            kind = SCOPE_WARNING
+            observation = f"{error}. Không có thay đổi nào được áp. Lần ghi ngoài phạm vi tiếp theo sẽ dừng run."
         except Forbidden as error:
             if store and name in WRITE_TOOLS:
                 store.done(n, name, args, str(error), "forbidden")
