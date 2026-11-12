@@ -10,6 +10,8 @@ from budget import Budget
 from conftest import FakeModels, deps_with
 from gates import best_match, brainstorm, plan_validate
 from test_code_index import _SeqModels
+
+pytestmark = pytest.mark.usefixtures('high_target_confidence')
 from test_repomap import COUNTER_REQUEST, _crowded_repo, _plan_for, _real_matching
 
 WIDGET, SCHOOL = "public/js/widget.js", "public/school.html"

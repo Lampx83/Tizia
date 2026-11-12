@@ -32,6 +32,8 @@ def _no_repomap(monkeypatch, request):
     tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""
     import repomap
     import tools
+    tools._files_with.cache_clear()  # keyed by (source, commit, gram); a stubbed index must not see another test's real-index hits
+    tools._ranked.cache_clear()
     monkeypatch.setattr(repomap, "related", lambda *a, **kw: [])
     monkeypatch.setattr(tools, "matching_files", lambda *a, **kw: [])  # same index build, same reason
     if request.module.__name__ == "test_eval_strata":
@@ -44,6 +46,14 @@ def _no_repomap(monkeypatch, request):
             return {"files": {}, "words": {}}
         return ui_index(source, *args, **kwargs)
     monkeypatch.setattr(code_index, "ui_index", fixture_index)
+
+
+@pytest.fixture
+def high_target_confidence(monkeypatch):
+    """Pin gate 2.5 target confidence to high: grounding tests use one-file repos, where repomap IDF gives no signal."""
+    from gates import plan_validate
+    monkeypatch.setattr(plan_validate.target_confidence, "assess",
+                        lambda *a, **k: {"level": "high", "signals": {}, "candidates": [], "reason": ""})
 
 
 @pytest.fixture
