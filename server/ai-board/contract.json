@@ -108,6 +108,11 @@
       "similarity_max_chars": 20000,
       "topology_window": 6
     },
+    "repair_sampling": {
+      "_why": "Second and later repair attempts of gate 3 sample warmer so a repair is not a byte-identical retry. Flag AI_BOARD_REPAIR_SAMPLING_DIVERSITY, default off; the first repair keeps temperature 0.",
+      "from_attempt": 2,
+      "temperature": 0.3
+    },
     "progress": {
       "_why": "Progress-based loop control (runtime/progress.py): the loop slides a window over step signals instead of counting rounds. Signals and strategies are registries filled by the node that owns them; this block only holds the thresholds. Flags default off, so the old behaviour stays.",
       "flag": "AI_BOARD_PROGRESS_LOOP",

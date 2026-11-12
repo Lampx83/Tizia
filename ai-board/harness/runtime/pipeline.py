@@ -23,7 +23,7 @@ from runtime.budget import Budget, BudgetExhausted          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
-from runtime import meter, prompt_roles, state_file  # noqa: E402
+from runtime import limits, meter, prompt_roles, state_file  # noqa: E402
 from services import context                     # noqa: E402
 from services import attachments                 # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
@@ -180,6 +180,14 @@ class Deps:
             notify=Unavailable("telegram"),
         )
 
+    def _repair_temperature(self, gate: float) -> float:
+        """Gate 3 from the contract's repair attempt on: contract temperature when the flag is on, else 0."""
+        from settings import get_settings
+        if gate != 3 or not get_settings().repair_sampling_diversity:
+            return 0
+        spec = limits.repair_sampling()
+        return spec["temperature"] if getattr(self.trace, "attempt", 0) >= spec["from_attempt"] else 0
+
     def call_model(self, model: str, prompt: str, *, gate: float, budget,
                     db_path=None, proposal_id: int | None = None, format: str | dict | None = "json",
                     prompt_name: str | None = None, child: int | None = None, iteration: int = 0,
@@ -190,7 +198,8 @@ class Deps:
         Phí: model_calls +1, tokens, units (meter: giây GPU ollama / 1K token api).
         Lỗi HTTP/timeout vẫn tính units theo wall (GPU có thể đã chạy) rồi raise lại.
         body["_metrics"] = metrics đã chuẩn hoá cho cổng dùng (done_reason, …)."""
-        options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": 0, **(options or {})}
+        options = {"num_predict": NUM_PREDICT.get(gate, NUM_PREDICT_DEFAULT), "temperature": self._repair_temperature(gate),
+                   **(options or {})}
         if skill_context:
             extra = {**(extra or {}), '_skill_context': skill_context}
         if not budget.tick() or not budget.can_request():
