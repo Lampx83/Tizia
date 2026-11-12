@@ -184,7 +184,8 @@ const STOP_ROUTE = { needs_review: 'Cần admin duyệt', claude_code_queue: 'H�
 export function renderStopReport(trace = {}) {
   return (trace.runs || []).filter((run) => run.stop_report).map((run) => {
     const s = run.stop_report, step = s.next_step || {};
-    return `<div class="g-stop meta" data-run="${esc(run.id)}"><p class="warn">Dừng (${esc(s.class)}): cổng đã thử: ${(s.tried || []).map(esc).join(', ')}; vướng ở cổng ${esc(s.blocked_gate)}${s.reason ? ` — ${esc(s.reason)}` : ''}</p>${step.route
+    return `<div class="g-stop meta" data-run="${esc(run.id)}"><p class="warn">Dừng (${esc(s.class)}): cổng đã thử: ${(s.tried || []).map(esc).join(', ')}; vướng ở cổng ${esc(s.blocked_gate)}${s.reason ? ` — ${esc(s.reason)}` : ''}</p>${s.error_kind
+      ? `<p>Lỗi lặp: <code>${esc(s.error_kind)}</code> ở cổng ${esc(s.blocked_gate)}, agent đã được phản hồi ${esc(s.feedback_count)} lần.${s.last_evidence ? ` Bằng chứng lần cuối: <code>${esc(s.last_evidence)}</code>` : ''}</p>` : ''}${step.route
       ? `<p>Hướng đi tiếp: <b>${esc(STOP_ROUTE[step.route] || step.route)}</b>${step.message ? `. ${esc(step.message)}` : ''}</p>` : ''}</div>`;
   }).join('');
 }

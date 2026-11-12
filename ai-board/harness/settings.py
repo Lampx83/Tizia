@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     repair_same_session: bool = False
     repair_sampling_diversity: bool = False
     scope_first_warning: bool = False
+    gate_feedback_cap: bool = False
     prompt_role_split: bool = False
     procedure_in_split: bool = False  # tạm thời để đo LF/166; gỡ khi có kết quả
     gate25_answered: bool = False

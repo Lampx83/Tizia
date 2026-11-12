@@ -382,6 +382,10 @@ function validatePrePrVerdict(value, selfRequest = false) {
       tried: (Array.isArray(value.stop_report.tried) ? value.stop_report.tried : []).slice(0, 10).map((g) => Number(g)),
       blocked_gate: Number(value.stop_report.blocked_gate),
       reason: String(value.stop_report.reason ?? '').slice(0, 300),
+      ...(typeof value.stop_report.error_kind === 'string' ? {
+        error_kind: value.stop_report.error_kind.slice(0, 40),
+        feedback_count: Number(value.stop_report.feedback_count) || 0,
+        last_evidence: String(value.stop_report.last_evidence ?? '').slice(0, 500) } : {}),
       ...(value.stop_report.next_step && typeof value.stop_report.next_step === 'object' ? { next_step: {
         route: String(value.stop_report.next_step.route ?? '').slice(0, 40),
         message: String(value.stop_report.next_step.message ?? '').slice(0, 300) } } : {}),

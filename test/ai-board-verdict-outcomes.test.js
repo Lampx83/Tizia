@@ -533,3 +533,12 @@ test('a verdict without stop_report leaves the admin run trace unchanged', async
   assert.equal('stop_report' in (await store.getRequestTrace(1)).runs.at(-1), false);
   db.close();
 });
+
+test('feedback-cap fields of a stop report are kept and capped', async () => {
+  const { store, submit, db } = await plannedRoot();
+  const stop = { class: 'check_failed', tried: [4], blocked_gate: 4, reason: 'r', error_kind: 'syntax', feedback_count: 3, last_evidence: 'e'.repeat(900) };
+  await submit(blocked(4, 'r', 'ordinary', { stop_report: stop }));
+  const kept = (await store.getRequestTrace(1)).runs.at(-1).stop_report;
+  assert.deepEqual([kept.error_kind, kept.feedback_count, kept.last_evidence.length], ['syntax', 3, 500]);
+  db.close();
+});

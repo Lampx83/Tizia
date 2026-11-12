@@ -160,3 +160,11 @@ test('stop report panel shows tried gates, blocker and next step; escapes text; 
   assert.match(html, /Chuyển hàng chờ Claude Code\./);
   assert.doesNotMatch(html, /<b>smoke/);
 });
+
+test('stop report shows the repeated error kind, feedback count and last evidence, escaped', () => {
+  const html = renderStopReport({ runs: [{ id: 5, stop_report: { class: 'check_failed', tried: [4], blocked_gate: 4, reason: 'x',
+    error_kind: 'syntax', feedback_count: 3, last_evidence: '<i>SyntaxError</i>' } }] });
+  assert.match(html, /Lỗi lặp: <code>syntax<\/code> ở cổng 4, agent đã được phản hồi 3 lần/);
+  assert.match(html, /&lt;i&gt;SyntaxError/);
+  assert.doesNotMatch(html, /<i>Syntax/);
+});
