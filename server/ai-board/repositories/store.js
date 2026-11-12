@@ -2098,15 +2098,18 @@ function resumeSummary(journal) {
     if (!next) throw new WorkerContractError('invalid rollback outcome');
     const revert = input.outcome === 'revert_ready' ? validateCandidate(input.revert) : null;
     const detail = String(input.detail || '').slice(0, 1000) || null;
+    const prNumber = Number(input.pullRequest?.number);
+    const pullRequest = revert && Number.isInteger(prNumber) && prNumber > 0
+      ? { number: prNumber, url: String(input.pullRequest.url || '').slice(0, 300) } : null;
     const [status, phase, note] = next;
-    await db.run('UPDATE ai_runs SET evidence_json=?, failure_reason=?, updated_at=? WHERE id=?', [JSON.stringify({ rollback: { outcome: input.outcome, revert, detail } }),
+    await db.run('UPDATE ai_runs SET evidence_json=?, failure_reason=?, updated_at=? WHERE id=?', [JSON.stringify({ rollback: { outcome: input.outcome, revert, pull_request: pullRequest, detail } }),
         input.outcome === 'failed' ? detail : null, input.now, run.id]);
     await closeRoot(root, {
       status, phase, note, reason: detail, now: input.now,
       event: { type: 'rollback_done', actorType: 'worker', actorId: input.workerId, idem: `rollback-done:${run.id}`,
-        detail: JSON.stringify({ outcome: input.outcome, branch: revert?.branch ?? null, detail }) },
+        detail: JSON.stringify({ outcome: input.outcome, branch: revert?.branch ?? null, pr: pullRequest?.number ?? null, detail }) },
     });
-    return { status, phase, outcome: input.outcome, revert };
+    return { status, phase, outcome: input.outcome, revert, pull_request: pullRequest };
   });
 
   async function submitRollback(ticketId, input) {

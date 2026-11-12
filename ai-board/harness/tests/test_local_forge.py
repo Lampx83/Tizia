@@ -76,6 +76,36 @@ def test_revert_after_merge_makes_a_revert_branch_and_never_touches_dev(world):
     assert revert['commits'][-1]['files'] == ['x.txt']
 
 
+def test_revert_pushes_the_branch_and_opens_a_pr_without_merging(world):
+    remote, clone, forge, candidates, cand = world
+    pr = candidates.publish(cand, title='t', body='b')
+    merge_commit = forge.merge(pr['number'])
+    git(clone, 'fetch', '-q', 'origin', '+refs/heads/dev:refs/remotes/origin/dev')
+    out = candidates.rollback(cand, 9, pull_request=pr)
+    revert = out['revert']
+    assert out['outcome'] == 'revert_ready' and out['pull_request']['number'] == 2
+    assert git(remote, 'rev-parse', revert['branch']) == revert['head_sha']
+    view = forge('GET', '/repos/local/demo/pulls/2', None)
+    assert view['state'] == 'open' and not view['merged'] and view['base']['ref'] == 'dev'
+    assert git(remote, 'rev-parse', 'dev') == merge_commit
+
+
+def test_revert_conflict_fails_with_files_and_leaves_no_branch(world):
+    remote, clone, forge, candidates, cand = world
+    pr = candidates.publish(cand, title='t', body='b')
+    forge.merge(pr['number'])
+    git(clone, 'fetch', '-q', 'origin', '+refs/heads/dev:refs/remotes/origin/dev')
+    git(clone, 'checkout', '-q', '--detach', 'origin/dev')
+    (clone / 'x.txt').write_text('changed later', encoding='utf-8')
+    git(clone, 'commit', '-q', '-am', 'later')
+    git(clone, 'push', '-q', 'origin', 'HEAD:refs/heads/dev')
+    git(clone, 'fetch', '-q', 'origin', '+refs/heads/dev:refs/remotes/origin/dev')
+    out = candidates.rollback(cand, 9, pull_request=pr)
+    assert out['outcome'] == 'failed' and out['conflicts'] == ['x.txt'] and 'x.txt' in out['detail']
+    assert git(clone, 'branch', '--list', 'ai-board/*ticket-9-revert*') == ''
+    assert git(remote, 'branch', '--list', 'ai-board/*ticket-9-revert*') == ''
+
+
 def test_forge_refuses_a_plain_directory_and_an_unpushed_branch(world, tmp_path):
     remote, clone, forge, candidates, cand = world
     (tmp_path / 'plain').mkdir()

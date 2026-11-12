@@ -84,7 +84,7 @@ test('rollback (discard / revert / failure), PR recording and model-call traces'
       const lease = { workerId: w, leaseToken: claim.lease_token };
       out[`snap_${tag}`] = (await store.getLeasedSnapshot(claim.id, w, claim.lease_token)).rollback_candidate.branch;
       const run = await store.createRun(claim.id, { ...lease, trigger: 'rollback', idempotencyKey: `run-adm-${tag}-rb` });
-      const body = outcome === 'revert_ready' ? { revert: { ...candidate(5), branch: 'ai-board/2026-09-25-revert-1' } } : { detail: 'không hoàn tác được' };
+      const body = outcome === 'revert_ready' ? { revert: { ...candidate(5), branch: 'ai-board/2026-09-25-revert-1' }, pullRequest: { number: 77, url: 'https://forge.test/pull/77' } } : { detail: 'không hoàn tác được' };
       out[`submit_${tag}`] = await store.submitRollback(claim.id, { ...lease, runId: run.id, outcome, ...body });
       out[`trace_${tag}`] = await store.getRequestTrace(req.request_id);
       out[`list_${tag}`] = await store.listRequestsForOwner(1, 'pharmacy');
@@ -113,6 +113,8 @@ test('rollback (discard / revert / failure), PR recording and model-call traces'
   assert.equal(out.pr_r.number, 12);
   assert.equal(out.submit_r.outcome, 'revert_ready', 'revert path opens a revert branch for admin');
   assert.equal(out.submit_r.status, 'waiting_admin');
+  assert.equal(out.submit_r.pull_request.number, 77, 'revert PR number recorded with revert_ready');
+  assert.equal(out.submit_f.pull_request, null);
   assert.equal(out.pr_f.number, 13);
   assert.equal(out.submit_f.outcome, 'failed');
   assert.equal(out.submit_f.phase, 'rollback_failed');
