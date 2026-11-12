@@ -986,7 +986,7 @@ def test_no_oracle_without_generated_test_is_needs_review_when_flag_on(tmp_path,
 def test_no_oracle_without_generated_test_still_blocks_when_flag_off(tmp_path, monkeypatch):
     import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
-    monkeypatch.delenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", raising=False)
+    monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "0")
     assert verify.run(_no_test_state(tmp_path), runner=FakeRunner())["blocked"] is True
 
 

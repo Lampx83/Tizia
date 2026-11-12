@@ -38,8 +38,9 @@ def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_REPAIR_SAME_SESSION", "1")
 
 
-def test_flag_is_off_by_default():
-    assert get_settings().repair_same_session is False
+def test_flag_is_on_by_default(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_REPAIR_SAME_SESSION")
+    assert get_settings().repair_same_session is True
 
 
 def test_flag_off_keeps_the_fresh_prompt_and_drops_history():

@@ -45,12 +45,13 @@ def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_GATE_FEEDBACK_CAP", "1")
 
 
-def test_flag_is_off_by_default():
-    assert get_settings().gate_feedback_cap is False
+def test_flag_is_on_by_default(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_GATE_FEEDBACK_CAP")
+    assert get_settings().gate_feedback_cap is True
 
 
 def test_flag_off_never_caps(monkeypatch):
-    monkeypatch.delenv("AI_BOARD_GATE_FEEDBACK_CAP", raising=False)
+    monkeypatch.setenv("AI_BOARD_GATE_FEEDBACK_CAP", "0")
     execution = _execution()
     assert [_fail(execution) for _ in range(4)] == ["repair"] * 4
     assert execution.feedback_stop is None

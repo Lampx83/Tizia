@@ -19,6 +19,17 @@ def _fresh_settings():
     settings.reset_settings()
 
 
+FLAGS_OFF_IN_TESTS = ("PLAN_REPAIR", "REPAIR_SAME_SESSION", "GATE_FEEDBACK_CAP", "STOP_REPORT_V2", "GATE1_ARBITER",
+                      "VERIFY_PRELOADED_BASES", "NO_ORACLE_REVIEW_ANY")
+
+
+@pytest.fixture(autouse=True)
+def _flags_off_profile(monkeypatch):
+    """Most tests describe one flag at a time from an all-off base; tests/test_settings.py::test_defaults pins the shipped defaults."""
+    for name in FLAGS_OFF_IN_TESTS:
+        monkeypatch.setenv(f"AI_BOARD_{name}", "0")
+
+
 @pytest.fixture(autouse=True)
 def _fresh_intake_cache():
     from gates import intake_guard
