@@ -62,6 +62,12 @@ def loop(env=None) -> dict:
     }
 
 
+def repair_sampling() -> dict:
+    """Contract repair_sampling: from_attempt, temperature."""
+    spec = _parsed()["limits"]["repair_sampling"]
+    return {"from_attempt": int(spec["from_attempt"]), "temperature": float(spec["temperature"])}
+
+
 def observation_tokens(env=None) -> dict:
     """Trần token quan sát theo tool; flag AI_BOARD_OBSERVATION_RAISE nới read_file và grep (contract loop.observation_raise)."""
     spec = _parsed()["limits"]["loop"]
