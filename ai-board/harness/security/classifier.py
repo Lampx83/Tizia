@@ -9,12 +9,18 @@ import math
 import re
 from pathlib import Path
 
+from runtime import meter
+
 CONFIG_PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "classifier-calibration.json"
 CLASSIFIER = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 MAX_TEXT = 2000
 _LETTER = re.compile(r"^([A-Z])[.):]?$")
 # keep_alive: model nhỏ dùng chung với chat làm rõ, giữ nạp sẵn.
 LOGPROB_FIELDS = {"think": False, "logprobs": True, "top_logprobs": 20, "keep_alive": CLASSIFIER["keep_alive"]}
+
+
+for _task, _spec in CLASSIFIER['tasks'].items():
+    meter.register_prompt(f'classifier_{_task}', _spec.get('prompt', CLASSIFIER['prompt']))
 
 
 def build_prompt(task: str, text: str) -> str:
