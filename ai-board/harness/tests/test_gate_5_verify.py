@@ -1062,3 +1062,27 @@ def test_exit_127_acceptance_is_infra(tmp_path):
     out = verify.run({**state(checkout(tmp_path)), "acceptance": ["curl -fsS http://127.0.0.1:8041/"]}, runner=Exit127())
 
     assert out["failure_class"] == "transient" and "curl" in out["reason"]
+
+
+def test_curl_shim_is_installed_when_the_container_has_no_curl(tmp_path):
+    class NoCurlBinary(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if "which" in args:
+                self.calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 1, "", "")
+            return super().__call__(args, **kwargs)
+
+    runner = NoCurlBinary()
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["curl -s localhost:8041/ | grep -q x"]}, runner=runner)
+
+    assert out["blocked"] is False
+    assert any("cp" in args and args[-1] == "tizia:/usr/local/bin/curl" for args, _ in runner.calls)
+    assert any(args[-3:] == ["chmod", "755", "/usr/local/bin/curl"] for args, _ in runner.calls)
+
+
+def test_curl_shim_is_not_installed_when_curl_exists_or_is_unused(tmp_path):
+    for index, acceptance in enumerate((["curl -s localhost:8041/"], ["node --test test/generated.test.js"])):
+        runner = FakeRunner()
+        (tmp_path / str(index)).mkdir()
+        verify.run({**state(checkout(tmp_path / str(index))), "acceptance": acceptance}, runner=runner)
+        assert not any("/usr/local/bin/curl" in args for args, _ in runner.calls)
