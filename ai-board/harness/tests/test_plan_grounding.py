@@ -1,9 +1,12 @@
 import json
 import subprocess
 
+import pytest
 from budget import Budget
 from conftest import FakeModels, deps_with
 from gates import plan_validate
+
+pytestmark = pytest.mark.usefixtures('high_target_confidence')
 
 
 def test_live_plan_needs_verified_source_quote_and_behavior(tmp_path):

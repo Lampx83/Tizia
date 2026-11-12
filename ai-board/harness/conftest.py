@@ -49,6 +49,14 @@ def _no_repomap(monkeypatch, request):
 
 
 @pytest.fixture
+def high_target_confidence(monkeypatch):
+    """Pin gate 2.5 target confidence to high: grounding tests use one-file repos, where repomap IDF gives no signal."""
+    from gates import plan_validate
+    monkeypatch.setattr(plan_validate.target_confidence, "assess",
+                        lambda *a, **k: {"level": "high", "signals": {}, "candidates": [], "reason": ""})
+
+
+@pytest.fixture
 def request_item():
     """Đúng hình dạng 1 item do server/scripts/sync-inbox.mjs sinh ra."""
     return {
