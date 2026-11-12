@@ -93,7 +93,7 @@ def render(rep: dict) -> str:
             r, c = g["resolved"], g["cost"]
             plan = g.get("planning")
             review = g.get("review_false_block")
-            lines.append(f"{name:<18} n={g['trials']:<4} giải đúng {r['k']}/{r['n']} = {r['rate']}% (Wilson {r['lo']}-{r['hi']}) | sạch {g['resolved_clean']['rate']}% | "
+            lines.append(f"{name:<18} n={g['trials']:<4} {'' if g['conclusive'] else 'KHÔNG KẾT LUẬN (lỗi hạ tầng) | '}hợp lệ {g['valid']['rate']}% | giải đúng {r['k']}/{r['n']} = {r['rate']}% (Wilson {r['lo']}-{r['hi']}) | sạch {g['resolved_clean']['rate']}% | "
                          f"pass@any {g['pass_any']['rate']}% pass@all {g['pass_all']['rate']}% | bất ổn {g['flaky_tasks']} task | ship {g['shipped']['rate']}% | "
                          + (f"clean fixture-shipped {g['clean_fixture_shipped']['k']}/{g['trials']} | " if "clean_fixture_shipped" in g else "")
                          + (f"kế hoạch đúng ngay {plan['first_hit']['rate']}% (sau hỏi lại {plan['final_hit']['rate']}%, trang mới {plan['first_plans_new_page']['rate']}%) | " if plan else "")
@@ -146,7 +146,7 @@ def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list
     if any(set(r.get("served") or []) - {meta.get("model")} for r in rows):
         problems.append("a different served model id answered")
     infra = sum(bool(r.get("infra_error")) for r in rows)
-    if rows and infra / len(rows) > 0.1:
+    if rows and infra / len(rows) > metrics.INFRA_MAX_RATE:
         problems.append(f"{infra}/{len(rows)} trials ended in infrastructure errors")
     gate1_rows = [r for r in rows if r["mode"].startswith("e2e") and (r.get("plan") or {}).get("attempts")]
     if meta.get("reasoning", {}).get("gate1") and gate1_rows and not any(r.get("reasoning_chars") for r in gate1_rows):
@@ -482,6 +482,7 @@ def cmd_compare(args) -> int:
             for check in costs.values():
                 check.update(status="pending", increase_percent=None)
         result["cost_per_resolved_clean"] = costs
+        result["groups"] = metrics.compare_groups(ra, rb)
         print(mode, json.dumps(result, ensure_ascii=False))
     return 0
 

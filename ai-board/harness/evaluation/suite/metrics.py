@@ -6,6 +6,13 @@ import random
 from collections import Counter
 
 CELLS = ("kind", "level", "style", "split")
+INFRA_MAX_RATE = 0.1
+MIN_GROUP_TASKS = 10
+
+
+def infra_rate(rows: list[dict]) -> float:
+    """Share of trials that ended as infrastructure error, 0.0 when empty."""
+    return sum(bool(r.get("infra_error")) for r in rows) / len(rows) if rows else 0.0
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -69,6 +76,8 @@ def summarize(rows: list[dict]) -> dict:
         "resolved_clean": rate(sum(r["resolved"] and not r["collateral"] for r in rows), n),
         "shipped": rate(sum(bool(r.get("shipped")) for r in rows), n),
         "clean_fixture_shipped": rate(sum(r["resolved"] and not r["collateral"] and bool(r.get("shipped")) for r in rows), n),
+        "valid": rate(sum(not r.get("infra_error") for r in rows), n),
+        "conclusive": infra_rate(rows) <= INFRA_MAX_RATE,
         "pass_any": rate(sum(any(v) for v in tasks.values()), len(tasks)),
         "pass_all": rate(sum(all(v) for v in tasks.values()), len(tasks)),
         "flaky_tasks": sum(0 < sum(v) < len(v) for v in tasks.values()),
@@ -188,4 +197,19 @@ def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int 
     p = _binom_two_sided(better, worse)
     delta = round(100 * sum(diff) / len(diff), 1)
     verdict = "improved" if lo > 0 and p < 0.05 else "regressed" if hi < 0 and p < 0.05 else "no_significant_change"
-    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": [lo, hi], "tasks_better": better, "tasks_worse": worse, "sign_test_p": p}
+    if max(infra_rate(rows_a), infra_rate(rows_b)) > INFRA_MAX_RATE:
+        verdict = "inconclusive_infra"
+    valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
+    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": [lo, hi], "tasks_better": better, "tasks_worse": worse, "sign_test_p": p, "valid_percent": valid}
+
+
+def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:
+    """Verdict per cell group with >= MIN_GROUP_TASKS common tasks; smaller groups only show counts."""
+    out = {}
+    for cell in CELLS:
+        for value in sorted({str(r[cell]) for r in rows_a if r.get(cell) is not None}):
+            ga = [r for r in rows_a if str(r.get(cell)) == value]
+            gb = [r for r in rows_b if str(r.get(cell)) == value]
+            tasks = min(len(per_task(ga)), len(per_task(gb)))
+            out[f"{cell}={value}"] = compare(ga, gb, **kw) if tasks >= MIN_GROUP_TASKS else {"verdict": None, "display_only": True, "tasks": tasks}
+    return out

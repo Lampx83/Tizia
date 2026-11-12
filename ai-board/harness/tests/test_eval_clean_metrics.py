@@ -143,3 +143,35 @@ def test_compare_cli_reports_separate_cost_checks_only_with_matching_pins(tmp_pa
     result = json.loads(capsys.readouterr().out.partition(" ")[2])
     assert result["verdict"] == "incomparable"
     assert all(check["status"] == "pending" for check in result["cost_per_resolved_clean"].values())
+
+
+def trial(task, rep, ok, kind="a", infra=False):
+    return {**row(resolved=ok), "id": f"t{task}", "repeat": rep, "kind": kind, "infra_error": infra}
+
+
+def test_infra_above_threshold_is_inconclusive_at_boundary_is_not():
+    over = [trial(i, 1, True, infra=i < 3) for i in range(10)]
+    at = [trial(i, 1, True, infra=i < 1) for i in range(10)]
+    group = metrics.summarize(over)
+    assert group["valid"]["rate"] == 70.0 and group["conclusive"] is False
+    assert metrics.summarize(at)["conclusive"] is True
+    clean = [trial(i, 1, True) for i in range(10)]
+    verdict = metrics.compare(clean, over)
+    assert verdict["verdict"] == "inconclusive_infra" and verdict["valid_percent"] == {"baseline": 100.0, "candidate": 70.0}
+    assert metrics.compare(clean, at)["verdict"] != "inconclusive_infra"
+
+
+def test_integrity_flags_infra_only_above_threshold():
+    rows = lambda bad: [{"mode": "e2e", "infra_error": i < bad, "providers": ["vllm"], "served": ["m"]} for i in range(10)]
+    meta = {"model": "m"}
+    assert not any("infrastructure" in p for p in runner.integrity(meta, rows(1)))
+    assert any("infrastructure" in p for p in runner.integrity(meta, rows(2)))
+
+
+def test_small_cell_groups_are_display_only_and_large_ones_get_a_verdict():
+    base = [trial(i, 1, False, kind="a") for i in range(12)] + [trial(100 + i, 1, False, kind="b") for i in range(3)]
+    better = [trial(i, 1, True, kind="a") for i in range(12)] + [trial(100 + i, 1, True, kind="b") for i in range(3)]
+    groups = metrics.compare_groups(base, better)
+    assert groups["kind=a"]["verdict"] == "improved"
+    assert groups["kind=b"] == {"verdict": None, "display_only": True, "tasks": 3}
+    assert metrics.compare(base, better)["verdict"] == "improved"
