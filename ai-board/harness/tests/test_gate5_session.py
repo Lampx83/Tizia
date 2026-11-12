@@ -31,4 +31,4 @@ def test_unknown_stage_fails_loudly():
 
 def test_stage_table_covers_every_stage_once():
     assert set(session.STAGE_CLASS) == {
-        "preflight", "boot", "config", "address", "env", "ordinary", "plan", "screenshot", "teardown"}
+        "preflight", "boot", "config", "address", "env", "ordinary", "plan", "screenshot", "teardown", "tooling"}
