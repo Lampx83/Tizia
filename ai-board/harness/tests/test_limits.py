@@ -20,7 +20,7 @@ def test_defaults_equal_old_constants():
                                      "wall_clock_s": 900.0, "semantic_repairs": 24, "child_wall_clock_s": 300.0,
                                      "node_wall_clock_s": 1200.0}
     loop = limits.loop(env={})
-    assert {k: v for k, v in loop.items() if k != "observation_tokens"} == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000}
+    assert {k: v for k, v in loop.items() if k != "observation_tokens"} == {"model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000, "compaction_tokens": 24000}
     assert loop["observation_tokens"]["read_file"] == 2000
     assert limits.sandbox_client()["backoff_s"] == (1, 2, 4, 8)
     assert limits.sandbox_client()["call_attempts"] == 3

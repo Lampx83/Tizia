@@ -63,6 +63,7 @@
     "loop": {
       "_why": "Tool-loop ceilings per subtask (runtime/tool_loop.py). AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS override for a measured run only.",
       "model_calls": 10, "tool_calls": 30, "repeats": 3, "error_chars": 2000,
+      "compaction_tokens": 24000,
       "observation_tokens": { "_why": "Per-tool cap on what one observation hands back to the model, counted in Qwen tokens (services/token_count.py). read_file pages by start_line/end_line within its cap; default covers tools not listed.", "tree": 600, "outline": 800, "grep": 800, "read_file": 2000, "edit_file": 1000, "write_test": 150, "run_check": 1000, "finish": 150, "default": 1000 },
       "observation_raise": { "_why": "Nới trần read_file và grep khi flag bật. Chỉ hai khoá này đổi; các tool khác giữ observation_tokens. Mặc định tắt, chờ owner duyệt bảng A/B.", "flag": "AI_BOARD_OBSERVATION_RAISE", "default_enabled": false, "observation_tokens": { "read_file": 4000, "grep": 1600 } },
       "soft_start": 4, "soft_step": 2,

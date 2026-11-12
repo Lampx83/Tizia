@@ -557,7 +557,7 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
             observation = "đề xuất đã gửi sang cổng kiểm tra"
         steps.append(name)
         rejected = kind == "finish_rejected"
-        prompt = _show_step(prompt, history, messages, n, name, args, observation)
+        prompt = _show_step(prompt, history, messages, n, name, args, observation, kind)
     if pending:
         n = len(rows)
         args = {"sha": feedback["sha"]}
@@ -567,12 +567,22 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
     return prompt, steps, rejected, None
 
 
-def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, observation: str) -> str:
+COMPACTED = "(compacted into UNTRUSTED_SUMMARY)"
+
+
+def _release(messages: list, slots: list) -> None:
+    for slot in slots:
+        messages[slot] = {**messages[slot], "content": COMPACTED}
+
+
+def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, observation: str, kind: str = "") -> str:
     """Observation vào lịch sử hiện hành (compaction, native, hoặc nối prompt); trả prompt mới."""
-    if history is not None:
-        history.add(n, name, _fit(observation, name))
-    elif messages is not None:
+    if messages is not None:
         _native_turn(messages, n, name, args, _fit(observation, name))
+        if history is not None:
+            history.add(n, name, _fit(observation, name), slot=len(messages) - 1, keep=kind == "finish_rejected" or name == FEEDBACK)
+    elif history is not None:
+        history.add(n, name, _fit(observation, name))
     else:
         prompt += OBSERVATION.format(tool=name, text=_fit(observation, name))
     return prompt
@@ -687,14 +697,12 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     last_sig, repeats = None, 0
     history, messages = None, None
     if native_enabled():
-        if get_settings().context_compaction:
-            return _result("blocked", "native tool calling cannot be combined with context compaction", "critical")
         messages = []
         prompt += NATIVE
         pins = {**(pins or {}), "native": True}
     if get_settings().context_compaction:
         from runtime.compaction import History, pin
-        history = History()
+        history = History(native=messages is not None)
         pins = {**(pins or {}), 'compaction': pin()}
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
     if store:
@@ -718,6 +726,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                 try:
                     call_prompt = history.prepare(prompt, deps=deps, model=model, role=role or 'gate3_light', budget=loop_budget, manifest=MANIFEST.hash,
                         db_path=db_path, proposal_id=proposal_id, child=child, iteration=len(steps))
+                    if messages is not None:
+                        _release(messages, history.released)
                 except (CompactionPause, BudgetExhausted) as error:
                     return _result('paused', str(error), 'budget', steps=steps)
                 finally:
@@ -813,7 +823,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             store.save_ledger(budget.snapshot())
         _tool_span(deps, name, n, child, kind, observation, started_ms)
         steps.append(name)
-        prompt = _show_step(prompt, history, messages, n, name, args, observation)
+        prompt = _show_step(prompt, history, messages, n, name, args, observation, kind)
 
 
 PROBE_CASES = (
