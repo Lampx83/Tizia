@@ -52,11 +52,11 @@ class Settings(BaseSettings):
     multi_file_subtask: bool = False
     multi_file_max: int = Field(default=3, ge=2, le=6)
     graph_persistence: bool = False
-    plan_repair: bool = False
-    repair_same_session: bool = False
+    plan_repair: bool = True
+    repair_same_session: bool = True
     repair_sampling_diversity: bool = False
     scope_first_warning: bool = False
-    gate_feedback_cap: bool = False
+    gate_feedback_cap: bool = True
     prompt_role_split: bool = False
     procedure_in_split: bool = False  # tạm thời để đo LF/166; gỡ khi có kết quả
     gate25_answered: bool = False
@@ -67,14 +67,14 @@ class Settings(BaseSettings):
     text_oracle_skip_selector: bool = False
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = False  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
-    stop_report_v2: bool = False
+    stop_report_v2: bool = True
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
     explore_low_confidence: bool = False
     state_file: bool = False
-    gate1_arbiter: bool = False
+    gate1_arbiter: bool = True
     gate1_arbiter_min: float = Field(default=0.97, ge=0.5, le=1.0)
-    verify_preloaded_bases: bool = False  # gate 5 guest: FROM node:20-alpine@sha256 pin → tag (base preloaded without digest)
-    no_oracle_review_any: bool = False  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block
+    verify_preloaded_bases: bool = True  # gate 5 guest: FROM node:20-alpine@sha256 pin → tag (base preloaded without digest)
+    no_oracle_review_any: bool = True  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
