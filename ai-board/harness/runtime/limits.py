@@ -58,6 +58,7 @@ def loop(env=None) -> dict:
         "tool_calls": settings.loop_tool_calls or (moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
+        "compaction_tokens": spec["compaction_tokens"],
         "observation_tokens": observation_tokens(env),
     }
 

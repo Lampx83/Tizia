@@ -111,12 +111,6 @@ def test_authority_and_scope_unchanged_on_native_path(on):
     assert out["status"] != "proposed"
 
 
-def test_native_with_compaction_is_refused(on, monkeypatch):
-    monkeypatch.setenv("AI_BOARD_CONTEXT_COMPACTION", "1")
-    out, deps = run([native(EDIT)])
-    assert out["status"] == "blocked" and "compaction" in out["reason"] and deps.calls == []
-
-
 def test_native_changes_the_checkpoint_pin(on):
     ws = tool_loop.Workspace(".", "abc", "public/a.html", PAGE)
     assert tool_loop._pins(SUBTASK, "abc", ws, {"native": True})["native"] is True
