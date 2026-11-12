@@ -13,7 +13,7 @@ const sorted = (value) => Array.isArray(value) ? value.map(sorted)
 export const canonicalHash = (manifest) => createHash('sha256').update(JSON.stringify(sorted(manifest)), 'utf8').digest('hex');
 
 function check(manifest) {
-  if (![1, 2, 3, 4].includes(manifest?.version)) fail('tool_manifest_invalid', 400);
+  if (![1, 2, 3, 4, 5].includes(manifest?.version)) fail('tool_manifest_invalid', 400);
   if (manifest.version >= 2) {
     const fields = manifest.version >= 3 ? ['version', 'tools', 'command_policy', 'check_runtime_sha256']
       : ['version', 'tools', 'command_policy'];
@@ -40,6 +40,8 @@ function check(manifest) {
     seen.add(tool.name);
   }
 }
+
+export { check as checkManifest };
 
 export function createToolManifestStore(db) {
   const summary = (row) => {
