@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     graph_persistence: bool = False
     plan_repair: bool = False
     repair_same_session: bool = False
+    scope_first_warning: bool = False
     prompt_role_split: bool = False
     procedure_in_split: bool = False  # tạm thời để đo LF/166; gỡ khi có kết quả
     gate25_answered: bool = False
