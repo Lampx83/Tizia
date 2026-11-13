@@ -5,7 +5,7 @@ profile: dev
 vm: { cpus: 4, memory_mib: 1536, disk_mib: 10240, ttl_s: 1800, lease_s: 120 }
 concurrency: 1
 # guest-inputs: 845e3cc451a6f011e447ccdc80689d5f51cf8d2a144395a46d0ea2fab6e74ca9
-guest_image: image-registry:5000/gate5@sha256:e696d10420f021154fbc03cfa31aa75fd110f83681ba28a0005a861accd6cd0b
+guest_image: image-registry:5000/gate5@sha256:22d17d79a79294899eb39cf32c97711f668ae5376183181042193729d01d279d
 network: none
 egress: []
 guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }
