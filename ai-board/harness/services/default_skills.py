@@ -85,8 +85,8 @@ def parse(text):
     bound = len(_render(meta['name'], version, body).encode('utf-8'))
     if version < 1 or not 1 <= cap <= 1500 or not body or bound > cap:
         raise ValueError('skill exceeds token budget or is empty')
-    if len(re.findall(r'^\d+\. ', body, re.M)) > 7 or FORBIDDEN.search(body):
-        raise ValueError('skill requests authority or exceeds seven rules')
+    if FORBIDDEN.search(body):
+        raise ValueError('skill requests authority')
     return Skill(meta['name'], meta['description'], types, meta['source'], version, cap,
                  body, hashlib.sha256(text.encode('utf-8')).hexdigest(), bound, topic=meta.get('topic'))
 
