@@ -322,6 +322,8 @@
   .m2-pk button.ok{border-color:#2e8256;background:#e6f6ec;} .m2-pk button.bad{border-color:#c0392b;background:#fdecea;}
   .m2-pack{position:relative;width:220px;height:170px;margin:8px auto;border-radius:10px;background:linear-gradient(135deg,#f3ecdb,#fff);border:2px solid #d8c9a3;display:flex;align-items:center;justify-content:center;overflow:hidden;}
   .m2-pack img{max-width:100%;max-height:100%;object-fit:contain;}
+  .m2-faces{max-width:520px;margin:6px auto 10px;text-align:left;}
+  .m2-faces summary{cursor:pointer;font-weight:800;color:#5c4a2c;padding:4px 0;}
   .m2-pack .ph{font:800 .9rem 'Nunito',sans-serif;text-align:center;padding:8px;color:#5c4a2c;}
   .m2-pack.dent{transform:rotate(-3deg) skewX(-4deg);clip-path:polygon(0 0,42% 2%,48% 9%,58% 1%,100% 0,98% 46%,100% 55%,97% 100%,55% 98%,50% 92%,40% 100%,0 100%,2% 58%,0 50%);box-shadow:inset 0 0 26px rgba(0,0,0,.45);}
   .m2-pack.mold::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 22% 30%,rgba(70,90,40,.75) 0 9%,transparent 10%),radial-gradient(circle at 70% 62%,rgba(50,70,30,.7) 0 12%,transparent 13%),radial-gradient(circle at 48% 80%,rgba(90,70,30,.65) 0 7%,transparent 8%),radial-gradient(circle at 80% 22%,rgba(60,80,40,.6) 0 6%,transparent 7%);}
@@ -1929,7 +1931,20 @@ const OTC_NAMES = new Set(["Buổi 2|Xylomethazolin nhỏ mắt", "Buổi 4|Para
 const TU_MODE = new URLSearchParams(location.search).get('tu') === 'otc' ? 'otc' : 'rx';
 const TU_NAME = TU_MODE === 'otc' ? 'Tủ thuốc không kê đơn' : 'Tủ thuốc kê đơn';
 const drugClass = rec => OTC_NAMES.has(rec['STT Buổi'] + '|' + (rec._gen || rec['Tên hoạt chất'])) ? 'otc' : 'rx';
-const records = allRecords.filter(rec => drugClass(rec) === TU_MODE);
+// Thuốc phải kiểm soát đặc biệt — các nhóm theo Luật Dược / Thông tư 18/2026/TT-BYT; thuốc nào thuộc nhóm nào lấy từ cột KSĐB của danh mục
+const M3_KIND = { narc:'Thuốc gây nghiện', psy:'Thuốc hướng thần', pre:'Thuốc tiền chất', combo:'Thuốc dạng phối hợp có chứa dược chất gây nghiện',
+  toxic:'Thuốc độc', banned:'Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực' };
+function ksdbKind(r){
+  const t = ((r && r['KSĐB']) || '').toLowerCase();
+  if(!t || t === 'không') return null;
+  if(/phối hợp/.test(t)) return 'combo'; if(/bị cấm/.test(t)) return 'banned'; if(/độc/.test(t)) return 'toxic';
+  if(/hướng thần/.test(t)) return 'psy'; if(/tiền chất/.test(t)) return 'pre'; if(/gây nghiện/.test(t)) return 'narc';
+  return null;
+}
+// req #235 (29/10): thuốc kiểm soát đặc biệt (cột KSĐB) KHÔNG nằm lẫn trong tủ theo nhóm dược lý nữa mà xếp vào
+// tủ riêng có khoá ở trang tủ kê đơn, mỗi loại một ngăn — kể cả thuốc KSĐB không kê đơn (Terpin – codein).
+const KS_ORDER = ['narc','psy','pre','combo','toxic','banned'];
+const records = allRecords.filter(rec => ksdbKind(rec) ? TU_MODE === 'rx' : drugClass(rec) === TU_MODE);
 
 /* group by "Nhóm dược lý" (pharmacology class, column D of the sheet)
    rather than by teaching session, preserving first-seen order */
@@ -1940,10 +1955,14 @@ function hueForIndex(i){ return Math.round((i*137.508) % 360); }
 function buoiSortKey(b){ return parseInt((b||'').replace(/\D/g,''),10) || 0; }
 const sessions = [];
 const byGroup = {};
-records.forEach(rec=>{
-  const key = (rec['Nhóm dược lý']||'').trim() || rec['Tên Bài'];
+// KSĐB xếp SAU mọi nhóm dược lý để số thứ tự (mã) các tủ cũ giữ nguyên.
+const ksLast = r => ksdbKind(r) ? 1 + KS_ORDER.indexOf(ksdbKind(r)) : 0;
+records.slice().sort((a,b)=> ksLast(a) - ksLast(b)).forEach(rec=>{
+  const kind = ksdbKind(rec);
+  const key = kind ? `🔒 ${M3_KIND[kind]} · ngăn tủ kiểm soát đặc biệt (có khoá)`
+                   : ((rec['Nhóm dược lý']||'').trim() || rec['Tên Bài']);
   if(!byGroup[key]){
-    byGroup[key] = { topic:key, items:[], buoiSet:new Set(), hue: hueForIndex(sessions.length) };
+    byGroup[key] = { topic:key, items:[], buoiSet:new Set(), hue: hueForIndex(sessions.length), ks: !!kind };
     sessions.push(byGroup[key]);
   }
   byGroup[key].items.push(rec);
@@ -1974,7 +1993,7 @@ sessions.forEach(s=>{
     const id = 'tu-g'+groupIdx+'-'+cssId(s.topic)+(chunks.length>1?('-'+(ci+1)):'');
     const label = chunks.length>1 ? `${s.buoi} · Tủ ${ci+1}/${chunks.length}` : s.buoi;
     const part = chunks.length>1 ? `(Tủ ${ci+1}/${chunks.length})` : '';
-    cabinets.push({ id, label, part, buoi:s.buoi, topic:s.topic, hue:s.hue, items:chunk, realCount:chunk.length });
+    cabinets.push({ id, label, part, buoi:s.buoi, topic:s.topic, hue:s.hue, items:chunk, realCount:chunk.length, ks:s.ks });
     chunk.forEach(it=>{ it._cabinetId = id; it._cabinetLabel = label; });
   });
 });
@@ -2323,11 +2342,13 @@ function m1CabNeed(){
     let mx = 0;
     names.forEach(nm => {
       const i = cabinets.findIndex(c => c.items.some(r => r['Tên hoạt chất'] === nm || r._gen === nm));
-      if(i + 1 > mx) mx = i + 1;
+      if(i >= 0 && !cabinets[i].ks && i + 1 > mx) mx = i + 1;   // tủ KSĐB luôn mở, không kéo rộng số tủ theo mức
     });
     return mx;
   }catch(e){ return 0; }
 }
+// Tủ kiểm soát đặc biệt (req #235) là tủ riêng cố định như tủ lạnh: luôn mở ở mọi mức, không tính vào số tủ theo mức.
+function cabOpen(i){ return i < cartWindow || !!(cabinets[i] && cabinets[i].ks); }
 function tierCabinets(){ return Math.min(Math.max(TIERS[game.tier].cabinets, m1CabNeed()), cabinets.length); }
 let cartWindow = tierCabinets();
 function drugSlugOf(it){ return slugify(it._gen||it['Tên hoạt chất']); }
@@ -2463,7 +2484,7 @@ let activeCabIdx = 0;
 function buildTabs(){
   const html = [];
   cabinets.forEach((cab,idx)=>{
-    if(idx>=cartWindow) return;
+    if(!cabOpen(idx)) return;
     const pal = cabinetPalette(cab.hue);
     html.push(
       `<button type="button" class="cab-tab" data-idx="${idx}" title="${esc(cab.topic)}${cab.part?(' '+esc(cab.part)):''} · gõ số ${idx+1} để nhảy nhanh" style="--wood:${pal.wood};--wood-dark:${pal.woodDark}">`+
@@ -2490,7 +2511,7 @@ function showCabinet(idx){
    new cabinet) */
 function applyCabinetVisibility(){
   buildTabs();
-  if(activeCabIdx >= cartWindow) activeCabIdx = 0;
+  if(!cabOpen(activeCabIdx)) activeCabIdx = 0;
   showCabinet(activeCabIdx);
 }
 
@@ -4042,7 +4063,7 @@ function saveM2State(x){
 }
 function m2Unlocked(){ return m1PracticeCount() >= 1; }
 function m2Active(){ const x = getM2State(); return x.step !== 'idle' && x.step !== 'done'; }
-const M2_DEFECTS = { dent:'móp méo', mold:'ẩm mốc', blur:'chữ nhoè, mờ' };
+const M2_DEFECTS = { dent:'móp méo', mold:'ẩm mốc', blur:'chữ nhoè, mờ', expired:'đã quá hạn dùng' };
 function startM2(){
   const m1 = getM1State();
   const sup = M1_SUPPLIERS.find(x => x.id === m1.supplier) || M1_SUPPLIERS[2];
@@ -4054,6 +4075,8 @@ function startM2(){
   items.forEach((it, i) => {
     it.recv = i === mis ? (it.qty > 1 ? it.qty - 1 - Math.floor(Math.random()*Math.min(2, it.qty-1)) : it.qty + 1) : it.qty;
     it.defect = i === dfe ? ['dent','mold','blur'][Math.floor(Math.random()*3)] : null;
+    // req #235: hạn dùng thật (khớp ảnh) đã qua → sản phẩm không đạt, người học phải đọc HSD trên bao bì để phát hiện
+    if(pkgExpired(it)) it.defect = 'expired';
     // req #224 bước 5: sản phẩm CÓ niêm phong hay KHÔNG (cố định theo thuốc); lỗi cảm quan ngẫu nhiên từ lần luyện thứ 2
     it.sealed = m1HashNum(it.key+'seal', 0, 1) === 1;
     it.q5 = null;
@@ -4295,7 +4318,7 @@ function m2RenderPack(){
   const x = getM2State();
   const cards = x.items.map((it,i) => `<button type="button" data-i="${i}" class="${x.pack[i] != null ? (x.pack[i] === (it.defect ? 'bad' : 'ok') ? (x.pack[i]) : '') : ''}">${x.pack[i] != null ? (x.pack[i]==='ok'?'✅ ':'❌ ') : '🔍 '}${dn(it)}</button>`).join('');
   const body = m2Modal('🔍 Kiểm tra cảm quan bao bì', `
-    <p class="pos-note">Bấm từng sản phẩm, quan sát bao bì: <b>còn nguyên vẹn, sạch sẽ</b>, không <b>móp méo</b>, <b>ẩm mốc</b>; thông tin trên bao bì <b>rõ nét</b>, không nhoè, không mờ.</p>
+    <p class="pos-note">Bấm từng sản phẩm, quan sát bao bì: <b>còn nguyên vẹn, sạch sẽ</b>, không <b>móp méo</b>, <b>ẩm mốc</b>; thông tin trên bao bì <b>rõ nét</b>, không nhoè, không mờ; <b>còn hạn dùng</b>.</p>
     <div class="m2-pk">${cards}</div><div id="m2Insp"></div><div class="pos-err" id="m2Err"></div>`);
   const insp = body.querySelector('#m2Insp'), err = body.querySelector('#m2Err');
   const finishIfDone = () => {
@@ -4308,6 +4331,7 @@ function m2RenderPack(){
     err.textContent = '';
     insp.innerHTML = `<div style="text-align:center"><b>${dn(it)}</b>
       <div class="m2-pack ${it.defect || ''}" id="m2Pack"></div>
+      ${PKG_FACES[it.key] ? '<details class="m2-faces"><summary>🔎 Xem các mặt hộp (số lô, hạn dùng…)</summary>' + pkgViewer(it) + '</details>' : ''}
       <button type="button" class="pos-btn" data-v="ok">✅ Bao bì đạt</button>
       <button type="button" class="pos-btn" data-v="bad" style="background:#b03a2e">❌ Bao bì không đạt</button></div>`;
     const pk = insp.querySelector('#m2Pack'), slug = slugify(it.name.split(' ')[0]);
@@ -4321,7 +4345,7 @@ function m2RenderPack(){
       const truth = it.defect ? 'bad' : 'ok';
       if(btn.dataset.v !== truth){ err.textContent = it.defect ? '⚠️ Quan sát kỹ lại — bao bì này có dấu hiệu không đạt.' : '⚠️ Bao bì này còn nguyên vẹn, sạch, chữ rõ nét — chưa cần loại.'; return; }
       x.pack[i] = truth; saveM2State(x);
-      err.textContent = it.defect ? `✔ Đúng — bao bì ${M2_DEFECTS[it.defect]}, không đạt.` : '';
+      err.textContent = it.defect === 'expired' ? '✔ Đúng — sản phẩm đã quá hạn dùng (HSD in trên bao bì), không đạt.' : it.defect ? `✔ Đúng — bao bì ${M2_DEFECTS[it.defect]}, không đạt.` : '';
       b.classList.add(truth); b.textContent = (truth==='ok' ? '✅ ' : '❌ ') + it.name;
       insp.innerHTML = '';
       finishIfDone();
@@ -4335,7 +4359,7 @@ const M2_PROBLEMS = [
   ['inout','Bao bì trực tiếp và bao bì ngoài không thống nhất'], ['color','Màu sắc sản phẩm bất thường'],
   ['shape','Hình dáng, thể chất sản phẩm bất thường'], ['inv','Tên đơn vị bán trên hoá đơn không đúng'],
 ];
-const M2_REASON_TXT = { dent:'bao bì móp méo', mold:'bao bì ẩm mốc', blur:'thông tin trên bao bì mờ, nhoè', seal:'niêm phong bị rách', inout:'bao bì trong và ngoài không thống nhất', color:'màu sắc bất thường', shape:'hình dáng, thể chất bất thường' };
+const M2_REASON_TXT = { expired:'sản phẩm đã quá hạn dùng', dent:'bao bì móp méo', mold:'bao bì ẩm mốc', blur:'thông tin trên bao bì mờ, nhoè', seal:'niêm phong bị rách', inout:'bao bì trong và ngoài không thống nhất', color:'màu sắc bất thường', shape:'hình dáng, thể chất bất thường' };
 function m2Reasons(it){ const r = []; if(it.defect) r.push(it.defect); if(it.q5) r.push(it.q5); return r; }
 function m2PhotoUrl(name){ const sl = slugify(name); return PHOTO_SLUGS.has(sl) ? PHOTO_DIR + sl + '.jpg' : null; }
 function m2SealSvg(broken){
@@ -4459,15 +4483,17 @@ function m2RenderPrice(){
 }
 // req #224 (bước 8): người học không thể nhớ hết thông tin để điền sổ → cho xem lại bao bì nhiều mặt + hoá đơn.
 // Thông tin KHÔNG liệt kê sẵn: người học tự đọc trên các mặt bao bì (trước / sau / bên).
-// Thuốc phải kiểm soát đặc biệt — các nhóm theo Luật Dược / Thông tư 18/2026/TT-BYT; thuốc nào thuộc nhóm nào lấy từ cột KSĐB của danh mục
-const M3_KIND = { narc:'Thuốc gây nghiện', psy:'Thuốc hướng thần', pre:'Thuốc tiền chất', combo:'Thuốc dạng phối hợp có chứa dược chất gây nghiện',
-  toxic:'Thuốc độc', banned:'Thuốc thuộc danh mục chất bị cấm sử dụng trong một số ngành, lĩnh vực' };
-function ksdbKind(r){
-  const t = ((r && r['KSĐB']) || '').toLowerCase();
-  if(!t || t === 'không') return null;
-  if(/phối hợp/.test(t)) return 'combo'; if(/bị cấm/.test(t)) return 'banned'; if(/độc/.test(t)) return 'toxic';
-  if(/hướng thần/.test(t)) return 'psy'; if(/tiền chất/.test(t)) return 'pre'; if(/gây nghiện/.test(t)) return 'narc';
-  return null;
+// req #235 (29/10): thuốc có ảnh chụp thật → số lô ("Số kiểm soát") và hạn dùng lấy đúng theo danh mục, khớp số in trên ảnh
+// để người học đối chiếu khi quan sát bao bì. Thuốc chưa có ảnh và hàng tồn trong tủ vẫn dùng lô/hạn minh hoạ.
+function pkgRealLot(it, rec){
+  if(!(it && it.key && typeof PKG_FACES !== 'undefined' && PKG_FACES[it.key])) return null;
+  const lot = (rec || {})['Số kiểm soát'], exp = (rec || {})['Hạn sử dụng'];
+  return lot && exp ? { lot, exp, realLot: true } : null;
+}
+function pkgExpired(it){
+  const r = pkgRealLot(it, it && it.key && m1RecOf(it.key)); if(!r) return false;
+  const m = String(r.exp).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return !!m && new Date(+m[3], m[2]-1, +m[1], 23, 59) < new Date();
 }
 function pkgData(it){
   const rec = (it.key && m1RecOf(it.key)) || allRecords.find(r => r['Tên hoạt chất'] === it.name || r._gen === it.name) || {};
@@ -4479,7 +4505,8 @@ function pkgData(it){
   return { name: it.name, brand: rec['Tên biệt dược'] || '', strength: rec['Hoạt chất, hàm lượng/nồng độ'] || '',
     form: [rec['Dạng bào chế'], rec['Đường dùng'] ? 'Đường dùng: ' + rec['Đường dùng'] : ''].filter(Boolean).join(' · '),
     maker: maker || 'Công ty SX (minh hoạ)', realReg: !!rec['Số đăng ký'],
-    reg: rec['Số đăng ký'] || `VD-${10000 + m1HashNum(k+'dk',0,89999)}-24`, lot: `LO${m1HashNum(k+'lo',1000,9999)}`, exp: `${String(m1HashNum(k+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`,
+    reg: rec['Số đăng ký'] || `VD-${10000 + m1HashNum(k+'dk',0,89999)}-24`,
+    ...(pkgRealLot(it, rec) || { lot: `LO${m1HashNum(k+'lo',1000,9999)}`, exp: `${String(m1HashNum(k+'hd',1,12)).padStart(2,'0')}/${d.getFullYear()+2}`, realLot: false }),
     store: rec['Điều kiện bảo quản'] || (cold ? 'Bảo quản trong tủ lạnh 2–8°C, tránh ánh sáng, không để đông băng.' : 'Bảo quản nơi khô, nhiệt độ không quá 30°C, tránh ánh sáng.'),
     spec: pack.spec, kind: ksdbKind(rec), rx: (it.cabinet === 'rx' || base.cabinet === 'rx' || (rec['STT Buổi'] && drugClass(rec) === 'rx')) };
 }
@@ -4500,7 +4527,7 @@ function pkgViewer(it){
   const front = `<div class="pkg-face" data-face="front">${photo ? `<img src="${photo}" alt="Mặt trước ${e(it.name)}" onerror="this.remove()">` : ''}<div class="pkg-gen">${banner}<h4>${e(dd.brand || it.name)}</h4><div>${e(dd.strength)}</div><div>${e(dd.form)}</div><div class="fine">Hộp thuốc — mặt trước (hình minh hoạ)</div></div></div>`;
   const back = `<div class="pkg-face" data-face="back" hidden><div class="pkg-gen">${banner}<h4>${e(it.name)}</h4><table><tbody>
       <tr><th>Thành phần / hàm lượng</th><td>${e(dd.strength || it.name)}</td></tr>${dd.form ? `<tr><th>Dạng bào chế</th><td>${e(dd.form)}</td></tr>` : ''}<tr><th>Số đăng ký (SĐK)</th><td>${e(dd.reg)}${dd.realReg ? '' : ' <small>(số minh hoạ)</small>'}</td></tr>
-      <tr><th>Số lô SX</th><td>${dd.lot} <small>(minh hoạ)</small></td></tr><tr><th>Hạn dùng (HSD)</th><td>${dd.exp} <small>(minh hoạ)</small></td></tr><tr><th>Nhà sản xuất</th><td>${e(dd.maker)}</td></tr></tbody></table></div></div>`;
+      <tr><th>Số lô SX</th><td>${dd.lot}${dd.realLot ? '' : ' <small>(minh hoạ)</small>'}</td></tr><tr><th>Hạn dùng (HSD)</th><td>${dd.exp}${dd.realLot ? '' : ' <small>(minh hoạ)</small>'}</td></tr><tr><th>Nhà sản xuất</th><td>${e(dd.maker)}</td></tr></tbody></table></div></div>`;
   const side = `<div class="pkg-face" data-face="side" hidden><div class="pkg-gen">${banner}<table><tbody>
       <tr><th>Bảo quản</th><td>${e(dd.store)}</td></tr><tr><th>Quy cách đóng gói</th><td>${e(dd.spec)}</td></tr></tbody></table>
       <div class="fine">Đọc kỹ hướng dẫn sử dụng trước khi dùng. Để xa tầm tay trẻ em.</div></div></div>`;
@@ -5841,7 +5868,7 @@ document.addEventListener('keydown', e=>{
   clearTimeout(cabJumpT);
   cabJumpT = setTimeout(()=>{ cabJumpBuf=''; }, 600);
   const idx = parseInt(cabJumpBuf,10) - 1;
-  if(idx>=0 && idx<cartWindow) showCabinet(idx);
+  if(idx>=0 && idx<cabinets.length && cabOpen(idx)) showCabinet(idx);
 });
 
 /* ---- hand tracking: pinch (ngón cái + ngón trỏ) qua webcam để kéo hộp
