@@ -6,6 +6,13 @@ import random
 from collections import Counter
 
 CELLS = ("kind", "level", "style", "split")
+INFRA_MAX_RATE = 0.1
+MIN_GROUP_TASKS = 10
+
+
+def infra_rate(rows: list[dict]) -> float:
+    """Share of trials that ended as infrastructure error, 0.0 when empty."""
+    return sum(bool(r.get("infra_error")) for r in rows) / len(rows) if rows else 0.0
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -69,6 +76,8 @@ def summarize(rows: list[dict]) -> dict:
         "resolved_clean": rate(sum(r["resolved"] and not r["collateral"] for r in rows), n),
         "shipped": rate(sum(bool(r.get("shipped")) for r in rows), n),
         "clean_fixture_shipped": rate(sum(r["resolved"] and not r["collateral"] and bool(r.get("shipped")) for r in rows), n),
+        "valid": rate(sum(not r.get("infra_error") for r in rows), n),
+        "conclusive": infra_rate(rows) <= INFRA_MAX_RATE,
         "pass_any": rate(sum(any(v) for v in tasks.values()), len(tasks)),
         "pass_all": rate(sum(all(v) for v in tasks.values()), len(tasks)),
         "flaky_tasks": sum(0 < sum(v) < len(v) for v in tasks.values()),
@@ -169,16 +178,19 @@ def _binom_two_sided(b: int, c: int) -> float:
 
 def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int = 4000) -> dict:
     """Paired by task id (mean resolved over repeats). A = baseline, B = candidate. Verdict needs both the bootstrap CI and the sign test to agree."""
+    valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
+    infra = bool(rows_a and rows_b) and max(infra_rate(rows_a), infra_rate(rows_b)) > INFRA_MAX_RATE
     keys_a = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_a]
     keys_b = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_b]
+    fail = {"verdict": "incomparable", "valid_percent": valid, "inconclusive_infra": infra}
     if any(None in key for key in keys_a + keys_b) or len(set(keys_a)) != len(keys_a) or len(set(keys_b)) != len(keys_b):
-        return {"verdict": "incomparable", "reason": "missing trial identity or duplicate task/mode/repeat"}
+        return {**fail, "reason": "missing trial identity or duplicate task/mode/repeat"}
     if set(keys_a) != set(keys_b):
-        return {"verdict": "incomparable", "reason": "task/mode/repeat cohorts differ"}
+        return {**fail, "reason": "task/mode/repeat cohorts differ"}
     ta, tb = per_task(rows_a), per_task(rows_b)
     ids = sorted(ta)
     if not ids:
-        return {"verdict": "incomparable", "reason": "no common tasks"}
+        return {**fail, "reason": "no common tasks"}
     mean = lambda v: sum(v) / len(v)  # noqa: E731
     diff = [mean(tb[i]) - mean(ta[i]) for i in ids]
     rng = random.Random(seed)
@@ -188,4 +200,21 @@ def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int 
     p = _binom_two_sided(better, worse)
     delta = round(100 * sum(diff) / len(diff), 1)
     verdict = "improved" if lo > 0 and p < 0.05 else "regressed" if hi < 0 and p < 0.05 else "no_significant_change"
-    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": [lo, hi], "tasks_better": better, "tasks_worse": worse, "sign_test_p": p}
+    if infra:
+        verdict, delta, ci, p = "inconclusive_infra", None, None, None
+    else:
+        ci = [lo, hi]
+    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": ci, "tasks_better": better, "tasks_worse": worse, "sign_test_p": p,
+            "valid_percent": valid, "inconclusive_infra": infra}
+
+
+def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:
+    """Verdict per cell group with >= MIN_GROUP_TASKS common tasks; smaller groups only show counts."""
+    out = {}
+    for cell in CELLS:
+        for value in sorted({str(r[cell]) for r in rows_a if r.get(cell) is not None}):
+            ga = [r for r in rows_a if str(r.get(cell)) == value]
+            gb = [r for r in rows_b if str(r.get(cell)) == value]
+            tasks = len(set(per_task(ga)) & set(per_task(gb)))
+            out[f"{cell}={value}"] = compare(ga, gb, **kw) if tasks >= MIN_GROUP_TASKS else {"verdict": None, "display_only": True, "tasks": tasks}
+    return out
