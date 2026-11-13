@@ -78,7 +78,7 @@ class Unavailable:
 NUM_PREDICT = {2.5: 3072, 3: 3072}
 NUM_PREDICT_DEFAULT = 1024
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_PROMPT_LOCK = meter._LOCK
+_PROMPT_LOCK = meter.prompt_lock()
 
 # Backoff cho lỗi hạ tầng thoáng qua khi gọi Ollama (GPU dùng chung, tenant khác chiếm chỗ →
 # 500/timeout/connection ngắt). 2 lần thử lại, 2s rồi 5s — đủ ngắn để không đội thời gian lease

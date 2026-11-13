@@ -64,15 +64,49 @@ def test_record_fills_hash_from_name_once(tmp_path):
 
 
 def test_missing_identity_warns_with_call_id(caplog):
-    meter.UNIDENTIFIED.clear()
+    meter.unidentified_calls = 0
     tracer = meter.Tracer(None)
     tracer.begin(2, lambda _b: None)
     deps = dataclasses.replace(deps_with(FakeModels(plan_with(["features"]))), trace=tracer)
     with caplog.at_level(logging.WARNING):
         deps.call_model("m", "p", gate=1, budget=Budget(), prompt_name=None)
-    assert meter.UNIDENTIFIED == ["run2:g1:cNone:a0:i0:s1"]
+    assert meter.unidentified_calls == 1
     assert "run2:g1:cNone:a0:i0:s1" in caplog.text
-    meter.UNIDENTIFIED.clear()
+
+
+def test_unidentified_warning_is_throttled(caplog):
+    meter.unidentified_calls = 0
+    tracer = meter.Tracer(None)
+    tracer.begin(3, lambda _b: None)
+    deps = dataclasses.replace(deps_with(FakeModels(plan_with(["features"]))), trace=tracer)
+    with caplog.at_level(logging.WARNING):
+        for _ in range(meter.WARN_FIRST + 20):
+            deps.call_model("m", "p", gate=1, budget=Budget(), prompt_name=None)
+    assert meter.unidentified_calls == meter.WARN_FIRST + 20
+    assert len(caplog.records) == meter.WARN_FIRST
+
+
+def test_prompt_lock_missing_file_is_empty(monkeypatch, tmp_path):
+    monkeypatch.setattr(meter, "_LOCK_PATH", tmp_path / "none.json")
+    monkeypatch.setattr(meter, "_lock_cache", None)
+    assert meter.prompt_lock() == {} and meter.resolve_prompt_hash("x.md") is None
+
+
+def test_skill_call_unregistered_schema_does_not_crash():
+    from services import skill_rewrite
+    seen = {}
+    class D:
+        models = type("M", (), {"gate3_model": "m"})()
+        def call_model(self, *a, **kw):
+            seen.update(kw)
+            return {"response": "{}", "metrics": {}}
+    try:
+        skill_rewrite.call(D(), Budget(), "u", "s", {"type": "object"}, 8)
+    except KeyError:
+        raise AssertionError("KeyError on unregistered schema")
+    except Exception:
+        pass
+    assert seen["prompt_name"] is None
 
 
 def test_identity_report_counts_null_and_groups_by_prompt(tmp_path):

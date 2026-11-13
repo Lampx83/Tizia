@@ -20,6 +20,7 @@ SMOKE_TASKS = {
     'merge': 'Resolve a rebase conflict in a config file where both branches changed the same line.',
 }
 MAX_SMOKE_KINDS = 2
+# Hash is the task table the smoke prompt is built from; the f-string wrapper around it is fixed.
 meter.register_prompt('skill_smoke', json.dumps(SMOKE_TASKS, sort_keys=True))
 # Pass 1 extracts the source essence; pass 2 rewrites from the extraction, not from a generic practice list.
 ESSENCE_KEYS = ('trigger', 'procedure', 'guardrails', 'verification', 'examples', 'failure_modes', 'not_capturable')
@@ -57,11 +58,9 @@ def system_prompt():
     selected = default_skills.select('gate3_light', {'purpose': 'skill-authoring'})
     return prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(selected)
 
-PROMPT_NAMES = {id(EXTRACT_SCHEMA): 'skill_extract', id(SMOKE_SCHEMA): 'skill_smoke', id(REWRITE_SCHEMA): 'skill_rewrite'}
 
-
-def call(deps, budget, user, system, schema, num_predict):
-    body = deps.call_model(deps.models.gate3_model, user, gate=3, budget=budget, format=schema, prompt_name=PROMPT_NAMES[id(schema)],
+def call(deps, budget, user, system, schema, num_predict, prompt_name=None):
+    body = deps.call_model(deps.models.gate3_model, user, gate=3, budget=budget, format=schema, prompt_name=prompt_name,
                            options={'temperature': 0, 'num_predict': num_predict},
                            extra={'system': system, 'thinking': False, 'force_thinking': False},
                            **({'role': 'gate3_light'} if getattr(deps.models, 'routing', None) else {}))
@@ -97,7 +96,7 @@ def parse_extraction(raw):
 def extract(deps, budget, block, system):
     """(extraction | None, error | None). A failed pass falls back to the single-pass rewrite."""
     try:
-        raw, _ = call(deps, budget, f'{EXTRACT_INSTRUCTION}\n\n{block}', system, EXTRACT_SCHEMA, EXTRACT_MAX_TOKENS)
+        raw, _ = call(deps, budget, f'{EXTRACT_INSTRUCTION}\n\n{block}', system, EXTRACT_SCHEMA, EXTRACT_MAX_TOKENS, 'skill_extract')
     except BudgetExhausted:
         raise
     except Exception:  # noqa: BLE001 - extraction is best effort; the rewrite still runs
@@ -117,7 +116,7 @@ def smoke(deps, budget, system, rewritten, job):
     for kind in kinds:
         user = f'{SMOKE_TASKS[kind]} Answer in one short paragraph as JSON {{"answer": "..."}}.\n\n{block}'
         try:
-            text, tokens = call(deps, budget, user, system, SMOKE_SCHEMA, 512)
+            text, tokens = call(deps, budget, user, system, SMOKE_SCHEMA, 512, 'skill_smoke')
             answer = json.loads(text).get('answer')
         except BudgetExhausted:
             results.append({'kind': kind, 'ok': False, 'tokens': None, 'reason': 'budget_exhausted'})
@@ -157,7 +156,7 @@ def run_step(client, deps, *, worker_id):
         if extraction_error:
             report['extraction_error'] = extraction_error
         user = f'{REWRITE_INSTRUCTION}\n\n{block}' + (f'\n\n{essence_block(extraction)}' if extraction else '')
-        raw, _ = call(deps, budget, user, system, REWRITE_SCHEMA, 2048)
+        raw, _ = call(deps, budget, user, system, REWRITE_SCHEMA, 2048, 'skill_rewrite')
         report['raw_response'] = raw
         try:
             rewritten = json.loads(raw).get('skill')

@@ -6,7 +6,7 @@ from services import skill_rewrite
 def captured(job):
     seen = {}
 
-    def fake_call(deps, budget, user, system, schema, num_predict):
+    def fake_call(deps, budget, user, system, schema, num_predict, prompt_name=None):
         seen['user'] = user
         return '{"skill": "x"}', 1
 

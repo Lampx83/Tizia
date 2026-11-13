@@ -44,9 +44,22 @@ def _ms(ns) -> int | None:
     return None if ns is None else int(ns) // 1_000_000
 
 
-_LOCK = json.loads((Path(__file__).resolve().parent.parent / "prompts" / "prompts.lock.json").read_text(encoding="utf-8"))
+_LOCK_PATH = Path(__file__).resolve().parent.parent / "prompts" / "prompts.lock.json"
+_lock_cache: dict[str, str] | None = None
 INLINE_PROMPTS: dict[str, str] = {"model_probe": "ok"}
-UNIDENTIFIED: list[str] = []
+unidentified_calls = 0
+WARN_FIRST, WARN_EVERY = 5, 100
+
+
+def prompt_lock() -> dict[str, str]:
+    """prompts.lock.json name -> sha256, cached; {} if file missing."""
+    global _lock_cache
+    if _lock_cache is None:
+        try:
+            _lock_cache = json.loads(_LOCK_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _lock_cache = {}
+    return _lock_cache
 
 
 def register_prompt(name: str, template: str) -> str:
@@ -57,8 +70,9 @@ def register_prompt(name: str, template: str) -> str:
 
 def resolve_prompt_hash(name: str | None) -> str | None:
     """sha256 of prompt template: lock entry for prompts/ files, else registered inline template."""
-    if name in _LOCK:
-        return _LOCK[name]
+    lock = prompt_lock()
+    if name in lock:
+        return lock[name]
     return hashlib.sha256(INLINE_PROMPTS[name].encode("utf-8")).hexdigest() if name in INLINE_PROMPTS else None
 
 
@@ -225,8 +239,10 @@ class Tracer:
             "notes": notes, "edits": None, "evaluation": [],
         }
         if not (prompt_name and prompt_hash):
-            UNIDENTIFIED.append(rec["call_id"])
-            logging.getLogger(__name__).warning("model call without prompt identity: call_id=%s", rec["call_id"])
+            global unidentified_calls
+            unidentified_calls += 1
+            if unidentified_calls <= WARN_FIRST or unidentified_calls % WARN_EVERY == 0:
+                logging.getLogger(__name__).warning("model call without prompt identity: call_id=%s (total %d)", rec["call_id"], unidentified_calls)
         self._local.notes = []
         self._chat_span(rec, metrics, request or {})
         self._write({**rec, "prompt_var": variable, "output": output})
