@@ -355,6 +355,7 @@
   .pos-table th{background:#f3ecdb;color:#5c4a2c;}
   .pos-table input[type="number"]{width:80px;padding:4px 6px;border:1px solid #caa25a;border-radius:6px;font:inherit;}
   .pos-table .pos-hint{display:block;font-size:.68rem;opacity:.65;margin-top:2px;}
+  body.tt-nohint .pos-hint{display:none !important;}
   .pos-btn{border:none;background:#2e8256;color:#fff;font-weight:800;font-size:.86rem;padding:9px 16px;
     border-radius:16px;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.2);}
   .pos-btn:hover{filter:brightness(1.06);}
@@ -4610,6 +4611,7 @@ function renderThucNhapTab(){
 }
 function m2FinishDone(){
   try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
+  m2RoundIfLast();
   const msg = '🎉 Hoàn thành nhiệm vụ 2: đã kiểm nhập, niêm yết giá và ghi sổ.';
   const ov = document.getElementById('m2Overlay');
   if(ov && ov.style.display !== 'none') ov.querySelector('#m2Body').innerHTML = `<div class="pos-soon" style="color:#1f7a3d">${msg}</div>`;
@@ -4630,7 +4632,10 @@ function saveM3State(x){
   try{ if(typeof renderM1Checklist === 'function') renderM1Checklist(); }catch(e){}
   try{ window.renderMissionChecklist?.(); }catch(e){}
 }
-function m3Unlocked(){ return m2Count() >= 1; }
+// req #236: nhiệm vụ 3 (và 4, 5) còn cần GIẢNG VIÊN mở khoá cho lớp (trang tt-quan-ly); nhiệm vụ 1, 2 luôn mở.
+function ttMissionOpen(n){ return !window.TT || !window.TT.missionOpen || window.TT.missionOpen(n); }
+function m3Unlocked(){ return m2Count() >= 1 && ttMissionOpen(3); }
+function m3LockText(){ return m2Count() < 1 ? 'hoàn thành tối thiểu 1 lần Nhiệm vụ 2 để mở khoá' : 'chờ giảng viên mở khoá cho lớp'; }
 function m3CrateStep(st){ return st === 'stored' || st === 'fridge' || st === 'classify' || st === 'special'; }
 function m3Active(){ const x = getM3State(); return m3CrateStep(x.step) || x.step === 'sort'; }
 // Danh sách tên thuốc cần sắp xếp trong tủ `mode` (null nếu nhiệm vụ 3 không ở bước sắp xếp / tủ này đã xong)
@@ -4658,7 +4663,7 @@ function startM3(){
 }
 function m3Hint(){
   const x = getM3State();
-  if(!m3Unlocked()) return '🔒 Nhiệm vụ 3: hoàn thành tối thiểu 1 lần Nhiệm vụ 2 để mở khoá.';
+  if(!m3Unlocked()) return '🔒 Nhiệm vụ 3: ' + m3LockText() + '.';
   return x.step === 'stored' ? '📦 Nhiệm vụ 3: bấm vào thùng hàng có thẻ "Đã kiểm nhập, chờ sắp xếp" ở Khu vực chờ kiểm nhập để bắt đầu.'
     : x.step === 'fridge' ? '🧊 Nhiệm vụ 3: bấm vào thùng hàng để xếp thuốc bảo quản lạnh vào tủ lạnh.'
     : x.step === 'classify' ? '📋 Nhiệm vụ 3 (bước 3): bấm vào thùng hàng ở Khu vực chờ kiểm nhập để phân loại theo ngành hàng.'
@@ -4923,7 +4928,8 @@ function renderMissionChecklist(){
   const steps = mcSteps(n);
   const tabs = NAMES.map((t,i) => `<button type="button" data-mc="${i+1}" class="${i+1 === n ? 'on' : ''}" title="${esc(t)}" ${i >= 3 ? 'disabled' : ''}>NV${i+1}</button>`).join('');
   let body;
-  if(!steps) body = `<p class="mc-sub">${n >= 4 ? '🔒 Nhiệm vụ này đang được xây dựng theo giáo trình.' : `🔒 Hoàn thành tối thiểu 1 lần nhiệm vụ ${n-1} để mở khoá.`}</p>`;
+  if(!steps) body = `<p class="mc-sub">${n >= 4 ? '🔒 Nhiệm vụ này đang được xây dựng theo giáo trình.' : n === 3 ? `🔒 Nhiệm vụ 3: ${m3LockText()}.` : `🔒 Hoàn thành tối thiểu 1 lần nhiệm vụ ${n-1} để mở khoá.`}</p>`;
+  else if(hintsOffFor(n)) body = `<p class="mc-sub">🧭 Bạn đã hoàn thành nhiệm vụ này ${missionDoneCount(n)} lần — bảng các bước đã được ẩn để bạn tự thực hiện.<br>Cần hỗ trợ: bấm <b>Trợ lý AI</b> (câu hỏi được ghi lại cho giảng viên).</p>`;
   else {
     const done = steps.filter(x => x.done || x.skip).length, pct = Math.round(done / steps.length * 100);
     body = `<div class="mc-bar"><i style="width:${pct}%"></i></div><p class="mc-sub">Tiến độ: ${done}/${steps.length} bước${done === steps.length ? ' · 🎉 đã hoàn thành' : ''}</p>
@@ -4933,8 +4939,55 @@ function renderMissionChecklist(){
   el.querySelectorAll('[data-mc]').forEach(b => b.addEventListener('click', () => { mcSel = Number(b.dataset.mc); renderMissionChecklist(); }));
 }
 window.renderMissionChecklist = renderMissionChecklist;
+// ===================== req #236: ẩn gợi ý sau 2 lần hoàn thành một nhiệm vụ =====================
+// Bậc "Làm đúng" đòi người học tự làm không cần hỗ trợ → từ lần thứ 3 của mỗi nhiệm vụ: ẩn bảng các bước, dòng chỉ dẫn
+// trên bản đồ, ghi chú gợi ý trong phần mềm; thông báo lỗi chỉ còn nói CHỖ sai, bỏ phần chỉ cách sửa (sau dấu " — ").
+// Người học cần hỗ trợ thì hỏi Trợ lý AI — câu hỏi được ghi lại cho giảng viên phân tích.
+const HINT_FREE_AFTER = 2;
+function missionDoneCount(n){ return n === 1 ? m1PracticeCount() : n === 2 ? m2Count() : n === 3 ? m3Count() : 0; }
+function hintsOffFor(n){ return missionDoneCount(n) >= HINT_FREE_AFTER; }
+function activeMissionN(){ return (typeof m3Active === 'function' && m3Active()) ? 3 : (typeof m2Active === 'function' && m2Active()) ? 2 : 1; }
+function curTierIdx(){
+  let plays = 0; for(const k of ['tu-thuoc-mo-phong:game_v2','tu-thuoc-mo-phong:game_v2:otc']){ try{ const g = JSON.parse(localStorage.getItem(k)||'null'); if(g && typeof g.plays === 'number') plays = Math.max(plays, g.plays); }catch(e){} }
+  return Math.min(4, Math.floor(plays / PLAYS_PER_TIER));
+}
+// tt-access.js đọc hàm này khi một nhiệm vụ xong để ghi 'mission_result' (bảng xếp bậc của giảng viên).
+window.ttRunContext = (n) => ({ hintsOff: hintsOffFor(n), tier: curTierIdx() });
+window.ttActiveMission = activeMissionN;
+const NOHINT_ZONE = '🧭 Gợi ý đã ẩn (bạn đã làm nhiệm vụ này 2 lần) — tự thực hiện; cần hỗ trợ hãy hỏi Trợ lý AI.';
+function syncNoHint(){ document.body.classList.toggle('tt-nohint', hintsOffFor(activeMissionN())); }
+(function(){
+  const ERR_SEL = '.pos-err,#m2Err,#thuErr,#m2LedErr,#hosoErr,.m1-warn';
+  const STEP_RE = /Nhiệm vụ\s*\d|Bước\s*\d|\bbấm\b|đi tới|quay lại|đến tủ|sang tab/i;
+  new MutationObserver(ms => {
+    syncNoHint();
+    if(!document.body.classList.contains('tt-nohint')) return;
+    for(const m of ms){
+      const n = m.target.nodeType === 3 ? m.target.parentElement : m.target;
+      if(!n || !n.closest) continue;
+      if(n.closest('#pmZone')){
+        const z = document.getElementById('pmZone');
+        if(z.textContent !== NOHINT_ZONE && STEP_RE.test(z.textContent) && !/^🎉|^✅/.test(z.textContent)) z.textContent = NOHINT_ZONE;
+        continue;
+      }
+      const er = n.closest(ERR_SEL);
+      if(er && !er.dataset.trimmed){
+        const t = er.textContent; const k = t.indexOf(' — ');
+        if(k > 0 && /^⚠️/.test(t)){ er.dataset.trimmed = '1'; er.textContent = t.slice(0, k).replace(/[.。]$/, '') + '. Kiểm tra lại.'; delete er.dataset.trimmed; }
+      }
+    }
+  }).observe(document.body, { subtree:true, childList:true, characterData:true });
+  setInterval(syncNoHint, 2000); syncNoHint();
+  window.addEventListener('tt:open', () => { try{ window.refreshMissionsList?.(); renderMissionChecklist(); }catch(e){} });
+})();
 function m3Count(){ try{ return Number(localStorage.getItem('tu-thuoc-mo-phong:m3count')) || 0; }catch(e){ return 0; } }
 // Hoàn thành 1 LƯỢT (nhiệm vụ 1 → 3) = 1 lần chơi, tính cho cả hai tủ; đủ PLAYS_PER_TIER lượt thì lên mức.
+// req #236: 1 lượt = chuỗi các nhiệm vụ ĐANG MỞ cho người học. Khi giảng viên chưa mở NV3, lượt kết thúc ở NV2
+// (lên mức vẫn chạy) và lượt sau bốc bộ thuốc khác như khi xong NV3.
+function m2RoundIfLast(){
+  if(ttMissionOpen(3)) return;
+  try{ m2CountPlay(); m1ResetItems(); saveM1State({ step:'dutru', confirmed:{}, actual:{}, orders:{}, supplier:null, formulaOk:false, fmBlanks:null }); }catch(e){}
+}
 function m2CountPlay(){
   try{
     registerPlay(); saveGame(); applyCabinetVisibility();
@@ -4991,6 +5044,7 @@ function renderThuSub(){
     }
     x.step = 'done'; saveM2State(x);
     try{ localStorage.setItem(LS_M2N, String(m2Count() + 1)); }catch(e){}
+    m2RoundIfLast();
     body.innerHTML = `<div class="pos-soon" style="color:#1f7a3d">✅ Đã gửi thư cho ${esc(x.supplierName)}. Hàng được giữ ở khu chờ xử lý cho tới khi nhà cung ứng phản hồi.<br>🎉 Hoàn thành nhiệm vụ 2 (nhánh xử lý hàng không đạt).</div>`;
     window.refreshMissionsList?.();
   });
@@ -5103,7 +5157,7 @@ function renderM1Checklist(){
     const tier = Math.min(4, Math.floor(plays / PLAYS_PER_TIER)), inTier = tier >= 4 ? PLAYS_PER_TIER : plays % PLAYS_PER_TIER;
     el.innerHTML = `<div style="font:800 .72rem 'Nunito',sans-serif;color:#26405f">Mức độ: <b>${names[tier]}</b> · thuốc trong ${cabs[tier]} tủ</div>
       <div style="height:8px;background:#dfe6ee;border-radius:6px;overflow:hidden;margin:3px 0"><div style="height:100%;width:${tier>=4?100:Math.round(inTier/PLAYS_PER_TIER*100)}%;background:#2e8256"></div></div>
-      <div style="font:600 .62rem 'Nunito',sans-serif;color:#8a97ab">${tier>=4 ? 'Đã đạt mức cao nhất' : inTier + '/' + PLAYS_PER_TIER + ' lượt hoàn thành (nhiệm vụ 1 → 3) để lên mức tiếp theo'}</div>
+      <div style="font:600 .62rem 'Nunito',sans-serif;color:#8a97ab">${tier>=4 ? 'Đã đạt mức cao nhất' : inTier + '/' + PLAYS_PER_TIER + ' lượt hoàn thành (nhiệm vụ 1 → ' + (ttMissionOpen(3) ? 3 : 2) + ') để lên mức tiếp theo'}</div>
       <div style="margin-top:6px;font:700 .66rem 'Nunito',sans-serif;color:#26405f">📚 Danh mục thuốc:
         <label style="display:block;font-weight:600;margin-top:2px"><input type="radio" name="mgCat" value="1" checked> Danh mục 1 — Môn Dược lý (${allRecords.length} thuốc)</label>
         <label style="display:block;font-weight:600;color:#8a97ab" title="Đang chờ giảng viên cung cấp"><input type="radio" name="mgCat" value="2" disabled> Danh mục 2 — Nhà thuốc mô phỏng (sắp có)</label></div>`;
@@ -5132,7 +5186,7 @@ function renderM1Checklist(){
         return `<li class="mg-mission play${x2.step==='done'?'':' current'}" data-mission="${n}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${lb2}</span></li>`;
       }
       if(m.m3){
-        if(!m3Unlocked()) return `<li class="mg-mission soon" data-mission="${n}" title="Hoàn thành tối thiểu 1 lần nhiệm vụ 2 để mở khoá"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">🔒 Xong NV2 để mở</span></li>`;
+        if(!m3Unlocked()) return `<li class="mg-mission soon" data-mission="${n}" title="${m3LockText()}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${m2Count() < 1 ? '🔒 Xong NV2 để mở' : '🔒 Chờ GV mở khoá'}</span></li>`;
         const x3 = getM3State();
         const lb3 = x3.step === 'idle' ? '▶ Chơi →' : x3.step === 'done' ? `🔁 Luyện tập · ${m3Count()} lần →` : '🔍 Đang làm →';
         return `<li class="mg-mission play${x3.step==='done'?'':' current'}" data-mission="${n}"><span class="mg-mission-n">${n}</span><span class="mg-mission-tx">${m.name}</span><span class="mg-mission-st">${lb3}</span></li>`;
@@ -6065,11 +6119,12 @@ window.EduTutorContext = function(){
     const hint = n === 3 ? m3Hint() : n === 2 ? m2Hint() : (document.getElementById('pmZone')?.textContent || '');
     return `Trang "Nhà thuốc thực hành" (mô phỏng 2D nhà thuốc đạt chuẩn GPP cho sinh viên dược). Người học đang làm nhiệm vụ ${n} `
       + `(1: Lập dự trù và mua thuốc; 2: Kiểm nhập thuốc, niêm yết giá; 3: Bảo quản thuốc và sắp xếp hàng hóa). Gợi ý bước hiện tại trên màn hình: ${hint}. `
+      + (typeof hintsOffFor === 'function' && hintsOffFor(n) ? 'Người học đã làm nhiệm vụ này từ 2 lần, gợi ý trên màn hình đã ẩn: hướng dẫn theo kiểu gợi mở, hỏi lại để người học tự nghĩ. ' : '')
       + 'Hãy hướng dẫn cách làm, giải thích quy định GPP liên quan; KHÔNG làm hộ hay đưa thẳng đáp án của bài.';
   }catch(e){ return 'Trang Nhà thuốc thực hành GPP'; }
 };
 </script>
-<script src="/js/tt-access.js?v=2"></script>
+<script src="/js/tt-access.js?v=3"></script>
 <script src="/js/tutor-floating.js?v=tt1" data-domain="pharmacy" data-context="tu-thuoc-mo-phong" data-label="Trợ lý AI"></script>
 </body>
 </html>

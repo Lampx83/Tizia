@@ -1137,6 +1137,14 @@ CREATE TABLE IF NOT EXISTS tt_activity (
 );
 CREATE INDEX IF NOT EXISTS idx_tt_activity_code ON tt_activity(student_code, created_at);
 CREATE INDEX IF NOT EXISTS idx_tt_activity_sess ON tt_activity(session_id, created_at);
+-- req #236: giảng viên mở khoá nhiệm vụ 3, 4, 5 theo lớp ('*' = mọi lớp). Không có dòng = còn khoá.
+CREATE TABLE IF NOT EXISTS tt_unlock (
+  class_name    text    NOT NULL,
+  mission       integer NOT NULL,
+  unlocked_by   text,
+  created_at    bigint  NOT NULL,
+  PRIMARY KEY (class_name, mission)
+);
 
 -- Huy hiệu tra attempts theo tên người chơi ở mọi lần nộp bài.
 CREATE INDEX IF NOT EXISTS idx_attempts_player_created ON attempts (player_name, created_at DESC);

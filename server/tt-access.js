@@ -10,13 +10,18 @@
 //    thẳng bằng tài khoản Tizia của họ và dùng các route /api/tt/manage/*.
 //  - Mọi thao tác ghi vào tt_activity, gắn với phiên (tt_session) do MÁY CHỦ cấp lúc đăng nhập;
 //    định danh không nhận từ body của route ghi nhật ký.
-// Xoá module = xoá file này + 1 dòng attachTtAccess trong index.js + 3 bảng tt_* trong schema.sql.
+//  - req #236: nhiệm vụ 1, 2 luôn mở; nhiệm vụ 3, 4, 5 chỉ mở khi giảng viên mở khoá cho lớp (tt_unlock).
+//    Mỗi lượt làm xong 1 nhiệm vụ trang gửi 'mission_result' (số lỗi, số câu hỏi trợ lý AI, mức, có gợi ý
+//    hay không) → bảng phân tích xếp bậc Làm được / Làm đúng / Làm thành thạo theo từng nhiệm vụ.
+// Xoá module = xoá file này + 1 dòng attachTtAccess trong index.js + 4 bảng tt_* trong schema.sql.
 // =====================================================================
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
+import { gradeMission, TIER_RULE } from './tt-grade.js';
 
 const now = () => Date.now();
+const safeJson = (s) => { try { return JSON.parse(s); } catch { return null; } };
 const clean = (v, max = 120) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim();
 const TEST_PASSWORDS = (process.env.TT_TEST_PASSWORDS || '123456,12345@').split(',').map((s) => s.trim()).filter(Boolean);
@@ -35,6 +40,16 @@ const touchSess = db.prepare(`UPDATE tt_session SET last_seen_at = ? WHERE id = 
 const insAct = db.prepare(`INSERT INTO tt_activity (session_id, student_code, kind, detail, created_at) VALUES (?, ?, ?, ?, ?)`);
 const rosterCount = db.prepare(`SELECT COUNT(*) n FROM tt_roster`);
 const rosterByCode = db.prepare(`SELECT * FROM tt_roster WHERE student_code = ?`);
+const GATED = [3, 4, 5];   // nhiệm vụ cần giảng viên mở khoá
+
+// Nhiệm vụ đang mở cho 1 phiên: tài khoản thử + giảng viên luôn mở hết; sinh viên theo lớp hoặc '*'.
+async function openMissions(s) {
+  if (!s || s.kind === 'test' || s.kind === 'teacher') return GATED.slice();
+  const rows = await db.prepare(`SELECT class_name, mission FROM tt_unlock`).all();
+  const cls = norm(s.class_name);
+  return [...new Set(rows.filter((r) => r.class_name === '*' || norm(r.class_name) === cls).map((r) => Number(r.mission)))].sort();
+}
+
 
 // chặn dò mật khẩu / dò mã SV: 10 lần sai / 10 phút / IP
 const fails = new Map();
@@ -112,7 +127,8 @@ export function attachTtAccess(r) {
       const id = randomUUID();
       await insSess.run({ id, code: who.code, name: who.name, cls: who.cls, kind: who.kind, ref: userRef(req), t: now() });
       await insAct.run(id, who.code, 'login', JSON.stringify({ kind: who.kind }), now());
-      res.json({ sessionId: id, identity: { code: who.code, name: who.name, className: who.cls, kind: who.kind } });
+      res.json({ sessionId: id, identity: { code: who.code, name: who.name, className: who.cls, kind: who.kind },
+        open: await openMissions({ kind: who.kind, class_name: who.cls }) });
     } catch (e) { console.error('[tt] enroll:', e.message); res.status(500).json({ error: 'Không đăng nhập được, thử lại sau.' }); }
   });
 
@@ -121,7 +137,7 @@ export function attachTtAccess(r) {
     try {
       const s = await getSess.get(String(req.query.sessionId || ''));
       if (!s || now() - Number(s.created_at) > SESSION_MS) return res.status(401).json({ error: 'Phiên đã hết hạn.' });
-      res.json({ identity: { code: s.student_code, name: s.full_name, className: s.class_name, kind: s.kind } });
+      res.json({ identity: { code: s.student_code, name: s.full_name, className: s.class_name, kind: s.kind }, open: await openMissions(s) });
     } catch { res.status(500).json({ error: 'Lỗi máy chủ.' }); }
   });
 
@@ -173,25 +189,34 @@ export function attachTtAccess(r) {
   // Bảng phân tích: mỗi người học 1 dòng. Thời gian hoạt động = tổng các khoảng cách giữa 2 thao tác liên tiếp < 5 phút.
   r.get('/api/tt/manage/summary', requireManager, async (_req, res) => {
     try {
-      const acts = await db.prepare(`SELECT a.student_code code, a.kind, a.created_at t, a.session_id sid FROM tt_activity a ORDER BY a.student_code, a.created_at`).all();
+      const acts = await db.prepare(`SELECT a.student_code code, a.kind, a.created_at t, a.session_id sid,
+          CASE WHEN a.kind IN ('mission_done','mission_result') THEN a.detail END detail
+        FROM tt_activity a ORDER BY a.student_code, a.created_at`).all();
       const sess = await db.prepare(`SELECT student_code code, full_name name, class_name cls, kind FROM tt_session ORDER BY created_at DESC`).all();
       const info = new Map(); for (const s of sess) if (!info.has(s.code)) info.set(s.code, s);
       const by = new Map();
       for (const a of acts) {
         let u = by.get(a.code);
-        if (!u) { u = { code: a.code, sessions: new Set(), events: 0, activeMs: 0, first: Number(a.t), last: Number(a.t), missionsDone: 0, errors: 0, tutorQuestions: 0, posOpens: 0 }; by.set(a.code, u); }
+        if (!u) { u = { code: a.code, sessions: new Set(), events: 0, activeMs: 0, first: Number(a.t), last: Number(a.t), missionsDone: 0, errors: 0, tutorQuestions: 0, posOpens: 0, done: {}, results: {} }; by.set(a.code, u); }
         const t = Number(a.t);
         if (u.events && t - u.last < 300000) u.activeMs += t - u.last;
         u.last = t; u.events++; u.sessions.add(a.sid);
-        if (a.kind === 'mission_done') u.missionsDone++;
+        if (a.kind === 'mission_done') {
+          u.missionsDone++;
+          const m = Number(safeJson(a.detail)?.m) || 0; if (m) u.done[m] = (u.done[m] || 0) + 1;
+        } else if (a.kind === 'mission_result') {
+          const d = safeJson(a.detail) || {}; const m = Number(d.m) || 0;
+          if (m) (u.results[m] = u.results[m] || []).push({ hintsOff: !!d.hintsOff, errors: Number(d.errors) || 0, asks: Number(d.asks) || 0, tier: Number(d.tier) || 0 });
+        }
         else if (a.kind === 'error') u.errors++;
         else if (a.kind === 'tutor_ask') u.tutorQuestions++;
         else if (a.kind === 'pos_open') u.posOpens++;
       }
-      const students = [...by.values()].map((u) => ({ ...u, sessions: u.sessions.size, name: info.get(u.code)?.name || '', cls: info.get(u.code)?.cls || '', kind: info.get(u.code)?.kind || '' }))
+      const students = [...by.values()].map(({ done, results, ...u }) => ({ ...u, sessions: u.sessions.size, name: info.get(u.code)?.name || '', cls: info.get(u.code)?.cls || '', kind: info.get(u.code)?.kind || '',
+          tiers: Object.fromEntries([1, 2, 3, 4, 5].map((m) => [m, gradeMission(results[m] || [], done[m] || 0)])) }))
         .sort((a, b) => String(a.cls).localeCompare(String(b.cls)) || String(a.code).localeCompare(String(b.code)));
       const rosterN = Number((await rosterCount.get())?.n || 0);
-      res.json({ students, rosterN });
+      res.json({ students, rosterN, tierRule: TIER_RULE });
     } catch (e) { console.error('[tt] summary:', e.message); res.status(500).json({ error: 'Lỗi máy chủ.' }); }
   });
   // Dòng thời gian của 1 người học
@@ -199,6 +224,25 @@ export function attachTtAccess(r) {
     const code = clean(req.query.code, 40).toUpperCase();
     const rows = await db.prepare(`SELECT session_id sid, kind, detail, created_at t FROM tt_activity WHERE student_code = ? ORDER BY created_at DESC LIMIT 1000`).all(code);
     res.json({ rows });
+  });
+  // Mở / khoá nhiệm vụ 3–5 theo lớp. cls = '*' áp cho mọi lớp.
+  r.get('/api/tt/manage/unlocks', requireManager, async (_req, res) => {
+    try {
+      const rows = await db.prepare(`SELECT class_name cls, mission FROM tt_unlock ORDER BY class_name, mission`).all();
+      const classes = (await db.prepare(`SELECT class_name c FROM tt_roster GROUP BY class_name
+        UNION SELECT class_name c FROM tt_session WHERE kind = 'student' AND class_name IS NOT NULL GROUP BY class_name ORDER BY c`).all()).map((x) => x.c);
+      res.json({ missions: GATED, classes, rows });
+    } catch (e) { console.error('[tt] unlocks:', e.message); res.status(500).json({ error: 'Lỗi máy chủ.' }); }
+  });
+  r.post('/api/tt/manage/unlock', requireManager, J, async (req, res) => {
+    try {
+      const b = req.body || {}; const cls = b.cls === '*' ? '*' : clean(b.cls, 60); const m = Number(b.mission);
+      if (!cls || !GATED.includes(m)) return res.status(400).json({ error: 'Thiếu lớp hoặc nhiệm vụ không hợp lệ.' });
+      if (b.on) await db.prepare(`INSERT INTO tt_unlock (class_name, mission, unlocked_by, created_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT (class_name, mission) DO NOTHING`).run(cls, m, userRef(req), now());
+      else await db.prepare(`DELETE FROM tt_unlock WHERE class_name = ? AND mission = ?`).run(cls, m);
+      res.json({ ok: true });
+    } catch (e) { console.error('[tt] unlock:', e.message); res.status(500).json({ error: 'Không lưu được.' }); }
   });
   r.get('/api/tt/manage/export.csv', requireManager, async (_req, res) => {
     const rows = await db.prepare(`SELECT a.created_at t, a.student_code code, s.full_name name, s.class_name cls, a.kind, a.detail

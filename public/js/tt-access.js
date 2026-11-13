@@ -12,7 +12,7 @@
   const rawSet = Storage.prototype.setItem;
   const sset = (k, v) => { try { rawSet.call(localStorage, k, JSON.stringify(v)); } catch {} };
 
-  let session = null, identity = null, queue = [], lastAct = Date.now();
+  let session = null, identity = null, queue = [], lastAct = Date.now(), open = null;
   const log = (kind, detail) => { if (!session) return; queue.push({ kind, detail: detail === undefined ? null : detail, t: Date.now() }); if (queue.length >= 30) flush(); };
   function flush(beacon) {
     if (!session || !queue.length) return;
@@ -20,7 +20,22 @@
     if (beacon && navigator.sendBeacon) { navigator.sendBeacon('/api/tt/log', new Blob([body], { type: 'application/json' })); return; }
     fetch('/api/tt/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true, credentials: 'same-origin' }).catch(() => {});
   }
-  window.TT = { log, get identity() { return identity; } };
+  // req #236: open = nhiệm vụ (3–5) giảng viên đã mở cho lớp; null = chưa biết (đang tải).
+  window.TT = { log, get identity() { return identity; }, get open() { return open; }, missionOpen: (n) => n < 3 || (Array.isArray(open) && open.includes(n)) };
+  function setOpen(list) {
+    const nw = Array.isArray(list) ? list.map(Number).sort() : [];
+    if (open && nw.join() === open.join()) return;
+    open = nw; window.dispatchEvent(new CustomEvent('tt:open', { detail: open }));
+  }
+  /* Mỗi lượt của 1 nhiệm vụ: đếm lỗi + câu hỏi trợ lý AI từ lúc bắt đầu tới lúc xong → 'mission_result' cho bảng xếp bậc.
+     Lưu localStorage để tải lại trang giữa chừng không mất số đếm. */
+  const RKEY = 'tt:runs';
+  let runs = sget(RKEY) || {}, activeM = null;
+  const saveRuns = () => sset(RKEY, runs);
+  const bump = (k) => {
+    const m = activeM || (typeof window.ttActiveMission === 'function' ? window.ttActiveMission() : null);   // sau khi tải lại trang
+    if (m && runs[m]) { runs[m][k]++; saveRuns(); }
+  };
 
   /* ---------- bắt thao tác ---------- */
   const SKIP = '#ttLogin,#doorPwMask,input[type=password]';
@@ -33,7 +48,21 @@
           const old = (() => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } })();
           let nw = null; try { nw = JSON.parse(v); } catch {}
           const m = (k.match(/mission(\d)/) || [])[1];
-          if (m && nw && (!old || old.step !== nw.step)) { log('mission_step', { m: Number(m), from: old && old.step || null, step: nw.step }); if (nw.step === 'done') log('mission_done', { m: Number(m) }); }
+          if (m && nw && (!old || old.step !== nw.step)) {
+            const mn = Number(m);
+            log('mission_step', { m: mn, from: old && old.step || null, step: nw.step });
+            if (nw.step !== 'done' && nw.step !== 'idle') {
+              if (!runs[mn] || !old || old.step === 'done' || old.step === 'idle') { runs[mn] = { t0: Date.now(), errors: 0, asks: 0 }; saveRuns(); }
+              activeM = mn;
+            }
+            if (nw.step === 'done') {
+              log('mission_done', { m: mn });
+              const r = runs[mn], ctx = (typeof window.ttRunContext === 'function' ? window.ttRunContext(mn) : null) || {};
+              if (r) log('mission_result', { m: mn, errors: r.errors, asks: r.asks, ms: Date.now() - r.t0, hintsOff: !!ctx.hintsOff, tier: ctx.tier || 0 });
+              delete runs[mn]; saveRuns(); if (activeM === mn) activeM = null;
+              flush();
+            }
+          }
           else if (!m) log('state', { key: k.replace('tu-thuoc-mo-phong:', ''), value: String(v).slice(0, 80) });
         }
       } catch (e) {}
@@ -63,7 +92,7 @@
         const er = n && n.closest && n.closest('.pos-err,#m2Err,#thuErr,#m2LedErr,#hosoErr,.m1-warn');
         if (!er) continue;
         const t = er.textContent.replace(/\s+/g, ' ').trim();
-        if (t && t !== lastErr) { lastErr = t; log('error', { id: er.id || er.className, msg: t.slice(0, 200) }); }
+        if (t && t !== lastErr && !/^✔|^✅/.test(t)) { lastErr = t; bump('errors'); log('error', { id: er.id || er.className, msg: t.slice(0, 200) }); }
         else if (!t) lastErr = '';
       }
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
@@ -71,7 +100,9 @@
     const wrap = (name, fn) => { const o = window[name]; if (typeof o !== 'function') return; window[name] = function () { try { fn.apply(this, arguments); } catch {} return o.apply(this, arguments); }; };
     wrap('openPOS', () => log('pos_open'));
     wrap('closePOS', () => log('pos_close'));
-    window.addEventListener('edututor:ask', (e) => log('tutor_ask', { q: String(e.detail && e.detail.text || '').slice(0, 400) }));
+    window.addEventListener('edututor:ask', (e) => { bump('asks'); log('tutor_ask', { m: activeM, q: String(e.detail && e.detail.text || '').slice(0, 400) }); });
+    // giảng viên có thể mở khoá giữa giờ → hỏi lại mỗi phút
+    setInterval(() => { if (document.visibilityState === 'visible') J('/api/tt/me?sessionId=' + encodeURIComponent(session)).then((d) => setOpen(d.open)).catch(() => {}); }, 60000);
     setInterval(() => { if (document.visibilityState === 'visible' && Date.now() - lastAct < 60000) log('heartbeat'); }, 60000);
     setInterval(() => flush(), 4000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(true); });
@@ -122,7 +153,7 @@
         const d = await J('/api/tt/enroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (payload.mode === 'student') sset('tt:last', { code: payload.studentCode, name: payload.studentName, cls: payload.className });
         sset(SKEY, { id: d.sessionId, at: Date.now() }); sset(IKEY, d.identity);
-        start(d.sessionId, d.identity);
+        start(d.sessionId, d.identity, d.open);
         box.remove(); document.body.classList.remove('tt-locked');
       } catch (e) { err.textContent = e.message || 'Không đăng nhập được.'; } finally { btn.disabled = false; }
     };
@@ -136,8 +167,8 @@
     if ($('ttTeacher')) $('ttTeacher').addEventListener('click', () => go({ mode: 'teacher' }));
   }
 
-  function start(sid, ident) {
-    session = sid; identity = ident;
+  function start(sid, ident, openList) {
+    session = sid; identity = ident; setOpen(openList);
     try { const u = $('mhUser'); if (u) { u.textContent = '👤 ' + (ident.name || ident.code); setTimeout(() => { u.textContent = '👤 ' + (ident.name || ident.code); }, 1500); } } catch {}
     // "Đổi người dùng" trong menu cài đặt
     try {
@@ -154,7 +185,7 @@
   async function init() {
     const s = sget(SKEY);
     if (s && s.id && Date.now() - s.at < 11 * 3600000) {
-      try { const d = await J('/api/tt/me?sessionId=' + encodeURIComponent(s.id)); start(s.id, d.identity); return; } catch (e) { if (e.status !== 401) { /* mạng lỗi: vẫn chặn, báo rõ */ } }
+      try { const d = await J('/api/tt/me?sessionId=' + encodeURIComponent(s.id)); start(s.id, d.identity, d.open); return; } catch (e) { if (e.status !== 401) { /* mạng lỗi: vẫn chặn, báo rõ */ } }
     }
     try { showLogin(await J('/api/tt/config')); }
     catch (e) {
