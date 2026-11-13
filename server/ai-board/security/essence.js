@@ -16,3 +16,19 @@ export function essenceMissing(sourceText, rewrittenText) {
   const low = body(rewrittenText).toLowerCase();
   return essenceTerms(sourceText).filter((term) => !low.includes(term)).sort();
 }
+
+const STEP_LINE = /^\s*(?:\d+[a-z]?[.)]|[-*•])\s+(.+)$/;
+const STEP_KEPT_MIN = 0.6;
+
+/** Tỷ lệ bước (dòng đánh số/gạch đầu dòng) của skill gốc còn trong bản mặc định; bước giữ nếu ≥60% từ khóa của nó có mặt. Offline. */
+export function essenceStepRatio(sourceText, defaultText) {
+  const low = body(defaultText).toLowerCase();
+  const steps = body(sourceText).split('\n').map((line) => STEP_LINE.exec(line)?.[1].trim()).filter(Boolean);
+  const lost = [];
+  for (const step of steps) {
+    const terms = essenceTerms(step);
+    if (terms.length && terms.filter((t) => low.includes(t)).length / terms.length < STEP_KEPT_MIN) lost.push(step);
+  }
+  const kept = steps.length - lost.length;
+  return { total: steps.length, kept, ratio: steps.length ? kept / steps.length : 1, lost };
+}
