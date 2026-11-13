@@ -1025,14 +1025,25 @@ def test_teardown_runs_on_an_unexpected_exit_too(tmp_path):
     assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
 
 
-def test_preloaded_base_pin_is_dropped_only_for_the_known_digest(tmp_path):
+@pytest.mark.parametrize("network", ["internal", "published"])
+def test_gate_5_never_writes_into_the_candidate_checkout(tmp_path, monkeypatch, network):
+    monkeypatch.setenv("AI_BOARD_VERIFY_NETWORK", network)
+    monkeypatch.setattr(verify, "probe_http", lambda url: (200, b"<h1>changed</h1>\n// x\n"))
+    (tmp_path / "checkout").mkdir()
+    root = checkout(tmp_path / "checkout")
     pin = "fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293"
-    (tmp_path / "Dockerfile").write_text(
-        f"FROM node:20-alpine@sha256:{pin} AS deps\nFROM node:20-alpine@sha256:{'0' * 64}\nFROM alpine:3\n", encoding="utf-8")
-    assert verify._use_preloaded_bases(tmp_path) is True
-    assert (tmp_path / "Dockerfile").read_text(encoding="utf-8") == (
-        f"FROM node:20-alpine AS deps\nFROM node:20-alpine@sha256:{'0' * 64}\nFROM alpine:3\n")
-    assert verify._use_preloaded_bases(tmp_path) is False
+    (root / "Dockerfile").write_text(f"FROM node:20-alpine@sha256:{pin} AS deps\n", encoding="utf-8")
+    snapshot = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.rglob("*") if p.is_file()}
+    writes = []
+    real_write_text, real_write_bytes = Path.write_text, Path.write_bytes
+    monkeypatch.setattr(Path, "write_text", lambda self, *a, **k: writes.append(self) or real_write_text(self, *a, **k))
+    monkeypatch.setattr(Path, "write_bytes", lambda self, *a, **k: writes.append(self) or real_write_bytes(self, *a, **k))
+
+    runner = InternalRunner() if network == "internal" else FakeRunner()
+    verify.run(state(root), runner=runner)
+
+    assert [p for p in writes if root in p.parents] == []
+    assert snapshot == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in root.rglob("*") if p.is_file()}
 
 
 def test_missing_acceptance_tool_is_infra_not_candidate_repair(tmp_path):
