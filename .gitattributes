@@ -13,3 +13,9 @@ ai-board/sandbox-runner/sandbox-policy*.yaml text eol=lf
 server/ai-board/contract.json text eol=lf
 server/skills-mapping.json text eol=lf
 server/ai-board/resources/qwen3.5-tokenizer.json -text
+# Docker build inputs: the warm guest cache keys on file bytes, so a CRLF checkout must not change them.
+package.json text eol=lf
+package-lock.json text eol=lf
+**/package.json text eol=lf
+**/package-lock.json text eol=lf
+Dockerfile text eol=lf
