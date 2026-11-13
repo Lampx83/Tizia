@@ -761,7 +761,7 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/rollback', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     res.json(await store.submitRollback(req.params.id, {
-      ...lease, runId: req.body?.run_id, outcome: req.body?.outcome, revert: req.body?.revert, detail: req.body?.detail,
+      ...lease, runId: req.body?.run_id, outcome: req.body?.outcome, revert: req.body?.revert, pullRequest: req.body?.pull_request, detail: req.body?.detail,
     }));
   }));
 

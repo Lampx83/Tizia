@@ -397,7 +397,8 @@ class Candidates:
     def rollback(self, candidate: dict, ticket_id: int, pull_request: dict | None = None) -> dict:
         """Chưa merge: xóa nhánh (cả nhánh đã đẩy, GitHub tự đóng PR). Đã merge vào base: nhánh revert mới từ base,
         để người mở PR; PR đã merge thì revert đúng merge commit của nó (nhận cả squash nhiều commit).
-        Return {outcome: discarded|revert_ready, detail, revert?}."""
+        Có github: đẩy nhánh revert + mở PR (pull_request); xung đột → failed kèm conflicts, không để lại nhánh.
+        Return {outcome: discarded|revert_ready|failed, detail, revert?, pull_request?, conflicts?}."""
         repo, head = self.repo, candidate["head_sha"]
         base = pr_base()
         refs = [ref for name in dict.fromkeys((base, "main")) for ref in (f"origin/{name}", name)]
@@ -415,12 +416,21 @@ class Candidates:
         try:
             _git_out(["worktree", "add", "-q", "-b", branch, checkout, merged_into], repo)
             base_sha = _git_out(["rev-parse", "HEAD"], checkout).strip()
-            if merge_commit:
-                parents = _git_out(["rev-list", "--parents", "-n", "1", merge_commit], checkout).split()[1:]
-                mainline = ["-m", "1"] if len(parents) > 1 else []
-                _git_out([*_AUTHOR, "revert", "--no-edit", *mainline, merge_commit], checkout)
-            else:
-                _git_out([*_AUTHOR, "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
+            try:
+                if merge_commit:
+                    parents = _git_out(["rev-list", "--parents", "-n", "1", merge_commit], checkout).split()[1:]
+                    mainline = ["-m", "1"] if len(parents) > 1 else []
+                    _git_out([*_AUTHOR, "revert", "--no-edit", *mainline, merge_commit], checkout)
+                else:
+                    _git_out([*_AUTHOR, "revert", "--no-edit", f"{candidate['base_sha']}..{head}"], checkout)
+            except OSError as error:
+                files = _git(checkout, "diff", "--name-only", "--diff-filter=U").stdout.split()
+                if not files:
+                    raise
+                _git(checkout, "revert", "--abort")
+                _git(repo, "worktree", "remove", "--force", checkout)
+                _git(repo, "branch", "-D", branch)
+                return {"outcome": "failed", "detail": f"revert conflict in {', '.join(files)}"[:1000], "conflicts": files}
             shas = _git_out(["rev-list", "--reverse", f"{base_sha}..HEAD"], checkout).split()
             commits = [{"sha": sha, "title": _git_out(["log", "-1", "--format=%s", sha], checkout).strip(),
                         "files": _git_out(["show", "--name-only", "--format=", sha], checkout).split()}
@@ -432,8 +442,22 @@ class Candidates:
         finally:
             _git(repo, "worktree", "remove", "--force", checkout)
             shutil.rmtree(checkout, ignore_errors=True)
-        return {"outcome": "revert_ready", "detail": f"{candidate['branch']} was merged into {merged_into}",
-                "revert": {"branch": branch, "base_sha": base_sha, "head_sha": shas[-1], "commits": commits}}
+        revert = {"branch": branch, "base_sha": base_sha, "head_sha": shas[-1], "commits": commits}
+        out = {"outcome": "revert_ready", "detail": f"{candidate['branch']} was merged into {merged_into}", "revert": revert}
+        if self.github:
+            try:
+                self.github.push(repo, branch)
+                pr = self.github.open_pull(branch, title=f"Revert ticket #{ticket_id}: {candidate['branch']}"[:250],
+                                           body=f"Revert of {candidate['branch']} ({merged_into}). Merge to roll back.")
+            except Exception:
+                try:
+                    self.github.delete_branch(repo, branch)
+                except Exception:  # noqa: BLE001 — never pushed, or already gone
+                    pass
+                _git(repo, "branch", "-D", branch)
+                raise
+            out["pull_request"] = {"number": pr["number"], "url": pr["html_url"]}
+        return out
 
     def merged(self, candidate: dict, ref: str) -> bool:
         """Candidate đã vào ref: head là tổ tiên, hoặc mọi commit có bản vá tương đương (cherry-pick/squash 1 commit)."""
