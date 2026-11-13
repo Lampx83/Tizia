@@ -88,6 +88,9 @@ def _use_preloaded_bases(checkout: Path) -> bool:
     return new != text
 
 
+_CURL_SHIM = Path(__file__).resolve().parents[1] / "verification" / "curl-shim.sh"
+
+
 def _guest_ca() -> Path | None:
     """Public interception CA supplied by Microsandbox to this guest, never from the candidate checkout."""
     for path in sorted(CA_DIR.glob('microsandbox-ca.*')):
@@ -600,6 +603,13 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
             # Feature acceptance (LF/107): lệnh e2e của plan chạy trong container disposable trước verdict.
             acceptance = acceptance_commands(state)
+            if any("curl" in item for item in acceptance):
+                try:
+                    command([*compose, "exec", "-T", "tizia", "which", "curl"], log_output=False)
+                except RuntimeError:
+                    # The offline guest's layer cache holds no curl layer; busybox wget is already in the image.
+                    command([*compose, "cp", str(_CURL_SHIM), "tizia:/usr/local/bin/curl"])
+                    command([*compose, "exec", "-T", "-u", "root", "tizia", "chmod", "755", "/usr/local/bin/curl"])
             for item in acceptance:
                 try:
                     command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
