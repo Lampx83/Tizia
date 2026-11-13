@@ -3,13 +3,13 @@ name: default-skill-authoring
 description: Write or rewrite advisory skills
 task_type: all
 source: default
-version: 2
+version: 3
 max_tokens: 1500
 ---
-Use seven parts, one language, under the token cap; no rule count limit.
+Preserve the uploaded intent. Use seven parts, one language, under the token cap; no rule count limit.
 Trigger: when it applies.
 Procedure: numbered, checkable steps; keep source commands.
-Guardrails: invariants; authority stays outside.
+Guardrails: invariants; keep platform decisions and authority outside guidance.
 Output contract: result shape.
 Checks: commands proving the work; never invent.
 Pitfalls: failures, wrong vs right example.
