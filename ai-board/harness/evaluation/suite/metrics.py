@@ -178,16 +178,19 @@ def _binom_two_sided(b: int, c: int) -> float:
 
 def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int = 4000) -> dict:
     """Paired by task id (mean resolved over repeats). A = baseline, B = candidate. Verdict needs both the bootstrap CI and the sign test to agree."""
+    valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
+    infra = bool(rows_a and rows_b) and max(infra_rate(rows_a), infra_rate(rows_b)) > INFRA_MAX_RATE
     keys_a = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_a]
     keys_b = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_b]
+    fail = {"verdict": "incomparable", "valid_percent": valid, "inconclusive_infra": infra}
     if any(None in key for key in keys_a + keys_b) or len(set(keys_a)) != len(keys_a) or len(set(keys_b)) != len(keys_b):
-        return {"verdict": "incomparable", "reason": "missing trial identity or duplicate task/mode/repeat"}
+        return {**fail, "reason": "missing trial identity or duplicate task/mode/repeat"}
     if set(keys_a) != set(keys_b):
-        return {"verdict": "incomparable", "reason": "task/mode/repeat cohorts differ"}
+        return {**fail, "reason": "task/mode/repeat cohorts differ"}
     ta, tb = per_task(rows_a), per_task(rows_b)
     ids = sorted(ta)
     if not ids:
-        return {"verdict": "incomparable", "reason": "no common tasks"}
+        return {**fail, "reason": "no common tasks"}
     mean = lambda v: sum(v) / len(v)  # noqa: E731
     diff = [mean(tb[i]) - mean(ta[i]) for i in ids]
     rng = random.Random(seed)
@@ -197,10 +200,12 @@ def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int 
     p = _binom_two_sided(better, worse)
     delta = round(100 * sum(diff) / len(diff), 1)
     verdict = "improved" if lo > 0 and p < 0.05 else "regressed" if hi < 0 and p < 0.05 else "no_significant_change"
-    if max(infra_rate(rows_a), infra_rate(rows_b)) > INFRA_MAX_RATE:
-        verdict = "inconclusive_infra"
-    valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
-    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": [lo, hi], "tasks_better": better, "tasks_worse": worse, "sign_test_p": p, "valid_percent": valid}
+    if infra:
+        verdict, delta, ci, p = "inconclusive_infra", None, None, None
+    else:
+        ci = [lo, hi]
+    return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": ci, "tasks_better": better, "tasks_worse": worse, "sign_test_p": p,
+            "valid_percent": valid, "inconclusive_infra": infra}
 
 
 def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:
@@ -210,6 +215,6 @@ def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:
         for value in sorted({str(r[cell]) for r in rows_a if r.get(cell) is not None}):
             ga = [r for r in rows_a if str(r.get(cell)) == value]
             gb = [r for r in rows_b if str(r.get(cell)) == value]
-            tasks = min(len(per_task(ga)), len(per_task(gb)))
+            tasks = len(set(per_task(ga)) & set(per_task(gb)))
             out[f"{cell}={value}"] = compare(ga, gb, **kw) if tasks >= MIN_GROUP_TASKS else {"verdict": None, "display_only": True, "tasks": tasks}
     return out

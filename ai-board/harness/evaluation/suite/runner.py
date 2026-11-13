@@ -478,7 +478,8 @@ def cmd_compare(args) -> int:
         costs = metrics.compare_clean_cost(ra, rb, timing_comparable=timing_comparable)
         if reasons or result["verdict"] == "incomparable":
             reasons += [result["reason"]] if result["verdict"] == "incomparable" else []
-            result = {"verdict": "incomparable", "reasons": sorted(set(reasons))}
+            result = {"verdict": "incomparable", "reasons": sorted(set(reasons)),
+                      "valid_percent": result["valid_percent"], "inconclusive_infra": result["inconclusive_infra"]}
             for check in costs.values():
                 check.update(status="pending", increase_percent=None)
         result["cost_per_resolved_clean"] = costs

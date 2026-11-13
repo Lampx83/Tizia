@@ -175,3 +175,52 @@ def test_small_cell_groups_are_display_only_and_large_ones_get_a_verdict():
     assert groups["kind=a"]["verdict"] == "improved"
     assert groups["kind=b"] == {"verdict": None, "display_only": True, "tasks": 3}
     assert metrics.compare(base, better)["verdict"] == "improved"
+
+
+def test_inconclusive_infra_hides_conclusion_fields():
+    clean = [trial(i, 1, True) for i in range(10)]
+    over = [trial(i, 1, False, infra=i < 3) for i in range(10)]
+    result = metrics.compare(clean, over)
+    assert result["verdict"] == "inconclusive_infra" and result["inconclusive_infra"] is True
+    assert result["delta_points"] is None and result["ci95_points"] is None and result["sign_test_p"] is None
+
+
+def test_group_gate_counts_common_tasks_only():
+    a = [trial(i, 1, False) for i in range(12)]
+    b = [trial(i + 6, 1, True) for i in range(12)]
+    assert metrics.compare_groups(a, b)["kind=a"] == {"verdict": None, "display_only": True, "tasks": 6}
+
+
+def test_group_over_infra_threshold_is_inconclusive():
+    a = [trial(i, 1, False) for i in range(12)]
+    b = [trial(i, 1, True, infra=i < 4) for i in range(12)]
+    group = metrics.compare_groups(a, b)["kind=a"]
+    assert group["verdict"] == "inconclusive_infra" and group["delta_points"] is None
+
+
+def _compare_cli(tmp_path, capsys, infra=0, model_b="model"):
+    meta = {"ref": "source", "dirty": False, "model": "model", "routing_catalog": "catalog",
+            "prompt_lock": "prompt", "skill_lock": "skill", "contract_hash": "contract", "config_sha256": "config", "tool_manifest": "tools",
+            "suite_hash": "suite", "pipeline_hash": "pipeline", "reasoning": {}, "corpus_sha": "corpus",
+            "seed": 7, "repeats": 1, "modes": ["gold"], "fast_tier": True, "review": False,
+            "packs": [], "budget": {"model_calls": 40}, "status": "complete", "integrity": []}
+    paths = [tmp_path / arm / "results.jsonl" for arm in ("control", "candidate")]
+    for path, bad, model in zip(paths, (0, infra), ("model", model_b)):
+        path.parent.mkdir()
+        path.write_text("".join(json.dumps({**trial(i, 1, True, infra=i < bad), "repeat": 1}) + "\n" for i in range(10)))
+        path.with_name("run.json").write_text(json.dumps({**meta, "model": model}))
+    runner.cmd_compare(SimpleNamespace(baseline=str(paths[0]), candidate=str(paths[1])))
+    return json.loads(capsys.readouterr().out.partition(" ")[2])
+
+
+def test_cmd_compare_infra_heavy_rows(tmp_path, capsys):
+    result = _compare_cli(tmp_path, capsys, infra=3)
+    assert result["verdict"] == "inconclusive_infra" and result["inconclusive_infra"] is True
+    assert result["valid_percent"] == {"baseline": 100.0, "candidate": 70.0}
+    assert result["delta_points"] is None and result["sign_test_p"] is None
+
+
+def test_cmd_compare_pin_mismatch_keeps_validity_fields(tmp_path, capsys):
+    result = _compare_cli(tmp_path, capsys, infra=3, model_b="other")
+    assert result["verdict"] == "incomparable" and "missing or different pin: model" in result["reasons"]
+    assert result["valid_percent"] == {"baseline": 100.0, "candidate": 70.0} and result["inconclusive_infra"] is True
