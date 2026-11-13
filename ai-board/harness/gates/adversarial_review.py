@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from runtime import prompt_roles
+from runtime import meter, prompt_roles
 from runtime.budget import BudgetExhausted
 from services import default_skills
 from repositories import server_hsm
@@ -15,7 +15,7 @@ SCHEMA = {'type': 'object', 'required': ['verdict', 'findings'], 'properties': {
     'verdict': {'enum': ['pass', 'concerns']},
     'findings': {'type': 'array', 'maxItems': 8, 'items': {'type': 'object', 'required': ['severity', 'issue'], 'properties': {
         'severity': {'enum': list(SEVERITIES)}, 'issue': {'type': 'string'}}}}}}
-PROMPT = ('Review the diff below as an adversarial reviewer who knows nothing about its purpose. The change is hard to reverse '
+PROMPT = meter.register_prompt('adversarial_review', 'Review the diff below as an adversarial reviewer who knows nothing about its purpose. The change is hard to reverse '
           '(migration, auth, payment, file deletion or API schema). Look for data loss, missing rollback, authorization gaps, '
           'double charging, and breaking callers. Report only concrete problems found in the diff. '
           'Severity high means it must be fixed before merge. Return JSON {"verdict": "pass"|"concerns", "findings": [{"severity", "issue"}]}. '
@@ -40,6 +40,7 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
     try:
         server_hsm.authorize_action('model')
         body = deps.call_model(deps.models.gate1_model, PROMPT % diff, gate=4, budget=budget, db_path=db_path, proposal_id=proposal_id,
+                               prompt_name='adversarial_review',
                                format=SCHEMA, options=role_options, extra={**role_extra, 'system': system},
                                **({'role': 'gate4_review'} if routing else {}))
     except server_hsm.AuthorityError as error:

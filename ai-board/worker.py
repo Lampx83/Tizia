@@ -1415,7 +1415,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
                 cooldowns = dict(ollama.routing.cooldowns)
                 try:
                     Deps(models=ollama, notify=None).call_model(ollama.gate1_model, 'ok', gate=1,
-                        role=role, budget=budget, format=None,
+                        role=role, budget=budget, format=None, prompt_name='model_probe',
                         options={'num_predict': 1})
                 except Exception as error:
                     ollama.routing.cooldowns.clear()

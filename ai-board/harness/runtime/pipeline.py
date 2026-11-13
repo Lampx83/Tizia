@@ -78,7 +78,7 @@ class Unavailable:
 NUM_PREDICT = {2.5: 3072, 3: 3072}
 NUM_PREDICT_DEFAULT = 1024
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_PROMPT_LOCK = json.loads((PROMPTS_DIR / "prompts.lock.json").read_text(encoding="utf-8"))
+_PROMPT_LOCK = meter.prompt_lock()
 
 # Backoff cho lỗi hạ tầng thoáng qua khi gọi Ollama (GPU dùng chung, tenant khác chiếm chỗ →
 # 500/timeout/connection ngắt). 2 lần thử lại, 2s rồi 5s — đủ ngắn để không đội thời gian lease
@@ -420,7 +420,7 @@ class Deps:
         if prompt_name and prompt.startswith(context.manual()):
             prefix = context.manual() + prefix  # AIBOARD.md luôn đứng đầu, cũng là phần cố định
         self.trace.record(gate=gate, model=model, prompt=prompt, prompt_name=prompt_name,
-                          prompt_hash=_PROMPT_LOCK.get(prompt_name), static_prefix=prefix,
+                          static_prefix=prefix,
                           output=output, metrics=metrics, budget_units=n, result=result, error=error,
                           child=child, iteration=iteration, **({'provider': provider} if provider else {}),
                           **({'request': request} if request and hasattr(self.trace, 'open_span') else {}))

@@ -6,7 +6,9 @@ ollama (GPU tự host, dùng chung) = 1 đơn vị / giây GPU; api (thuê, chư
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import math
 import re
 import secrets
@@ -40,6 +42,59 @@ _SECRET = re.compile(
 
 def _ms(ns) -> int | None:
     return None if ns is None else int(ns) // 1_000_000
+
+
+_LOCK_PATH = Path(__file__).resolve().parent.parent / "prompts" / "prompts.lock.json"
+_lock_cache: dict[str, str] | None = None
+INLINE_PROMPTS: dict[str, str] = {"model_probe": "ok"}
+unidentified_calls = 0
+WARN_FIRST, WARN_EVERY = 5, 100
+
+
+def prompt_lock() -> dict[str, str]:
+    """prompts.lock.json name -> sha256, cached; {} if file missing."""
+    global _lock_cache
+    if _lock_cache is None:
+        try:
+            _lock_cache = json.loads(_LOCK_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _lock_cache = {}
+    return _lock_cache
+
+
+def register_prompt(name: str, template: str) -> str:
+    """Register in-code prompt template under name; return template."""
+    INLINE_PROMPTS[name] = template
+    return template
+
+
+def resolve_prompt_hash(name: str | None) -> str | None:
+    """sha256 of prompt template: lock entry for prompts/ files, else registered inline template."""
+    lock = prompt_lock()
+    if name in lock:
+        return lock[name]
+    return hashlib.sha256(INLINE_PROMPTS[name].encode("utf-8")).hexdigest() if name in INLINE_PROMPTS else None
+
+
+def identity_report(path: str | Path) -> dict:
+    """Trace jsonl -> {calls, null, null_rate, by_prompt: {name: {calls, errors}}}; null = missing prompt_name or prompt_hash."""
+    calls = null = 0
+    by_prompt: dict[str, dict] = {}
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if "call_id" not in rec or "gate" not in rec:
+            continue
+        calls += 1
+        if not (rec.get("prompt_name") and rec.get("prompt_hash")):
+            null += 1
+        if rec.get("prompt_name"):
+            row = by_prompt.setdefault(rec["prompt_name"], {"calls": 0, "errors": 0})
+            row["calls"] += 1
+            row["errors"] += rec.get("result") not in (None, "ok")
+    return {"calls": calls, "null": null, "null_rate": null / calls if calls else 0.0, "by_prompt": by_prompt}
 
 
 def measure(provider: str, body: dict, wall_ms: int) -> dict:
@@ -161,7 +216,7 @@ class Tracer:
                 self.close_span(span, status if span is self._open[0] else "unset",
                                 {"tizia.outcome": outcome} if outcome and span is self._open[0] else None)
 
-    def record(self, *, gate: float, model: str, prompt: str, prompt_name: str | None, prompt_hash: str | None,
+    def record(self, *, gate: float, model: str, prompt: str, prompt_name: str | None, prompt_hash: str | None = None,
                static_prefix: str, output: str, metrics: dict, budget_units: int, result: str,
                error: str | None = None, child: int | None = None, iteration: int = 0,
                provider: str | None = None, request: dict | None = None) -> dict:
@@ -171,6 +226,7 @@ class Tracer:
                 self.flush()  # 1 lô mỗi cổng; đầy lô thì xả trước khi thêm, để record cuối còn nhận được phần đánh giá
             self._seq += 1
             seq = self._seq
+        prompt_hash = prompt_hash or resolve_prompt_hash(prompt_name)
         variable = prompt[len(static_prefix):] if static_prefix and prompt.startswith(static_prefix) else prompt
         variable, output = redact(variable), redact(output)
         rec = {
@@ -182,6 +238,11 @@ class Tracer:
             "at": int(time.time() * 1000),
             "notes": notes, "edits": None, "evaluation": [],
         }
+        if not (prompt_name and prompt_hash):
+            global unidentified_calls
+            unidentified_calls += 1
+            if unidentified_calls <= WARN_FIRST or unidentified_calls % WARN_EVERY == 0:
+                logging.getLogger(__name__).warning("model call without prompt identity: call_id=%s (total %d)", rec["call_id"], unidentified_calls)
         self._local.notes = []
         self._chat_span(rec, metrics, request or {})
         self._write({**rec, "prompt_var": variable, "output": output})
