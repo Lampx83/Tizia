@@ -67,7 +67,7 @@ export function lintSkill(text, { source = 'admin', version = null, name = null 
       : `DEFAULT SKILL ${meta.name} v${meta.version} (advisory):\n${body}`;
     const tokens = counter.count(rendered);
     if (!body || tokens > Number(meta.max_tokens)) throw bad('Skill exceeds token cap');
-    if ((body.match(/^\d+\. /gm) || []).length > 7 || FORBIDDEN.test(body)) throw bad('Skill requests authority or exceeds seven rules');
+    if (FORBIDDEN.test(body)) throw bad('Skill requests authority');
     return { ok: true, errors: [], name: meta.name, task_types: types, source, version: Number(meta.version),
       max_tokens: Number(meta.max_tokens), body, token_count: tokens, token_method: counter.method, hash: hash(text) };
   } catch (error) {

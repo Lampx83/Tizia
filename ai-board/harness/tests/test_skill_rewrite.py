@@ -57,7 +57,7 @@ def test_rewrite_is_thinking_off_authoring_in_system_original_as_advisory_data_a
     extract, rewrite, smoke = models.calls
     for call in (extract, rewrite, smoke):
         assert call['extra']['thinking'] is False
-    assert 'Preserve the uploaded intent' in rewrite['extra']['system']
+    assert 'Use seven parts' in rewrite['extra']['system']
     assert 'Keep labels clear' not in rewrite['extra']['system']
     assert '<ADMIN_SKILL name="frontend-example"' in extract['prompt']
     assert '&lt;/ADMIN_SKILL&gt;' in rewrite['prompt']
