@@ -73,7 +73,6 @@ class Settings(BaseSettings):
     state_file: bool = False
     gate1_arbiter: bool = True
     gate1_arbiter_min: float = Field(default=0.97, ge=0.5, le=1.0)
-    verify_preloaded_bases: bool = True  # gate 5 guest: FROM node:20-alpine@sha256 pin → tag (base preloaded without digest)
     no_oracle_review_any: bool = True  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
 
