@@ -156,7 +156,7 @@ def site_personal_surfaces(checkout: str | Path | None, skip: frozenset[str] = f
 _CONTENT_DATA = re.compile(r"^public/(?:js/(?:scenarios|domains)/.+\.(?:js|json)|.+\.json)$")
 _ANSWER_KEY = re.compile(r"""(?:^|[\s{,"'])(?:answer|correct|ans|correctIndex|answerIndex)["']?\s*:""")
 _SOVEREIGNTY_MAP = re.compile(r"(?:^|/)(?:ban-do-vn|ban-do-viet-nam|vietnam-map|vn-map)[^/]*$|(?:^|/)maps?/.*(?:vn|vietnam)", re.I)
-_VISIBLE_FILE = re.compile(r"^(?:public/.+\.(?:html?|svg|m?js|json)|server/contexts/_ai-generated/.+\.m?js)$")
+_VISIBLE_FILE = re.compile(r"^(?:public/.+\.(?:html?|svg|m?js|json)|" + re.escape(path_policy.GENERATED_ROOT) + r".+\.m?js)$")
 _BLOCK = re.compile(r"<(script|style)\b.*?</\1\s*>", re.I | re.S)
 _TAG = re.compile(r"<[^>]*>")
 _ATTR_TEXT = re.compile(r"""\b(?:alt|title|placeholder|aria-label|content|value)\s*=\s*["']([^"']*)["']""", re.I)
@@ -522,7 +522,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
                     strong.add(host.lower())
                     if not host_allowed(host):
                         add("external_script", "critical", f"{path}: nạp script/tài nguyên từ origin ngoài ({host.lower()})")
-            if path.startswith(("public/", "server/contexts/_ai-generated/")):
+            if path.startswith("public/") or path_policy.may_edit(path):
                 for host in {m.group(1).lower() for m in _URL.finditer(line)} - strong:
                     if not host_allowed(host):
                         add("external_link", "medium", f"{path}: link tới domain ngoài allowlist ({host})")

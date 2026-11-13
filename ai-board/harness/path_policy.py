@@ -10,6 +10,8 @@ _DENY = [re.compile(p, re.I) for p in _LEXICON["deny_paths"]["patterns"]]
 _PARTS = frozenset(part.lower() for part in _LEXICON["deny_paths"]["parts"])
 _ROOTS = tuple(_LEXICON["code_index"]["roots"])
 _CONTROL = re.compile(r"[\x00-\x1f]")
+GENERATED_DIR = "_ai-generated"
+GENERATED_ROOT = f"server/contexts/{GENERATED_DIR}/"
 
 
 def denied_parts() -> frozenset[str]:
@@ -45,6 +47,11 @@ def check(path, op: str = "read") -> dict:
 
 def denied(path, op: str = "read") -> bool:
     return not check(path, op)["allow"]
+
+
+def may_edit(path, role: str = "student") -> bool:
+    """Backend code ghi được ở path này với vai role? Hiện chỉ GENERATED_ROOT, mọi vai."""
+    return str(path).startswith(GENERATED_ROOT)
 
 
 def names_scope(test_text: str, scope) -> bool:
