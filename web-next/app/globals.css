@@ -29,6 +29,13 @@
     --input: 0 0% 89.8%;
     --ring: 32 95% 40%;
     --radius: 0.75rem;
+    /* Màu ngữ nghĩa (đúng / cảnh báo / thông tin) — dùng thay #10b981, #f59e0b, #3b82f6 viết cứng */
+    --success: 152 76% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 40%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 80% 46%;
+    --info-foreground: 0 0% 100%;
   }
   .dark {
     /* Nền slate của Tizia (không phải xám shadcn mặc định) */
@@ -51,6 +58,12 @@
     --border: 217 33% 27%;
     --input: 217 33% 27%;
     --ring: 43 96% 56%;
+    --success: 158 64% 52%;
+    --success-foreground: 222 47% 11%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+    --info: 213 94% 68%;
+    --info-foreground: 222 47% 11%;
   }
 }
 

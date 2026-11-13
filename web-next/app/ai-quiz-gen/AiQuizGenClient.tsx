@@ -43,7 +43,7 @@ const TOPIC_PRESETS: Record<string, string> = {
 type Msg = { kind: 'err' | 'ok'; node: React.ReactNode } | null;
 
 const selectCls =
-  'w-full rounded-[10px] border border-border bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-[#fbbf24] focus:outline-none';
+  'w-full rounded-[10px] border border-border bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none';
 const labelCls =
   'mb-1.5 mt-2.5 block text-[11px] font-bold uppercase tracking-wide text-muted-foreground';
 
@@ -150,7 +150,7 @@ export default function AiQuizGenClient() {
         node: (
           <>
             ✓ Đăng thành công!{' '}
-            <a href="/ugc/index.html" className="text-[#fbbf24] underline">
+            <a href="/ugc/index.html" className="text-primary underline">
               Xem trong marketplace →
             </a>
           </>
@@ -196,7 +196,7 @@ export default function AiQuizGenClient() {
           'mt-3.5 rounded-[10px] px-3.5 py-2.5 text-[13px]',
           m.kind === 'err'
             ? 'border-l-[3px] border-[#fb7185] bg-[rgba(239,68,68,0.10)] text-[#fda4af]'
-            : 'border-l-[3px] border-[#34d399] bg-[rgba(34,197,94,0.10)] text-[#86efac]',
+            : 'border-l-[3px] border-success bg-[rgba(34,197,94,0.10)] text-[#86efac]',
         )}
       >
         {m.node}
@@ -334,7 +334,7 @@ export default function AiQuizGenClient() {
               rows={2}
               maxLength={500}
               placeholder="Mô tả"
-              className="w-full rounded-[10px] border border-border bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-[#fbbf24] focus:outline-none"
+              className="w-full rounded-[10px] border border-border bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
               value={pDesc}
               onChange={(e) => setPDesc(e.target.value)}
             />
@@ -353,7 +353,7 @@ export default function AiQuizGenClient() {
                       className={cn(
                         'my-1 block rounded-lg px-2.5 py-1.5 text-[13px]',
                         j === q.correct
-                          ? 'bg-[rgba(34,197,94,0.18)] font-bold text-[#34d399]'
+                          ? 'bg-[rgba(34,197,94,0.18)] font-bold text-success'
                           : 'bg-white/[0.03]',
                       )}
                     >

@@ -259,7 +259,7 @@ export default function Leaderboard() {
             <div className="empty">
               <div className="ic">🔐</div>
               <p>Đăng nhập để xem các bạn đang dẫn đầu.</p>
-              <a href="/login?return=/bang-phong-than">Đăng nhập</a>
+              <Link href="/login?return=%2Fbang-phong-than">Đăng nhập</Link>
             </div>
           ) : entries.length === 0 ? (
             <div className="empty">

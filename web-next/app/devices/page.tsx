@@ -157,7 +157,7 @@ export default function DevicesPage() {
               ))}
             </ul>
             <div
-              className="mt-auto rounded-lg bg-black/25 px-3 py-2 text-xs [&_b]:text-[#fbbf24]"
+              className="mt-auto rounded-lg bg-black/25 px-3 py-2 text-xs [&_b]:text-primary"
               dangerouslySetInnerHTML={{ __html: `💡 ${d.rec}` }}
             />
           </div>

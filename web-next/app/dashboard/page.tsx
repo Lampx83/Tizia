@@ -6,6 +6,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
+import { LoginRequired } from '@/components/ui/empty-state';
 
 // "Migrate trang thật": bản Next của dashboard.html (bảng điều khiển giáo viên) —
 // thống kê theo chế độ + bảng xếp hạng, tất cả tương tác bằng state React, dữ liệu
@@ -33,12 +35,13 @@ export default function Dashboard() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [minScore, setMinScore] = useState(0);
+  const [needLogin, setNeedLogin] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     fetch(`/api/leaderboard?version=${mode}&limit=20`, { credentials: 'same-origin' })
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => { if (r.status === 401) { if (alive) setNeedLogin(true); return []; } return r.ok ? r.json() : []; })
       .then((data) => { if (alive) { setRows(Array.isArray(data) ? data : []); setLoading(false); } })
       .catch(() => { if (alive) { setRows([]); setLoading(false); } });
     return () => { alive = false; };
@@ -54,12 +57,12 @@ export default function Dashboard() {
 
   const filtered = rows.filter((r) => r.score >= minScore);
 
+  const header = <PageHeader icon="📊" title="Bảng điều khiển" description="Thống kê học tập và xếp hạng theo từng chế độ chơi." />;
+  if (needLogin) return <div className="space-y-6">{header}<LoginRequired returnTo="/dashboard" description="Đăng nhập để xem thống kê và bảng xếp hạng của bạn." /></div>;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">📊 Bảng điều khiển</h1>
-        <p className="text-muted-foreground">Thống kê + xếp hạng theo chế độ — state React, không reload.</p>
-      </div>
+      {header}
 
       <Tabs value={mode} onValueChange={setMode}>
         <TabsList>
@@ -101,7 +104,7 @@ export default function Dashboard() {
           {loading ? (
             <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-9" />)}</div>
           ) : filtered.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">Không có kết quả (hạ điểm tối thiểu, hoặc backend chưa chạy).</p>
+            <p className="py-4 text-sm text-muted-foreground">Chưa có kết quả nào ở chế độ này{minScore ? ' với mức điểm tối thiểu đã chọn' : ''}.</p>
           ) : (
             <ul className="divide-y">
               {filtered.map((r, i) => (

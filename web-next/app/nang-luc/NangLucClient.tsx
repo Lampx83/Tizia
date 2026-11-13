@@ -346,7 +346,7 @@ function ClassRoster({
     <div className="space-y-4">
       <div className="rounded-2xl border border-[rgba(251,191,36,.35)] bg-[linear-gradient(135deg,rgba(251,191,36,.18),rgba(251,191,36,.03))] px-6 py-5">
         <h2 className="text-xl font-bold">
-          🎓 Lớp <span className="text-[#34d399]">{cls.name || cls.code}</span>
+          🎓 Lớp <span className="text-success">{cls.name || cls.code}</span>
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           {members.length} HS trong lớp. Bấm vào HS để xem cây năng lực chi tiết. (Chỉ HS đã làm bài
@@ -448,13 +448,13 @@ function Tree({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-2xl font-extrabold text-[#fbbf24]">{pct}%</div>
+            <div className="text-2xl font-extrabold text-primary">{pct}%</div>
             <div className="text-[11px] font-semibold text-muted-foreground">Tiến độ</div>
           </div>
         </div>
         <div className="min-w-[260px] flex-1">
           <h2 className="text-[22px] font-bold">
-            {whoName} đã đạt <span className="text-[#34d399]">{summary.earned}</span> /{' '}
+            {whoName} đã đạt <span className="text-success">{summary.earned}</span> /{' '}
             {summary.total} kỹ năng
           </h2>
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -565,7 +565,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
         <span>Đã đạt</span>
         <span>
-          <b className="text-[#34d399]">{earned}</b>/{total} ({coveragePct}%)
+          <b className="text-success">{earned}</b>/{total} ({coveragePct}%)
         </span>
       </div>
       <div className="mb-2.5 h-2 overflow-hidden rounded-lg bg-white/[.07]">
@@ -577,7 +577,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
       <div className="mb-2 mt-2.5 flex justify-between text-xs text-muted-foreground">
         <span>Thành thạo</span>
         <span>
-          <b className="text-[#34d399]">{masteryPct}%</b>
+          <b className="text-success">{masteryPct}%</b>
           <span className="text-[11px] opacity-60"> · TB {avgMasteryPct}%</span>
         </span>
       </div>
@@ -598,7 +598,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
               <span
                 key={s.code}
                 title={`${s.domain ? DOMAIN_LABEL[s.domain] || '' : ''} · Thành thạo ${s.mastery_pct}%`}
-                className="inline-flex flex-col items-stretch gap-[3px] rounded-[14px] border border-[rgba(16,185,129,.4)] bg-[rgba(16,185,129,.16)] px-2.5 py-1 text-[11.5px] text-[#34d399]"
+                className="inline-flex flex-col items-stretch gap-[3px] rounded-[14px] border border-[rgba(16,185,129,.4)] bg-[rgba(16,185,129,.16)] px-2.5 py-1 text-[11.5px] text-success"
               >
                 {s.name}
                 <span className="h-[3px] overflow-hidden rounded-sm bg-white/[.18]">

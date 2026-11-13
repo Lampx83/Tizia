@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, LoginRequired } from '@/components/ui/empty-state';
 
 // ── Kiểu dữ liệu khớp API DB (server/contexts/economy/index.js) ──
 type ShopItem = {
@@ -61,13 +63,13 @@ const RARITY_BORDER: Record<string, string> = {
   common: 'border-white/10',
   rare: 'border-[#60a5fa]/40 shadow-[0_4px_14px_rgba(96,165,250,.15)]',
   epic: 'border-[#a78bfa]/50 shadow-[0_4px_18px_rgba(167,139,250,.2)]',
-  legendary: 'border-[#fbbf24]/55 shadow-[0_6px_22px_rgba(251,191,36,.25)]',
+  legendary: 'border-primary/55 shadow-[0_6px_22px_rgba(251,191,36,.25)]',
 };
 const RARITY_TAG: Record<string, string> = {
   common: 'bg-white/[.08] text-[#9aa3c7]',
   rare: 'bg-[#60a5fa]/20 text-[#60a5fa]',
   epic: 'bg-[#a78bfa]/25 text-[#c4b5fd]',
-  legendary: 'bg-[#fbbf24]/25 text-[#fbbf24]',
+  legendary: 'bg-primary/25 text-primary',
 };
 
 export default function CuaHang() {
@@ -77,6 +79,7 @@ export default function CuaHang() {
   const [currentTab, setCurrentTab] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needLogin, setNeedLogin] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +88,7 @@ export default function CuaHang() {
         fetch('/api/shop/me', { credentials: 'same-origin' }),
         fetch('/api/wallet', { credentials: 'same-origin' }),
       ]);
+      if (shopRes.status === 401) setNeedLogin(true);
       if (shopRes.ok) {
         const d = await shopRes.json();
         setItems(d.items || []);
@@ -177,7 +181,7 @@ export default function CuaHang() {
           ← Trang chủ
         </Link>
         <h1 className="text-lg font-semibold tracking-tight">🛒 Cửa hàng skin &amp; avatar</h1>
-        <div className="ml-auto rounded-[14px] bg-[#fbbf24]/15 px-3.5 py-1.5 text-sm font-extrabold text-[#fbbf24]">
+        <div className="ml-auto rounded-[14px] bg-primary/15 px-3.5 py-1.5 text-sm font-extrabold text-primary">
           {coins} 🪙
         </div>
       </div>
@@ -200,11 +204,15 @@ export default function CuaHang() {
       </div>
 
       {loading ? (
-        <div className="py-10 text-center text-muted-foreground">Đang tải…</div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+          {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+        </div>
+      ) : needLogin ? (
+        <LoginRequired returnTo="/cua-hang" description="Đăng nhập để đổi xu lấy skin, khung avatar và danh hiệu." />
       ) : error ? (
-        <p className="py-10 text-center text-[#fb7185]">Lỗi: {error}</p>
+        <EmptyState tone="error" icon="⚠️" title="Không tải được cửa hàng" description="Kiểm tra mạng rồi tải lại trang." />
       ) : display.length === 0 ? (
-        <div className="py-10 text-center text-muted-foreground">Không có item nào.</div>
+        <EmptyState icon="🛍️" title="Chưa có vật phẩm nào ở mục này" description="Thử chọn mục khác ở thanh phía trên." />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
           {display.map((i) => (
@@ -229,20 +237,20 @@ export default function CuaHang() {
                 {i.description || ''}
               </div>
               {!i.owned && (
-                <div className="mb-2 text-[13px] font-extrabold text-[#fbbf24]">{i.price_coin} 🪙</div>
+                <div className="mb-2 text-[13px] font-extrabold text-primary">{i.price_coin} 🪙</div>
               )}
               {i.owned ? (
                 i.equipped ? (
                   <button
                     disabled
-                    className="w-full cursor-not-allowed rounded-[10px] border border-[#34d399] bg-[#34d399] px-3.5 py-2 text-[12.5px] font-bold text-[#052e16]"
+                    className="w-full cursor-not-allowed rounded-[10px] border border-success bg-success px-3.5 py-2 text-[12.5px] font-bold text-[#052e16]"
                   >
                     ✓ Đang dùng
                   </button>
                 ) : (
                   <button
                     onClick={() => equip(i.id)}
-                    className="w-full cursor-pointer rounded-[10px] border border-[#34d399] bg-[#22c55e]/[.18] px-3.5 py-2 text-[12.5px] font-bold text-[#34d399]"
+                    className="w-full cursor-pointer rounded-[10px] border border-success bg-[#22c55e]/[.18] px-3.5 py-2 text-[12.5px] font-bold text-success"
                   >
                     Dùng item này
                   </button>

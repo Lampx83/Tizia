@@ -320,7 +320,7 @@ export default function PediatricDose() {
             </div>
             {fb && (
               <div
-                className={'mt-2.5 text-[13.5px] ' + (fb.ok ? 'text-[#34d399]' : 'text-[#f87171]')}
+                className={'mt-2.5 text-[13.5px] ' + (fb.ok ? 'text-success' : 'text-[#f87171]')}
                 dangerouslySetInnerHTML={{ __html: fb.html }}
               />
             )}

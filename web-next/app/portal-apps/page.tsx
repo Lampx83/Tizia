@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import PortalAppsClient, { type PortalApp } from './PortalAppsClient';
+import { LoginRequired } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata: Metadata = pageMeta({
   title: 'Portal Apps · Cài app cho dev',
@@ -19,19 +20,8 @@ export default async function PortalAppsPage() {
   if (res.status === 401 || !res.ok || !res.data) {
     return (
       <div className="w-full space-y-6 py-8">
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight">
-            🧩 Portal Apps{' '}
-            <span className="text-base font-semibold text-muted-foreground">· Developer dashboard</span>
-          </h1>
-        </div>
-        <div className="rounded-xl border border-dashed border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
-          Cần{' '}
-          <Link href="/login" className="font-medium text-primary hover:underline">
-            đăng nhập
-          </Link>{' '}
-          để xem app.
-        </div>
+        <PageHeader icon="🧩" title="Portal Apps" description="Ứng dụng web chạy trong Tizia theo chuẩn AI Portal." />
+        <LoginRequired returnTo="/portal-apps" description="Đăng nhập để xem các ứng dụng đã cài." />
       </div>
     );
   }

@@ -322,8 +322,8 @@ export default async function IndexPage() {
             <div className={styles.gbText}>
               <b>Bạn đang dùng thử ở chế độ khách.</b> Vào được trường <b>Mầm non</b> — các trường khác cần đăng nhập để mở khoá.
             </div>
-            <a className={styles.gbCta} href="/login?return=%2F">Đăng nhập</a>
-            <a className={styles.gbAlt} href="/register">Tạo tài khoản</a>
+            <Link className={styles.gbCta} href="/login?return=%2F">Đăng nhập</Link>
+            <Link className={styles.gbAlt} href="/register">Tạo tài khoản</Link>
           </div>
         </div>
       )}

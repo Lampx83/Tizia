@@ -14,6 +14,7 @@ import { pageMeta } from '@/lib/seo';
 import { notFound, redirect } from 'next/navigation';
 import { tiziaFetch } from '@/lib/tizia';
 import { appIcon } from '@/lib/app-icon';
+import { LoginRequired } from '@/components/ui/empty-state';
 
 type PortalApp = {
   id: number | string;
@@ -63,16 +64,7 @@ export default async function AppFramePage({ params }: { params: Promise<{ alias
 
   if (res.status === 401) {
     return (
-      <div className="mx-auto w-full max-w-lg py-16 text-center">
-        <div className="mb-3 text-[44px]">🔒</div>
-        <h1 className="mb-2 text-lg font-bold">Cần đăng nhập để mở ứng dụng</h1>
-        <Link
-          href={`/login?return=${encodeURIComponent(`/app/${alias}`)}`}
-          className="inline-block rounded-lg bg-primary px-4 py-2 text-[14px] font-bold text-primary-foreground hover:opacity-90"
-        >
-          Đăng nhập
-        </Link>
-      </div>
+      <LoginRequired className="my-12" returnTo={`/app/${alias}`} title="Cần đăng nhập để mở ứng dụng" />
     );
   }
 

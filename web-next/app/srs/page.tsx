@@ -3,6 +3,7 @@ import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { tiziaFetch } from '@/lib/tizia';
 import SrsClient, { type Deck, type Stats } from './srs-client';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata: Metadata = pageMeta({
   title: '🃏 Flashcards SRS',
@@ -42,9 +43,7 @@ export default async function SrsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">🃏 Flashcards SRS</h1>
-      </div>
+      <PageHeader icon="🃏" title="Thẻ ghi nhớ" description="Ôn lại đúng lúc sắp quên (lặp lại ngắt quãng)." />
       <SrsClient initialStats={stats} initialDecks={decks} />
     </div>
   );

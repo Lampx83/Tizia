@@ -152,7 +152,7 @@ export default async function League() {
                   : '';
             const rankColor =
               rank === 1
-                ? 'text-[#fbbf24]'
+                ? 'text-primary'
                 : rank === 2
                   ? 'text-[#c0c0c0]'
                   : rank === 3

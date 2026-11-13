@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
+import { LoginRequired } from '@/components/ui/empty-state';
 import NangLucClient, {
   type MeUser,
   type FamilyMe,
@@ -21,18 +21,7 @@ export default async function NangLucPage() {
   const meRes = await tiziaFetch<{ user: MeUser | null }>('/api/auth/me');
   if (meRes.status === 401 || !meRes.data?.user) {
     return (
-      <div className="mx-auto max-w-[560px] rounded-2xl border border-dashed border-border bg-card py-12 text-center">
-        <h3 className="text-lg font-semibold">🔐 Em chưa đăng nhập</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Đăng nhập để theo dõi cây năng lực theo khung GDPT 2018.
-        </p>
-        <Link
-          href="/login?return=%2Fnang-luc"
-          className="mt-3 inline-block rounded-xl bg-primary px-5 py-2.5 font-bold text-primary-foreground hover:opacity-90"
-        >
-          Đăng nhập
-        </Link>
-      </div>
+      <LoginRequired returnTo="/nang-luc" title="Em chưa đăng nhập" description="Đăng nhập để theo dõi cây năng lực theo khung GDPT 2018." />
     );
   }
   const me = meRes.data.user;
