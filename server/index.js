@@ -1532,7 +1532,6 @@ r.get(/.*/, async (req, res, next) => {
   else if (/\.[a-z0-9]+$/i.test(u)) return next();        // không phải HTML
   else rel = u.slice(1) + '.html';                         // express.static({extensions:['html']})
   const file = path.resolve(PUBLIC_DIR, rel);
-  if (u === '/cay-tri-thuc.html') console.log('[HTML-DEBUG] rel=', rel, 'file=', file);
   if (!file.startsWith(PUBLIC_DIR + path.sep)) return next(); // chống path traversal
   try {
     const html = await fs.readFile(file, 'utf8');
