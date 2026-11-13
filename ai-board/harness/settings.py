@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = False
     compile_prose_verify: bool = False
-    gate1_unified_verify: bool = False  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
+    gate1_unified_verify: bool = True  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
     stop_report_v2: bool = True
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
     explore_low_confidence: bool = False
