@@ -441,6 +441,7 @@ class _Execution:
             "checkout_source": str(self.checkout_source), "skill_id": f"ticket-{self.ticket_id}",
             # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (và gửi sang guest nếu dùng sandbox).
             "acceptance": list(execution_plan.get("acceptance") or []),
+            **getattr(getattr(self.deps, "network", None), "broker_state", dict)(),
         }
         if seed:  # gate 3 da xong trong journal: dung lai state + scratch, khong goi model lai
             state.update(seed.get("candidate_state") or {})
@@ -854,7 +855,7 @@ class _Execution:
 
     def _network_fields(self) -> dict:
         report = getattr(getattr(self.deps, "network", None), "report", lambda: {})()
-        return {"network_requests": report} if report.get("pending") or report.get("auto_denied") else {}
+        return {"network_requests": report} if report.get("pending") or report.get("auto_denied") or report.get("dependencies") else {}
 
     def verdict(self) -> str:
         gates, kind, last = self.gates, self.kind, self.gates[-1]
@@ -1058,8 +1059,10 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                 "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
     catalog = policy.get("capabilities") if policy is not None else None
     if network_decisions is not None and dataclasses.is_dataclass(deps):
-        from runtime import network_request
-        deps = dataclasses.replace(deps, network=network_request.Queue(network_decisions))
+        from runtime import network_request, package_broker
+        broker = package_broker.configured(checkout_source, get_settings().package_broker_dir, get_settings().package_layer_cap)
+        deps = dataclasses.replace(deps, network=network_request.Queue(
+            network_decisions, broker=network_request.FetchBroker(fallback=broker)))
     extra = {"carried": reverify["candidate"], "tip": reverify["tip"]} if reverify else {}
     execution = (_Reverification if reverify else _Execution)(
         plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget, run_gate=run_gate, cleanup=cleanup,
@@ -2317,7 +2320,9 @@ def main(argv: list[str] | None = None) -> int:
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
                                                      progress=worker.gate_started)
         github = _forge(candidate, github_token)
-        worker.candidates = candidate.Candidates(repo, github=github)
+        from runtime import package_broker
+        worker.candidates = candidate.Candidates(repo, github=github,
+                                                 broker_receipts=package_broker.receipts_path(get_settings().package_broker_dir))
         if get_settings().private_preview_enabled:
             from preview import PreviewPublisher
             worker.preview_publisher = PreviewPublisher(base_url, key)

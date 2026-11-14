@@ -2,13 +2,21 @@ const KINDS = new Set(['package', 'fetch_url']);
 const MAX_REQUESTS = 20;
 const text = (value, max) => String(value ?? '').slice(0, max);
 
+const cleanMetadata = (raw) => (raw && typeof raw === 'object' ? {
+  version: text(raw.version, 80), license: text(raw.license, 80),
+  age_days: Number.isFinite(raw.age_days) ? raw.age_days : null,
+  weekly_downloads: Number.isFinite(raw.weekly_downloads) ? raw.weekly_downloads : null,
+  install_scripts: (Array.isArray(raw.install_scripts) ? raw.install_scripts : []).slice(0, 5).map(item => text(item, 120)),
+  transitive_count: Number.isInteger(raw.transitive_count) ? raw.transitive_count : null,
+} : undefined);
+
 /** Làm sạch phần `network_requests` của verdict; bỏ mục sai hình dạng. */
 export function cleanNetworkReport(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const pending = (Array.isArray(raw.pending) ? raw.pending : []).filter((item) => item && KINDS.has(item.kind) && /^[A-Za-z0-9_.:@/-]{1,120}$/.test(String(item.call_id)))
     .slice(0, MAX_REQUESTS).map((item) => ({
       kind: item.kind, call_id: String(item.call_id), reason: text(item.reason, 500),
-      ...(item.kind === 'package' ? { name: text(item.name, 214), version_range: text(item.version_range, 80) } : { url: text(item.url, 500) }),
+      ...(item.kind === 'package' ? { name: text(item.name, 214), version_range: text(item.version_range, 80), metadata: cleanMetadata(item.metadata) } : { url: text(item.url, 500) }),
     }));
   const autoDenied = Number.isInteger(raw.auto_denied) && raw.auto_denied > 0 ? raw.auto_denied : 0;
   return pending.length || autoDenied ? { pending, auto_denied: autoDenied } : null;

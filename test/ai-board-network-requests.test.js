@@ -70,6 +70,9 @@ test('report cleaning drops malformed entries and empty reports', () => {
   assert.equal(cleanNetworkReport({ pending: [{ kind: 'shell', call_id: 'x' }, { kind: 'package', call_id: 'bad id!' }] }), null);
   assert.deepEqual(cleanNetworkReport({ pending: [], auto_denied: 3 }), { pending: [], auto_denied: 3 });
   assert.equal(cleanNetworkReport('x'), null);
+  const [card] = cleanNetworkReport({ pending: [{ kind: 'package', call_id: 'pkg:a', name: 'a', version_range: '^1', reason: 'r',
+    metadata: { version: '1.2.0', license: 'MIT', age_days: 400, weekly_downloads: 9, install_scripts: [], transitive_count: 2, junk: 1 } }] }).pending;
+  assert.deepEqual(card.metadata, { version: '1.2.0', license: 'MIT', age_days: 400, weekly_downloads: 9, install_scripts: [], transitive_count: 2 });
 });
 
 test('recording the same verdict twice does not duplicate pending rows', async () => {
