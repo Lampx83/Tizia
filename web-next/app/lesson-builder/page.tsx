@@ -403,7 +403,7 @@ export default function LessonBuilder() {
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onClick={() => addBlock(it.type)}
-                  className="mb-1.5 flex cursor-grab items-center gap-2 rounded-[10px] border border-white/10 bg-white/5 px-3 py-2.5 text-[13px] hover:bg-white/10 active:scale-[0.97]"
+                  className="mb-1.5 flex cursor-grab items-center gap-2 rounded-[10px] border border-white/10 bg-white/5 px-3 py-2.5 text-sm hover:bg-white/10 active:scale-[0.97]"
                 >
                   <span className="shrink-0 text-lg">{it.ico}</span>
                   {it.label}
@@ -411,7 +411,7 @@ export default function LessonBuilder() {
               ))}
             </div>
           ))}
-          <p className="mt-3.5 text-[11px] leading-relaxed opacity-60">
+          <p className="mt-3.5 text-2xs leading-relaxed opacity-60">
             💡 Kéo khối từ đây sang vùng giữa. Trên di động, bấm khối để thêm.
           </p>
         </div>
@@ -440,7 +440,7 @@ export default function LessonBuilder() {
             }}
           >
             {blocks.length === 0 ? (
-              <div className="px-5 py-10 text-center text-[13px] opacity-70">
+              <div className="px-5 py-10 text-center text-sm opacity-70">
                 Kéo khối từ panel bên trái vào đây để bắt đầu xây bài giảng.<br />
                 Tự động lưu khi anh chị Publish hoặc bấm 💾 Lưu.
               </div>
@@ -465,36 +465,36 @@ export default function LessonBuilder() {
 
         {/* PREVIEW */}
         <div className="max-h-[80vh] overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-3.5">
-          <h3 className="my-1 text-[13px] opacity-85">📊 Tổng quan</h3>
+          <h3 className="my-1 text-sm opacity-85">📊 Tổng quan</h3>
           <div className="text-xs leading-relaxed opacity-85">
             {blocks.length} khối · {currentSlug ? 'slug=' + currentSlug : 'chưa lưu'}
           </div>
 
           {shareUrl && (
             <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-              <div className="mb-1.5 text-[11px] opacity-70">🔗 URL share cho HS:</div>
+              <div className="mb-1.5 text-2xs opacity-70">🔗 URL share cho HS:</div>
               <a href={shareUrl} target="_blank" rel="noreferrer" className="break-all text-xs text-emerald-300">{shareUrl}</a>
               <div className="mt-2 flex gap-1.5">
                 <button
-                  className="rounded-md border-none bg-emerald-500/20 px-2.5 py-1 text-[11px] text-emerald-300"
+                  className="rounded-md border-none bg-emerald-500/20 px-2.5 py-1 text-2xs text-emerald-300"
                   onClick={() => navigator.clipboard.writeText(shareUrl)}
                 >📋 Copy</button>
                 <button
-                  className="rounded-md border-none bg-sky-500/20 px-2.5 py-1 text-[11px] text-sky-300"
+                  className="rounded-md border-none bg-sky-500/20 px-2.5 py-1 text-2xs text-sky-300"
                   onClick={() => window.open(shareUrl, '_blank')}
                 >👁 Xem</button>
               </div>
             </div>
           )}
 
-          <h3 className="mt-[18px] text-[13px] opacity-85">📋 Cấu trúc bài</h3>
-          <div className="text-[11px] leading-relaxed opacity-85">
+          <h3 className="mt-[18px] text-sm opacity-85">📋 Cấu trúc bài</h3>
+          <div className="text-2xs leading-relaxed opacity-85">
             {blocks.map((b, i) => (
               <div key={i}>{i + 1}. {blockLabel(b)}</div>
             ))}
           </div>
 
-          <h3 className="mt-[18px] text-[13px] opacity-85">🔧 Mã JSON</h3>
+          <h3 className="mt-[18px] text-sm opacity-85">🔧 Mã JSON</h3>
           <pre className="max-h-[280px] overflow-y-auto whitespace-pre rounded-lg bg-black/30 p-2.5 font-mono text-[10px] leading-snug">
             {JSON.stringify(blocks, null, 2)}
           </pre>
@@ -504,7 +504,7 @@ export default function LessonBuilder() {
       {/* TOAST */}
       {toast && (
         <div
-          className="fixed bottom-[18px] right-[18px] z-[999] rounded-[10px] px-4 py-2.5 text-[13px] text-white shadow-lg"
+          className="fixed bottom-[18px] right-[18px] z-[999] rounded-[10px] px-4 py-2.5 text-sm text-white shadow-lg"
           style={{ background: toast.kind === 'danger' ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : 'linear-gradient(135deg,#10b981,#059669)' }}
         >
           {toast.text}
@@ -518,7 +518,7 @@ export default function LessonBuilder() {
 // Editor cho một block — render field theo type.
 // ============================================================
 const inputCls =
-  'mb-1.5 w-full rounded-lg border border-white/15 bg-black/20 px-2.5 py-2 text-[13px] text-white';
+  'mb-1.5 w-full rounded-lg border border-white/15 bg-black/20 px-2.5 py-2 text-sm text-white';
 
 function BlockEditor({
   block: b,
@@ -544,12 +544,12 @@ function BlockEditor({
   return (
     <div className="relative mb-2.5 rounded-xl border border-white/10 bg-white/5 p-3.5 hover:border-white/25">
       <div className="mb-2 flex items-center gap-2">
-        <div className="rounded-full bg-amber-400 px-2.5 py-[3px] text-[11px] font-bold text-[#3e2723]">{b.type}</div>
+        <div className="rounded-full bg-amber-400 px-2.5 py-[3px] text-2xs font-bold text-[#3e2723]">{b.type}</div>
         <div className="text-xs tabular-nums opacity-55">#{i + 1}</div>
         <div className="ml-auto flex gap-1">
-          <button title="Lên" onClick={() => onMove(-1)} className="h-7 w-7 rounded-md border-none bg-white/5 text-[13px] text-white hover:bg-white/15">↑</button>
-          <button title="Xuống" onClick={() => onMove(1)} className="h-7 w-7 rounded-md border-none bg-white/5 text-[13px] text-white hover:bg-white/15">↓</button>
-          <button title="Xoá" onClick={onDel} className="h-7 w-7 rounded-md border-none bg-red-500/20 text-[13px] text-red-300 hover:bg-red-500/35">✕</button>
+          <button title="Lên" onClick={() => onMove(-1)} className="h-7 w-7 rounded-md border-none bg-white/5 text-sm text-white hover:bg-white/15">↑</button>
+          <button title="Xuống" onClick={() => onMove(1)} className="h-7 w-7 rounded-md border-none bg-white/5 text-sm text-white hover:bg-white/15">↓</button>
+          <button title="Xoá" onClick={onDel} className="h-7 w-7 rounded-md border-none bg-red-500/20 text-sm text-red-300 hover:bg-red-500/35">✕</button>
         </div>
       </div>
       <BlockFields b={b} i={i} total={total} onPatch={onPatch} onSetOption={onSetOption} onAddOption={onAddOption} onDelOption={onDelOption} />
@@ -558,7 +558,7 @@ function BlockEditor({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mb-0.5 text-[11px] opacity-75">{children}</div>;
+  return <div className="mb-0.5 text-2xs opacity-75">{children}</div>;
 }
 
 function BlockFields({
@@ -626,14 +626,14 @@ function BlockFields({
                 />
                 <input
                   type="text"
-                  className="m-0 flex-1 rounded-lg border border-white/15 bg-black/20 px-2.5 py-2 text-[13px] text-white"
+                  className="m-0 flex-1 rounded-lg border border-white/15 bg-black/20 px-2.5 py-2 text-sm text-white"
                   value={o}
                   onChange={(e) => onSetOption(j, e.target.value)}
                 />
                 <button className="h-7 w-[26px] rounded-md border-none bg-red-500/20 text-red-300" onClick={() => onDelOption(j)}>✕</button>
               </div>
             ))}
-            <button className="rounded-md border-none bg-sky-500/15 px-2.5 py-1 text-[11px] text-sky-300" onClick={onAddOption}>+ Thêm phương án</button>
+            <button className="rounded-md border-none bg-sky-500/15 px-2.5 py-1 text-2xs text-sky-300" onClick={onAddOption}>+ Thêm phương án</button>
           </div>
           <FieldLabel>Giải thích đáp án</FieldLabel>
           <input type="text" className={inputCls} value={b.explain || ''} onChange={(e) => onPatch({ explain: e.target.value })} />

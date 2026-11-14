@@ -38,6 +38,9 @@ const nextConfig = {
       // Nay cả hai đều gom về "/".
       { source: '/index.html', destination: '/', permanent: true },
       { source: '/index', destination: '/', permanent: true },
+      // Trang thử nghiệm SSR cũ đã gộp vào Bảng Phong Thần (bảng xếp hạng thật).
+      { source: '/leaderboard', destination: '/bang-phong-than', permanent: true },
+      { source: '/leaderboard.html', destination: '/bang-phong-than', permanent: true },
       ...MIGRATED.filter((p) => p !== 'index').map((p) => ({
         source: `/${p}.html`,
         destination: `/${p}`,

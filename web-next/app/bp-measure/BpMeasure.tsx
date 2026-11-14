@@ -280,7 +280,7 @@ export default function BpMeasure() {
           <canvas ref={canvasRef} width={300} height={300} className="block" />
           <div
             className={
-              'rounded-xl border px-4 py-2 text-[15px] font-bold ' +
+              'rounded-xl border px-4 py-2 text-base font-bold ' +
               (sound
                 ? 'border-[#fb7185] bg-[rgba(251,113,133,.22)] tz-bp-pulse'
                 : 'border-white/10 bg-white/5')
@@ -292,8 +292,8 @@ export default function BpMeasure() {
 
         <div className="min-w-[280px] max-w-[420px] flex-1">
           <div className="mb-[14px] rounded-[14px] border border-white/10 bg-white/5 px-[18px] py-4">
-            <h3 className="mb-[10px] text-[15px] font-semibold">Quy trình đo</h3>
-            <ol className="mt-1 list-decimal pl-[18px] text-[13px] leading-[1.7] opacity-85">
+            <h3 className="mb-[10px] text-base font-semibold">Quy trình đo</h3>
+            <ol className="mt-1 list-decimal pl-[18px] text-sm leading-[1.7] opacity-85">
               <li>
                 Bấm <b>Bơm</b> để bơm bao đo lên ~180 mmHg.
               </li>
@@ -340,7 +340,7 @@ export default function BpMeasure() {
 
           {result && (
             <div className="mb-[14px] rounded-[14px] border border-white/10 bg-white/5 px-[18px] py-4">
-              <h3 className="mb-[10px] text-[15px] font-semibold">Kết quả</h3>
+              <h3 className="mb-[10px] text-base font-semibold">Kết quả</h3>
               <div className="text-[34px] font-extrabold text-[#fb7185]">
                 {result.mSys}/{result.mDia} mmHg
               </div>

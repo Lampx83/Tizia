@@ -147,7 +147,7 @@ export default function FamilyClient({ initial }: { initial: FamilyMe }) {
             {addMsg && (
               <div
                 className={
-                  'mt-2 text-[13px] ' +
+                  'mt-2 text-sm ' +
                   (addMsg.kind === 'ok' ? 'text-green-600' : 'text-red-600')
                 }
               >

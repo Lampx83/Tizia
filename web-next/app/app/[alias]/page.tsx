@@ -76,10 +76,10 @@ export default async function AppFramePage({ params }: { params: Promise<{ alias
       <div className="mx-auto w-full max-w-lg py-16 text-center">
         <div className="mb-3 text-[44px]">🧩</div>
         <h1 className="mb-2 text-lg font-bold">Không tìm thấy ứng dụng “{alias}”</h1>
-        <p className="mb-4 text-[14px] text-muted-foreground">
+        <p className="mb-4 text-sm text-muted-foreground">
           Ứng dụng chưa được cài, hoặc chưa được công khai cho tài khoản của bạn.
         </p>
-        <Link href="/apps" className="text-[14px] font-semibold text-primary hover:underline">
+        <Link href="/apps" className="text-sm font-semibold text-primary hover:underline">
           ← Xem danh sách ứng dụng
         </Link>
       </div>
@@ -99,13 +99,13 @@ export default async function AppFramePage({ params }: { params: Promise<{ alias
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2">
       {/* Thanh đầu app */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border bg-card/40 px-3.5 py-2">
-        <span className="text-[20px] leading-none">{ico}</span>
-        <span className="text-[15px] font-bold">{app.name}</span>
-        <span className="font-mono text-[11.5px] text-muted-foreground">
+        <span className="text-xl leading-none">{ico}</span>
+        <span className="text-base font-bold">{app.name}</span>
+        <span className="font-mono text-2xs text-muted-foreground">
           {app.alias}
           {app.version ? ` · v${app.version}` : ''}
         </span>
-        <span className="ml-auto flex items-center gap-3 text-[12.5px]">
+        <span className="ml-auto flex items-center gap-3 text-xs">
           <Link href="/apps" className="text-muted-foreground hover:text-primary">
             ← Ứng dụng
           </Link>
@@ -129,7 +129,7 @@ export default async function AppFramePage({ params }: { params: Promise<{ alias
       />
 
       {/* Thanh chân app */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card/40 px-3.5 py-2 text-[12.5px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card/40 px-3.5 py-2 text-xs text-muted-foreground">
         {/* Tới được đây thì chắc chắn là app cài qua zip — builtin đã redirect ở trên. */}
         <span>Ứng dụng chạy trong Tizia · cài qua manifest + zip</span>
         <span className="ml-auto flex items-center gap-3">

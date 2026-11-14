@@ -68,7 +68,7 @@ export function CapabilityGrid() {
           )}
         >
           <div className="mb-1 text-xs uppercase tracking-[0.4px] text-white/70">{i.label}</div>
-          <div className="text-[15px] font-bold">{i.desc}</div>
+          <div className="text-base font-bold">{i.desc}</div>
         </div>
       ))}
     </div>

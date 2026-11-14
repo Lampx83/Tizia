@@ -67,7 +67,7 @@ export default async function BattlePass() {
             🌌
           </div>
           <div className="min-w-[200px] flex-1">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="text-2xs font-bold uppercase tracking-widest text-muted-foreground">
               Mùa giải hiện tại
             </div>
             <div className="my-1 bg-gradient-to-br from-amber-400 to-pink-500 bg-clip-text text-2xl font-extrabold text-transparent">

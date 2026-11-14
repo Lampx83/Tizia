@@ -204,7 +204,7 @@ export default function DilutionPage() {
                 <span>Hệ số pha loãng</span>
                 <b>{r.fold ? '×' + fmt(r.fold) : '–'}</b>
               </div>
-              <div className="mt-2 min-h-[18px] text-[13px] text-red-300">{warn}</div>
+              <div className="mt-2 min-h-[18px] text-sm text-red-300">{warn}</div>
             </div>
           </div>
         </div>
@@ -230,15 +230,15 @@ export default function DilutionPage() {
                 />
               )}
               {qShowInput && (
-                <button onClick={checkQ} className="cursor-pointer rounded-lg border-none bg-sky-500 px-4 py-2 text-[13.5px] font-extrabold text-[#042435]">
+                <button onClick={checkQ} className="cursor-pointer rounded-lg border-none bg-sky-500 px-4 py-2 text-sm font-extrabold text-[#042435]">
                   Kiểm tra
                 </button>
               )}
-              <button onClick={newQ} className="cursor-pointer rounded-lg border border-white/25 bg-transparent px-4 py-2 text-[13.5px] font-extrabold text-white">
+              <button onClick={newQ} className="cursor-pointer rounded-lg border border-white/25 bg-transparent px-4 py-2 text-sm font-extrabold text-white">
                 🎲 Câu hỏi mới
               </button>
             </div>
-            {feedback && <div className={`mt-2.5 text-[13.5px] ${feedback.kind === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{feedback.node}</div>}
+            {feedback && <div className={`mt-2.5 text-sm ${feedback.kind === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{feedback.node}</div>}
           </div>
 
           <div className="mt-2.5 text-xs leading-relaxed opacity-60">

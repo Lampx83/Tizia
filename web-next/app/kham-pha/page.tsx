@@ -134,7 +134,7 @@ const JOURNEY: Array<{ tier: string; title: string; desc: string; links: Array<[
     desc: 'Chuỗi ngày học, nhiệm vụ hằng ngày, đấu trường kiến thức và bảng xếp hạng giúp việc học thành thói quen thay vì đợt dồn.',
     links: [
       ['/league', 'League tuần'],
-      ['/leaderboard', 'Bảng xếp hạng'],
+      ['/bang-phong-than', 'Bảng xếp hạng'],
       ['/nang-luc', 'Hồ sơ năng lực'],
     ],
   },

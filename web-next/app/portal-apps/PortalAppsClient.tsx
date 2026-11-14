@@ -75,15 +75,15 @@ function AppCard({
           {ico}
         </div>
         <div className="min-w-0 flex-1">
-          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-[15px]">
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-base">
             {app.name}
           </b>
-          <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-muted-foreground">
+          <div className="overflow-hidden text-ellipsis whitespace-nowrap text-2xs text-muted-foreground">
             {meta}
           </div>
         </div>
       </div>
-      <div className="line-clamp-2 min-h-[38px] text-[12.5px] leading-relaxed text-foreground/80">
+      <div className="line-clamp-2 min-h-[38px] text-xs leading-relaxed text-foreground/80">
         {app.description || 'Portal app cài qua manifest + zip.'}
       </div>
       <div className="mt-1 flex gap-1.5">
@@ -224,7 +224,7 @@ export default function PortalAppsClient({
       {/* Cài app mới — chỉ admin; người khác gửi gói cho quản trị cài */}
       {!canInstall ? (
         <div className="rounded-2xl border border-border bg-card/40 p-[18px] text-sm leading-relaxed text-muted-foreground">
-          <h2 className="mb-2 text-[17px] font-semibold text-foreground">📥 Muốn cài app của bạn?</h2>
+          <h2 className="mb-2 text-lg font-semibold text-foreground">📥 Muốn cài app của bạn?</h2>
           App cài vào chạy chung địa chỉ với Tizia nên dùng được phiên đăng nhập của người đang xem. Vì vậy chỉ
           quản trị viên được cài. Bạn đóng gói <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">.zip</code>{' '}
           theo{' '}
@@ -235,9 +235,9 @@ export default function PortalAppsClient({
         </div>
       ) : (
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
-        <h2 className="mb-2 text-[17px] font-semibold">
+        <h2 className="mb-2 text-lg font-semibold">
           📥 Cài app mới{' '}
-          <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-primary">
+          <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 align-middle text-2xs font-bold uppercase tracking-wide text-primary">
             .zip
           </span>
         </h2>
@@ -266,10 +266,10 @@ export default function PortalAppsClient({
             onChange={(e) => installZip(e.target.files?.[0])}
           />
           <div className="mb-3 text-[44px] leading-none">📦</div>
-          <div className="text-[15px] font-bold">
+          <div className="text-base font-bold">
             <b className="text-primary">Kéo thả file .zip</b> vào đây hoặc bấm để chọn
           </div>
-          <div className="mt-2 text-[12.5px] text-muted-foreground">
+          <div className="mt-2 text-xs text-muted-foreground">
             Tối đa 30 MB · giải nén ≤ 100 MB · ≤ 2000 file
           </div>
         </label>
@@ -277,7 +277,7 @@ export default function PortalAppsClient({
         {progress && (
           <div
             className={cn(
-              'my-3 rounded-lg border px-3.5 py-2.5 font-mono text-[13px]',
+              'my-3 rounded-lg border px-3.5 py-2.5 font-mono text-sm',
               progress.kind === 'ok'
                 ? 'border-green-500/30 bg-green-500/[.12] text-green-300'
                 : 'border-red-500/30 bg-red-500/[.12] text-red-300',
@@ -288,10 +288,10 @@ export default function PortalAppsClient({
         )}
 
         <details className="mt-3.5 rounded-xl bg-black/20 px-4 py-3">
-          <summary className="cursor-pointer text-[13.5px] font-bold">
+          <summary className="cursor-pointer text-sm font-bold">
             📋 Quy chuẩn manifest.json
           </summary>
-          <p className="mt-2.5 text-[13px] text-muted-foreground">
+          <p className="mt-2.5 text-sm text-muted-foreground">
             Bắt buộc <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">alias</code> (lowercase
             kebab, ví dụ <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">my-app</code>) +{' '}
             <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">name</code>. App cần backend
@@ -304,7 +304,7 @@ export default function PortalAppsClient({
             </a>
             . Code backend nằm trong zip thì KHÔNG được chạy.
           </p>
-          <pre className="mt-2 overflow-auto rounded-lg bg-black/40 px-3.5 py-3 text-[11.5px] leading-relaxed">
+          <pre className="mt-2 overflow-auto rounded-lg bg-black/40 px-3.5 py-3 text-2xs leading-relaxed">
 {`{
   "id": "my-app",
   "alias": "my-app",
@@ -316,8 +316,8 @@ export default function PortalAppsClient({
   "hasFrontendOnly": true
 }`}
           </pre>
-          <p className="text-[13px] text-muted-foreground">Cấu trúc zip:</p>
-          <pre className="mt-2 overflow-auto rounded-lg bg-black/40 px-3.5 py-3 text-[11.5px] leading-relaxed">
+          <p className="text-sm text-muted-foreground">Cấu trúc zip:</p>
+          <pre className="mt-2 overflow-auto rounded-lg bg-black/40 px-3.5 py-3 text-2xs leading-relaxed">
 {`my-app.zip
 ├── manifest.json
 └── public/
@@ -325,7 +325,7 @@ export default function PortalAppsClient({
     ├── embed-config.json   ← tuỳ chọn, tự sinh nếu thiếu
     └── assets/...      ← JS/CSS đã build (đường dẫn TƯƠNG ĐỐI: ./assets/...)`}
           </pre>
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             ⚠️ Trong <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">index.html</code>, mọi
             đường dẫn asset phải tương đối (
             <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs">./assets/...</code>), KHÔNG dùng{' '}
@@ -343,14 +343,14 @@ export default function PortalAppsClient({
 
       {/* App của tôi */}
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
-        <h2 className="mb-2 text-[17px] font-semibold">🧩 App của tôi</h2>
+        <h2 className="mb-2 text-lg font-semibold">🧩 App của tôi</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
           {own.length ? (
             own.map((a) => (
               <AppCard key={a.id} app={a} isBuiltin={false} canDelete onUninstall={uninstall} />
             ))
           ) : (
-            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-[13px] text-muted-foreground">
+            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-sm text-muted-foreground">
               Bạn chưa cài app nào. Kéo file .zip vào ô trên để bắt đầu.
             </div>
           )}
@@ -359,14 +359,14 @@ export default function PortalAppsClient({
 
       {/* Apps công khai */}
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
-        <h2 className="mb-2 text-[17px] font-semibold">🌍 Apps công khai (do dev khác chia sẻ)</h2>
+        <h2 className="mb-2 text-lg font-semibold">🌍 Apps công khai (do dev khác chia sẻ)</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
           {publicApps.length ? (
             publicApps.map((a) => (
               <AppCard key={a.id} app={a} isBuiltin={false} canDelete={false} />
             ))
           ) : (
-            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-[13px] text-muted-foreground">
+            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-sm text-muted-foreground">
               Chưa có app công khai nào.
             </div>
           )}
@@ -375,13 +375,13 @@ export default function PortalAppsClient({
 
       {/* Apps có sẵn */}
       <div className="rounded-2xl border border-border bg-card/40 p-[18px]">
-        <h2 className="mb-2 text-[17px] font-semibold">
+        <h2 className="mb-2 text-lg font-semibold">
           📚 Apps có sẵn của Tizia{' '}
-          <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-primary">
+          <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 align-middle text-2xs font-bold uppercase tracking-wide text-primary">
             {builtin.length} apps
           </span>
         </h2>
-        <p className="mb-3.5 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="mb-3.5 text-sm leading-relaxed text-muted-foreground">
           Kho game/lab/sim/tool sẵn có. Khi cấu hình campus map, bạn có thể gán bất kỳ app nào ở đây vào
           một toà nhà cụ thể.
         </p>
@@ -395,7 +395,7 @@ export default function PortalAppsClient({
                 type="button"
                 onClick={() => setActiveDomain(d)}
                 className={cn(
-                  'rounded-lg border px-3 py-1.5 text-[12.5px] transition-colors',
+                  'rounded-lg border px-3 py-1.5 text-xs transition-colors',
                   active
                     ? 'border-primary bg-primary font-bold text-primary-foreground'
                     : 'border-border bg-white/[.06] font-medium text-foreground',
@@ -412,7 +412,7 @@ export default function PortalAppsClient({
               <AppCard key={a.id} app={a} isBuiltin canDelete={false} />
             ))
           ) : (
-            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-[13px] text-muted-foreground">
+            <div className="col-span-full rounded-xl border border-dashed border-border bg-white/[.02] p-7 text-center text-sm text-muted-foreground">
               Không có app nào trong nhóm này.
             </div>
           )}

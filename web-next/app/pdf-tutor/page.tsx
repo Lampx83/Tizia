@@ -442,7 +442,7 @@ export default function PdfTutorPage() {
                       '_blank',
                     )
                   }
-                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-[11px] text-sky-300"
+                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-2xs text-sky-300"
                 >
                   Toán 11 KNTT
                 </button>
@@ -453,7 +453,7 @@ export default function PdfTutorPage() {
                       '_blank',
                     )
                   }
-                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-[11px] text-sky-300"
+                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-2xs text-sky-300"
                 >
                   Lý 11 CD
                 </button>
@@ -464,7 +464,7 @@ export default function PdfTutorPage() {
                       '_blank',
                     )
                   }
-                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-[11px] text-sky-300"
+                  className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1.5 text-2xs text-sky-300"
                 >
                   Sử 10 CTST
                 </button>
@@ -482,7 +482,7 @@ export default function PdfTutorPage() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={
-                  'flex-1 rounded-lg border border-transparent px-1.5 py-2 text-[11px] ' +
+                  'flex-1 rounded-lg border border-transparent px-1.5 py-2 text-2xs ' +
                   (tab === t
                     ? 'bg-gradient-to-br from-amber-400 to-orange-500 font-bold text-[#3e2723]'
                     : 'bg-transparent text-white')
@@ -496,19 +496,19 @@ export default function PdfTutorPage() {
             <div className="mb-2.5 flex flex-wrap gap-1.5">
               <button
                 onClick={() => runAi()}
-                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/30"
+                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-2xs font-semibold text-sky-300 hover:bg-sky-500/30"
               >
                 {runLabel}
               </button>
               <button
                 onClick={() => speak(outText)}
-                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/30"
+                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-2xs font-semibold text-sky-300 hover:bg-sky-500/30"
               >
                 🔊 Đọc to
               </button>
               <button
                 onClick={() => typeof speechSynthesis !== 'undefined' && speechSynthesis.cancel()}
-                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/30"
+                className="flex-auto rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1.5 text-2xs font-semibold text-sky-300 hover:bg-sky-500/30"
               >
                 ⏹ Dừng
               </button>
@@ -523,7 +523,7 @@ export default function PdfTutorPage() {
             ) : (
               <div
                 className={
-                  'min-h-[100px] whitespace-pre-wrap rounded-[10px] border border-white/[0.08] bg-white/[0.04] p-3 text-[13px] leading-relaxed ' +
+                  'min-h-[100px] whitespace-pre-wrap rounded-[10px] border border-white/[0.08] bg-white/[0.04] p-3 text-sm leading-relaxed ' +
                   (thinking ? 'italic opacity-60' : '')
                 }
               >
@@ -537,7 +537,7 @@ export default function PdfTutorPage() {
       {/* Focus overlay */}
       {focusText && (
         <div className="fixed bottom-4 left-4 right-4 z-[100] max-w-[480px] rounded-xl border border-amber-400/50 bg-slate-900/95 px-3.5 py-2.5 text-xs backdrop-blur">
-          <div className="mb-1 text-[11px] opacity-65">🎯 AI đang focus đoạn:</div>
+          <div className="mb-1 text-2xs opacity-65">🎯 AI đang focus đoạn:</div>
           <div className="max-h-20 overflow-hidden leading-relaxed">
             {focusText.slice(0, 200) + (focusText.length > 200 ? '…' : '')}
           </div>
@@ -570,7 +570,7 @@ function QuizView({
 }) {
   if (!quiz.length) {
     return (
-      <div className="min-h-[100px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] p-3 text-[13px] leading-relaxed">
+      <div className="min-h-[100px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] p-3 text-sm leading-relaxed">
         AI chưa soạn được quiz từ trang này. Em thử trang khác nhé.
       </div>
     );
@@ -582,7 +582,7 @@ function QuizView({
         const chosen = answers[i];
         return (
           <div key={i} className="mb-2.5 rounded-[10px] bg-white/[0.04] p-3">
-            <div className="mb-2 text-[13px] font-semibold leading-normal">
+            <div className="mb-2 text-sm font-semibold leading-normal">
               {i + 1}. {q.stem}
             </div>
             {(q.options || []).map((opt, j) => {

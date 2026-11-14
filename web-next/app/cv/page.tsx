@@ -134,17 +134,17 @@ export default async function CvPage() {
             <div className="mt-1 text-sm text-muted-foreground">
               @{me.username} · {me.role === 'student' ? 'Sinh viên' : 'Giảng viên'}
             </div>
-            <div className="mt-1.5 text-[13px] font-semibold text-primary">{meta}</div>
+            <div className="mt-1.5 text-sm font-semibold text-primary">{meta}</div>
           </div>
         </div>
 
         {/* Hồ sơ */}
         <section className="mt-7">
-          <h2 className="mb-3.5 text-[15px] font-bold uppercase tracking-wider text-primary">Hồ sơ</h2>
+          <h2 className="mb-3.5 text-base font-bold uppercase tracking-wider text-primary">Hồ sơ</h2>
           <div className="grid grid-cols-2 gap-x-5 gap-y-2">
             {rows.map(([k, v]) => (
               <div key={k} className="contents">
-                <span className="text-[13px] text-muted-foreground">{k}</span>
+                <span className="text-sm text-muted-foreground">{k}</span>
                 <span className="text-sm font-semibold">{v}</span>
               </div>
             ))}
@@ -153,13 +153,13 @@ export default async function CvPage() {
 
         {/* Số liệu học tập */}
         <section className="mt-7">
-          <h2 className="mb-3.5 text-[15px] font-bold uppercase tracking-wider text-primary">
+          <h2 className="mb-3.5 text-base font-bold uppercase tracking-wider text-primary">
             Số liệu học tập
           </h2>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-border bg-muted/40 p-3.5 text-center">
               <div className="text-2xl font-extrabold text-primary">{attempts.length}</div>
-              <div className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <div className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 Lượt hoàn thành
               </div>
             </div>
@@ -167,13 +167,13 @@ export default async function CvPage() {
               <div className="text-2xl font-extrabold text-primary">
                 {achs.length}/{allBadges.length}
               </div>
-              <div className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <div className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 Huy hiệu đạt được
               </div>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 p-3.5 text-center">
               <div className="text-2xl font-extrabold text-primary">{perfect}</div>
-              <div className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <div className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 Lượt Perfect (100%)
               </div>
             </div>
@@ -182,13 +182,13 @@ export default async function CvPage() {
 
         {/* Huy hiệu */}
         <section className="mt-7">
-          <h2 className="mb-3.5 text-[15px] font-bold uppercase tracking-wider text-primary">Huy hiệu</h2>
+          <h2 className="mb-3.5 text-base font-bold uppercase tracking-wider text-primary">Huy hiệu</h2>
           <div className="flex flex-wrap gap-2">
             {unlocked.length ? (
               unlocked.map((b) => (
                 <span
                   key={b.id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/60 bg-amber-400/15 px-3 py-1.5 text-[13px] font-semibold text-amber-200"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/60 bg-amber-400/15 px-3 py-1.5 text-sm font-semibold text-amber-200"
                 >
                   {b.icon} {b.label}
                 </span>
@@ -201,13 +201,13 @@ export default async function CvPage() {
 
         {/* Top 10 lượt nổi bật */}
         <section className="mt-7">
-          <h2 className="mb-3.5 text-[15px] font-bold uppercase tracking-wider text-primary">
+          <h2 className="mb-3.5 text-base font-bold uppercase tracking-wider text-primary">
             Top 10 lượt nổi bật
           </h2>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="border-b border-border px-2.5 py-2 font-semibold">Bài</th>
                   <th className="w-[90px] border-b border-border px-2.5 py-2 font-semibold">Điểm</th>
                   <th className="w-20 border-b border-border px-2.5 py-2 font-semibold">Đúng</th>

@@ -45,7 +45,7 @@ type Msg = { kind: 'err' | 'ok'; node: React.ReactNode } | null;
 const selectCls =
   'w-full rounded-[10px] border border-border bg-black/30 px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none';
 const labelCls =
-  'mb-1.5 mt-2.5 block text-[11px] font-bold uppercase tracking-wide text-muted-foreground';
+  'mb-1.5 mt-2.5 block text-2xs font-bold uppercase tracking-wide text-muted-foreground';
 
 export default function AiQuizGenClient() {
   const [topic, setTopic] = useState('');
@@ -193,7 +193,7 @@ export default function AiQuizGenClient() {
     return (
       <div
         className={cn(
-          'mt-3.5 rounded-[10px] px-3.5 py-2.5 text-[13px]',
+          'mt-3.5 rounded-[10px] px-3.5 py-2.5 text-sm',
           m.kind === 'err'
             ? 'border-l-[3px] border-[#fb7185] bg-[rgba(239,68,68,0.10)] text-[#fda4af]'
             : 'border-l-[3px] border-success bg-[rgba(34,197,94,0.10)] text-[#86efac]',
@@ -209,7 +209,7 @@ export default function AiQuizGenClient() {
       <div className="flex items-center gap-3.5">
         <a
           href="/ugc/index.html"
-          className="rounded-[18px] border border-border bg-white/10 px-3.5 py-1.5 text-[13px] font-semibold"
+          className="rounded-[18px] border border-border bg-white/10 px-3.5 py-1.5 text-sm font-semibold"
         >
           ← Marketplace
         </a>
@@ -219,7 +219,7 @@ export default function AiQuizGenClient() {
       {/* Panel sinh quest */}
       <Card>
         <CardContent className="p-5">
-          <h3 className="mb-2.5 text-[14px] uppercase tracking-wide text-muted-foreground">
+          <h3 className="mb-2.5 text-sm uppercase tracking-wide text-muted-foreground">
             🪄 Sinh quest tự động
           </h3>
 
@@ -320,7 +320,7 @@ export default function AiQuizGenClient() {
       {generated && (
         <Card>
           <CardContent className="p-5">
-            <h3 className="mb-2.5 text-[14px] uppercase tracking-wide text-muted-foreground">
+            <h3 className="mb-2.5 text-sm uppercase tracking-wide text-muted-foreground">
               👀 Xem trước
             </h3>
             <Input
@@ -345,13 +345,13 @@ export default function AiQuizGenClient() {
                   key={i}
                   className="mb-2.5 rounded-xl border border-border bg-white/[0.04] p-3.5"
                 >
-                  <div className="mb-1.5 text-[11px] text-muted-foreground">Câu {i + 1}</div>
+                  <div className="mb-1.5 text-2xs text-muted-foreground">Câu {i + 1}</div>
                   <div className="mb-2 font-bold">{q.text}</div>
                   {q.options.map((o, j) => (
                     <div
                       key={j}
                       className={cn(
-                        'my-1 block rounded-lg px-2.5 py-1.5 text-[13px]',
+                        'my-1 block rounded-lg px-2.5 py-1.5 text-sm',
                         j === q.correct
                           ? 'bg-[rgba(34,197,94,0.18)] font-bold text-success'
                           : 'bg-white/[0.03]',

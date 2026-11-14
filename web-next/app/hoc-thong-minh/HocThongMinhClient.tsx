@@ -315,9 +315,9 @@ export default function HocThongMinhClient() {
           🧠
         </div>
         <div className="min-w-[200px] flex-1">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Trình độ AI đánh giá</div>
+          <div className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">Trình độ AI đánh giá</div>
           <div className="my-1 text-2xl font-extrabold text-violet-300">{theta.level || 'Trung bình'}</div>
-          <div className="text-[13px] text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             θ = <b className="text-amber-400">{(theta.theta || 0).toFixed(2)}</b> · {theta.n_attempts || 0} câu đã làm ·{' '}
             {currentSubject ? 'môn đang học' : 'tổng quát'}
           </div>
@@ -347,7 +347,7 @@ export default function HocThongMinhClient() {
                 type="button"
                 onClick={() => pickSubject(sid)}
                 className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-[13px] transition-colors',
+                  'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
                   cur
                     ? 'border-violet-400 bg-violet-400 font-bold text-white'
                     : 'border-border bg-white/5 hover:bg-white/10',
@@ -370,7 +370,7 @@ export default function HocThongMinhClient() {
         <div className="py-8 text-center text-muted-foreground">Chưa có câu hỏi.</div>
       ) : (
         <div className="rounded-2xl border border-border bg-card p-6">
-          <div className="mb-2.5 flex gap-3.5 text-[11.5px] text-muted-foreground">
+          <div className="mb-2.5 flex gap-3.5 text-2xs text-muted-foreground">
             <span>Độ khó: <b className="text-amber-400">{(expectedDifficulty ?? 0).toFixed(2)}</b></span>
             <span>θ của em: <b className="text-amber-400">{(theta.theta ?? 0).toFixed(2)}</b></span>
             <span>Loại: {question.question_type || 'mcq_single'}</span>
@@ -427,7 +427,7 @@ export default function HocThongMinhClient() {
           {feedback && (
             <div
               className={cn(
-                'mt-3.5 rounded-lg border-l-[3px] px-3.5 py-2.5 text-[13.5px] leading-relaxed',
+                'mt-3.5 rounded-lg border-l-[3px] px-3.5 py-2.5 text-sm leading-relaxed',
                 feedback.correct
                   ? 'border-emerald-400 bg-emerald-500/12 text-emerald-300'
                   : 'border-rose-400 bg-rose-500/10 text-rose-300',
@@ -447,9 +447,9 @@ export default function HocThongMinhClient() {
           recs.map((r, i) => (
             <div key={i} className="rounded-2xl border border-border bg-card p-4 transition-transform hover:-translate-y-0.5 hover:border-violet-400">
               <div className="mb-1.5 text-sm font-bold leading-snug">{r.name}</div>
-              <div className="text-[11.5px] text-muted-foreground">{r.competency.name}</div>
+              <div className="text-2xs text-muted-foreground">{r.competency.name}</div>
               {r.grade_min != null && (
-                <div className="mt-2 inline-block rounded-full bg-amber-400/12 px-2 py-0.5 text-[11px] font-bold text-amber-400">
+                <div className="mt-2 inline-block rounded-full bg-amber-400/12 px-2 py-0.5 text-2xs font-bold text-amber-400">
                   Lớp {r.grade_min}
                   {r.grade_max && r.grade_max !== r.grade_min ? `–${r.grade_max}` : ''}
                 </div>
@@ -457,7 +457,7 @@ export default function HocThongMinhClient() {
               <div className="mt-2 h-1 overflow-hidden rounded bg-white/[0.06]">
                 <span className="block h-full bg-violet-400 transition-[width] duration-500" style={{ width: `${r.prereq_progress}%` }} />
               </div>
-              <div className="mt-1 text-[10.5px] text-muted-foreground">Sẵn sàng học: {r.prereq_progress}%</div>
+              <div className="mt-1 text-2xs text-muted-foreground">Sẵn sàng học: {r.prereq_progress}%</div>
             </div>
           ))
         ) : (
@@ -487,7 +487,7 @@ function LandingView({ landing }: { landing: Landing }) {
         {landing.back && (
           <a
             href={landing.back.href}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-white/5 px-3 py-1.5 text-[13px] font-semibold hover:bg-white/10"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-white/5 px-3 py-1.5 text-sm font-semibold hover:bg-white/10"
           >
             ← {landing.back.label}
           </a>
@@ -502,9 +502,9 @@ function LandingView({ landing }: { landing: Landing }) {
             className="block rounded-2xl border border-border bg-white/5 p-4.5 no-underline transition-transform hover:-translate-y-0.5 hover:border-violet-400"
           >
             <div className="mb-2 text-3xl">{a.ic}</div>
-            <div className="mb-1 text-[15.5px] font-bold">{a.name}</div>
-            <div className="text-[13px] leading-relaxed text-muted-foreground">{a.rd}</div>
-            <div className="mt-3 text-[13px] font-semibold text-violet-400">Vào ngay →</div>
+            <div className="mb-1 text-base font-bold">{a.name}</div>
+            <div className="text-sm leading-relaxed text-muted-foreground">{a.rd}</div>
+            <div className="mt-3 text-sm font-semibold text-violet-400">Vào ngay →</div>
           </a>
         ))}
       </div>

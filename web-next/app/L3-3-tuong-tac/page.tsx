@@ -27,7 +27,7 @@ export default function L33TuongTac() {
       </div>
 
       <h1 className="mb-1.5 text-[28px] font-semibold">🔗 Module L3.3 · Tương tác thuốc</h1>
-      <div className="mb-6 text-[15px] opacity-75">
+      <div className="mb-6 text-base opacity-75">
         Phát hiện cặp tương tác nguy hiểm + hiểu cơ chế CYP450 — phục vụ môn Dược lý 3 và Dược lâm sàng 4.
       </div>
 

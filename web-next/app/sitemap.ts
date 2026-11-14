@@ -28,7 +28,6 @@ const CORE: Entry[] = [
   { path: '/dev', priority: 0.6, freq: 'monthly' },
   { path: '/marketplace', priority: 0.6, freq: 'weekly' },
   { path: '/league', priority: 0.5, freq: 'weekly' },
-  { path: '/leaderboard', priority: 0.5, freq: 'daily' },
   { path: '/bang-phong-than', priority: 0.5, freq: 'daily' },
   { path: '/login', priority: 0.3, freq: 'yearly' },
   { path: '/register', priority: 0.4, freq: 'yearly' },

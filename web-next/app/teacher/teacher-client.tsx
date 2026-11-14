@@ -186,7 +186,7 @@ export default function TeacherClient({ initialClasses }: { initialClasses: Clas
                 )}
               >
                 <div className="text-sm font-bold">{c.name}</div>
-                <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                <div className="mt-0.5 flex flex-wrap gap-2 text-2xs text-muted-foreground">
                   <span className="rounded bg-card px-2 py-px font-mono font-bold text-foreground">
                     {c.code}
                   </span>
@@ -218,7 +218,7 @@ export default function TeacherClient({ initialClasses }: { initialClasses: Clas
             </div>
 
             <div className="mb-3.5 flex flex-wrap items-center gap-2.5 rounded-lg border border-dashed border-primary bg-primary/10 px-3.5 py-2.5">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <span className="text-2xs uppercase tracking-wide text-muted-foreground">
                 Mã mời SV:
               </span>
               <code className="rounded bg-background/60 px-2.5 py-1 text-base font-bold text-primary">
@@ -234,7 +234,7 @@ export default function TeacherClient({ initialClasses }: { initialClasses: Clas
               </a>
               <button
                 onClick={copyLink}
-                className="rounded bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground"
+                className="rounded bg-primary px-2.5 py-1 text-2xs font-bold text-primary-foreground"
               >
                 {copied ? '✓ Đã sao chép' : 'Sao chép link'}
               </button>
@@ -269,7 +269,7 @@ export default function TeacherClient({ initialClasses }: { initialClasses: Clas
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <tr className="text-2xs uppercase tracking-wide text-muted-foreground">
                       <th className="border-b border-border px-2 py-1.5 text-left font-semibold">
                         Sinh viên
                       </th>
@@ -315,7 +315,7 @@ export default function TeacherClient({ initialClasses }: { initialClasses: Clas
                               (m.perfect_count > 5 ? '+' : '')
                             : '—'}
                         </td>
-                        <td className="border-b border-border/60 px-2 py-1.5 text-right text-[11px] text-muted-foreground">
+                        <td className="border-b border-border/60 px-2 py-1.5 text-right text-2xs text-muted-foreground">
                           {fmt(m.last_seen)}
                         </td>
                       </tr>

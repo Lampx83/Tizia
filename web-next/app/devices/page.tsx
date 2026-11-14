@@ -108,7 +108,7 @@ export default function DevicesPage() {
           📱 Hỗ trợ thiết bị
           <Link
             href="/"
-            className="ml-auto rounded-md bg-white/15 px-3 py-1.5 text-[13px] text-white no-underline hover:bg-white/25"
+            className="ml-auto rounded-md bg-white/15 px-3 py-1.5 text-sm text-white no-underline hover:bg-white/25"
           >
             ← Trang chính
           </Link>
@@ -129,12 +129,12 @@ export default function DevicesPage() {
             key={d.name}
             className="flex flex-col rounded-[14px] border border-white/15 bg-white/[0.08] px-[22px] py-5 transition-transform hover:-translate-y-[3px] hover:bg-white/[0.13]"
           >
-            <h3 className="m-0 mb-1 flex items-center gap-2 text-[18px]">
+            <h3 className="m-0 mb-1 flex items-center gap-2 text-lg">
               {d.icon} {d.name}
             </h3>
             <div className="mb-3 text-xs opacity-65">{d.vendor}</div>
             <span
-              className={`mb-2.5 inline-block self-start rounded-[10px] px-[9px] py-[3px] text-[11px] font-bold uppercase tracking-[0.3px] ${STATUS_CLASS[d.status]}`}
+              className={`mb-2.5 inline-block self-start rounded-[10px] px-[9px] py-[3px] text-2xs font-bold uppercase tracking-[0.3px] ${STATUS_CLASS[d.status]}`}
             >
               {STATUS_LABEL[d.status]}
             </span>
@@ -151,7 +151,7 @@ export default function DevicesPage() {
                 );
               })}
             </div>
-            <ul className="my-2 mb-3.5 list-disc pl-[18px] text-[13px] leading-[1.7] opacity-90">
+            <ul className="my-2 mb-3.5 list-disc pl-[18px] text-sm leading-[1.7] opacity-90">
               {d.works.map((w) => (
                 <li key={w}>{w}</li>
               ))}

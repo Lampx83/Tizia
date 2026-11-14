@@ -73,7 +73,7 @@ export function ClaimButton({
         disabled
         size="sm"
         variant="secondary"
-        className="mt-1 h-auto px-2 py-1 text-[10.5px]"
+        className="mt-1 h-auto px-2 py-1 text-2xs"
       >
         {label}
       </Button>
@@ -111,7 +111,7 @@ export function ClaimButton({
       onClick={claim}
       disabled={busy}
       size="sm"
-      className="mt-1 h-auto bg-gradient-to-br from-emerald-400 to-emerald-600 px-2 py-1 text-[10.5px] font-bold text-emerald-950 hover:opacity-90"
+      className="mt-1 h-auto bg-gradient-to-br from-emerald-400 to-emerald-600 px-2 py-1 text-2xs font-bold text-emerald-950 hover:opacity-90"
     >
       Nhận
     </Button>

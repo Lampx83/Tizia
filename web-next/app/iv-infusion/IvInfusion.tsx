@@ -293,7 +293,7 @@ export default function IvInfusion() {
                 <div className="text-3xl font-extrabold text-primary">
                   {valid ? fmt(r.mlh) : '—'}
                 </div>
-                <div className="text-[11px] uppercase tracking-wide opacity-75">
+                <div className="text-2xs uppercase tracking-wide opacity-75">
                   mL / giờ
                 </div>
               </div>
@@ -301,7 +301,7 @@ export default function IvInfusion() {
                 <div className="text-3xl font-extrabold text-primary">
                   {valid ? Math.round(r.gtt) : '—'}
                 </div>
-                <div className="text-[11px] uppercase tracking-wide opacity-75">
+                <div className="text-2xs uppercase tracking-wide opacity-75">
                   giọt / phút
                 </div>
               </div>
@@ -329,14 +329,14 @@ export default function IvInfusion() {
               {qShow && (
                 <button
                   onClick={checkQ}
-                  className="cursor-pointer rounded-lg bg-primary px-3.5 py-2 text-[13.5px] font-extrabold text-primary-foreground"
+                  className="cursor-pointer rounded-lg bg-primary px-3.5 py-2 text-sm font-extrabold text-primary-foreground"
                 >
                   Kiểm tra
                 </button>
               )}
               <button
                 onClick={newQ}
-                className="cursor-pointer rounded-lg border bg-transparent px-3.5 py-2 text-[13.5px] font-extrabold text-foreground"
+                className="cursor-pointer rounded-lg border bg-transparent px-3.5 py-2 text-sm font-extrabold text-foreground"
               >
                 🎲 Câu hỏi mới
               </button>
@@ -344,7 +344,7 @@ export default function IvInfusion() {
             {qFb && (
               <div
                 className={
-                  'mt-2.5 text-[13.5px] ' +
+                  'mt-2.5 text-sm ' +
                   (qFb.kind === 'ok' ? 'text-emerald-400' : 'text-red-400')
                 }
                 dangerouslySetInnerHTML={{ __html: qFb.html }}

@@ -32,7 +32,7 @@ const LD_HOWTO = {
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="scroll-mt-20 space-y-3.5">
-      <h2 className="border-b border-border pb-2 text-[19px] font-bold tracking-tight">
+      <h2 className="border-b border-border pb-2 text-lg font-bold tracking-tight">
         <a href={`#${id}`} className="hover:text-primary">
           {title}
         </a>
@@ -43,11 +43,11 @@ function Section({ id, title, children }: { id: string; title: string; children:
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
-  return <h3 className="pt-1.5 text-[15.5px] font-bold">{children}</h3>;
+  return <h3 className="pt-1.5 text-base font-bold">{children}</h3>;
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-[14px] leading-relaxed text-muted-foreground">{children}</p>;
+  return <p className="text-sm leading-relaxed text-muted-foreground">{children}</p>;
 }
 
 function Code({ children }: { children: React.ReactNode }) {
@@ -58,11 +58,11 @@ function Pre({ children, label }: { children: string; label?: string }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-black/40">
       {label && (
-        <div className="border-b border-border bg-white/[.04] px-3.5 py-1.5 font-mono text-[11.5px] text-muted-foreground">
+        <div className="border-b border-border bg-white/[.04] px-3.5 py-1.5 font-mono text-2xs text-muted-foreground">
           {label}
         </div>
       )}
-      <pre className="overflow-x-auto px-3.5 py-3 text-[12px] leading-relaxed">{children}</pre>
+      <pre className="overflow-x-auto px-3.5 py-3 text-xs leading-relaxed">{children}</pre>
     </div>
   );
 }
@@ -82,7 +82,7 @@ function Note({
     bad: 'border-red-500/30 bg-red-500/[.08]',
   }[kind];
   return (
-    <div className={`rounded-xl border px-4 py-3 text-[13.5px] leading-relaxed ${tone}`}>
+    <div className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${tone}`}>
       <div className="mb-1 font-bold">{title}</div>
       <div className="text-muted-foreground">{children}</div>
     </div>
@@ -113,7 +113,7 @@ function Figure({
         loading="lazy"
         className="w-full rounded-xl border border-border"
       />
-      <figcaption className="text-[12.5px] leading-relaxed text-muted-foreground">{caption}</figcaption>
+      <figcaption className="text-xs leading-relaxed text-muted-foreground">{caption}</figcaption>
     </figure>
   );
 }
@@ -121,7 +121,7 @@ function Figure({
 function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-left text-[13px]">
+      <table className="w-full text-left text-sm">
         <thead className="bg-white/[.04] text-muted-foreground">
           <tr>
             {head.map((h) => (
@@ -139,7 +139,7 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
                   key={j}
                   className={
                     j === 0
-                      ? 'whitespace-nowrap px-3 py-2 font-mono text-[12px]'
+                      ? 'whitespace-nowrap px-3 py-2 font-mono text-xs'
                       : 'px-3 py-2 text-muted-foreground'
                   }
                 >
@@ -193,7 +193,7 @@ function DiagramLifecycle() {
           </defs>
         </svg>
       </div>
-      <figcaption className="text-[12.5px] text-muted-foreground">
+      <figcaption className="text-xs text-muted-foreground">
         Vòng đời một app: bạn chỉ làm bước 1–2, Tizia lo bước 3–4.
       </figcaption>
     </figure>
@@ -221,7 +221,7 @@ function DiagramUrl() {
           </text>
         </svg>
       </div>
-      <figcaption className="text-[12.5px] text-muted-foreground">
+      <figcaption className="text-xs text-muted-foreground">
         Hai người khác nhau cài cùng một alias vẫn không đụng nhau — id tài khoản tách riêng kho chứa.
       </figcaption>
     </figure>
@@ -285,7 +285,7 @@ function DiagramProxy() {
           </defs>
         </svg>
       </div>
-      <figcaption className="text-[12.5px] text-muted-foreground">
+      <figcaption className="text-xs text-muted-foreground">
         App không bao giờ gọi thẳng backend — mọi thứ đi qua Tizia để được gắn danh tính.
       </figcaption>
     </figure>
@@ -424,13 +424,13 @@ export default function DevPage() {
         <div className="flex flex-wrap gap-2 pt-1">
           <Link
             href="/portal-apps"
-            className="rounded-lg bg-primary px-3.5 py-2 text-[13.5px] font-bold text-primary-foreground hover:opacity-90"
+            className="rounded-lg bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground hover:opacity-90"
           >
             📥 Trang Portal Apps
           </Link>
           <Link
             href="/apps"
-            className="rounded-lg border border-border px-3.5 py-2 text-[13.5px] font-semibold hover:bg-white/5"
+            className="rounded-lg border border-border px-3.5 py-2 text-sm font-semibold hover:bg-white/5"
           >
             🧩 Xem app đang chạy
           </Link>
@@ -441,8 +441,8 @@ export default function DevPage() {
 
       {/* Mục lục */}
       <nav className="rounded-2xl border border-border bg-card/40 p-4">
-        <div className="mb-2 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">Nội dung</div>
-        <ol className="grid gap-1.5 text-[13.5px] sm:grid-cols-2">
+        <div className="mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">Nội dung</div>
+        <ol className="grid gap-1.5 text-sm sm:grid-cols-2">
           {[
             ['batdau', '1. Làm thử trong 5 phút'],
             ['tai-mau', '2. Tải app mẫu về'],
@@ -536,16 +536,16 @@ export default function DevPage() {
               <div className="flex items-center gap-2.5">
                 <span className="text-[26px] leading-none">{s.icon}</span>
                 <div className="min-w-0">
-                  <div className="text-[14.5px] font-bold">{s.name}</div>
-                  <div className="font-mono text-[11.5px] text-muted-foreground">{s.file}</div>
+                  <div className="text-sm font-bold">{s.name}</div>
+                  <div className="font-mono text-2xs text-muted-foreground">{s.file}</div>
                 </div>
               </div>
-              <p className="text-[13px] leading-relaxed text-muted-foreground">{s.desc}</p>
-              <p className="text-[12.5px] leading-relaxed text-primary/90">Học được: {s.learn}</p>
+              <p className="text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
+              <p className="text-xs leading-relaxed text-primary/90">Học được: {s.learn}</p>
               <a
                 href={`/downloads/apps/${s.file}`}
                 download
-                className="mt-auto rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-center text-[13px] font-bold text-primary hover:bg-primary/20"
+                className="mt-auto rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-center text-sm font-bold text-primary hover:bg-primary/20"
               >
                 ⬇ Tải {s.file}
               </a>
@@ -691,7 +691,7 @@ export async function getSources() {
   res.json({ items: db.listFor(userId) });
 });`}</Pre>
         <Sub>Bốn luật phải nhớ</Sub>
-        <ul className="list-disc space-y-1.5 pl-5 text-[14px] leading-relaxed text-muted-foreground">
+        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
             <Code>apiProxyTarget</Code> phải là <b>URL tuyệt đối</b>. Đường dẫn kiểu{' '}
             <Code>/my-api</Code> bị từ chối (502).
@@ -719,15 +719,15 @@ export async function getSources() {
         </P>
 
         <div className="rounded-xl border border-border bg-card/40 p-4">
-          <div className="text-[14px] font-bold">① Asset phải dùng đường dẫn tương đối</div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="text-sm font-bold">① Asset phải dùng đường dẫn tương đối</div>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             App nằm trong thư mục con, nên <Code>/assets/index.js</Code> (có gạch chéo đầu) sẽ 404.
           </p>
           <Pre label="vite.config.ts">{`export default defineConfig({
   base: './',              // ← quan trọng nhất
   build: { outDir: 'public' },
 })`}</Pre>
-          <p className="mt-2 text-[13px] text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             Kiểm tra nhanh: mở <Code>public/</Code>, thẻ script/link phải bắt đầu bằng{' '}
             <Code>./assets/</Code>. Nếu thấy <Code>/assets/</Code> hay{' '}
             <Code>/embed/ten-app/assets/</Code> là còn sai.
@@ -735,8 +735,8 @@ export async function getSources() {
         </div>
 
         <div className="rounded-xl border border-border bg-card/40 p-4">
-          <div className="text-[14px] font-bold">② Đừng để .env lúc dev lọt vào bản build</div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="text-sm font-bold">② Đừng để .env lúc dev lọt vào bản build</div>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             Vite nướng thẳng giá trị <Code>VITE_*</Code> vào bundle. Nếu <Code>.env</Code> còn{' '}
             <Code>VITE_API_URL=http://localhost:4001</Code> thì app cài lên Tizia vẫn cắm đầu gọi{' '}
             <Code>localhost</Code> của máy người dùng và fail sạch. Tệ hơn là <Code>.env</Code> thường
@@ -746,8 +746,8 @@ export async function getSources() {
         </div>
 
         <div className="rounded-xl border border-border bg-card/40 p-4">
-          <div className="text-[14px] font-bold">③ Backend lấy từ host, đừng hard-code</div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="text-sm font-bold">③ Backend lấy từ host, đừng hard-code</div>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             Luôn ưu tiên <Code>window.__WRITE_API_BASE__</Code>, chỉ rơi về địa chỉ mặc định khi biến
             này rỗng. Như vậy cùng một gói chạy được ở Tizia, ở AI Portal và ở máy bạn.
           </p>
@@ -861,7 +861,7 @@ export async function getSources() {
 
       {/* 10 */}
       <Section id="giao-dien" title="11. Giao diện & trải nghiệm">
-        <ul className="list-disc space-y-1.5 pl-5 text-[14px] leading-relaxed text-muted-foreground">
+        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
             <b>Nền tối là mặc định.</b> Tizia dark-only ở hầu hết trang. App nền trắng vẫn mở được
             nhưng chói mắt khi người học đang đi từ trang tối sang. Nếu làm được cả hai nền thì đọc{' '}
@@ -891,7 +891,7 @@ export async function getSources() {
           Dữ liệu học tập của trẻ là dữ liệu nhạy cảm. Đừng gửi bất cứ thứ gì ra dịch vụ bên thứ ba khi
           không thật sự cần, và nếu có thì phải nói rõ trong mô tả app.
         </Note>
-        <ul className="list-disc space-y-1.5 pl-5 text-[14px] leading-relaxed text-muted-foreground">
+        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
             <b>Không nhúng khoá API vào bundle.</b> Mã frontend ai cũng đọc được. Khoá phải nằm ở
             backend của bạn.
@@ -932,7 +932,7 @@ export async function getSources() {
 
       {/* 14 */}
       <Section id="checklist" title="15. Checklist trước khi nộp">
-        <ul className="space-y-2 text-[14px] leading-relaxed text-muted-foreground">
+        <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
           {[
             'index.html trỏ asset bằng ./ — không còn đường dẫn tuyệt đối.',
             'Đã grep bundle: không còn localhost, không còn khoá API.',
@@ -954,7 +954,7 @@ export async function getSources() {
 
       {/* 15 */}
       <Section id="gioi-han" title="16. Giới hạn hiện tại">
-        <ul className="list-disc space-y-1.5 pl-5 text-[14px] leading-relaxed text-muted-foreground">
+        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
             <b>Không chạy code backend trong zip.</b> App kiểu AI Portal đóng gói sẵn{' '}
             <Code>dist/embed.js</Code> chỉ chạy được phần giao diện; muốn có backend thì tách ra dịch vụ

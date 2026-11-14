@@ -200,14 +200,14 @@ export default function SrsClient({
               className="absolute inset-0 flex flex-col items-center justify-center rounded-3xl border-2 border-border bg-card p-8 text-center shadow-2xl shadow-black/40"
               style={{ backfaceVisibility: 'hidden' }}
             >
-              <div className="absolute left-[18px] top-3.5 text-[10.5px] font-extrabold uppercase tracking-[1.2px] text-muted-foreground">
+              <div className="absolute left-[18px] top-3.5 text-2xs font-extrabold uppercase tracking-[1.2px] text-muted-foreground">
                 {c.isNew ? '🌱 MỚI' : '🔁 ÔN LẠI'}
               </div>
               <div className="max-w-full text-[28px] font-bold leading-[1.4]">
                 {c.front || c.card_key}
               </div>
               {c.hint ? (
-                <div className="mt-3.5 text-[13px] italic text-muted-foreground">{c.hint}</div>
+                <div className="mt-3.5 text-sm italic text-muted-foreground">{c.hint}</div>
               ) : null}
             </div>
 
@@ -216,7 +216,7 @@ export default function SrsClient({
               className="absolute inset-0 flex flex-col items-center justify-center rounded-3xl border-2 border-emerald-400/35 bg-card p-8 text-center shadow-2xl shadow-black/40"
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
-              <div className="absolute left-[18px] top-3.5 text-[10.5px] font-extrabold uppercase tracking-[1.2px] text-muted-foreground">
+              <div className="absolute left-[18px] top-3.5 text-2xs font-extrabold uppercase tracking-[1.2px] text-muted-foreground">
                 ĐÁP ÁN
               </div>
               <div className="max-w-full text-[28px] font-bold leading-[1.4] text-emerald-400">
@@ -292,7 +292,7 @@ export default function SrsClient({
         + Tạo deck nhanh
       </button>
 
-      <h3 className="mb-3 mt-6 text-[13px] uppercase tracking-[.6px] text-muted-foreground">
+      <h3 className="mb-3 mt-6 text-sm uppercase tracking-[.6px] text-muted-foreground">
         📚 Decks công khai
       </h3>
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
@@ -307,7 +307,7 @@ export default function SrsClient({
               onClick={() => startReview(d.id)}
               className="rounded-2xl border border-border bg-card p-3.5 text-left transition-transform duration-150 hover:-translate-y-0.5 hover:border-primary"
             >
-              <div className="mb-1 text-[14.5px] font-extrabold">{d.name}</div>
+              <div className="mb-1 text-sm font-extrabold">{d.name}</div>
               <div className="text-xs text-muted-foreground">
                 {d.card_count} card · {d.subject_tag || ''}{' '}
                 {d.grade_tag ? '· Lớp ' + d.grade_tag : ''}
@@ -333,7 +333,7 @@ function StatCard({
   return (
     <div className="rounded-xl border border-border bg-card p-3 text-center">
       <div className={cn('text-2xl font-extrabold text-primary', valueClass)}>{value}</div>
-      <div className="text-[10.5px] uppercase tracking-[.5px] text-muted-foreground">{label}</div>
+      <div className="text-2xs uppercase tracking-[.5px] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -353,7 +353,7 @@ function GradeButton({
     <button
       onClick={onClick}
       className={cn(
-        'rounded-2xl px-2 py-3.5 text-[13px] font-extrabold transition-transform hover:-translate-y-0.5',
+        'rounded-2xl px-2 py-3.5 text-sm font-extrabold transition-transform hover:-translate-y-0.5',
         className,
       )}
     >

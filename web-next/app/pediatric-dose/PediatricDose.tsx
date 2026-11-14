@@ -216,7 +216,7 @@ export default function PediatricDose() {
         <div className="min-w-[280px] flex-1">
           {/* controls */}
           <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <label className="mb-1.5 flex justify-between text-[13px] opacity-85">
+            <label className="mb-1.5 flex justify-between text-sm opacity-85">
               Cân nặng của bé{' '}
               <b className="text-[color:var(--pd-accent)]">{weight} kg</b>
             </label>
@@ -230,7 +230,7 @@ export default function PediatricDose() {
               className="w-full"
               style={{ accentColor: 'var(--pd-accent)' }}
             />
-            <label className="mb-1.5 mt-3.5 block text-[13px] opacity-85">Thuốc</label>
+            <label className="mb-1.5 mt-3.5 block text-sm opacity-85">Thuốc</label>
             <select
               value={drug}
               onChange={(e) => setDrug(e.target.value)}
@@ -246,7 +246,7 @@ export default function PediatricDose() {
 
           {/* result */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-[13px] uppercase tracking-[0.6px] opacity-70">💉 Thể tích siro cần hút mỗi lần</div>
+            <div className="text-sm uppercase tracking-[0.6px] opacity-70">💉 Thể tích siro cần hút mỗi lần</div>
             <div className="my-[2px_0_4px] text-[42px] font-extrabold leading-[1.05] text-[color:var(--pd-accent)]">
               {fmt(r.vol)} mL
             </div>
@@ -275,7 +275,7 @@ export default function PediatricDose() {
             {warn.msgs.length > 0 && (
               <div
                 className={
-                  'mt-3 rounded-[10px] px-3 py-2.5 text-[13px] ' +
+                  'mt-3 rounded-[10px] px-3 py-2.5 text-sm ' +
                   (warn.cls === 'bad'
                     ? 'border border-[rgba(239,68,68,.45)] bg-[rgba(239,68,68,.16)]'
                     : 'border border-[rgba(251,191,36,.4)] bg-[rgba(251,191,36,.14)]')
@@ -287,7 +287,7 @@ export default function PediatricDose() {
 
           {/* quiz */}
           <div className="mt-[18px] rounded-2xl border border-[rgba(56,189,248,.3)] bg-[rgba(56,189,248,.08)] p-4">
-            <h3 className="mb-2 text-[15px] font-bold">🎯 Tự kiểm tra (luyện tính nhanh)</h3>
+            <h3 className="mb-2 text-base font-bold">🎯 Tự kiểm tra (luyện tính nhanh)</h3>
             <div className="mb-2.5 text-sm">{quizText}</div>
             <div className="flex flex-wrap items-center gap-2">
               {quizAns != null && (
@@ -301,11 +301,11 @@ export default function PediatricDose() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') checkQ();
                     }}
-                    className="w-[110px] rounded-[9px] border border-white/20 bg-[#1e293b] px-[11px] py-2.5 text-[15px] text-white"
+                    className="w-[110px] rounded-[9px] border border-white/20 bg-[#1e293b] px-[11px] py-2.5 text-base text-white"
                   />
                   <button
                     onClick={checkQ}
-                    className="cursor-pointer rounded-[10px] bg-[color:var(--pd-accent)] px-4 py-2.5 text-[13.5px] font-extrabold text-[#062a3d] hover:brightness-110"
+                    className="cursor-pointer rounded-[10px] bg-[color:var(--pd-accent)] px-4 py-2.5 text-sm font-extrabold text-[#062a3d] hover:brightness-110"
                   >
                     Kiểm tra
                   </button>
@@ -313,14 +313,14 @@ export default function PediatricDose() {
               )}
               <button
                 onClick={newQ}
-                className="cursor-pointer rounded-[10px] border border-white/25 bg-transparent px-4 py-2.5 text-[13.5px] font-extrabold text-white hover:brightness-110"
+                className="cursor-pointer rounded-[10px] border border-white/25 bg-transparent px-4 py-2.5 text-sm font-extrabold text-white hover:brightness-110"
               >
                 🎲 Câu hỏi mới
               </button>
             </div>
             {fb && (
               <div
-                className={'mt-2.5 text-[13.5px] ' + (fb.ok ? 'text-success' : 'text-[#f87171]')}
+                className={'mt-2.5 text-sm ' + (fb.ok ? 'text-success' : 'text-[#f87171]')}
                 dangerouslySetInnerHTML={{ __html: fb.html }}
               />
             )}

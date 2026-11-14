@@ -166,18 +166,18 @@ export default function CastView() {
               <p className="mb-5 text-sm leading-relaxed opacity-85">
                 Dán URL này lên máy chiếu lớp — học sinh sẽ thấy view sạch, không có nút điều khiển.
               </p>
-              <label className="mb-[6px] mt-3 block text-[13px] opacity-85">Chọn nội dung cần chiếu</label>
+              <label className="mb-[6px] mt-3 block text-sm opacity-85">Chọn nội dung cần chiếu</label>
               <select
                 value={selValue}
                 onChange={(e) => setSelValue(e.target.value)}
-                className="w-full rounded-[10px] px-[14px] py-3 text-[15px]"
+                className="w-full rounded-[10px] px-[14px] py-3 text-base"
                 style={{ border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.95)', color: '#1f2937' }}
               >
                 {targets.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
-              <label className="mb-[6px] mt-3 block text-[13px] opacity-85">
+              <label className="mb-[6px] mt-3 block text-sm opacity-85">
                 Mã phòng (tuỳ chọn) — đồng bộ HS qua hash
               </label>
               <input
@@ -185,7 +185,7 @@ export default function CastView() {
                 onChange={(e) => setRoomInput(e.target.value)}
                 placeholder="VD: A3X9KL"
                 maxLength={12}
-                className="w-full rounded-[10px] px-[14px] py-3 text-[15px]"
+                className="w-full rounded-[10px] px-[14px] py-3 text-base"
                 style={{ border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.95)', color: '#1f2937' }}
               />
               <button
@@ -196,7 +196,7 @@ export default function CastView() {
                 Bắt đầu chiếu
               </button>
               <div
-                className="mt-5 rounded-[10px] px-4 py-3 text-[13px] leading-relaxed opacity-90"
+                className="mt-5 rounded-[10px] px-4 py-3 text-sm leading-relaxed opacity-90"
                 style={{ background: 'rgba(14,165,233,0.1)', border: '1px solid rgba(14,165,233,0.3)' }}
               >
                 💡 <b>Mẹo</b>: gắn <code>?bare=1</code> để ẩn cả header — vd{' '}

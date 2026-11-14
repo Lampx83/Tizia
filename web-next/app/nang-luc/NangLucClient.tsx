@@ -217,19 +217,19 @@ export default function NangLucClient({
         <div className="flex flex-wrap items-center gap-3.5 rounded-2xl border border-border bg-card px-4 py-3.5">
           <div className="text-3xl">{enrollMeta ? enrollMeta.icon : '❓'}</div>
           <div className="min-w-[200px] flex-1">
-            <div className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+            <div className="text-2xs font-extrabold uppercase tracking-wider text-muted-foreground">
               Trường đang theo học
             </div>
-            <div className="text-[17px] font-extrabold">
+            <div className="text-lg font-extrabold">
               {enrollMeta ? enrollMeta.name : 'Chưa chọn trường'}
             </div>
-            <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+            <div className="mt-0.5 text-xs text-muted-foreground">
               {enrollMeta ? enrollMeta.tagline : 'Hãy chọn một trường để bắt đầu theo dõi năng lực.'}
             </div>
           </div>
           <Link
             href="/"
-            className="rounded-[10px] bg-foreground px-4 py-2 text-[13px] font-bold text-background hover:opacity-90"
+            className="rounded-[10px] bg-foreground px-4 py-2 text-sm font-bold text-background hover:opacity-90"
           >
             {me.enrolled_domain ? '🔄 Đổi trường' : '🎓 Chọn trường'}
           </Link>
@@ -283,7 +283,7 @@ function Switcher({
   if (children.length === 0 && classes.length === 0) return null;
 
   const pillBase =
-    'inline-flex items-center gap-1.5 rounded-[14px] border px-3 py-1.5 text-[13px] transition-colors';
+    'inline-flex items-center gap-1.5 rounded-[14px] border px-3 py-1.5 text-sm transition-colors';
   const pillOn = 'border-primary bg-primary font-bold text-primary-foreground';
   const pillOff = 'border-border bg-card-foreground/5 hover:bg-card-foreground/10';
 
@@ -291,13 +291,13 @@ function Switcher({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-border bg-card px-3 py-2.5">
-      <b className="mr-1.5 text-[13px] text-muted-foreground">Xem cây năng lực của:</b>
+      <b className="mr-1.5 text-sm text-muted-foreground">Xem cây năng lực của:</b>
       <button
         className={active(subject.context === 'self')}
         onClick={() => onPick({ context: 'self', label: 'Bản thân' })}
       >
         👤 Bản thân
-        <span className="text-[11px] opacity-70">{me.display_name || ''}</span>
+        <span className="text-2xs opacity-70">{me.display_name || ''}</span>
       </button>
       {children.map((c) => (
         <button
@@ -308,7 +308,7 @@ function Switcher({
           }
         >
           👶 {c.display_name}
-          <span className="text-[11px] opacity-70">con</span>
+          <span className="text-2xs opacity-70">con</span>
         </button>
       ))}
       {classes.map((cls) => (
@@ -324,7 +324,7 @@ function Switcher({
           }
         >
           🎓 {cls.name || cls.code}
-          <span className="text-[11px] opacity-70">lớp</span>
+          <span className="text-2xs opacity-70">lớp</span>
         </button>
       ))}
     </div>
@@ -384,7 +384,7 @@ function ClassRoster({
                     style={{ width: pct + '%' }}
                   />
                 </div>
-                <div className="mt-1 flex justify-between text-[11.5px] text-muted-foreground">
+                <div className="mt-1 flex justify-between text-2xs text-muted-foreground">
                   <span>
                     {m.summary.earned}/{total} kỹ năng
                   </span>
@@ -449,7 +449,7 @@ function Tree({
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-2xl font-extrabold text-primary">{pct}%</div>
-            <div className="text-[11px] font-semibold text-muted-foreground">Tiến độ</div>
+            <div className="text-2xs font-semibold text-muted-foreground">Tiến độ</div>
           </div>
         </div>
         <div className="min-w-[260px] flex-1">
@@ -475,13 +475,13 @@ function Tree({
             <div className="mt-2.5 flex flex-wrap gap-2">
               <Link
                 href="/"
-                className="rounded-xl bg-primary px-3.5 py-2 text-[13px] font-bold text-primary-foreground hover:opacity-90"
+                className="rounded-xl bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground hover:opacity-90"
               >
                 🏫 Khám phá các trường
               </Link>
               <Link
                 href="/cay-tri-thuc"
-                className="rounded-xl border border-border bg-white/[.08] px-3.5 py-2 text-[13px] font-bold hover:bg-white/[.14]"
+                className="rounded-xl border border-border bg-white/[.08] px-3.5 py-2 text-sm font-bold hover:bg-white/[.14]"
               >
                 🌳 Cây Tri Thức
               </Link>
@@ -520,7 +520,7 @@ function Tree({
                 style={{ background: KIND_DOT[meta.cls] }}
               />
               {meta.icon} {meta.label}
-              <span className="ml-auto text-[12.5px] font-medium text-muted-foreground">
+              <span className="ml-auto text-xs font-medium text-muted-foreground">
                 {totalEarned}/{totalAll} kỹ năng
               </span>
             </div>
@@ -555,11 +555,11 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
         (isEmpty ? 'opacity-60' : '')
       }
     >
-      <h3 className="mb-1.5 flex items-center gap-2 text-[15.5px] font-semibold">
+      <h3 className="mb-1.5 flex items-center gap-2 text-base font-semibold">
         <span className="text-xl">{icon}</span>
         {c.name}
       </h3>
-      <p className="mb-3 min-h-[36px] text-[12.5px] leading-relaxed text-muted-foreground">
+      <p className="mb-3 min-h-[36px] text-xs leading-relaxed text-muted-foreground">
         {c.description || ''}
       </p>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -578,7 +578,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
         <span>Thành thạo</span>
         <span>
           <b className="text-success">{masteryPct}%</b>
-          <span className="text-[11px] opacity-60"> · TB {avgMasteryPct}%</span>
+          <span className="text-2xs opacity-60"> · TB {avgMasteryPct}%</span>
         </span>
       </div>
       <div className="mb-2.5 h-2 overflow-hidden rounded-lg bg-white/[.07]">
@@ -589,7 +589,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
       </div>
       <div className="flex flex-wrap gap-1.5">
         {isEmpty ? (
-          <span className="text-[12.5px] italic text-muted-foreground">
+          <span className="text-xs italic text-muted-foreground">
             Chưa có kỹ năng nào — vào trường và làm quiz đi em!
           </span>
         ) : (
@@ -598,7 +598,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
               <span
                 key={s.code}
                 title={`${s.domain ? DOMAIN_LABEL[s.domain] || '' : ''} · Thành thạo ${s.mastery_pct}%`}
-                className="inline-flex flex-col items-stretch gap-[3px] rounded-[14px] border border-[rgba(16,185,129,.4)] bg-[rgba(16,185,129,.16)] px-2.5 py-1 text-[11.5px] text-success"
+                className="inline-flex flex-col items-stretch gap-[3px] rounded-[14px] border border-[rgba(16,185,129,.4)] bg-[rgba(16,185,129,.16)] px-2.5 py-1 text-2xs text-success"
               >
                 {s.name}
                 <span className="h-[3px] overflow-hidden rounded-sm bg-white/[.18]">
@@ -611,7 +611,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
             ))}
             {more > 0 && (
               <button
-                className="cursor-pointer rounded-[14px] border border-dashed border-border bg-white/[.06] px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                className="cursor-pointer rounded-[14px] border border-dashed border-border bg-white/[.06] px-2.5 py-1 text-2xs text-muted-foreground"
                 onClick={() => onOpenModal(node)}
               >
                 +{more} khác
@@ -623,7 +623,7 @@ function CompCard({ node, onOpenModal }: { node: TreeNode; onOpenModal: (n: Tree
       {total > earned && !isEmpty && (
         <div className="mt-2">
           <button
-            className="cursor-pointer rounded-[14px] border border-dashed border-border bg-white/[.06] px-2.5 py-1 text-[11.5px] text-muted-foreground"
+            className="cursor-pointer rounded-[14px] border border-dashed border-border bg-white/[.06] px-2.5 py-1 text-2xs text-muted-foreground"
             onClick={() => onOpenModal(node)}
           >
             Xem {total - earned} kỹ năng chưa đạt →
@@ -663,7 +663,7 @@ function SkillModal({
         <h2 className="text-xl font-bold">
           {COMP_ICON[c.code] || '⭐'} {c.name}
         </h2>
-        <p className="mb-3.5 text-[13.5px] text-muted-foreground">{c.description || ''}</p>
+        <p className="mb-3.5 text-sm text-muted-foreground">{c.description || ''}</p>
         <div>
           {loading || !catalog ? (
             <p className="text-muted-foreground">Đang tải…</p>
@@ -681,11 +681,11 @@ function SkillModal({
               return (
                 <div
                   key={s.code}
-                  className="flex items-center gap-2.5 border-t border-border py-2.5 text-[13.5px]"
+                  className="flex items-center gap-2.5 border-t border-border py-2.5 text-sm"
                 >
                   <span className="text-base">{isEarned ? '✅' : '⬜'}</span>
                   <span className={isEarned ? '' : 'opacity-65'}>{s.name}</span>
-                  <span className="ml-auto text-[11.5px] text-muted-foreground">
+                  <span className="ml-auto text-2xs text-muted-foreground">
                     {domainLabel}
                     {src?.score != null ? ' · ' + src.score + '%' : ''}
                   </span>

@@ -262,7 +262,7 @@ export default function AgentChat() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-bold">{a.name}</div>
-                      <div className="truncate text-[11.5px] text-muted-foreground">
+                      <div className="truncate text-2xs text-muted-foreground">
                         {a.alias}
                         {a.mine ? '' : ' · công khai'}
                       </div>
@@ -282,24 +282,24 @@ export default function AgentChat() {
             open={addOpen}
             onToggle={(e) => setAddOpen((e.currentTarget as HTMLDetailsElement).open)}
           >
-            <summary className="cursor-pointer text-[12.5px] text-muted-foreground">➕ Cài agent mới</summary>
+            <summary className="cursor-pointer text-xs text-muted-foreground">➕ Cài agent mới</summary>
             <div className="mt-2.5">
               <input
-                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-[13.5px] outline-none"
+                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-sm outline-none"
                 value={fAlias}
                 onChange={(e) => setFAlias(e.target.value)}
                 placeholder="alias (vd: papers)"
                 autoComplete="off"
               />
               <input
-                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-[13.5px] outline-none"
+                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-sm outline-none"
                 value={fBase}
                 onChange={(e) => setFBase(e.target.value)}
                 placeholder="base_url (https://…/v1)"
                 autoComplete="off"
               />
               <input
-                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-[13.5px] outline-none"
+                className="mb-2 w-full rounded-lg border bg-black/25 px-2.5 py-2 text-sm outline-none"
                 value={fName}
                 onChange={(e) => setFName(e.target.value)}
                 placeholder="Tên hiển thị (tuỳ chọn)"
@@ -309,7 +309,7 @@ export default function AgentChat() {
                 type="button"
                 onClick={registerAgent}
                 disabled={registering}
-                className="rounded-lg bg-primary px-3.5 py-2 text-[13.5px] font-bold text-primary-foreground disabled:opacity-50"
+                className="rounded-lg bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50"
               >
                 Cài &amp; kiểm tra /metadata
               </button>
@@ -371,14 +371,14 @@ export default function AgentChat() {
                 }
               }}
               disabled={!current}
-              className="max-h-[180px] min-h-[46px] flex-1 resize-y rounded-lg border bg-black/25 px-2.5 py-2 text-[13.5px] outline-none disabled:opacity-50"
+              className="max-h-[180px] min-h-[46px] flex-1 resize-y rounded-lg border bg-black/25 px-2.5 py-2 text-sm outline-none disabled:opacity-50"
               placeholder="Nhập câu hỏi… (Enter để gửi, Shift+Enter xuống dòng)"
             />
             <button
               type="button"
               onClick={send}
               disabled={!current || busy}
-              className="rounded-lg bg-primary px-3.5 py-2 text-[13.5px] font-bold text-primary-foreground disabled:opacity-50"
+              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground disabled:opacity-50"
             >
               Gửi
             </button>

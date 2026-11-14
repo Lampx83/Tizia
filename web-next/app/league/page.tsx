@@ -129,7 +129,7 @@ export default async function League() {
       </div>
 
       {/* Legend */}
-      <div className="text-[13px] leading-relaxed text-muted-foreground">
+      <div className="text-sm leading-relaxed text-muted-foreground">
         <b className="text-emerald-400">Top 5</b> cuối Chủ nhật → lên tier kế tiếp.{' '}
         <span className="text-rose-400">Bottom 5</span> (nếu nhóm ≥20 người) tụt 1 tier. Mỗi câu
         quiz đúng = 5 XP. Mỗi bài Codelab accepted = 5–20 XP. Claim quest = XP của quest.
@@ -173,13 +173,13 @@ export default async function League() {
                   <span className={cn('w-9 text-base font-extrabold', rankColor)}>{rank}</span>
                   <span className="flex-1">
                     <b className="font-bold">{r.display_name || 'Vô danh'}</b>
-                    <span className="ml-1.5 text-[11px] text-muted-foreground">
+                    <span className="ml-1.5 text-2xs text-muted-foreground">
                       {roleLabel(r.role)}
                     </span>
                   </span>
                   <span className="font-extrabold tabular-nums text-primary">
                     {r.week_xp}
-                    <span className="ml-0.5 text-[11px] font-medium opacity-60">XP</span>
+                    <span className="ml-0.5 text-2xs font-medium opacity-60">XP</span>
                   </span>
                 </div>
 

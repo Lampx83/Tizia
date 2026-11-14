@@ -24,6 +24,8 @@ const config: Config = {
         warning: { DEFAULT: 'hsl(var(--warning))', foreground: 'hsl(var(--warning-foreground))' },
         info: { DEFAULT: 'hsl(var(--info))', foreground: 'hsl(var(--info-foreground))' },
       },
+      // Cỡ chữ nhỏ nhất của giao diện ứng dụng (nhãn, chú thích). Thay cho text-[10.5px]…text-[11.5px] rải rác.
+      fontSize: { '2xs': ['0.6875rem', { lineHeight: '1rem' }] },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',

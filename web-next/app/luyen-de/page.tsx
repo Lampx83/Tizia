@@ -116,13 +116,13 @@ function ExamList({ exams, onStart }: { exams: Exam[]; onStart: (id: string) => 
                 onClick={() => onStart(e.id)}
                 className="rounded-[13px] border border-border bg-card p-4 text-left transition-transform hover:-translate-y-0.5 hover:border-[#a78bfa]"
               >
-                <div className="mb-1.5 text-[15px] font-bold">{e.title}</div>
-                <div className="flex flex-wrap gap-2.5 text-[12.5px] text-muted-foreground">
+                <div className="mb-1.5 text-base font-bold">{e.title}</div>
+                <div className="flex flex-wrap gap-2.5 text-xs text-muted-foreground">
                   <span>{SUBJ[e.subject || ''] || e.subject || ''}</span>
                   <span>📝 {e.questions.length} câu</span>
                   <span>⏱ {e.durationMin}′</span>
                 </div>
-                <div className="mt-2.5 text-[13px] font-semibold text-[#a78bfa]">Bắt đầu →</div>
+                <div className="mt-2.5 text-sm font-semibold text-[#a78bfa]">Bắt đầu →</div>
               </button>
             ))}
           </div>
@@ -189,7 +189,7 @@ function ExamRunner({ exam, onBack }: { exam: Exam; onBack: () => void }) {
         <span className="text-lg font-extrabold tabular-nums text-primary">
           {mm}:{ss}
         </span>
-        <span className="text-[13px] text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {answeredCount}/{total}
         </span>
         {!submitted && (
@@ -197,7 +197,7 @@ function ExamRunner({ exam, onBack }: { exam: Exam; onBack: () => void }) {
             onClick={() => {
               if (window.confirm('Nộp bài và xem kết quả?')) doSubmit();
             }}
-            className="ml-auto rounded-[9px] border border-primary bg-primary px-4 py-2.5 text-[13.5px] font-semibold text-[#1a1205] hover:brightness-110"
+            className="ml-auto rounded-[9px] border border-primary bg-primary px-4 py-2.5 text-sm font-semibold text-[#1a1205] hover:brightness-110"
           >
             Nộp bài
           </button>
@@ -250,7 +250,7 @@ function ExamRunner({ exam, onBack }: { exam: Exam; onBack: () => void }) {
                 );
               })}
               {submitted && (
-                <div className="mt-2 rounded-md border-l-[3px] border-[#a78bfa] bg-[rgba(167,139,250,.07)] px-2.5 py-1.5 text-[13px] text-muted-foreground">
+                <div className="mt-2 rounded-md border-l-[3px] border-[#a78bfa] bg-[rgba(167,139,250,.07)] px-2.5 py-1.5 text-sm text-muted-foreground">
                   💡 {q.ex || ''}
                 </div>
               )}
@@ -261,7 +261,7 @@ function ExamRunner({ exam, onBack }: { exam: Exam; onBack: () => void }) {
 
       <button
         onClick={onBack}
-        className="mt-2.5 rounded-[9px] border border-border bg-white/[.08] px-4 py-2.5 text-[13.5px] font-semibold hover:brightness-110"
+        className="mt-2.5 rounded-[9px] border border-border bg-white/[.08] px-4 py-2.5 text-sm font-semibold hover:brightness-110"
       >
         ← Về danh sách đề
       </button>

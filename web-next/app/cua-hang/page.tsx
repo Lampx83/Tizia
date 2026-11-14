@@ -176,7 +176,7 @@ export default function CuaHang() {
       <div className="mb-5 flex items-center gap-3.5">
         <Link
           href="/"
-          className="rounded-[18px] border bg-white/[.08] px-3.5 py-1.5 text-[13px] font-semibold"
+          className="rounded-[18px] border bg-white/[.08] px-3.5 py-1.5 text-sm font-semibold"
         >
           ← Trang chủ
         </Link>
@@ -192,7 +192,7 @@ export default function CuaHang() {
             key={t.type || 'all'}
             onClick={() => setCurrentTab(t.type)}
             className={cn(
-              'cursor-pointer rounded-[18px] border px-4 py-1.5 text-[13px] font-semibold transition-colors',
+              'cursor-pointer rounded-[18px] border px-4 py-1.5 text-sm font-semibold transition-colors',
               currentTab === t.type
                 ? 'border-[#a78bfa] bg-[#a78bfa] text-white'
                 : 'bg-white/5 hover:bg-white/10',
@@ -233,24 +233,24 @@ export default function CuaHang() {
                 {rarityLabel(i.rarity)}
               </div>
               <div className="mb-[3px] text-sm font-extrabold">{i.name}</div>
-              <div className="mb-2.5 min-h-[32px] text-[11.5px] leading-snug text-muted-foreground">
+              <div className="mb-2.5 min-h-[32px] text-2xs leading-snug text-muted-foreground">
                 {i.description || ''}
               </div>
               {!i.owned && (
-                <div className="mb-2 text-[13px] font-extrabold text-primary">{i.price_coin} 🪙</div>
+                <div className="mb-2 text-sm font-extrabold text-primary">{i.price_coin} 🪙</div>
               )}
               {i.owned ? (
                 i.equipped ? (
                   <button
                     disabled
-                    className="w-full cursor-not-allowed rounded-[10px] border border-success bg-success px-3.5 py-2 text-[12.5px] font-bold text-[#052e16]"
+                    className="w-full cursor-not-allowed rounded-[10px] border border-success bg-success px-3.5 py-2 text-xs font-bold text-[#052e16]"
                   >
                     ✓ Đang dùng
                   </button>
                 ) : (
                   <button
                     onClick={() => equip(i.id)}
-                    className="w-full cursor-pointer rounded-[10px] border border-success bg-[#22c55e]/[.18] px-3.5 py-2 text-[12.5px] font-bold text-success"
+                    className="w-full cursor-pointer rounded-[10px] border border-success bg-[#22c55e]/[.18] px-3.5 py-2 text-xs font-bold text-success"
                   >
                     Dùng item này
                   </button>
@@ -258,7 +258,7 @@ export default function CuaHang() {
               ) : (
                 <Button
                   onClick={() => buy(i.id)}
-                  className="w-full rounded-[10px] bg-gradient-to-br from-[#fbbf24] to-[#f97316] px-3.5 py-2 text-[12.5px] font-bold text-[#1e293b] hover:opacity-90"
+                  className="w-full rounded-[10px] bg-gradient-to-br from-[#fbbf24] to-[#f97316] px-3.5 py-2 text-xs font-bold text-[#1e293b] hover:opacity-90"
                 >
                   Mua
                 </Button>
