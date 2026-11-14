@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-import eval_corpus
-import eval_run
+from evaluation import eval_corpus
+from evaluation import eval_run
 from evaluation.suite import metrics, runner, trial
 from runtime.pipeline import ROOT, Deps
 

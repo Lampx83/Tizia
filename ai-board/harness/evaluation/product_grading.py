@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import eval_corpus  # noqa: E402
+from evaluation import eval_corpus  # noqa: E402
 from evaluation.suite import metrics  # noqa: E402
 from evaluation.suite.candidate_grade import PROTOCOL  # noqa: E402
 

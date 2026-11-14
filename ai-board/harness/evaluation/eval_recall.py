@@ -21,7 +21,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from services import context  # noqa: E402
 from services import file_context  # noqa: E402
 from evaluation.strata import _exemplars  # noqa: E402
@@ -46,7 +45,7 @@ def gold_lines(old: str, new: str) -> list[int]:
 
 def synthetic(root: Path) -> list[dict]:
     """Case của mọi corpus sinh theo seed (corpus/*/cases.json + site/)."""
-    import eval_run
+    from evaluation import eval_run
     out = []
     for folder in sorted((root / "corpus").glob("*")):
         if not (folder / "cases.json").is_file() or not (folder / "site").is_dir():
@@ -62,7 +61,7 @@ def synthetic(root: Path) -> list[dict]:
 
 
 def load_cases(root: Path, names: list[str] | None) -> list[dict]:
-    import eval_git
+    from evaluation import eval_git
     cases = synthetic(root) + eval_git.recall_cases(root)
     return [c for c in cases if not names or c["corpus"] in names]
 
@@ -115,7 +114,7 @@ def measure(case: dict) -> dict:
 
 
 def _stats(rows: list[dict]) -> dict:
-    import eval_run
+    from evaluation import eval_run
     n = len(rows)
     out = {"cases": n}
     for name, key in (("gate1", "gate1"), ("gate3", "gate3")):
@@ -174,10 +173,10 @@ def weights_id(path: str | None = None) -> dict:
 
 def _alt_rows(args) -> list[dict]:
     """Rows với retrieval_weights khác: tiến trình con (trọng số nạp lúc import), cùng corpus."""
-    import eval_run
+    from evaluation import eval_run
     out = Path(args.root) / "recall" / f"{args.label}-alt-rows.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, str(Path(eval_run.__file__).resolve()), "recall", "--root", args.root, "--dump-rows", str(out)]
+    cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "eval_run.py"), "recall", "--root", args.root, "--dump-rows", str(out)]
     for name in args.corpus or []:
         cmd += ["--corpus", name]
     subprocess.run(cmd, env={**os.environ, "AI_BOARD_RETRIEVAL_WEIGHTS": str(args.weights_alt)}, check=True,
@@ -206,7 +205,7 @@ def render(rep: dict) -> str:
 
 
 def register(subs) -> None:
-    import eval_run
+    from evaluation import eval_run
     parser = subs.add_parser("recall", help="recall context cổng 1/3 + chi phí từng phần, không model")
     parser.add_argument("--root", default=str(get_settings().eval_dir or eval_run.DEFAULT_ROOT))
     parser.add_argument("--corpus", action="append", help="chỉ corpus này (tên thư mục; corpus-git); mặc định mọi corpus có sẵn")

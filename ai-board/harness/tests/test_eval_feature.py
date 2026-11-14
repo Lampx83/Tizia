@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-import eval_run
+from evaluation import eval_run
 from evaluation import feature
 from evaluation.feature_cases import CASES
 

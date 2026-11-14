@@ -220,7 +220,7 @@ def generate(request, client, model_name, *, runtime=None, session_factory=Check
 def run_trial(task, deps, root, source, *, runtime=None, wall_s=300, budget=None):
     """Original request -> upstream agent -> candidate -> the same private corpus oracle."""
     import difflib
-    import eval_corpus
+    from evaluation import eval_corpus
     from evaluation.suite import candidate_grade, taskpack
     started = time.monotonic()
     budget = budget if budget is not None else Budget(max_wall_clock_s=wall_s)
@@ -242,7 +242,7 @@ def run_trial(task, deps, root, source, *, runtime=None, wall_s=300, budget=None
     record = eval_corpus.case_record(task, Path(root), source)
     graded = candidate_grade.grade(task, record, result['candidate'])
     diff = []
-    from eval_fast import _base_bytes
+    from evaluation.eval_fast import _base_bytes
     for path, text in result['candidate'].items():
         before = _base_bytes(repo, path)
         old = '' if before is None else before.decode('utf-8', 'replace')

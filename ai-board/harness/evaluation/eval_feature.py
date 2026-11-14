@@ -19,7 +19,7 @@ from settings import get_settings
 
 
 def register(subs) -> None:
-    import eval_run
+    from evaluation import eval_run
     p = subs.add_parser("feature", help="tầng chức năng e2e: acceptance tự động + rubric 0-3")
     p.add_argument("--root", default=str(get_settings().eval_dir or eval_run.DEFAULT_ROOT))
     p.add_argument("--records", help="jsonl bản ghi run đã thu (offline, không model)")
@@ -31,7 +31,7 @@ def register(subs) -> None:
 
 
 def pins(model: str) -> dict:
-    import eval_run
+    from evaluation import eval_run
     from runtime.pipeline import ROOT
     base = eval_run.pins(model, SimpleNamespace(models=SimpleNamespace()))
     manifest = ROOT / "ai-board" / "harness" / "runtime" / "tool_manifest.json"

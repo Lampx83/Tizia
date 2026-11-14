@@ -14,8 +14,8 @@ import unicodedata
 from pathlib import Path
 
 from repositories import code_index
-import eval_corpus
-import eval_fast
+from evaluation import eval_corpus
+from evaluation import eval_fast
 from evaluation import gold as gold_eval
 from evaluation.suite import candidate_grade, taskpack
 from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
