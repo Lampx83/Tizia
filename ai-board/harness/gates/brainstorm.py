@@ -279,8 +279,8 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
             seen.append(extra)
     must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
     if sha is None:
-        if pending:
-            raise levels.ElevationRequired(levels.requirements(plan, read), plan)
+        if pending and (needs := levels.requirements(plan, read)):
+            raise levels.ElevationRequired(needs, plan)
         return
     try:
         tree = repo_at_commit.at(source, sha)
@@ -293,8 +293,8 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
         raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
     if existing_migrations:
         raise ValueError(f"migration '{sorted(existing_migrations)[0]}' đã tồn tại — migration phải additive (file mới)")
-    if pending:
-        raise levels.ElevationRequired(levels.requirements(plan, read), plan)
+    if pending and (needs := levels.requirements(plan, read)):
+        raise levels.ElevationRequired(needs, plan)
 
 
 SEARCH_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "search_terms.md").read_text(encoding="utf-8")

@@ -80,3 +80,31 @@ def test_test_file_must_name_scope_file():
 ])
 def test_may_edit_table(path, allowed, role):
     assert path_policy.may_edit(path, role) is allowed
+
+
+TEST_TEXT = "import test from 'node:test';\nimport { route } from '../server/contexts/content/routes.js';\n"
+READ = {"test/content.test.js": TEST_TEXT, "test/plain.test.js": "assert(1)  // server/contexts/content/routes.js",
+        "test/other.test.js": "import test from 'node:test'"}.get
+
+
+@pytest.mark.parametrize("path,tests,allowed,expected", [
+    ("server/contexts/content/routes.js", ["test/content.test.js"], {"content"}, True),
+    ("server/contexts/content/routes.js", [], {"content"}, False),                          # thiếu test
+    ("server/contexts/content/routes.js", ["test/plain.test.js"], {"content"}, False),      # không node:test
+    ("server/contexts/content/routes.js", ["test/other.test.js"], {"content"}, False),      # test không nêu file
+    ("server/contexts/content/routes.js", ["test/missing.test.js"], {"content"}, False),    # test không tồn tại
+    ("server/contexts/content/routes.js", ["test/content.test.js"], set(), False),          # danh sách rỗng
+    ("server/contexts/content/routes.js", ["test/content.test.js"], {"learning"}, False),   # chưa duyệt
+    ("server/index.js", ["test/content.test.js"], {"content"}, False),
+    ("server/db.js", ["test/content.test.js"], {"db.js"}, False),
+    ("public/js/engine/wallet.js", ["test/content.test.js"], {"content"}, False),
+])
+def test_surface_context_needs_approved_context_and_node_test(path, tests, allowed, expected):
+    assert path_policy.surface_context(path, tests, READ, allowed) is expected
+
+
+@pytest.mark.parametrize("name", sorted(path_policy.FORBIDDEN_CONTEXTS) + ["ai-board-intake", "_ai-generated"])
+def test_surface_context_never_opens_forbidden_contexts(name):
+    path = f"server/contexts/{name}/routes.js"
+    text = f"import test from 'node:test'; // {path}"
+    assert not path_policy.surface_context(path, ["test/x.test.js"], {"test/x.test.js": text}.get, {name})

@@ -57,3 +57,28 @@ def may_edit(path, role: str = "student") -> bool:
 def names_scope(test_text: str, scope) -> bool:
     """Test under test/ hợp lệ chỉ khi nêu (đường dẫn hoặc tên file) một file trong phạm vi."""
     return any(p and (p in test_text or posixpath.basename(p) in test_text) for p in scope)
+
+
+_CONTEXT_FILE = re.compile(r"^server/contexts/([^/]+)/.+")
+_TEST_FILE = re.compile(r"^tests?/.+\.test\.[cm]?js$")
+# Tiền, bảo mật, danh tính, quản trị: không bao giờ mở, kể cả khi owner liệt kê nhầm.
+FORBIDDEN_CONTEXTS = frozenset({"billing", "payment", "economy", "security", "identity", "auth", "session", "admin"})
+
+
+def surface_context(path, tests, read, allowed) -> bool:
+    """File trong context được owner mở + có test node:test hiện có nêu file này -> được coi surface."""
+    normalized = normalize(path)
+    match = _CONTEXT_FILE.match(normalized or "")
+    if not match or read is None or not allowed:
+        return False
+    name = match.group(1).lower()
+    if name.startswith(("_", "ai-board")) or name in FORBIDDEN_CONTEXTS or name not in allowed:
+        return False
+    if not check(normalized, "write")["allow"]:
+        return False
+    for test in tests:
+        test = normalize(test)
+        text = read(test) if test and _TEST_FILE.match(test) else None
+        if text and "node:test" in text and names_scope(text, [normalized]):
+            return True
+    return False

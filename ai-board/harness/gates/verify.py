@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 from gates import visual
 from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
+from runtime import levels
 from runtime.meter import redact
 from settings import get_settings
 
@@ -560,7 +561,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             stage = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
-                                 if item.get("test_file")})
+                                 if item.get("test_file")} | set(levels.surface_tests(state.get("plan"))))
             review_any = get_settings().no_oracle_review_any
             if not test_files and not probe_id and not review_any:
                 raise RuntimeError("không có generated test để chạy")

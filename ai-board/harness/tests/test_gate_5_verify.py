@@ -1148,3 +1148,19 @@ def test_server_only_diff_without_a_route_is_still_a_plan_failure_before_docker(
     out = verify.run(server_only(tmp_path, "+  const x = 1;\n"), runner=runner)
     assert out["blocked"] is True and out["failure_class"] == "plan"
     assert runner.calls == []
+
+
+def test_opened_context_runs_its_related_test_and_route_probe(tmp_path, monkeypatch):
+    import settings
+    from verification import functional
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "1")
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST", "x")
+    settings.reset_settings()
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: (200, b'{"ok":true}'))
+    runner = FakeRunner()
+    s = server_only(tmp_path)
+    s["plan"] = {"subtasks": [{"file": "server/contexts/x/index.js", "verify": "node --test test/x.test.js"}]}
+    out = verify.run(s, runner=runner, functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is False, out["reason"]
+    assert any("/app/test/x.test.js" in args for args, _ in runner.calls)
+    assert out["evidence"]["functional"]["probe_id"] == functional.ROUTE_PROBE

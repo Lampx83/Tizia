@@ -193,17 +193,44 @@ def task_level(task: dict) -> str:
     return touch_level(task.get("file"), script_paths(task))
 
 
-def requirements(plan: dict, read=None) -> list[dict]:
+def surface_contexts() -> frozenset[str]:
+    """Context owner đã duyệt mở surface; rỗng khi cờ tắt."""
+    from settings import get_settings
+    cfg = get_settings()
+    return frozenset(name.lower() for name in cfg.backend_contexts_surface_list) if cfg.backend_contexts_surface else frozenset()
+
+
+def tests_of(task: dict) -> list[str]:
+    """Path test trong verify/acceptance của subtask."""
+    return [path for path in script_paths(task) if path_policy._TEST_FILE.match(path)]
+
+
+def surface_tests(plan: dict, surface=None) -> list[str]:
+    """Test của subtask có file trong context đã mở; gate 5 chạy chúng."""
+    allowed = surface_contexts() if surface is None else surface
+    found = []
+    for task in (plan or {}).get("subtasks") or []:
+        match = path_policy._CONTEXT_FILE.match(path_policy.normalize(task.get("file")) or "")
+        if match and match.group(1).lower() in allowed:
+            found += tests_of(task)
+    return list(dict.fromkeys(found))
+
+
+def requirements(plan: dict, read=None, surface=None) -> list[dict]:
     """[{path, level, why}] cho target trên surface; cùng path giữ mức cao nhất, bỏ mức surface.
     `read(path)` là nội dung file tại base: có thì mức target gộp cả import sẵn có (file_level)."""
     found: dict[str, dict] = {}
 
-    def add(path, source):
+    allowed = surface_contexts() if surface is None else surface
+
+    def add(path, source, tests=()):
         normalized = path_policy.normalize(path)
         if normalized is None:
             return
         level = file_level(normalized, read)
         if level == SURFACE:
+            return
+        if level == PROTECTED and path_policy.surface_context(normalized, tests, read, allowed):
             return
         if normalized in found and RANK[found[normalized]["level"]] >= RANK[level]:
             return
@@ -212,7 +239,7 @@ def requirements(plan: dict, read=None) -> list[dict]:
                                     + ("" if level == level_of(normalized) else " (import sẵn có trong file chạm mức này)")}
 
     for index, task in enumerate(plan.get("subtasks") or [], start=1):
-        add(str(task.get("file") or ""), f"file subtask {index}")
+        add(str(task.get("file") or ""), f"file subtask {index}", tests_of(task))
         for script in script_paths(task):
             add(script, f"script/verify của subtask {index}")
     return [found[path] for path in sorted(found)]

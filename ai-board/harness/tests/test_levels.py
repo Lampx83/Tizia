@@ -163,3 +163,50 @@ def test_write_check_blocks_protected_and_core_without_elevation():
                                   "scope": [{"path": "server/db.js", "level": "core"}]})
     assert levels.write_check("server/db.js", scope)["allow"] is True
     assert levels.write_check("ai-board/worker.py", scope)["allow"] is False  # self luôn chặn
+
+
+CTX_TEST = "import test from 'node:test';\n// server/contexts/content/routes.js\n"
+CTX_PLAN = {"subtasks": [{"file": "server/contexts/content/routes.js", "verify": "node --test test/content.test.js"}]}
+
+
+def _read(path):
+    return CTX_TEST if path == "test/content.test.js" else "export const x = 1;\n"
+
+
+def test_approved_context_with_node_test_is_surface():
+    assert levels.requirements(CTX_PLAN, _read, frozenset({"content"})) == []
+
+
+def test_context_stays_protected_by_default_and_without_test_or_approval():
+    assert [i["level"] for i in levels.requirements(CTX_PLAN, _read)] == ["protected"]
+    assert [i["level"] for i in levels.requirements(CTX_PLAN, _read, frozenset({"learning"}))] == ["protected"]
+    no_test = {"subtasks": [{"file": "server/contexts/content/routes.js", "verify": "echo ok"}]}
+    assert [i["level"] for i in levels.requirements(no_test, _read, frozenset({"content"}))] == ["protected"]
+
+
+def test_opened_context_importing_core_stays_core():
+    read = lambda path: CTX_TEST if path.startswith("test/") else "import db from '../../db.js';\n"
+    assert [i["level"] for i in levels.requirements(CTX_PLAN, read, frozenset({"content"}))] == ["core"]
+
+
+def test_core_files_stay_core_even_when_listed():
+    plan = {"subtasks": [{"file": "server/index.js", "verify": "node --test test/content.test.js"},
+                         {"file": "server/db.js", "verify": "node --test test/content.test.js"}]}
+    found = {i["path"]: i["level"] for i in levels.requirements(plan, _read, frozenset({"content", "db.js", "index.js"}))}
+    assert found == {"server/index.js": "core", "server/db.js": "core"}
+
+
+def test_surface_contexts_follow_flag_and_list(monkeypatch):
+    import settings
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST", "Content, learning")
+    settings.reset_settings()
+    assert levels.surface_contexts() == frozenset()  # cờ tắt
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "1")
+    settings.reset_settings()
+    assert levels.surface_contexts() == {"content", "learning"}
+    assert levels.surface_tests(CTX_PLAN) == ["test/content.test.js"]
+    assert levels.requirements(CTX_PLAN, _read) == []
+
+
+def test_surface_tests_empty_when_context_not_opened():
+    assert levels.surface_tests(CTX_PLAN) == []
