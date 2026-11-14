@@ -15,21 +15,7 @@ import { db,
          getUserByUsername, getUserById, setUserPlan } from '../../db.js';
 import { USER_PLANS as USER_PLANS_B2C } from './user-plans.js';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS subscriptions (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id           INTEGER NOT NULL,
-    plan              TEXT    NOT NULL DEFAULT 'free',  -- free | pro | school
-    status            TEXT    NOT NULL DEFAULT 'active', -- active | pending | past_due | canceled
-    seats             INTEGER NOT NULL DEFAULT 0,        -- 0 = không giới hạn (theo gói)
-    current_period_end INTEGER,                          -- epoch ms; NULL = vĩnh viễn (free)
-    order_ref         TEXT,                              -- liên kết invoice payment (nếu trả phí)
-    created_at        INTEGER NOT NULL,
-    updated_at        INTEGER NOT NULL,
-    UNIQUE(user_id)
-  );
-  CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id);
-`);
+// Schema (subscriptions) do server/schema.sql sở hữu sau khi migrate sang Postgres.
 
 // ── Catalog gói (code-defined; Phase sau có thể đưa vào DB cho admin sửa) ──
 // price_vnd theo tháng. features = tập entitlement. limits = hạn mức.
@@ -62,8 +48,8 @@ const upsertSubStmt = db.prepare(`
 `);
 
 /** Subscription hiện tại của user (mặc định free nếu chưa có row). */
-export function getSubscription(user_id) {
-  const row = getSubStmt.get(Number(user_id));
+export async function getSubscription(user_id) {
+  const row = await getSubStmt.get(Number(user_id));
   if (row) {
     // Hết hạn → coi như free (downgrade mềm, không xoá lịch sử).
     if (row.current_period_end && row.current_period_end < Date.now() && row.plan !== 'free') {
@@ -75,31 +61,31 @@ export function getSubscription(user_id) {
 }
 
 /** Entitlement suy ra từ plan hiện tại. */
-export function getEntitlements(user_id) {
-  const sub = getSubscription(user_id);
+export async function getEntitlements(user_id) {
+  const sub = await getSubscription(user_id);
   const plan = PLANS[sub.plan] || PLANS.free;
   return { plan: plan.id, plan_name: plan.name, status: sub.status, features: plan.features, limits: plan.limits, current_period_end: sub.current_period_end ?? null };
 }
 
-export function hasFeature(user_id, feature) {
-  return getEntitlements(user_id).features.includes(feature);
+export async function hasFeature(user_id, feature) {
+  return (await getEntitlements(user_id)).features.includes(feature);
 }
 
 /** Kích hoạt/đổi gói cho user. periodDays=null → vĩnh viễn (free). */
-export function activateSubscription({ user_id, plan, status = 'active', periodDays = 30, order_ref = null }) {
+export async function activateSubscription({ user_id, plan, status = 'active', periodDays = 30, order_ref = null }) {
   if (!VALID_PLANS.has(plan)) throw new Error(`plan không hợp lệ: ${plan}`);
   const now = Date.now();
   const current_period_end = (plan === 'free' || periodDays == null) ? null : now + periodDays * 24 * 3600 * 1000;
-  upsertSubStmt.run({ user_id: Number(user_id), plan, status, seats: 0, current_period_end, order_ref, t: now });
+  await upsertSubStmt.run({ user_id: Number(user_id), plan, status, seats: 0, current_period_end, order_ref, t: now });
   return getSubscription(user_id);
 }
 
 // ── Middleware gate tính năng premium theo user ──
 export function requireFeature(feature) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    if (hasFeature(req.user.id, feature)) return next();
-    const ent = getEntitlements(req.user.id);
+    if (await hasFeature(req.user.id, feature)) return next();
+    const ent = await getEntitlements(req.user.id);
     return res.status(402).json({  // 402 Payment Required
       error: 'feature_locked', feature, current_plan: ent.plan,
       message: `Tính năng "${feature}" cần nâng cấp gói. Gói hiện tại: ${ent.plan_name}.`,
@@ -112,29 +98,29 @@ export function requireFeature(feature) {
 export function attachBilling(r) {
   r.get('/api/billing/plans', (_req, res) => res.json({ plans: Object.values(PLANS) }));
 
-  r.get('/api/billing/me', (req, res) => {
+  r.get('/api/billing/me', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-    res.json({ user_id: req.user.id, ...getEntitlements(req.user.id) });
+    res.json({ user_id: req.user.id, ...(await getEntitlements(req.user.id)) });
   });
 
   // Đăng ký/đổi gói. Gói trả phí → tạo subscription 'pending' + trả amount để
   // client gọi payment create-order; khi IPN settled, payment gọi activateSubscription.
   // (Bản demo: cho phép kích hoạt trial ngay nếu PLAN free hoặc BILLING_DEMO_ACTIVATE=1.)
-  r.post('/api/billing/subscribe', (req, res) => {
+  r.post('/api/billing/subscribe', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const plan = String(req.body?.plan || '').trim();
     if (!VALID_PLANS.has(plan)) return res.status(400).json({ error: 'invalid_plan' });
     const planDef = PLANS[plan];
     if (planDef.price_vnd === 0) {
-      const sub = activateSubscription({ user_id: req.user.id, plan, periodDays: null });
+      const sub = await activateSubscription({ user_id: req.user.id, plan, periodDays: null });
       return res.json({ ok: true, activated: true, subscription: sub });
     }
     if (process.env.BILLING_DEMO_ACTIVATE === '1') {
-      const sub = activateSubscription({ user_id: req.user.id, plan, periodDays: 30 });
+      const sub = await activateSubscription({ user_id: req.user.id, plan, periodDays: 30 });
       return res.json({ ok: true, activated: true, demo: true, subscription: sub });
     }
     // Trả phí: tạo bản ghi pending, hướng client sang thanh toán.
-    activateSubscription({ user_id: req.user.id, plan, status: 'pending', periodDays: 30 });
+    await activateSubscription({ user_id: req.user.id, plan, status: 'pending', periodDays: 30 });
     res.json({
       ok: true, activated: false, plan, amount_vnd: planDef.price_vnd,
       next: 'POST /api/payment/create-order với amount tương ứng; kích hoạt khi IPN thành công.',
@@ -150,39 +136,39 @@ export function attachBilling(r) {
   }
 
   // POST /api/family/link { childUsername }
-  r.post('/api/family/link', (req, res) => {
+  r.post('/api/family/link', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     if (!canBeParent(req.user)) {
       return res.status(403).json({ error: 'role_not_parent', message: 'Tài khoản HS không thể làm phụ huynh. Hãy đổi vai trò sang Sinh viên hoặc Giảng viên.' });
     }
     const uname = String(req.body?.childUsername || '').trim();
     if (!uname) return res.status(400).json({ error: 'missing_child' });
-    const child = getUserByUsername(uname);
+    const child = await getUserByUsername(uname);
     if (!child) return res.status(404).json({ error: 'child_not_found', message: 'Không tìm thấy tài khoản này.' });
     if (child.id === req.user.id) return res.status(400).json({ error: 'self_link', message: 'Không thể link chính bạn.' });
     if (child.role !== 'pupil') {
       return res.status(400).json({ error: 'child_not_pupil', message: 'Chỉ link được tài khoản Học sinh.' });
     }
-    const out = linkChildToParent({ parent_user_id: req.user.id, child_user_id: child.id });
+    const out = await linkChildToParent({ parent_user_id: req.user.id, child_user_id: child.id });
     if (!out.linked) return res.status(409).json({ error: 'already_linked' });
     res.json({ ok: true, child: { id: child.id, username: child.username, display_name: child.display_name } });
   });
 
-  r.post('/api/family/unlink', (req, res) => {
+  r.post('/api/family/unlink', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     const childId = Number(req.body?.childId);
     if (!childId) return res.status(400).json({ error: 'missing_child' });
-    const out = unlinkChildFromParent({ parent_user_id: req.user.id, child_user_id: childId });
+    const out = await unlinkChildFromParent({ parent_user_id: req.user.id, child_user_id: childId });
     res.json({ ok: out.unlinked });
   });
 
   // GET /api/family/me — list con của user (chỉ trả nếu canBeParent)
-  r.get('/api/family/me', (req, res) => {
+  r.get('/api/family/me', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'unauthorized' });
     if (!canBeParent(req.user)) return res.json({ children: [], can_be_parent: false });
-    const me = getUserById(req.user.id);
+    const me = await getUserById(req.user.id);
     const meEff = me ? me.plan || 'free' : 'free';
-    const children = listChildrenOfParent(req.user.id);
+    const children = await listChildrenOfParent(req.user.id);
     res.json({
       children, can_be_parent: true,
       parent_plan: meEff,

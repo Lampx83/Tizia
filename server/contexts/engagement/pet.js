@@ -48,20 +48,6 @@ const FEED_COST = 10;                      // coin / lần feed
 const FEED_XP   = 25;                      // XP / lần feed
 const FEED_COOLDOWN_MS = 4 * 60 * 60 * 1000;  // 4h giữa các lần feed (tránh spam coin)
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user_pet (
-    user_id          INTEGER PRIMARY KEY,
-    pet_id           TEXT    NOT NULL,           -- 'rong-toan', 'cu-anh', ...
-    nickname         TEXT,
-    stage            INTEGER NOT NULL DEFAULT 0, -- 0=baby, 1=teen, 2=adult
-    xp               INTEGER NOT NULL DEFAULT 0,
-    last_fed_at      INTEGER NOT NULL DEFAULT 0,
-    created_at       INTEGER NOT NULL,
-    updated_at       INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-`);
-
 const _getPetStmt = db.prepare(`SELECT * FROM user_pet WHERE user_id = ?`);
 const _upsertPetStmt = db.prepare(`
   INSERT INTO user_pet (user_id, pet_id, nickname, stage, xp, last_fed_at, created_at, updated_at)
@@ -88,48 +74,48 @@ function normalizePetId(id) {
   return null;
 }
 
-function ensurePet(userId) {
-  let row = _getPetStmt.get(userId);
+async function ensurePet(userId) {
+  let row = await _getPetStmt.get(userId);
   if (row) {
     // Lazy migrate: nếu pet_id cũ (rong-toan…), tự đổi sang pet mới.
     const fixed = normalizePetId(row.pet_id);
     if (fixed && fixed !== row.pet_id) {
-      _upsertPetStmt.run({ ...row, pet_id: fixed, updated_at: Date.now() });
-      row = _getPetStmt.get(userId);
+      await _upsertPetStmt.run({ ...row, pet_id: fixed, updated_at: Date.now() });
+      row = await _getPetStmt.get(userId);
     } else if (!fixed) {
       // pet_id orphan (không tồn tại trong catalog mới lẫn legacy) → reset về default
-      _upsertPetStmt.run({ ...row, pet_id: 'cu-to-mo', updated_at: Date.now() });
-      row = _getPetStmt.get(userId);
+      await _upsertPetStmt.run({ ...row, pet_id: 'cu-to-mo', updated_at: Date.now() });
+      row = await _getPetStmt.get(userId);
     }
     return row;
   }
   // Auto-create từ pet đã chọn trong onboarding (lưu ở user_state)
   let petId = 'cu-to-mo';
   try {
-    const state = getUserState(userId);
+    const state = await getUserState(userId);
     const fromOnb = state?.['engagement.pet']?.value?.id || state?.['engagement.pet']?.id;
     const normalized = normalizePetId(fromOnb);
     if (normalized) petId = normalized;
   } catch {}
   const now = Date.now();
-  _upsertPetStmt.run({
+  await _upsertPetStmt.run({
     user_id: userId, pet_id: petId, nickname: null,
     stage: 0, xp: 0, last_fed_at: 0, created_at: now, updated_at: now,
   });
-  return _getPetStmt.get(userId);
+  return await _getPetStmt.get(userId);
 }
 
 /**
  * Cộng XP cho pet (gọi từ claim quest, codelab accepted, …). Idempotent.
  * Trả new state nếu evolve.
  */
-export function addPetXp(userId, xp) {
+export async function addPetXp(userId, xp) {
   if (!userId || !Number.isFinite(xp) || xp <= 0) return null;
-  const row = ensurePet(userId);
+  const row = await ensurePet(userId);
   const newXp = row.xp + Math.floor(xp);
   const newStage = computeStage(newXp);
   const evolved = newStage > row.stage;
-  _upsertPetStmt.run({
+  await _upsertPetStmt.run({
     ...row, xp: newXp, stage: newStage, updated_at: Date.now(),
   });
   return { xp: newXp, stage: newStage, evolved };
@@ -166,9 +152,9 @@ function petPayload(row) {
 }
 
 export function attachPet(router) {
-  router.get('/api/pet/me', requireAuth, (req, res) => {
+  router.get('/api/pet/me', requireAuth, async (req, res) => {
     try {
-      const row = ensurePet(req.user.id);
+      const row = await ensurePet(req.user.id);
       res.json({ ok: true, pet: petPayload(row), catalog: Object.entries(PET_CATALOG).map(([id, c]) => ({ id, ...c })) });
     } catch (e) {
       console.error('[pet] me error', e);
@@ -177,26 +163,26 @@ export function attachPet(router) {
   });
 
   // Đổi pet (chấp nhận legacy id để mượt cho client cũ)
-  router.post('/api/pet/switch', requireAuth, (req, res) => {
+  router.post('/api/pet/switch', requireAuth, async (req, res) => {
     const raw = String(req.body?.pet_id || '');
     const petId = normalizePetId(raw);
     if (!petId) return res.status(400).json({ ok: false, error: 'unknown_pet' });
-    const row = ensurePet(req.user.id);
-    _upsertPetStmt.run({ ...row, pet_id: petId, updated_at: Date.now() });
-    res.json({ ok: true, pet: petPayload(_getPetStmt.get(req.user.id)) });
+    const row = await ensurePet(req.user.id);
+    await _upsertPetStmt.run({ ...row, pet_id: petId, updated_at: Date.now() });
+    res.json({ ok: true, pet: petPayload(await _getPetStmt.get(req.user.id)) });
   });
 
   // Đặt nickname
-  router.post('/api/pet/nickname', requireAuth, (req, res) => {
+  router.post('/api/pet/nickname', requireAuth, async (req, res) => {
     const name = String(req.body?.nickname || '').trim().slice(0, 24);
-    const row = ensurePet(req.user.id);
-    _upsertPetStmt.run({ ...row, nickname: name || null, updated_at: Date.now() });
-    res.json({ ok: true, pet: petPayload(_getPetStmt.get(req.user.id)) });
+    const row = await ensurePet(req.user.id);
+    await _upsertPetStmt.run({ ...row, nickname: name || null, updated_at: Date.now() });
+    res.json({ ok: true, pet: petPayload(await _getPetStmt.get(req.user.id)) });
   });
 
   // Feed pet — tốn coin, được XP, cooldown 4h
-  router.post('/api/pet/feed', requireAuth, (req, res) => {
-    const row = ensurePet(req.user.id);
+  router.post('/api/pet/feed', requireAuth, async (req, res) => {
+    const row = await ensurePet(req.user.id);
     const now = Date.now();
     if (now < row.last_fed_at + FEED_COOLDOWN_MS) {
       return res.status(400).json({
@@ -205,23 +191,23 @@ export function attachPet(router) {
         message: 'Pet chưa đói — hãy quay lại sau.',
       });
     }
-    const wallet = getUserWallet(req.user.id) || { coins: 0 };
+    const wallet = await getUserWallet(req.user.id) || { coins: 0 };
     if ((wallet.coins || 0) < FEED_COST) {
       return res.status(400).json({ ok: false, error: 'no_coins', need: FEED_COST, have: wallet.coins || 0 });
     }
-    upsertUserWallet(req.user.id, {
+    await upsertUserWallet(req.user.id, {
       coins: (wallet.coins || 0) - FEED_COST,
     }, { monotonic: false });
     const newXp = row.xp + FEED_XP;
     const newStage = computeStage(newXp);
-    _upsertPetStmt.run({
+    await _upsertPetStmt.run({
       ...row, xp: newXp, stage: newStage, last_fed_at: now, updated_at: now,
     });
     res.json({
       ok: true,
       gained: { xp: FEED_XP, coins: -FEED_COST },
       evolved: newStage > row.stage,
-      pet: petPayload(_getPetStmt.get(req.user.id)),
+      pet: petPayload(await _getPetStmt.get(req.user.id)),
     });
   });
 }

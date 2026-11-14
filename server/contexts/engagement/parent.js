@@ -14,17 +14,17 @@ import { getEngagementReadOnly } from './index.js';
 import { getLeagueBoardForUser } from './league.js';
 import { getUserSkillTree, getUserSkillSummary } from '../../skills.js';
 
-function summarizeChild(child) {
+async function summarizeChild(child) {
   const id = child.id;
   let engagement = null, league = null, skills = null;
-  try { engagement = getEngagementReadOnly(id); } catch {}
+  try { engagement = await getEngagementReadOnly(id); } catch {}
   try {
-    const lb = getLeagueBoardForUser(id);
+    const lb = await getLeagueBoardForUser(id);
     league = lb ? { tier: lb.tier, tier_meta: lb.tier_meta, week_xp: lb.week_xp, my_rank: lb.my_rank } : null;
   } catch {}
   try {
-    const tree = getUserSkillTree(id);
-    const summary = getUserSkillSummary(id);
+    const tree = await getUserSkillTree(id);
+    const summary = await getUserSkillSummary(id);
     // Tổng mastery_pct = trung bình mastery của các competency CÓ skill đã đạt.
     const hasEarned = tree.filter(t => t.earned_skills.length > 0);
     const overallMastery = hasEarned.length > 0
@@ -54,14 +54,15 @@ function summarizeChild(child) {
 }
 
 export function attachParentDashboard(router, requireAuth) {
-  router.get('/api/parent/dashboard', requireAuth, (req, res) => {
+  router.get('/api/parent/dashboard', requireAuth, async (req, res) => {
     // PH = parent role-capable (kiểm trong billing/canBeParent đã có; ở đây
     // tin tưởng listChildrenOfParent: nếu user không phải parent → trả []).
-    const children = listChildrenOfParent(req.user.id) || [];
-    const items = children.map(c => {
-      const full = getUserById(c.id) || c;
-      return summarizeChild(full);
-    });
+    const children = await listChildrenOfParent(req.user.id) || [];
+    const items = [];
+    for (const c of children) {
+      const full = (await getUserById(c.id)) || c;
+      items.push(await summarizeChild(full));
+    }
     res.json({ ok: true, parent: { id: req.user.id, display_name: req.user.display_name }, children: items });
   });
 }

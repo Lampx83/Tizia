@@ -53,7 +53,7 @@ export function attachPayment(r, { basePath = '' } = {}) {
   // Hỗ trợ 2 mode:
   //   - upgrade gói cá nhân: body={plan,cycle} → amount tự tính theo bảng giá
   //   - generic: body={amount,description} (giữ tương thích cũ)
-  r.post('/api/payment/create-order', requireAuth, (req, res) => {
+  r.post('/api/payment/create-order', requireAuth, async (req, res) => {
     if (!isVnpayConfigured()) {
       return res.status(503).json({ error: 'payment_unconfigured', detail: 'VNPay chưa cấu hình TMN_CODE/HASH_SECRET' });
     }
@@ -77,7 +77,7 @@ export function attachPayment(r, { basePath = '' } = {}) {
     }
     const order_ref = genOrderRef();
     const now = Date.now();
-    insertInvoiceStmt.run({
+    await insertInvoiceStmt.run({
       user_id: req.user.id, order_ref, amount, currency: 'VND',
       description, gateway: 'vnpay', metadata, t: now,
     });
@@ -94,24 +94,24 @@ export function attachPayment(r, { basePath = '' } = {}) {
   });
 
   // ── IPN: server-to-server, chốt đơn (nguồn chân lý) ──
-  r.get('/api/payment/vnpay/ipn', (req, res) => {
+  r.get('/api/payment/vnpay/ipn', async (req, res) => {
     const q = req.query || {};
     const v = verifyCallback(q);
     const now = Date.now();
     const event_key = `${v.orderRef}:${v.gatewayTxnNo || q.vnp_TransactionNo || ''}:${v.responseCode}`;
 
     if (!v.valid) {
-      try { insertInboxStmt.run({ gateway: 'vnpay', event_key, order_ref: v.orderRef, payload: JSON.stringify(q), signature_valid: 0, t: now }); } catch {}
+      try { await insertInboxStmt.run({ gateway: 'vnpay', event_key, order_ref: v.orderRef, payload: JSON.stringify(q), signature_valid: 0, t: now }); } catch {}
       return res.json(IPN_RESPONSES.invalidSig);
     }
 
-    const invoice = getInvoiceByRefStmt.get(v.orderRef);
+    const invoice = await getInvoiceByRefStmt.get(v.orderRef);
     if (!invoice) return res.json(IPN_RESPONSES.orderNotFound);
     if (Math.round(invoice.amount) !== Math.round(v.amount)) return res.json(IPN_RESPONSES.amountInvalid);
 
     // Idempotency: nếu đã ghi inbox event này → đã xử lý, trả alreadyConfirmed.
     try {
-      insertInboxStmt.run({ gateway: 'vnpay', event_key, order_ref: v.orderRef, payload: JSON.stringify(q), signature_valid: 1, t: now });
+      await insertInboxStmt.run({ gateway: 'vnpay', event_key, order_ref: v.orderRef, payload: JSON.stringify(q), signature_valid: 1, t: now });
     } catch (e) {
       // UNIQUE(gateway, event_key) vi phạm → retry trùng, coi như đã confirm.
       return res.json(IPN_RESPONSES.alreadyConfirmed);
@@ -119,26 +119,26 @@ export function attachPayment(r, { basePath = '' } = {}) {
 
     // Đơn đã chốt trước đó (qua event khác) → không ghi sổ lần nữa.
     if (invoice.status === 'paid') {
-      markInboxProcessedStmt.run({ gateway: 'vnpay', event_key, t: now });
+      await markInboxProcessedStmt.run({ gateway: 'vnpay', event_key, t: now });
       return res.json(IPN_RESPONSES.alreadyConfirmed);
     }
 
     const success = isSuccessCode(v.responseCode);
-    const tx = db.transaction(() => {
-      insertPaymentStmt.run({
+    const tx = db.transaction(async () => {
+      await insertPaymentStmt.run({
         invoice_id: invoice.id, gateway: 'vnpay',
         gateway_txn_ref: v.gatewayTxnNo || null, amount: v.amount,
         status: success ? 'success' : 'failed', response_code: v.responseCode,
         raw_response: JSON.stringify(q), t: now,
       });
       if (success) {
-        markInvoicePaidStmt.run({ id: invoice.id, t: now });
-        recordPaymentSettled({ gateway: 'vnpay', amount: v.amount, invoice_id: invoice.id });
+        await markInvoicePaidStmt.run({ id: invoice.id, t: now });
+        await recordPaymentSettled({ gateway: 'vnpay', amount: v.amount, invoice_id: invoice.id });
         // Kích hoạt gói cá nhân nếu invoice gắn metadata kind=user_plan.
         try {
           const meta = invoice.metadata ? JSON.parse(invoice.metadata) : null;
           if (meta?.kind === 'user_plan' && meta.user_id && VALID_USER_PLANS.has(meta.plan)) {
-            setUserPlan(meta.user_id, {
+            await setUserPlan(meta.user_id, {
               plan: meta.plan,
               expires_at: expiresAtFor(meta.cycle || 'month'),
               cycle: meta.cycle || 'month',
@@ -146,22 +146,22 @@ export function attachPayment(r, { basePath = '' } = {}) {
           }
         } catch (e) { console.warn('[payment] activate user_plan failed:', e?.message); }
       } else {
-        markInvoiceFailedStmt.run({ id: invoice.id, t: now });
+        await markInvoiceFailedStmt.run({ id: invoice.id, t: now });
       }
-      markInboxProcessedStmt.run({ gateway: 'vnpay', event_key, t: now });
+      await markInboxProcessedStmt.run({ gateway: 'vnpay', event_key, t: now });
     });
-    tx();
+    await tx();
 
     return res.json(IPN_RESPONSES.success);
   });
 
   // ── Return URL: browser quay về — CHỈ hiển thị, KHÔNG chốt đơn ──
-  r.get('/api/payment/vnpay/return', (req, res) => {
+  r.get('/api/payment/vnpay/return', async (req, res) => {
     const v = verifyCallback(req.query || {});
     if (!v.valid) {
       return res.status(400).json({ ok: false, error: 'invalid_signature' });
     }
-    const invoice = getInvoiceByRefStmt.get(v.orderRef);
+    const invoice = await getInvoiceByRefStmt.get(v.orderRef);
     const success = isSuccessCode(v.responseCode);
     res.json({
       ok: true,
@@ -175,8 +175,8 @@ export function attachPayment(r, { basePath = '' } = {}) {
   });
 
   // ── Tra cứu trạng thái đơn (cho client poll sau khi quay về) ──
-  r.get('/api/payment/invoices/:orderRef', requireAuth, (req, res) => {
-    const invoice = getInvoiceByRefStmt.get(String(req.params.orderRef));
+  r.get('/api/payment/invoices/:orderRef', requireAuth, async (req, res) => {
+    const invoice = await getInvoiceByRefStmt.get(String(req.params.orderRef));
     if (!invoice) return res.status(404).json({ error: 'not_found' });
     // Chỉ chủ đơn (hoặc cùng trường + teacher) xem được — đơn giản: chủ đơn.
     if (invoice.user_id !== req.user.id && req.user.role !== 'teacher') {
@@ -190,22 +190,22 @@ export function attachPayment(r, { basePath = '' } = {}) {
   });
 
   // ── Hoàn tiền (teacher/admin) — ghi refund + bút toán đảo ──
-  r.post('/api/payment/refunds', requireAuth, (req, res) => {
+  r.post('/api/payment/refunds', requireAuth, async (req, res) => {
     if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'forbidden', message: 'Chỉ giáo viên/quản trị được hoàn tiền.' });
     }
     try {
-      const out = refundPayment({ payment_id: req.body?.paymentId, amount: req.body?.amount, reason: req.body?.reason });
+      const out = await refundPayment({ payment_id: req.body?.paymentId, amount: req.body?.amount, reason: req.body?.reason });
       res.json(out);
     } catch (e) { res.status(400).json({ error: 'refund_failed', detail: String(e.message) }); }
   });
 
   // ── Đối soát ledger ↔ payments (admin) — phát hiện lệch sổ ──
-  r.get('/api/payment/reconcile', requireAuth, (req, res) => {
+  r.get('/api/payment/reconcile', requireAuth, async (req, res) => {
     if (req.user.role !== 'admin' && req.user.role !== 'teacher') {
       return res.status(403).json({ error: 'forbidden' });
     }
-    res.json(reconcile());
+    res.json(await reconcile());
   });
 
   console.log('[payment] routes mounted: /api/payment/* (vnpay + refund + reconcile)');

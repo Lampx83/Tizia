@@ -36,7 +36,7 @@ function makeTxnGroup(prefix = 'txn') {
  * @param {string} [p.txn_group] override (mặc định tự sinh)
  * @returns {{ txn_group:string, entries:number }}
  */
-export function postTransaction({ entries, ref_type = null, ref_id = null, memo = null, currency = 'VND', txn_group } = {}) {
+export async function postTransaction({ entries, ref_type = null, ref_id = null, memo = null, currency = 'VND', txn_group } = {}) {
   if (!Array.isArray(entries) || entries.length < 2) {
     throw new Error('postTransaction: cần ít nhất 2 bút toán (nợ + có)');
   }
@@ -52,15 +52,15 @@ export function postTransaction({ entries, ref_type = null, ref_id = null, memo 
   }
   const group = txn_group || makeTxnGroup();
   const now = Date.now();
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const e of signed) {
-      insertEntryStmt.run({
+      await insertEntryStmt.run({
         txn_group: group, account: e.account, amount_signed: e.amount_signed,
         currency, ref_type, ref_id, memo, created_at: now,
       });
     }
   });
-  tx();
+  await tx();
   return { txn_group: group, entries: signed.length };
 }
 
@@ -77,22 +77,22 @@ const txnGroupStmt = db.prepare(`
 `);
 
 /** Số dư 1 tài khoản (VND, signed). */
-export function getBalance(account) {
-  return balanceStmt.get(String(account))?.bal ?? 0;
+export async function getBalance(account) {
+  return (await balanceStmt.get(String(account)))?.bal ?? 0;
 }
 /** Bảng số dư mọi tài khoản toàn hệ thống. */
-export function getAllBalances() {
-  return balanceAllStmt.all();
+export async function getAllBalances() {
+  return await balanceAllStmt.all();
 }
 /** Đọc lại các bút toán của 1 txn_group (audit/trace). */
-export function getTransaction(txn_group) {
-  return txnGroupStmt.all(String(txn_group));
+export async function getTransaction(txn_group) {
+  return await txnGroupStmt.all(String(txn_group));
 }
 
 // ── Helpers cao cấp cho luồng thanh toán ──
 
 /** Khi 1 payment thành công: tiền vào cổng (debit asset) + ghi nhận doanh thu (credit). */
-export function recordPaymentSettled({ gateway, amount, invoice_id, memo }) {
+export async function recordPaymentSettled({ gateway, amount, invoice_id, memo }) {
   return postTransaction({
     ref_type: 'payment', ref_id: invoice_id, memo: memo || `Thu tiền đơn ${invoice_id}`,
     entries: [
@@ -103,7 +103,7 @@ export function recordPaymentSettled({ gateway, amount, invoice_id, memo }) {
 }
 
 /** Khi hoàn tiền: đảo chiều — giảm doanh thu (debit) + tiền rời cổng (credit). */
-export function recordRefund({ gateway, amount, payment_id, memo }) {
+export async function recordRefund({ gateway, amount, payment_id, memo }) {
   return postTransaction({
     ref_type: 'refund', ref_id: payment_id, memo: memo || `Hoàn tiền payment ${payment_id}`,
     entries: [

@@ -33,11 +33,15 @@ const FEATURES = {
   'school-tieuhoc':{ tier: 0, name: 'Trường Tiểu học', scope: 'global' },
 
   // ───── Tier 1: Vào học lần đầu ─────
+  // Streak + thưởng đăng nhập: CHỈ trường phổ thông (mầm non + tiểu học + THCS +
+  // THPT). Trường ĐH/nghề khác → ẩn (lọc theo enrolled_domain ở /api/features/me).
   'hud-streak':    { tier: 1, name: 'Streak hằng ngày 🔥', scope: 'global',
+                     domains: ['preschool', 'primary', 'secondary', 'highschool'],
                      unlock_text: 'Làm 1 câu quiz để mở' },
   'daily-quest':   { tier: 1, name: 'Nhiệm vụ hôm nay 📋', scope: 'school',
                      unlock_text: 'Làm 1 câu quiz để mở' },
   'daily-bonus':   { tier: 1, name: 'Thưởng đăng nhập 🎁', scope: 'global',
+                     domains: ['preschool', 'primary', 'secondary', 'highschool'],
                      unlock_text: 'Mở khi giữ streak 2 ngày' },
 
   // ───── Tier 2: Bắt đầu kiên trì ─────
@@ -99,31 +103,31 @@ const FEATURES = {
 };
 
 // ── User progress checker ────────────────────────────────
-function getUserProgress(userId) {
-  const wallet = getUserWallet(userId) || {};
+async function getUserProgress(userId) {
+  const wallet = (await getUserWallet(userId)) || {};
   const streak = wallet.streak || 0;
   const longestStreak = wallet.longestStreak || 0;
   // Streak engagement riêng (cross-domain)
   let engStreak = 0;
   try {
-    const er = db.prepare(`SELECT streak FROM engagement_state WHERE user_id = ?`).get(userId);
+    const er = await db.prepare(`SELECT streak FROM engagement_state WHERE user_id = ?`).get(userId);
     engStreak = er?.streak || 0;
   } catch {}
   // Quiz đúng tổng (lifetime)
-  const quizCorrect = db.prepare(
+  const quizCorrect = (await db.prepare(
     `SELECT COUNT(*) AS n FROM question_attempts WHERE user_id = ? AND correct = 1`
-  ).get(userId)?.n || 0;
+  ).get(userId))?.n || 0;
   // Skills earned
-  const skillsEarned = db.prepare(
+  const skillsEarned = (await db.prepare(
     `SELECT COUNT(*) AS n FROM user_skills WHERE user_id = ?`
-  ).get(userId)?.n || 0;
+  ).get(userId))?.n || 0;
   // Số ngày active (distinct days từ user_activity hoặc engagement)
-  const activeDays = db.prepare(`
-    SELECT COUNT(DISTINCT date(last_active_date)) AS n FROM engagement_state WHERE user_id = ?
-  `).get(userId)?.n || 0;
+  const activeDays = (await db.prepare(`
+    SELECT COUNT(DISTINCT NULLIF(last_active_date, '')::date) AS n FROM engagement_state WHERE user_id = ?
+  `).get(userId))?.n || 0;
 
   // User createdAt → days since signup
-  const u = db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
+  const u = await db.prepare(`SELECT created_at FROM users WHERE id = ?`).get(userId);
   const daysSinceSignup = u ? Math.floor((Date.now() - u.created_at) / 86400_000) : 0;
 
   return {
@@ -168,8 +172,8 @@ function isFeatureRelevantToDomain(f, domain) {
 }
 
 export function attachFeatureGate(router) {
-  router.get('/api/features/me', requireAuth, (req, res) => {
-    const progress = getUserProgress(req.user.id);
+  router.get('/api/features/me', requireAuth, async (req, res) => {
+    const progress = await getUserProgress(req.user.id);
     const userTier = computeUserTier(progress, req.user.role);
     // Query filter:
     //   ?domain=primary  → chỉ feature relevant cho trường này
@@ -181,6 +185,9 @@ export function attachFeatureGate(router) {
     for (const [key, def] of Object.entries(FEATURES)) {
       if (scope && def.scope && def.scope !== scope) continue;
       if (domain && !isFeatureRelevantToDomain(def, domain)) continue;
+      // Lọc theo TRƯỜNG ĐÃ CHỌN của user: feature gắn `domains` (vd streak chỉ
+      // dành cho phổ thông) sẽ ẩn nếu user đang học trường ngoài danh sách đó.
+      if (!isFeatureRelevantToDomain(def, req.user.enrolled_domain)) continue;
       const unlocked = isFeatureUnlocked(key, req.user, progress, userTier);
       out[key] = {
         unlocked,

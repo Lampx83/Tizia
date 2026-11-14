@@ -19,35 +19,35 @@ export const ACHIEVEMENTS = [
 
   // ── Lĩnh vực 1 — Phát triển thể chất ──
   { id: 'active-mam', icon: '🏃', title: 'Bé năng động',
-    desc: 'Đạt 3 sao · Thể chất Mầm', trigger: { moduleStars: { 'N1-TC': 3 } } },
+    desc: 'Đạt 3 sao · Thể chất Mầm', trigger: { moduleStars: { 'N1TC': 3 } } },
   { id: 'agile-choi', icon: '🤸', title: 'Bé khéo léo',
-    desc: 'Đạt 3 sao · Thể chất Chồi', trigger: { moduleStars: { 'N2-TC': 3 } } },
+    desc: 'Đạt 3 sao · Thể chất Chồi', trigger: { moduleStars: { 'N2TC': 3 } } },
   { id: 'strong-la', icon: '💪', title: 'Bé cường tráng',
-    desc: 'Đạt 3 sao · Thể chất Lá', trigger: { moduleStars: { 'N3-TC': 3 } } },
+    desc: 'Đạt 3 sao · Thể chất Lá', trigger: { moduleStars: { 'N3TC': 3 } } },
 
   // ── Lĩnh vực 3 — Phát triển ngôn ngữ ──
   { id: 'talk-mam', icon: '💬', title: 'Bé bi bô',
-    desc: 'Đạt 3 sao · Ngôn ngữ Mầm', trigger: { moduleStars: { 'N1-NN': 3 } } },
+    desc: 'Đạt 3 sao · Ngôn ngữ Mầm', trigger: { moduleStars: { 'N1NN': 3 } } },
   { id: 'story-choi', icon: '📖', title: 'Bé kể chuyện',
-    desc: 'Đạt 3 sao · Ngôn ngữ Chồi', trigger: { moduleStars: { 'N2-NN': 3 } } },
+    desc: 'Đạt 3 sao · Ngôn ngữ Chồi', trigger: { moduleStars: { 'N2NN': 3 } } },
   { id: 'read-la', icon: '🔤', title: 'Bé đọc chữ',
-    desc: 'Đạt 3 sao · Ngôn ngữ Lá (biết 29 chữ cái)', trigger: { moduleStars: { 'N3-NN': 3 } } },
+    desc: 'Đạt 3 sao · Ngôn ngữ Lá (biết 29 chữ cái)', trigger: { moduleStars: { 'N3NN': 3 } } },
 
   // ── Lĩnh vực 4 — Phát triển tình cảm–xã hội ──
   { id: 'happy-mam', icon: '😊', title: 'Bé vui vẻ',
-    desc: 'Đạt 3 sao · Tình cảm–XH Mầm', trigger: { moduleStars: { 'N1-TX': 3 } } },
+    desc: 'Đạt 3 sao · Tình cảm–XH Mầm', trigger: { moduleStars: { 'N1TX': 3 } } },
   { id: 'kind-choi', icon: '🤝', title: 'Bé thân thiện',
-    desc: 'Đạt 3 sao · Tình cảm–XH Chồi', trigger: { moduleStars: { 'N2-TX': 3 } } },
+    desc: 'Đạt 3 sao · Tình cảm–XH Chồi', trigger: { moduleStars: { 'N2TX': 3 } } },
   { id: 'good-la', icon: '🌟', title: 'Bé tốt bụng',
-    desc: 'Đạt 3 sao · Tình cảm–XH Lá', trigger: { moduleStars: { 'N3-TX': 3 } } },
+    desc: 'Đạt 3 sao · Tình cảm–XH Lá', trigger: { moduleStars: { 'N3TX': 3 } } },
 
   // ── Lĩnh vực 5 — Phát triển thẩm mỹ ──
   { id: 'artist-mam', icon: '🎨', title: 'Bé nghệ sĩ nhỏ',
-    desc: 'Đạt 3 sao · Thẩm mỹ Mầm', trigger: { moduleStars: { 'N1-TM': 3 } } },
+    desc: 'Đạt 3 sao · Thẩm mỹ Mầm', trigger: { moduleStars: { 'N1TM': 3 } } },
   { id: 'talent-choi', icon: '🎭', title: 'Bé tài năng',
-    desc: 'Đạt 3 sao · Thẩm mỹ Chồi', trigger: { moduleStars: { 'N2-TM': 3 } } },
+    desc: 'Đạt 3 sao · Thẩm mỹ Chồi', trigger: { moduleStars: { 'N2TM': 3 } } },
   { id: 'creative-la', icon: '✨', title: 'Bé sáng tạo',
-    desc: 'Đạt 3 sao · Thẩm mỹ Lá', trigger: { moduleStars: { 'N3-TM': 3 } } },
+    desc: 'Đạt 3 sao · Thẩm mỹ Lá', trigger: { moduleStars: { 'N3TM': 3 } } },
 
   // ── Hoàn thành toàn diện ──
   { id: 'all-round', icon: '🏅', title: 'Phát triển toàn diện',
@@ -83,10 +83,10 @@ export const ACHIEVEMENTS = [
   // ── Combo đặc biệt — phát triển nhiều chiều ──
   { id: 'body-mind', icon: '🧠', title: 'Thể chất + Nhận thức',
     desc: 'Đạt 3 sao Thể chất và Nhận thức ở cùng lớp Lá',
-    trigger: { allModuleStars: [{ id: 'N3-TC', stars: 3 }, { id: 'N3', stars: 3 }] } },
+    trigger: { allModuleStars: [{ id: 'N3TC', stars: 3 }, { id: 'N3', stars: 3 }] } },
   { id: 'heart-voice', icon: '💝', title: 'Tình cảm + Ngôn ngữ',
     desc: 'Đạt 3 sao Tình cảm–XH và Ngôn ngữ ở lớp Lá',
-    trigger: { allModuleStars: [{ id: 'N3-TX', stars: 3 }, { id: 'N3-NN', stars: 3 }] } },
+    trigger: { allModuleStars: [{ id: 'N3TX', stars: 3 }, { id: 'N3NN', stars: 3 }] } },
   { id: 'early-achiever', icon: '🥇', title: 'Xuất sắc sớm',
     desc: 'Đạt 3 sao 3 lĩnh vực bất kỳ ở lớp Mầm', trigger: { quizzesPassed: 3 } },
 ];

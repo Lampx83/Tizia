@@ -15,8 +15,6 @@ import './pet-widget.js';
 import './daily-login.js';
 // i18n — auto-load bundle theo locale (vi/en/id).
 import './i18n.js';
-// TTS Reader — toggle 🔊 đọc to bài cho tiểu học.
-import './tts-reader.js';
 // Feature Gate — Progressive disclosure (locked → 🔒, mở dần theo journey)
 import './feature-gate.js';
 
@@ -30,7 +28,7 @@ const CSS = `
   .ev-header {
     position: sticky; top: 0; z-index: 100;
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 18px;
+    padding: 6px 18px;
     background: rgba(15, 23, 42, 0.85);
     border-bottom: 1px solid rgba(255,255,255,0.08);
     backdrop-filter: blur(14px);
@@ -45,10 +43,10 @@ const CSS = `
   }
   .ev-header .ev-brand {
     display: inline-flex; align-items: center; gap: 10px;
-    font-weight: 800; font-size: 19px; letter-spacing: -0.2px;
+    font-weight: 800; font-size: 17px; letter-spacing: -0.2px;
     color: white; text-decoration: none;
   }
-  .ev-header .ev-brand .logo { font-size: 30px; line-height: 1; }
+  .ev-header .ev-brand .logo { font-size: 24px; line-height: 1; }
   .ev-header .ev-brand .name {
     background: linear-gradient(135deg, #ffffff 0%, #fbbf24 60%, #f97316 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -63,7 +61,7 @@ const CSS = `
   /* Nút Quay lại + breadcrumb — chỉ hiện ở trang trong */
   .ev-header .ev-back {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 32px; height: 32px; border-radius: 8px;
+    width: 28px; height: 28px; border-radius: 8px;
     background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
     cursor: pointer; color: #fff; font-size: 15px; font-family: inherit;
     transition: background 0.15s, border-color 0.15s, transform 0.12s;
@@ -99,7 +97,7 @@ const CSS = `
      Trước đây chỉ ẩn trong "Khám phá thêm" cuối trang chủ, user không tìm thấy. */
   .ev-quicklinks { display: inline-flex; gap: 4px; padding: 0 4px; }
   .ev-quicklinks a {
-    width: 30px; height: 30px; border-radius: 8px;
+    width: 26px; height: 26px; border-radius: 8px;
     display: inline-flex; align-items: center; justify-content: center;
     text-decoration: none; font-size: 17px;
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
@@ -117,8 +115,8 @@ const CSS = `
 
   .ev-user-wrap { position: relative; }
   .ev-header .ev-user {
-    display: inline-flex; align-items: center; gap: 10px;
-    padding: 6px 12px 6px 6px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 4px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 999px; cursor: pointer; font-family: inherit; color: inherit;
@@ -126,7 +124,7 @@ const CSS = `
   }
   .ev-header .ev-user:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
   .ev-header .ev-avatar {
-    width: 30px; height: 30px; border-radius: 50%;
+    width: 26px; height: 26px; border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     background: linear-gradient(135deg, #fbbf24, #f97316); color: #3e2723;
     font-weight: 800; font-size: 13px;
@@ -198,6 +196,26 @@ const CSS = `
   .ev-header .ev-anon { font-size: 13px; opacity: 0.8; }
   .ev-header .ev-anon a { color: #fbbf24; text-decoration: none; font-weight: 700; }
 
+  /* Banner impersonate — admin đang xem với tư cách user khác. Nằm trên cùng, đè
+     mọi trang. Khi hiện banner, huỷ margin âm phía trên của header (syncEdgeMargins
+     kéo header lên bằng inline style → cần !important để thắng). */
+  #ev-imp-banner {
+    position: sticky; top: 0; z-index: 400;
+    display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+    padding: 7px 16px; font-size: 13px; line-height: 1.35;
+    background: linear-gradient(135deg, #b45309, #f59e0b); color: #1c1917;
+    font-family: 'Inter', system-ui, sans-serif; text-align: center;
+  }
+  #ev-imp-banner b { font-weight: 800; }
+  #ev-imp-banner button {
+    border: 1px solid rgba(0,0,0,0.35); background: rgba(0,0,0,0.14); color: #1c1917;
+    font-weight: 800; font-size: 12px; padding: 5px 13px; border-radius: 999px;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+    transition: background 0.15s, transform 0.12s;
+  }
+  #ev-imp-banner button:hover { background: rgba(0,0,0,0.26); transform: translateY(-1px); }
+  body.ev-impersonating #auth-header { margin-top: 0 !important; }
+
   /* Plan badge (Free/Plus/Pro) — hiển thị cạnh tên trong chip user và trong dialog */
   .ev-plan-pill {
     display: inline-flex; align-items: center; gap: 4px;
@@ -216,14 +234,14 @@ const CSS = `
   .ev-plan-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(168,85,247,.5); }
   .ev-plan-cta.muted { background: rgba(255,255,255,.08); color: #fff; box-shadow: none; }
   @media (max-width: 540px) {
-    .ev-header { padding: 8px 12px; gap: 8px; }
+    .ev-header { padding: 5px 12px; gap: 8px; }
     .ev-header .ev-brand .name { display: none; }
     .ev-header .ev-user-text { max-width: 120px; overflow: hidden; }
     .ev-header .ev-user-name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
     .ev-header .ev-crumbs .crumb-home { display: none; }
     .ev-header .ev-crumbs .sep { display: none; }
     .ev-header .ev-crumbs .leaf { max-width: 42vw; }
-    .ev-header .ev-back { width: 30px; height: 30px; }
+    .ev-header .ev-back { width: 26px; height: 26px; }
   }
 `;
 
@@ -380,7 +398,37 @@ function brandHtml() {
   return `<div class="ev-brand-stack"><a class="ev-brand" href="./"><span class="logo">🌌</span><span class="name">Tizia</span></a>${tagline}</div>`;
 }
 
+// Banner "đang xem với tư cách …" — chỉ hiện khi /api/auth/me trả impersonated_by
+// (admin đã bấm nút impersonate ở /admin). Nút "Quay lại admin" gọi stop rồi về /admin.
+function renderImpersonationBanner(user) {
+  const imp = user && user.impersonated_by;
+  const existing = document.getElementById('ev-imp-banner');
+  if (!imp) {
+    existing?.remove();
+    document.body.classList.remove('ev-impersonating');
+    return;
+  }
+  document.body.classList.add('ev-impersonating');
+  let bar = existing;
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'ev-imp-banner';
+    document.body.prepend(bar);
+  }
+  bar.innerHTML = `
+    <span>🕵️ Bạn (admin <b>${esc(imp.display_name)}</b>) đang xem với tư cách <b>${esc(user.display_name)}</b> (@${esc(user.username)})</span>
+    <button id="ev-imp-stop" type="button">↩ Quay lại admin</button>`;
+  bar.querySelector('#ev-imp-stop').addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/auth/impersonate/stop', { method: 'POST', credentials: 'same-origin' });
+      const d = await r.json().catch(() => ({}));
+      location.href = d.redirectTo || '/admin';
+    } catch { location.href = '/admin'; }
+  });
+}
+
 function render(host, user) {
+  renderImpersonationBanner(user);
   if (!user) {
     host.innerHTML = `
       ${brandHtml()}
@@ -397,7 +445,6 @@ function render(host, user) {
     return;
   }
   const r = ROLE_LABEL[user.role] || ROLE_LABEL.student;
-  const ageStr = user.age != null ? ` · ${user.age}t` : '';
   const avatarInner = user.avatar_url
     ? `<img src="${esc(user.avatar_url)}" alt="" />`
     : initials(user.display_name);
@@ -437,7 +484,6 @@ function render(host, user) {
         <span class="ev-avatar">${avatarInner}</span>
         <span class="ev-user-text">
           <span class="ev-user-name">${esc(user.display_name)}${planPill(planId)}</span>
-          <span class="ev-user-meta">${r.ico} ${r.label}${ageStr}</span>
         </span>
         <span class="ev-caret">▾</span>
       </button>

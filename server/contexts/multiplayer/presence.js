@@ -27,13 +27,13 @@ function getCookie(req, name) {
   return null;
 }
 
-function authConn(req) {
+async function authConn(req) {
   // Cookie 'tizia_sid' (khớp COOKIE_NAME trong auth.js); fallback ?token=.
   const token = getCookie(req, 'tizia_sid') || new URL(req.url, 'http://x').searchParams.get('token');
   if (!token) return null;
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) return null;
-  const user = getUserById(session.user_id);
+  const user = await getUserById(session.user_id);
   return user ? { token, user } : null;
 }
 
@@ -88,8 +88,8 @@ export function attachPresence(server) {
     }
   });
 
-  wss.on('connection', (ws, req) => {
-    const auth = authConn(req);
+  wss.on('connection', async (ws, req) => {
+    const auth = await authConn(req);
     if (!auth) {
       const cookieRaw = req.headers.cookie || '(no cookie)';
       console.warn('[presence] auth failed, cookies:', cookieRaw.slice(0, 200));

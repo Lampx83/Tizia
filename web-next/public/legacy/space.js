@@ -1,0 +1,778 @@
+// Wrap-mount cho trang Next /space.
+// Tái sử dụng NGUYÊN logic của inline <script type="module"> trong
+// public/space.html — không đổi hành vi (gate view-only, quiz SRS cá nhân hoá,
+// modal phòng, các widget thực hành canvas/audio, grant kỹ năng), giữ text tiếng
+// Việt + dữ liệu. Content LẤY TỪ DB qua API (phục vụ qua fallback proxy của Next:
+//   /api/content/space-sets, /api/skills/space, /api/skills/grant,
+//   /api/curriculum/grade/*, /js/engine/*.js, /js/request-board.js, /js/enrollment.js).
+// KHÔNG bê content vào code — mọi bộ nội gian + ngân hàng câu hỏi vẫn fetch runtime.
+
+// ── Per-school view-only gate (Phase 4): nếu user vào space của trường KHÔNG
+//    phải mình → banner đỏ + dim mọi nút submit/play + chặn fetch ghi. ──
+(async () => {
+  try {
+    const { applyViewOnlyGate } = await import('/js/enrollment.js');
+    const domGate = new URLSearchParams(location.search).get('domain') || 'pharmacy';
+    applyViewOnlyGate(domGate);
+  } catch (e) { /* enrollment gate không tải được → bỏ qua (guest/degrade) */ }
+})();
+
+// Cau hinh 8 truong (space + quiz nhung) tu DB (/api/content/space-sets).
+const _spaceSetsItems = await fetch('/api/content/space-sets', { credentials: 'same-origin' })
+  .then(r => r.ok ? r.json() : { items: [] }).then(j => j.items || []).catch(() => []);
+const SPACE_SETS = Object.fromEntries(_spaceSetsItems.map(it => [it.domain, it.spaces]));
+const DOMAIN_TITLES = { pharmacy: 'Trường Dược', secondary: 'Trường THCS', it: 'Trường Công nghệ thông tin', primary: 'Trường Tiểu học', preschool: 'Trường Mầm non', language: 'Trường Ngoại ngữ', driving: 'Trường Lái xe' };
+
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),4200); }
+
+const params=new URLSearchParams(location.search);
+const id=params.get('b')||'admin';
+const dom=params.get('domain')||'pharmacy';
+// highschool nay nam trong collection space-sets (DB)
+const SPACES=SPACE_SETS[dom]||SPACE_SETS.pharmacy||{};
+const S=SPACES[id]||SPACES[Object.keys(SPACES)[0]];
+document.title=`${S.emoji} ${S.name} · ${DOMAIN_TITLES[dom]||'Tizia'}`;
+
+// CSS cho block code {code} (req #106) — chèn runtime để chạy trên CẢ trang Express
+// (space.html) lẫn Next (SpaceMount) mà KHÔNG cần rebuild Next.
+if(!document.getElementById('mb-code-style')){
+  const _st=document.createElement('style'); _st.id='mb-code-style';
+  // Kèm luôn fix nền modal phòng (req #111 Enderboy): bản Next để modal-card nền
+  // hsl(var(--card)) ~ trong suốt → chữ lẫn nền trang phía sau, khó đọc. Ép nền tối
+  // đặc bằng !important (thắng .space-root .modal-card), không cần rebuild Next.
+  _st.textContent='.mb-code{background:#0b1220;border:1px solid rgba(255,255,255,.12);border-left:3px solid #38bdf8;border-radius:8px;padding:11px 14px;margin:4px 0 14px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#d6e4ff;white-space:pre;overflow-x:auto;tab-size:2}'
+    +'.modal-card{background:linear-gradient(180deg,#1b2438,#141c2e)!important}';
+  document.head.appendChild(_st);
+}
+
+const wrap=document.getElementById('wrap');
+const roomCard=(r,idx)=> r.href
+  ? `<a class="room" href="${r.href}"><div class="ri">${r.ic}</div><h3>${r.name}</h3><div class="rd">${r.rd}</div><span class="tag">Vào trải nghiệm →</span></a>`
+  : `<div class="room" data-room="${idx}"><div class="ri">${r.ic}</div><h3>${r.name}</h3><div class="rd">${r.rd}</div><span class="tag${r.board?'':' soon'}">${r.board?'Vào Ban điều hành →':'Khám phá →'}</span></div>`;
+
+wrap.style.setProperty('--accent', S.accent);
+// Nút quay lại về campus trường (req #102+#103 Thì Dũng): mọi không gian /space
+// đều vào từ bản đồ trường mà trước đó không có đường về → kẹt phải bấm Back trình duyệt.
+wrap.innerHTML = `
+  <a class="spaceBack" href="/school?domain=${dom}" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:14px;padding:8px 14px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:inherit;text-decoration:none;font-size:13.5px;font-weight:600">← Quay lại</a>
+  <div class="banner" style="background:linear-gradient(120deg, ${S.accent}33, rgba(255,255,255,.04));--accent:${S.accent}">
+    <div class="ic">${S.emoji}</div><h1>${S.name}</h1><p>${S.intro}</p>
+  </div>
+  <div class="sec-title">🚪 Không gian & hoạt động</div>
+  <div class="rooms">${S.rooms.map(roomCard).join('')}</div>
+  <div class="sec-title">🎯 Kỹ năng đạt được tại đây</div>
+  <div class="skills-meta" id="skills-meta">Đang tải tiến độ năng lực…</div>
+  <div class="skills" id="skills-list">${S.skills.map(s=>`<span class="chip pending"><span class="chip-i">⬜</span>${s}</span>`).join('')}</div>
+  <div class="sec-title">🧠 Củng cố kiến thức</div>
+  <div class="quiz" id="quiz"></div>
+`;
+document.documentElement.style.setProperty('--accent', S.accent);
+[...document.querySelectorAll('.room[data-room]')].forEach(el=>el.addEventListener('click',()=>openRoom(S.rooms[+el.dataset.room])));
+
+// ---- room detail modal ----
+const modal=document.getElementById('modal');
+const mClose=()=>modal.classList.remove('show');
+document.getElementById('m-x').addEventListener('click',mClose);
+modal.addEventListener('click',e=>{ if(e.target===modal) mClose(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') mClose(); });
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+let _pr=[];
+function prShell(i,icon,title,sub){ return '<div class="pr" data-pr="'+i+'"><div class="pr-h">'+icon+' '+esc(title)+' <span class="pr-badge">Thực hành</span></div>'+(sub?'<div class="pr-sub">'+esc(sub)+'</div>':'')+'<div class="pr-body"></div></div>'; }
+function renderBlocks(blocks){
+  _pr=[];
+  return blocks.map(b=>{
+    if(typeof b==='string') return `<p>${esc(b)}</p>`;
+    if(b.h) return `<h4>${esc(b.h)}</h4>`;
+    if(b.p) return `<p>${esc(b.p)}</p>`;
+    if(b.note) return `<div class="mb-note">${esc(b.note)}</div>`;
+    if(b.code) return `<pre class="mb-code">${esc(b.code)}</pre>`;   // ví dụ code kiểu w3schools (req #106)
+    // Mầm non + list (ul/ol) trông giống "Tập tô" → thay bằng Trace Canvas.
+    // Phải check TRƯỚC handler ul/ol mặc định, không thì handler cũ trả luôn <ol>.
+    if((b.ul || b.ol) && dom==='preschool'){
+      const items = b.ul || b.ol;
+      const looksTrace = items.some(s => /tô|cầm bút|nét/i.test(String(s)));
+      if(looksTrace){
+        const i = _pr.push({t:'trace', glyphs:['A','O','0','3']}) - 1;
+        return `<div class="pr-ps" data-ps="${i}"></div>
+          <details style="margin-top:10px;opacity:.75;font-size:13px;">
+            <summary>Gợi ý cho phụ huynh</summary>
+            <${b.ul?'ul':'ol'}>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</${b.ul?'ul':'ol'}>
+          </details>`;
+      }
+    }
+    // {ul}/{ol} có vibe "quy trình thí nghiệm" cho THCS/THPT → Experiment Stages tự bước.
+    if((b.ul || b.ol) && (dom==='highschool' || dom==='secondary')){
+      const items = b.ul || b.ol;
+      const txt = items.join(' ').toLowerCase();
+      // Heuristic: ol thường là procedural; ul nếu có keyword "bước/quy trình/thí nghiệm/đo/lắp"
+      // hoặc nếu là {ol} (đã có thứ tự inherently) → Experiment Stages.
+      const looksProc = !!b.ol || /bước|quy trình|thí nghiệm|thao tác|đo |lắp|chuẩn bị|thực hiện/i.test(txt);
+      if(looksProc && items.length >= 3){
+        const i = _pr.push({t:'stages', steps: items}) - 1;
+        return `<div class="pr-sec" data-sec="${i}"></div>`;
+      }
+    }
+    if(b.ul) return `<ul>${b.ul.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if(b.ol) return `<ol>${b.ol.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`;
+    if(b.cards) return `<div class="mb-cards">${b.cards.map(c=>`<div class="mb-card" data-card><div class="ci">${c.ic||''}</div><div class="ct">${esc(c.t)}</div><div class="cd">${esc(c.d)}</div><div class="more"></div></div>`).join('')}</div>`;
+    // Timeline interactive cho primary/secondary/highschool (click mở chi tiết).
+    // Mầm non vẫn dùng kiểu tĩnh đơn giản.
+    if(b.timeline){
+      if(dom==='primary' || dom==='secondary' || dom==='highschool'){
+        const i = _pr.push({t:'timeline', events: b.timeline}) - 1;
+        const isPrimary = (dom==='primary');
+        return `<div class="${isPrimary?'pr-prm':'pr-sec'}" data-${isPrimary?'prm':'sec'}="${i}"></div>`;
+      }
+      return `<ul class="timeline">${b.timeline.map(t=>`<li><div class="tl-t">${esc(t.t)}</div><div class="tl-d">${esc(t.d)}</div></li>`).join('')}</ul>`;
+    }
+    // THCS/THPT + flashcard ≥4 thẻ → upgrade thành Memory Match (lật cặp, có timer).
+    // Cấp khác hoặc <4 thẻ thì giữ kiểu flash flip cũ.
+    if(b.flash){
+      const isLab = (dom==='highschool' || dom==='secondary');
+      if(isLab && b.flash.length >= 4){
+        const i = _pr.push({t:'memory', pairs:b.flash}) - 1;
+        return `<div class="pr-sec" data-sec="${i}"></div>`;
+      }
+      return `<div class="flash-grid">${b.flash.map(f=>`<div class="flash"><div class="flash-inner"><div class="flash-face flash-front"><div class="fe">${f.e||''}</div><div class="fn">${esc(f.f)}</div></div><div class="flash-face flash-back">${esc(f.b)}</div></div></div>`).join('')}</div><div class="flash-hint">Bấm vào thẻ để lật xem đáp án</div>`;
+    }
+    // Checklist nâng cấp theo cấp học:
+    //  - Mầm non → Sticker Board (kéo dán vào Bảng Ngoan, TTS).
+    //  - THCS/THPT + content "an toàn" → Hazard Scene (click vùng nguy hiểm).
+    //  - THCS/THPT + content "thời gian biểu / ôn / học / ngủ" → Day Planner.
+    //  - Cấp khác / fallback giữ checkbox cũ.
+    if(b.check){
+      if(dom==='preschool'){
+        const i=_pr.push({t:'sticker', b:b})-1;
+        return `<div class="pr-ps" data-ps="${i}"></div>`;
+      }
+      const isLab = (dom==='highschool' || dom==='secondary');
+      if(isLab){
+        const txt = b.check.join(' ').toLowerCase();
+        // "điện" khớp cả "điện thoại" (dùng sai giờ học/khi lái xe...) khiến checklist
+        // nội quy thường bị nhầm sang trò chơi Lab Simulator — loại trừ cụm đó (req #140).
+        if(/an toàn|nguy|cẩn|kiểm tra|ngắt|dây|phích|điện(?!\s*thoại)|hoá chất|ppe/i.test(txt)){
+          const i=_pr.push({t:'hazard', items:b.check})-1;
+          return `<div class="pr-sec" data-sec="${i}"></div>`;
+        }
+        // "ôn" khớp cả bên trong "không", "luôn", "khuôn"… (chuỗi con) — chỉ nhận
+        // cụm ôn tập cụ thể để tránh checklist thường bị nhầm sang Kế hoạch ngày.
+        if(/thời gian biểu|ôn tập|ôn lại|ôn thi|tự học|ngay sau|đặt câu hỏi|ngủ|kế hoạch/i.test(txt)){
+          const i=_pr.push({t:'planner', items:b.check})-1;
+          return `<div class="pr-sec" data-sec="${i}"></div>`;
+        }
+      }
+      // Tiểu học: checklist → Quest Line (chặng đường có pet bay theo).
+      if(dom==='primary'){
+        const i=_pr.push({t:'quest', items:b.check})-1;
+        return `<div class="pr-prm" data-prm="${i}"></div>`;
+      }
+      return `<ul class="checklist">${b.check.map((x,i)=>`<li><label><input type="checkbox" data-ck="${i}"> <span>${esc(x)}</span></label></li>`).join('')}</ul><div class="ck-prog">0/${b.check.length} hoàn thành</div>`;
+    }
+    // Block tường minh: {hazard: [...]}, {planner: [...]}, {memory: [...]}, {trace: ...}.
+    if(b.hazard){
+      const items = Array.isArray(b.hazard) ? b.hazard : (b.hazard.items || []);
+      const i=_pr.push({t:'hazard', items})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    if(b.planner){
+      const items = Array.isArray(b.planner) ? b.planner : (b.planner.items || []);
+      const i=_pr.push({t:'planner', items})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    if(b.memory){
+      const pairs = Array.isArray(b.memory) ? b.memory : (b.memory.pairs || []);
+      const i=_pr.push({t:'memory', pairs})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    // {stages: [...]} — quy trình thí nghiệm theo bước.
+    if(b.stages){
+      const steps = Array.isArray(b.stages) ? b.stages : (b.stages.steps || []);
+      const i=_pr.push({t:'stages', steps})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    // {procedure: [...]} — kéo bước vào đúng thứ tự (THCS/THPT).
+    if(b.procedure){
+      const steps = Array.isArray(b.procedure) ? b.procedure : (b.procedure.steps || []);
+      const i=_pr.push({t:'procedure', steps})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    // {calc: {formula, vars, compute, unit}} — máy tính công thức tương tác.
+    if(b.calc){
+      const i=_pr.push({t:'calc', cfg:b.calc})-1;
+      return `<div class="pr-sec" data-sec="${i}"></div>`;
+    }
+    // {treasure: [...]} — săn kho báu (tiểu học).
+    if(b.treasure){
+      const items = Array.isArray(b.treasure) ? b.treasure : (b.treasure.items || []);
+      const i=_pr.push({t:'treasure', items})-1;
+      return `<div class="pr-prm" data-prm="${i}"></div>`;
+    }
+    // {quest: [...]} — chặng đường (tiểu học).
+    if(b.quest){
+      const items = Array.isArray(b.quest) ? b.quest : (b.quest.items || []);
+      const i=_pr.push({t:'quest', items})-1;
+      return `<div class="pr-prm" data-prm="${i}"></div>`;
+    }
+    // {trace: 'A'} hoặc {trace: ['A','O','0','3']} — tô chữ/số (mầm non).
+    if(b.trace){
+      const glyphs = Array.isArray(b.trace) ? b.trace : [b.trace];
+      const i = _pr.push({t:'trace', glyphs}) - 1;
+      return `<div class="pr-ps" data-ps="${i}"></div>`;
+    }
+    if(b.goal) return `<div class="goal-in"><input id="goal-input" placeholder="VD: Hoàn thành 3 module bào chế tuần này" /><button id="goal-save">Lưu</button></div><div class="goal-saved" id="goal-saved"></div>`;
+    if(b.mcq){
+      if(dom==='preschool'){
+        const i=_pr.push({t:'mcq-ps', items:b.mcq})-1;
+        return `<div class="pr-ps" data-ps="${i}"></div>`;
+      }
+      // Tiểu học: adventure cute MCQ (font vừa, có pet icon, không TTS).
+      if(dom==='primary'){
+        const i=_pr.push({t:'mcq-prm', items:b.mcq})-1;
+        return `<div class="pr-prm" data-prm="${i}"></div>`;
+      }
+      return b.mcq.map(m=>`<div class="mcq" data-a="${m.a}"><div class="mcq-q">${esc(m.q)}</div>${m.o.map((o,j)=>`<button class="mcq-o" data-i="${j}">${esc(o)}</button>`).join('')}<div class="mcq-fb">${esc(m.fb||'')}</div></div>`).join('');
+    }
+    if(b.piano){ const o=(typeof b.piano==='object')?b.piano:{}; const i=_pr.push({t:'piano',b:b})-1; return prShell(i,'🎹', o.title||'Đàn phím — chơi thử', o.sub||'Bấm phím để nghe nốt nhạc. Bấm ▶ để nghe câu mẫu rồi tự chơi theo.'); }
+    if(b.rhythm){ const o=(typeof b.rhythm==='object')?b.rhythm:{}; const i=_pr.push({t:'rhythm',b:b})-1; return prShell(i,'🥁', o.title||'Tập gõ nhịp', o.sub||'Chọn nhịp 2/4, 3/4 hay 4/4 — bấm Bắt đầu rồi gõ theo phách (phách 1 là phách mạnh).'); }
+    if(b.mixer){ const o=(typeof b.mixer==='object')?b.mixer:{}; const i=_pr.push({t:'mixer',b:b})-1; return prShell(i,'🎨', o.title||'Pha màu cơ bản', o.sub||'Bấm 2 màu cơ bản (Đỏ – Vàng – Lam) để xem màu pha ra. Thử pha đúng màu được yêu cầu.'); }
+    if(b.draw){ const o=(typeof b.draw==='object')?b.draw:{}; const i=_pr.push({t:'draw',b:b})-1; return prShell(i,'🖌️', o.title||'Vẽ tự do', o.sub||'Chọn màu, cỡ bút rồi vẽ trực tiếp lên giấy. Tự do sáng tạo!'); }
+    if(b.order){ const i=_pr.push({t:'order',b:b})-1; return prShell(i,'🔢', b.order.title||'Sắp xếp đúng thứ tự', b.order.sub||'Bấm các bước lần lượt theo thứ tự em cho là đúng, rồi bấm Kiểm tra.'); }
+    if(b.match){ const i=_pr.push({t:'match',b:b})-1; return prShell(i,'🔗', b.match.title||'Nối cặp đúng', b.match.sub||'Bấm một ô bên trái rồi ô tương ứng bên phải để nối.'); }
+    return '';
+  }).join('');
+}
+function openRoom(r){
+  if(!r) return;
+  document.getElementById('m-ic').textContent=r.ic||'📌';
+  document.getElementById('m-title').textContent=r.name||'';
+  const body=document.getElementById('m-body');
+  // Phòng "Ban điều hành AI": nạp bảng tiếp nhận yêu cầu tương tác (live) vào modal
+  if(r.board){
+    body.innerHTML = '<p style="opacity:.7">Đang mở Ban điều hành AI…</p>';
+    modal.classList.add('show'); body.scrollTop=0;
+    import('/js/request-board.js')
+      .then(m=>{ body.innerHTML=''; m.renderRequestBoard({ host: body, domain: dom, domainName: DOMAIN_TITLES[dom]||'Tizia' }); })
+      .catch(()=>{ body.innerHTML='<p>Không tải được Ban điều hành (cần backend chạy).</p>'; });
+    return;
+  }
+  body.innerHTML = renderBlocks(r.panel || [r.content || 'Nội dung đang được biên soạn.']);
+  body.querySelectorAll('.flash').forEach(f=>f.addEventListener('click',()=>f.classList.toggle('flipped')));
+  // Cards interactive — bấm card để đánh dấu "đã ghi nhớ" (toggle), có animation sao.
+  body.querySelectorAll('.mb-card[data-card]').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('flipped')));
+  body.querySelectorAll('.mcq').forEach(mc=>{ const a=+mc.dataset.a; mc.querySelectorAll('.mcq-o').forEach(o=>o.addEventListener('click',()=>{ if(mc.dataset.done) return; mc.dataset.done='1'; const pick=+o.dataset.i; mc.querySelectorAll('.mcq-o').forEach(x=>{ const xi=+x.dataset.i; if(xi===a) x.classList.add('correct'); else if(xi===pick) x.classList.add('wrong'); }); const fb=mc.querySelector('.mcq-fb'); if(fb&&fb.textContent.trim()) fb.classList.add('show'); })); });
+  const prog=body.querySelector('.ck-prog');
+  if(prog){ const boxes=[...body.querySelectorAll('input[data-ck]')];
+    const upd=()=>{ const n=boxes.filter(b=>b.checked).length; prog.textContent=`${n}/${boxes.length} hoàn thành`;
+      prog.classList.toggle('full',n===boxes.length); boxes.forEach(b=>b.closest('label').classList.toggle('done',b.checked)); };
+    boxes.forEach(b=>b.addEventListener('change',upd)); }
+  const gIn=body.querySelector('#goal-input');
+  if(gIn){ const gKey='tizia:goal:'+dom, saved=body.querySelector('#goal-saved');
+    const show=v=>{ if(v){ saved.textContent='🎯 Mục tiêu hiện tại: '+v; saved.classList.add('show'); } };
+    try{ show(localStorage.getItem(gKey)||''); }catch(e){}
+    body.querySelector('#goal-save').addEventListener('click',()=>{ const v=gIn.value.trim(); if(!v) return;
+      try{ localStorage.setItem(gKey,v); }catch(e){} show(v); gIn.value=''; toast('Đã lưu mục tiêu!'); }); }
+  body.querySelectorAll('.pr[data-pr]').forEach(el=>initPractice(el, _pr[+el.dataset.pr]));
+  // THCS/THPT blocks: Hazard / Memory Match / Day Planner / Stages / Procedure / Calc / Timeline.
+  const secNodes = body.querySelectorAll('.pr-sec[data-sec]');
+  if(secNodes.length){
+    import('/js/engine/secondary-ui.js?v=p5').then(ui => {
+      secNodes.forEach(node => {
+        const d = _pr[+node.dataset.sec];
+        if(d.t === 'hazard') ui.renderHazardScene(node, d.items, () => toast('🏆 Đã rà soát đủ nguy cơ — phòng thí nghiệm an toàn!'));
+        else if(d.t === 'memory') ui.renderMemoryMatch(node, d.pairs, ({seconds}) => toast(`🏆 Ghép xong sau ${seconds}s!`));
+        else if(d.t === 'planner') ui.renderDayPlanner(node, d.items, ({score, total}) => toast(`Kế hoạch: ${score}/${total} điểm`));
+        else if(d.t === 'stages') ui.renderExperimentStages(node, d.steps, { onDone: () => toast('🏆 Hoàn tất quy trình!') });
+        else if(d.t === 'procedure') ui.renderProcedureSort(node, d.steps, { onDone: ({score,total}) => toast(`Sắp xếp: ${score}/${total} đúng`) });
+        else if(d.t === 'calc') ui.renderFormulaCalc(node, d.cfg);
+        else if(d.t === 'timeline'){
+          // Timeline cho THCS/THPT dùng kiểu primary interactive (đẹp + click expand).
+          import('/js/engine/primary-ui.js?v=p4').then(pu => pu.renderInteractiveTimeline(node, d.events));
+        }
+      });
+    }).catch(err => console.warn('[secondary-ui] load fail', err));
+  }
+  // Tiểu học blocks: Quest / Treasure / Quiz inline / Timeline.
+  const prmNodes = body.querySelectorAll('.pr-prm[data-prm]');
+  if(prmNodes.length){
+    import('/js/engine/primary-ui.js?v=p4').then(ui => {
+      prmNodes.forEach(node => {
+        const d = _pr[+node.dataset.prm];
+        if(d.t === 'quest') ui.renderQuestLine(node, d.items, () => toast('🏆 Hoàn thành cả chặng!'));
+        else if(d.t === 'treasure') ui.renderTreasureHunt(node, d.items, () => toast('🏆 Tìm hết kho báu!'));
+        else if(d.t === 'mcq-prm') ui.renderQuizPrimaryInline(node, d.items);
+        else if(d.t === 'timeline') ui.renderInteractiveTimeline(node, d.events);
+      });
+    }).catch(err => console.warn('[primary-ui] load fail', err));
+  }
+  // Mầm non blocks: Sticker Board / Trace Canvas (dynamic import — không bắt cấp khác tải).
+  const psNodes = body.querySelectorAll('.pr-ps[data-ps]');
+  if(psNodes.length){
+    import('/js/engine/preschool-ui.js?v=p3').then(ui => {
+      psNodes.forEach(node => {
+        const d = _pr[+node.dataset.ps];
+        if(d.t === 'sticker'){
+          ui.renderStickerBoard(node, d.b.check || [], () => toast('🎉 Bé giỏi quá! +10 sao'));
+        } else if(d.t === 'mcq-ps'){
+          ui.renderInlineQuizPreschool(node, d.items);
+        } else if(d.t === 'trace'){
+          let idx = 0;
+          const next = () => {
+            node.innerHTML = '';
+            if(idx >= d.glyphs.length){
+              node.innerHTML = '<div style="text-align:center;font-size:24px;font-weight:900;color:#16a34a;padding:24px;">🏆 Bé tô hết rồi! Giỏi quá!</div>';
+              return;
+            }
+            ui.renderTraceCanvas(node, d.glyphs[idx], { onDone: () => { idx++; next(); } });
+          };
+          next();
+        }
+      });
+    }).catch(err => console.warn('[preschool-ui] load fail', err));
+  }
+  modal.classList.add('show'); body.scrollTop=0;
+}
+
+// ===== Interactive practice widgets =====
+const NOTES=[{n:'Đồ',f:261.63},{n:'Rê',f:293.66},{n:'Mi',f:329.63},{n:'Fa',f:349.23},{n:'Son',f:392.00},{n:'La',f:440.00},{n:'Si',f:493.88},{n:'Đố',f:523.25}];
+function getAudio(){ try{ if(!window._ac) window._ac=new (window.AudioContext||window.webkitAudioContext)(); if(window._ac.state==='suspended') window._ac.resume(); return window._ac; }catch(e){ return null; } }
+function playTone(freq,dur){ const ac=getAudio(); if(!ac) return; dur=dur||0.45;
+  const o=ac.createOscillator(),g=ac.createGain(); o.type='triangle'; o.frequency.value=freq;
+  const t=ac.currentTime; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.28,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+0.05); }
+function playClick(strong){ const ac=getAudio(); if(!ac) return;
+  const o=ac.createOscillator(),g=ac.createGain(); o.type='square'; o.frequency.value=strong?1500:900;
+  const t=ac.currentTime; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(strong?0.22:0.13,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t+0.08); }
+function shuf(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function initPractice(host,d){ const body=host.querySelector('.pr-body');
+  if(d.t==='piano') initPiano(body,d.b);
+  else if(d.t==='rhythm') initRhythm(body,d.b);
+  else if(d.t==='mixer') initMixer(body,d.b);
+  else if(d.t==='draw') initDraw(body,d.b);
+  else if(d.t==='order') initOrder(body,d.b);
+  else if(d.t==='match') initMatch(body,d.b); }
+
+function initPiano(body,b){
+  const o=(typeof b.piano==='object')?b.piano:{};
+  const notes=NOTES.slice(0,8);
+  const song=o.song||['Đồ','Đồ','Son','Son','La','La','Son'];
+  const songName=o.songName||'Ngôi sao lấp lánh';
+  let pos=-1;
+  const piano=document.createElement('div'); piano.className='piano';
+  const keyByName={};
+  notes.forEach(nt=>{ const k=document.createElement('div'); k.className='pk'; k.textContent=nt.n; keyByName[nt.n]=k;
+    k.addEventListener('click',()=>{ playTone(nt.f); k.classList.add('down'); setTimeout(()=>k.classList.remove('down'),140); onPress(nt.n); });
+    piano.appendChild(k); });
+  body.appendChild(piano);
+  const row=document.createElement('div'); row.className='pr-row';
+  const tgt=document.createElement('div'); tgt.style.flex='1'; tgt.style.fontSize='13px'; tgt.innerHTML='🎼 Câu mẫu (<b>'+esc(songName)+'</b>): '+song.map(n=>'<span style="display:inline-block;margin:0 2px;padding:1px 7px;border-radius:7px;background:rgba(255,255,255,.08);font-weight:700">'+esc(n)+'</span>').join('');
+  const btnPlay=document.createElement('button'); btnPlay.className='pr-btn'; btnPlay.textContent='▶ Nghe mẫu';
+  const btnTry=document.createElement('button'); btnTry.className='pr-btn ghost'; btnTry.textContent='🎯 Tập chơi';
+  row.appendChild(tgt); row.appendChild(btnPlay); row.appendChild(btnTry);
+  body.appendChild(row);
+  const msg=document.createElement('div'); msg.className='pr-msg'; body.appendChild(msg);
+  function freqOf(n){ const x=NOTES.find(z=>z.n===n); return x?x.f:440; }
+  function resetTargets(){ Object.values(keyByName).forEach(k=>k.classList.remove('target')); }
+  function setTarget(n){ resetTargets(); const k=keyByName[n]; if(k) k.classList.add('target'); }
+  btnPlay.addEventListener('click',()=>{ pos=-1; resetTargets(); msg.className='pr-msg'; msg.textContent='';
+    let i=0; const dt=420;
+    const tick=()=>{ if(i>=song.length) return; const n=song[i]; playTone(freqOf(n),0.35); const k=keyByName[n]; if(k){ k.classList.add('down'); setTimeout(()=>k.classList.remove('down'),200); } i++; setTimeout(tick,dt); };
+    tick(); });
+  btnTry.addEventListener('click',()=>{ pos=0; msg.className='pr-msg'; msg.textContent='Chơi nốt: '+song[0]; setTarget(song[0]); });
+  function onPress(n){ if(pos<0) return;
+    if(n===song[pos]){ pos++;
+      if(pos>=song.length){ msg.className='pr-msg ok'; msg.textContent='🎉 Bạn đã chơi đúng cả câu nhạc!'; pos=-1; resetTargets(); }
+      else { msg.className='pr-msg ok'; msg.textContent='Đúng! Nốt tiếp: '+song[pos]; setTarget(song[pos]); }
+    } else { msg.className='pr-msg bad'; msg.textContent='Chưa đúng (em vừa chơi '+n+', cần '+song[pos]+'). Bấm 🎯 Tập chơi để bắt đầu lại.'; pos=-1; resetTargets(); } }
+}
+
+function initRhythm(body,b){
+  const sigs=[[2,4],[3,4],[4,4]];
+  let beatsCount=4, bpm=90, timer=null, beatIdx=-1, lastBeat=0, interval=0, total=0, good=0;
+  const segRow=document.createElement('div'); segRow.className='pr-row';
+  const seg=document.createElement('div'); seg.className='seg';
+  sigs.forEach(s=>{ const bn=document.createElement('button'); bn.textContent=s[0]+'/'+s[1]; if(s[0]===4) bn.classList.add('on'); bn.addEventListener('click',()=>{ stop(); seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); bn.classList.add('on'); beatsCount=s[0]; buildBeats(); }); seg.appendChild(bn); });
+  segRow.appendChild(seg);
+  const btnStart=document.createElement('button'); btnStart.className='pr-btn'; btnStart.textContent='▶ Bắt đầu';
+  const btnStop=document.createElement('button'); btnStop.className='pr-btn ghost'; btnStop.textContent='■ Dừng';
+  segRow.appendChild(btnStart); segRow.appendChild(btnStop); body.appendChild(segRow);
+  const beatsRow=document.createElement('div'); beatsRow.className='beats'; body.appendChild(beatsRow);
+  const tap=document.createElement('button'); tap.className='tap-pad'; tap.textContent='👆 GÕ ở đây (hoặc nhấn phím cách)'; body.appendChild(tap);
+  const msg=document.createElement('div'); msg.className='pr-msg'; body.appendChild(msg);
+  function buildBeats(){ beatsRow.innerHTML=''; for(let i=0;i<beatsCount;i++){ const d=document.createElement('div'); d.className='beat'+(i===0?' strong':''); d.textContent=(i+1); beatsRow.appendChild(d); } }
+  buildBeats();
+  function tick(){ beatIdx=(beatIdx+1)%beatsCount;
+    [...beatsRow.children].forEach((d,i)=>d.classList.toggle('on', i===beatIdx));
+    playClick(beatIdx===0); lastBeat=performance.now(); }
+  function start(){ if(timer) return; total=0; good=0; msg.className='pr-msg'; msg.textContent='Cảm nhận số phách và gõ theo nhé!'; interval=60000/bpm; beatIdx=-1; tick(); timer=setInterval(tick,interval); }
+  function stop(){ if(timer){ clearInterval(timer); timer=null; } [...beatsRow.children].forEach(d=>d.classList.remove('on')); beatIdx=-1; }
+  btnStart.addEventListener('click',start);
+  btnStop.addEventListener('click',()=>{ stop(); if(total>0){ const pct=Math.round(100*good/total); msg.className='pr-msg ok'; msg.textContent='Đã gõ '+total+' lần — '+good+' đúng nhịp ('+pct+'%).'; } });
+  function onTap(){ if(!timer) return;
+    const now=performance.now(); const predicted=lastBeat+Math.round((now-lastBeat)/interval)*interval; const delta=Math.abs(now-predicted); total++;
+    if(delta<90){ good++; msg.className='pr-msg ok'; msg.textContent='Chuẩn! ('+Math.round(delta)+' ms)'; }
+    else if(delta<200){ good++; msg.className='pr-msg'; msg.textContent='Tạm ổn ('+Math.round(delta)+' ms)'; }
+    else { msg.className='pr-msg bad'; msg.textContent='Hơi lệch ('+Math.round(delta)+' ms) — chú ý phách 1 mạnh.'; } }
+  tap.addEventListener('click',onTap);
+  const keyH=e=>{ if(e.code==='Space' && modal.classList.contains('show')){ e.preventDefault(); onTap(); } };
+  document.addEventListener('keydown', keyH);
+  const mo=new MutationObserver(()=>{ if(!modal.classList.contains('show')){ stop(); document.removeEventListener('keydown', keyH); mo.disconnect(); } });
+  mo.observe(modal,{attributes:true,attributeFilter:['class']});
+}
+
+function initMixer(body,b){
+  const prims=[{n:'Đỏ',c:'#e23b3b',k:'r'},{n:'Vàng',c:'#f5c518',k:'y'},{n:'Lam',c:'#2563eb',k:'b'}];
+  const mixes={'r':{c:'#e23b3b',n:'Đỏ'},'y':{c:'#f5c518',n:'Vàng'},'b':{c:'#2563eb',n:'Lam'},'r+y':{c:'#f97316',n:'Cam'},'y+b':{c:'#16a34a',n:'Lục (xanh lá)'},'b+r':{c:'#7c3aed',n:'Tím'},'b+r+y':{c:'#5b3a1a',n:'Nâu (gần đen)'}};
+  const challenges=[{target:'Cam'},{target:'Lục (xanh lá)'},{target:'Tím'}];
+  let sel=new Set(); let chIdx=0;
+  const row=document.createElement('div'); row.className='mix-prim';
+  prims.forEach(p=>{ const el=document.createElement('button'); el.className='mix-c'; el.style.background=p.c; el.textContent=p.n; el.addEventListener('click',()=>{ if(sel.has(p.k)) sel.delete(p.k); else sel.add(p.k); el.classList.toggle('sel'); update(); }); row.appendChild(el); });
+  body.appendChild(row);
+  const out=document.createElement('div'); out.className='mix-out'; out.style.background='rgba(255,255,255,.05)'; out.textContent='Chưa chọn màu'; body.appendChild(out);
+  const ch=document.createElement('div'); ch.className='pr-row'; ch.style.marginTop='8px';
+  const lbl=document.createElement('div'); lbl.style.flex='1'; lbl.style.fontSize='13px';
+  const btn=document.createElement('button'); btn.className='pr-btn ghost'; btn.textContent='↺ Đổi yêu cầu';
+  ch.appendChild(lbl); ch.appendChild(btn); body.appendChild(ch);
+  const msg=document.createElement('div'); msg.className='pr-msg'; body.appendChild(msg);
+  function key(){ return ['r','y','b'].filter(k=>sel.has(k)).join('+'); }
+  function update(){ const k=key(); const m=mixes[k];
+    if(m){ out.style.background=m.c; out.textContent=m.n; } else { out.style.background='rgba(255,255,255,.05)'; out.textContent='Chưa chọn màu'; }
+    const c=challenges[chIdx]; if(m && m.n===c.target){ msg.className='pr-msg ok'; msg.textContent='🎉 Đúng rồi! Em vừa pha ra '+c.target+'.'; } else { msg.className='pr-msg'; msg.textContent=''; } }
+  function setCh(){ const c=challenges[chIdx]; lbl.innerHTML='🎯 Pha cho ra màu: <b>'+esc(c.target)+'</b>'; }
+  setCh();
+  btn.addEventListener('click',()=>{ chIdx=(chIdx+1)%challenges.length; setCh(); update(); });
+}
+
+function initDraw(body,b){
+  const colors=['#1f2937','#e11d48','#f59e0b','#16a34a','#2563eb','#7c3aed','#ffffff'];
+  const sizes=[3,6,12];
+  let color=colors[0], size=sizes[1];
+  const tools=document.createElement('div'); tools.className='draw-tools';
+  colors.forEach((c,i)=>{ const s=document.createElement('button'); s.className='sw'+(i===0?' sel':''); s.style.background=c; s.addEventListener('click',()=>{ color=c; tools.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); }); tools.appendChild(s); });
+  sizes.forEach((sz,i)=>{ const s=document.createElement('button'); s.className='brush'+(i===1?' sel':''); s.textContent=sz+'px'; s.addEventListener('click',()=>{ size=sz; tools.querySelectorAll('.brush').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); }); tools.appendChild(s); });
+  const clr=document.createElement('button'); clr.className='pr-btn ghost'; clr.textContent='🧹 Xoá'; tools.appendChild(clr);
+  body.appendChild(tools);
+  const c=document.createElement('canvas'); c.className='draw-c'; body.appendChild(c);
+  function fit(){ const r=c.getBoundingClientRect(); c.width=Math.max(2,Math.round(r.width)); c.height=Math.max(2,Math.round(r.height)); }
+  setTimeout(fit,30);
+  const ctx=c.getContext('2d'); let drawing=false, lx=0, ly=0;
+  function pos(e){ const r=c.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
+  function down(e){ e.preventDefault(); drawing=true; [lx,ly]=pos(e); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle=color; ctx.lineWidth=size; ctx.beginPath(); ctx.moveTo(lx,ly); }
+  function move(e){ if(!drawing) return; e.preventDefault(); const [x,y]=pos(e); ctx.strokeStyle=color; ctx.lineWidth=size; ctx.lineTo(x,y); ctx.stroke(); lx=x; ly=y; }
+  function up(){ drawing=false; }
+  c.addEventListener('pointerdown',down); c.addEventListener('pointermove',move); c.addEventListener('pointerup',up); c.addEventListener('pointerleave',up); c.addEventListener('pointercancel',up);
+  clr.addEventListener('click',()=>{ ctx.clearRect(0,0,c.width,c.height); });
+}
+
+function initOrder(body,b){
+  const items=b.order.items.slice();
+  const display=shuf(items.map((t,i)=>({t:t,i:i})));
+  const list=document.createElement('div'); list.className='ord-list';
+  const picks=[]; const btns=[];
+  display.forEach(it=>{
+    const el=document.createElement('button'); el.className='ord-it'; el.dataset.i=it.i;
+    const num=document.createElement('span'); num.className='num'; num.textContent='–';
+    const tx=document.createElement('span'); tx.textContent=it.t;
+    el.appendChild(num); el.appendChild(tx);
+    el.addEventListener('click',()=>{ if(el.dataset.done) return; if(el.classList.contains('picked')) return; picks.push(+el.dataset.i); el.classList.add('picked'); num.textContent=picks.length; });
+    list.appendChild(el); btns.push(el);
+  });
+  body.appendChild(list);
+  const row=document.createElement('div'); row.className='pr-row';
+  const ck=document.createElement('button'); ck.className='pr-btn'; ck.textContent='✅ Kiểm tra';
+  const rs=document.createElement('button'); rs.className='pr-btn ghost'; rs.textContent='↺ Làm lại';
+  row.appendChild(ck); row.appendChild(rs); body.appendChild(row);
+  const msg=document.createElement('div'); msg.className='pr-msg'; body.appendChild(msg);
+  ck.addEventListener('click',()=>{
+    if(picks.length!==items.length){ msg.className='pr-msg bad'; msg.textContent='Em chưa chọn đủ '+items.length+' bước.'; return; }
+    let ok=0;
+    btns.forEach(btn=>{ const correct=+btn.dataset.i+1; const got=picks.indexOf(+btn.dataset.i)+1; if(got===correct){ btn.classList.add('correct'); ok++; } else btn.classList.add('wrong'); btn.dataset.done='1'; });
+    if(ok===items.length){ msg.className='pr-msg ok'; msg.textContent='🎉 Hoàn hảo — đúng cả '+ok+'/'+items.length+' bước!'; }
+    else { msg.className='pr-msg bad'; msg.textContent='Đúng '+ok+'/'+items.length+' bước. Bấm Làm lại để thử.'; }
+  });
+  rs.addEventListener('click',()=>{ picks.length=0; btns.forEach(btn=>{ btn.classList.remove('picked','correct','wrong'); delete btn.dataset.done; btn.querySelector('.num').textContent='–'; }); msg.className='pr-msg'; msg.textContent=''; });
+}
+
+function initMatch(body,b){
+  const pairs=b.match.pairs;
+  const grid=document.createElement('div'); grid.className='match-grid';
+  const L=document.createElement('div'); L.style.display='flex'; L.style.flexDirection='column'; L.style.gap='8px';
+  const R=document.createElement('div'); R.style.display='flex'; R.style.flexDirection='column'; R.style.gap='8px';
+  pairs.forEach((p,i)=>{ const l=document.createElement('button'); l.className='mt'; l.textContent=p[0]; l.dataset.p=i; L.appendChild(l); });
+  shuf(pairs.map((_,i)=>i)).forEach(i=>{ const r=document.createElement('button'); r.className='mt'; r.textContent=pairs[i][1]; r.dataset.p=i; R.appendChild(r); });
+  grid.appendChild(L); grid.appendChild(R); body.appendChild(grid);
+  const msg=document.createElement('div'); msg.className='pr-msg'; body.appendChild(msg);
+  let sel=null, done=0;
+  L.querySelectorAll('.mt').forEach(el=>el.addEventListener('click',()=>{
+    if(el.classList.contains('done')) return;
+    L.querySelectorAll('.mt').forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel'); sel=el;
+  }));
+  R.querySelectorAll('.mt').forEach(el=>el.addEventListener('click',()=>{
+    if(el.classList.contains('done')) return;
+    if(!sel){ msg.className='pr-msg'; msg.textContent='Chọn một ô bên trái trước nhé.'; return; }
+    if(sel.dataset.p===el.dataset.p){
+      sel.classList.remove('sel'); sel.classList.add('done'); el.classList.add('done'); sel=null; done++;
+      if(done===pairs.length){ msg.className='pr-msg ok'; msg.textContent='🎉 Em đã nối đúng tất cả '+done+' cặp!'; }
+      else { msg.className='pr-msg ok'; msg.textContent='Đúng rồi! Đã nối '+done+'/'+pairs.length+' cặp.'; }
+    } else { el.classList.add('bad'); setTimeout(()=>el.classList.remove('bad'),420); msg.className='pr-msg bad'; msg.textContent='Chưa đúng, thử lại.'; }
+  }));
+}
+
+// ---- Củng cố kiến thức — CÁ NHÂN HOÁ qua spaced-quiz.js (SM-2-lite) ----
+// Trước đây render thẳng S.quiz (3 câu cố định). Giờ:
+//  1. Mỗi câu có id ổn định (vd 'mam-c03') → bind state SRS per (user, card).
+//  2. Khi vào trang: fetch state (server nếu login, localStorage nếu guest).
+//  3. Picker chọn 4-5 câu = ưu tiên câu sai gần đây (🔁) + đến hạn ôn (🎯)
+//     + câu mới (🆕), trộn ngẫu nhiên nhẹ.
+//  4. Sau khi nộp: gửi review từng câu lên server (hoặc local) để SM-2 cập
+//     nhật ease/interval/due_at.
+//  5. Nút "🎲 Đổi bộ câu" pick lại → tránh nhàm khi bé học liên tục.
+const QUIZ_SIZE = 5;                        // mỗi lần hiển thị 5 câu
+const SRS_PREFIX = `space:${dom}:${id}:`;   // vd space:preschool:mam:
+const quizEl=document.getElementById('quiz');
+let _srsState = null;                       // load 1 lần, reuse khi re-roll
+let _picked = {};                           // index câu trong bộ đang hiển thị → option index
+let _currentBatch = [];                     // mảng câu đang hiển thị
+
+const BADGE_HTML = {
+  lapse: '<span class="qb lapse">🔁 Ôn lại</span>',
+  due:   '<span class="qb due">🎯 Đến hạn</span>',
+  new:   '<span class="qb new">🆕 Câu mới</span>',
+  'review-early': '<span class="qb review-early">✨ Bonus</span>',
+};
+
+function renderQuiz(){
+  if(!_currentBatch.length){
+    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào — bé thử lại sau nhé.</p>';
+    return;
+  }
+  _picked = {};
+  const dueCount = _currentBatch.filter(c => c._badge==='due' || c._badge==='lapse').length;
+  const newCount = _currentBatch.filter(c => c._badge==='new').length;
+  const stateNote = _srsState && _srsState.source==='local'
+    ? 'Đang lưu ở thiết bị này (bé chưa đăng nhập).'
+    : 'Đồng bộ theo tài khoản của bé. 📡';
+  quizEl.innerHTML = `
+    <div class="quiz-meta">
+      <span>🧠 Bộ câu hôm nay: <b>${dueCount}</b> ôn lại · <b>${newCount}</b> câu mới · ${stateNote}</span>
+      <button class="reroll" id="qreroll" type="button">🎲 Đổi bộ câu</button>
+    </div>
+    ${_currentBatch.map((q,i)=>`
+      <div class="q" data-i="${i}">
+        <div class="qt"><span>${i+1}. ${q.q}</span>${BADGE_HTML[q._badge]||''}</div>
+        ${q.o.map((o,j)=>`<button class="opt" data-q="${i}" data-o="${j}" type="button">${o}</button>`).join('')}
+      </div>`).join('')}
+    <button class="submit" id="qs" type="button">Nộp & xem kết quả</button>
+    <div class="result" id="qr"></div>
+  `;
+  quizEl.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>{
+    const qi=+b.dataset.q; _picked[qi]=+b.dataset.o;
+    quizEl.querySelectorAll(`.opt[data-q="${qi}"]`).forEach(x=>x.style.outline='none');
+    b.style.outline='2px solid '+S.accent;
+  }));
+  document.getElementById('qs').addEventListener('click', submitQuiz);
+  document.getElementById('qreroll').addEventListener('click', rerollQuiz);
+}
+
+async function submitQuiz(){
+  let correct=0;
+  const sq = await getSpacedQuizModule();
+  _currentBatch.forEach((q,i)=>{
+    quizEl.querySelectorAll(`.opt[data-q="${i}"]`).forEach(b=>{
+      const o=+b.dataset.o;
+      b.classList.remove('correct','wrong');
+      if(o===q.a) b.classList.add('correct');
+      else if(_picked[i]===o) b.classList.add('wrong');
+    });
+    const isCorrect = (_picked[i]===q.a);
+    if(isCorrect) correct++;
+    // Ghi review SRS — fire-and-forget. Server trả state mới, ta cập nhật lại _srsState.
+    if(sq && q.id){
+      sq.recordReview(SRS_PREFIX+q.id, isCorrect).then(updated=>{
+        if(_srsState) _srsState.map[SRS_PREFIX+q.id] = updated;
+      }).catch(()=>{});
+    }
+  });
+  const r=document.getElementById('qr'); r.classList.add('show');
+  const total=_currentBatch.length;
+  const accuracy = total>0 ? Math.round((correct/total)*100) : 0;
+  r.innerHTML = `Bạn đúng <b>${correct}/${total}</b> câu. ${correct===total?'Xuất sắc! ':''}Kỹ năng được củng cố: <b>${S.skills.join(' · ')}</b>. <br><span style="opacity:.8;font-size:13px">Các câu sai sẽ xuất hiện lại sớm, câu đúng sẽ giãn dần theo nhịp ôn tập 1 → 3 → 7 ngày…</span>`;
+  try{ const k='tizia:space:done'; const d=JSON.parse(localStorage.getItem(k)||'{}'); d[id]=Math.max(d[id]||0, correct); localStorage.setItem(k, JSON.stringify(d)); }catch(e){}
+  // Grant skills theo khung GDPT 2018 — chỉ gọi khi đạt ngưỡng (server cũng chặn).
+  // Fire-and-forget: lỗi (chưa login / network) không block UI. Khi có skill mới
+  // mở khoá → bổ sung dòng toast vào kết quả.
+  if (accuracy >= 70 && window.fetch) {
+    fetch('/api/skills/grant', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({ domain: dom, space_id: id, score: accuracy, source_type: 'attempt', source_id: 'space-quiz' }),
+    }).then(res => res.ok ? res.json() : null).then(data => {
+      if (!data || !data.newly_granted || data.newly_granted.length===0) return;
+      const names = data.newly_granted.map(s => `<b>${esc(s.name)}</b>`).join(', ');
+      const banner = document.createElement('div');
+      banner.style.cssText = 'margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(110,231,183,.15);border:1px solid rgba(110,231,183,.4);font-size:14px';
+      banner.innerHTML = `🎉 Mở khoá ${data.newly_granted.length} kỹ năng mới: ${names}`;
+      r.appendChild(banner);
+      toast(`+${data.newly_granted.length} kỹ năng mới!`);
+      // Refresh chip ✔ ngay sau khi grant (không cần reload trang)
+      refreshSkillChips();
+    }).catch(()=>{});
+  }
+}
+
+async function rerollQuiz(){
+  const sq = await getSpacedQuizModule();
+  const pool = await getQuizPool();
+  if(!sq){
+    // Không có SRS: shuffle pool và lấy QUIZ_SIZE câu mới.
+    _currentBatch = shuffleArray(pool).slice(0, QUIZ_SIZE).map(q=>({...q, _badge:'new'}));
+    renderQuiz();
+    return;
+  }
+  // Re-load state để pick lại với due_at mới (sau khi vừa submit).
+  _srsState = await sq.loadSrsState(SRS_PREFIX);
+  const prefixed = pool.filter(q=>q && q.id).map(q=>({...q, id: SRS_PREFIX+q.id}));
+  const picked = sq.pickPersonalizedQuiz(prefixed, QUIZ_SIZE, _srsState);
+  _currentBatch = picked.map(c=>({...c, id: c.id.slice(SRS_PREFIX.length)}));
+  renderQuiz();
+}
+
+let _sqPromise = null;
+function getSpacedQuizModule(){
+  if(!_sqPromise) _sqPromise = import('/js/engine/spaced-quiz.js').catch(e=>{
+    console.warn('[spaced-quiz] import failed', e);
+    return null;
+  });
+  return _sqPromise;
+}
+
+// Shuffle Fisher-Yates — dùng cho fallback khi không có SRS.
+function shuffleArray(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ----- Pool mở rộng: nạp ngân hàng câu hỏi tuần (lop2..lop5) -----
+// S.quiz chỉ có ~3 câu seed mỗi grade — không đủ random. Trang module.html dùng
+// ngân hàng /js/scenarios/lopN/_index.js (~1700 câu/grade). Ở đây ta lazy-load
+// cùng nguồn đó, flatten về shape {q,o,a,id} để feed picker SRS.
+// Content lưu trong DB (curriculum_content) — load qua /api/curriculum/grade.
+// Trả bank { scenarioId: scenario } để flattenScenarioBank dùng như cũ.
+function loadGradeBank(domain, grade) {
+  return fetch(`/api/curriculum/grade/${domain}/${grade}`, { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j || !Array.isArray(j.items) || !j.items.length) return null;
+      const bank = {};
+      for (const sc of j.items) if (sc && sc.id) bank[sc.id] = sc;
+      return bank;
+    })
+    .catch(() => null);
+}
+const EXTENDED_POOL_LOADERS = {
+  'primary:g2': () => loadGradeBank('primary', 2),
+  'primary:g3': () => loadGradeBank('primary', 3),
+  'primary:g4': () => loadGradeBank('primary', 4),
+  'primary:g5': () => loadGradeBank('primary', 5),
+};
+
+function flattenScenarioBank(bank){
+  // bank: { scenarioId: { questions:[{stem,choices,answer,explanation}, ...] } }
+  const out = [];
+  if(!bank || typeof bank !== 'object') return out;
+  for(const [scId, sc] of Object.entries(bank)){
+    const qs = Array.isArray(sc?.questions) ? sc.questions : [];
+    qs.forEach((qx, idx) => {
+      if(!qx || !Array.isArray(qx.choices)) return;
+      const ans = Number(qx.answer);
+      if(!(ans>=0 && ans<qx.choices.length)) return;
+      out.push({
+        id: `${scId}:q${idx+1}`,
+        q:  String(qx.stem||'').trim(),
+        o:  qx.choices.map(c=>String(c)),
+        a:  ans,
+      });
+    });
+  }
+  return out;
+}
+
+let _poolPromise = null;
+function getQuizPool(){
+  if(_poolPromise) return _poolPromise;
+  const key = `${dom}:${id}`;
+  const loader = EXTENDED_POOL_LOADERS[key];
+  const seed = (S.quiz||[]).filter(q=>q).map((q,i)=>({...q, id: q.id || `${id}-seed-${i+1}`}));
+  if(!loader){
+    _poolPromise = Promise.resolve(seed);
+    return _poolPromise;
+  }
+  _poolPromise = loader()
+    .then(bank => {
+      const extra = flattenScenarioBank(bank);
+      // Ưu tiên ngân hàng tuần; seed làm fallback nếu bank rỗng (lỗi import).
+      return extra.length ? extra : seed;
+    })
+    .catch(err => {
+      console.warn('[space] extended pool load failed', err);
+      return seed;
+    });
+  return _poolPromise;
+}
+
+// ===== Skill chip earned state =====
+// Gọi /api/skills/space để biết HS đã đạt skill nào trong space này → render chip ✔.
+// Guest (chưa login) hoặc skill catalog chưa map sẽ silently fallback về chip text gốc.
+async function refreshSkillChips(){
+  const meta = document.getElementById('skills-meta');
+  const list = document.getElementById('skills-list');
+  if (!list) return;
+  try{
+    const res = await fetch(`/api/skills/space?domain=${encodeURIComponent(dom)}&space_id=${encodeURIComponent(id)}`, { credentials:'same-origin' });
+    if (!res.ok) {
+      if (res.status === 401 && meta) meta.innerHTML = '<a href="/login.html" style="color:var(--accent);text-decoration:none">🔐 Đăng nhập</a> để theo dõi kỹ năng đã đạt theo khung GDPT 2018';
+      return; // giữ nguyên chip pending
+    }
+    const data = await res.json();
+    const skills = data.skills || [];
+    if (skills.length === 0) {
+      if (meta) meta.textContent = '';
+      return;
+    }
+    const earnedCount = skills.filter(s => s.earned).length;
+    if (meta) meta.innerHTML = `Đã đạt <b style="color:#34d399">${earnedCount}/${skills.length}</b> kỹ năng tại đây · theo khung GDPT 2018 · <a href="/nang-luc.html" style="color:var(--accent);text-decoration:none">xem cây năng lực →</a>`;
+    list.innerHTML = skills.map(s => {
+      const icon = s.earned ? '✔️' : '⬜';
+      const cls  = s.earned ? 'earned' : 'pending';
+      return `<span class="chip ${cls}" title="${esc(s.comp_name)}"><span class="chip-i">${icon}</span>${esc(s.name)}<span class="chip-comp">${esc(s.comp_name)}</span></span>`;
+    }).join('');
+  } catch(e){ /* network lỗi: giữ chip pending */ }
+}
+refreshSkillChips();
+
+(async function bootQuiz(){
+  // Pool = ngân hàng tuần (lop2..lop5) nếu có, fallback về S.quiz seed.
+  const pool = await getQuizPool();
+  if(!pool.length){
+    quizEl.innerHTML = '<p style="opacity:.7">Chưa có câu hỏi nào — bé thử lại sau nhé.</p>';
+    return;
+  }
+  const sq = await getSpacedQuizModule();
+  if(!sq){
+    // Không có SRS (lỗi import / guest offline) → shuffle để khỏi lặp.
+    _currentBatch = shuffleArray(pool).slice(0, QUIZ_SIZE).map(q=>({...q, _badge:'new'}));
+    renderQuiz();
+    return;
+  }
+  _srsState = await sq.loadSrsState(SRS_PREFIX);
+  const prefixedPool = pool.map(q=>({...q, id: SRS_PREFIX+q.id}));
+  const picked = sq.pickPersonalizedQuiz(prefixedPool, QUIZ_SIZE, _srsState);
+  _currentBatch = picked.map(c=>({...c, id: c.id.slice(SRS_PREFIX.length)}));
+  renderQuiz();
+})();

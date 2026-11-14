@@ -17,3 +17,6 @@ dist/
 # Postgres data export sinh bởi scripts/export-sqlite-to-pg.mjs — chứa dữ liệu
 # thật (session token, password hash). KHÔNG commit. Schema (001_*.sql) thì commit.
 migrations/postgres/data-export.sql
+
+# Poster/slide working files (personal design output, not app source)
+Publishes/

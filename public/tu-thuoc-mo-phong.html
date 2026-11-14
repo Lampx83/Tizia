@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nhà thuốc thực hành · Sắp xếp thuốc – Pharma Crush – Pharma Sort</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/js/tu-thuoc/style.css?v=e7959147">
+</head>
+<body class="view-facade">
+<script>
+/* req #259: bấm tủ trên sơ đồ tải lại trang (?tu=…) mà body mặc định là mặt tiền → mặt tiền nhà thuốc hiện chớp lên
+   rồi mới vào tủ ("ra màn hình cửa xong mới vào tủ"). Chọn đúng màn ngay từ đầu, trước khi trình duyệt vẽ lần đầu.
+   Khớp điểm khởi động cuối file (?tu → tủ, ?view=map → sơ đồ, còn lại → mặt tiền). */
+(function(){
+  try{
+    var q = new URLSearchParams(location.search), c = document.body.classList;
+    if(q.has('tu')){ c.remove('view-facade'); c.add('view-pharmacy'); }
+    else if(q.get('view') === 'map'){ c.remove('view-facade'); c.add('view-map'); }
+  }catch(e){}
+})();
+</script>
+
+<!-- ===================================================================
+     req #154 (ThS Hương Lý) — MẶT TIỀN NHÀ THUỐC (màn đầu tiên)
+     Dựng theo đúng phong cách mặt tiền của Nhà thuốc An Tâm 2D để hai nơi nhìn
+     ra một hệ. Biển "SẢNH TIỀN THỰC HÀNH GPP" đặt NGOÀI CỬA, trên vỉa hè.
+     Bấm vào cửa → hai cánh kính trượt ra hai bên → mới vào sơ đồ nhà thuốc.
+     =================================================================== -->
+<div id="facadeScreen">
+  <svg id="facadeSvg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="fSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe6f7"/><stop offset="1" stop-color="#eaf6f2"/></linearGradient>
+      <linearGradient id="fSign" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#357a6c"/><stop offset="1" stop-color="#225C4E"/></linearGradient>
+      <linearGradient id="fGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bfe6e0" stop-opacity=".85"/><stop offset=".5" stop-color="#8fc9c0" stop-opacity=".5"/><stop offset="1" stop-color="#cfeee8" stop-opacity=".8"/></linearGradient>
+      <linearGradient id="fGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eafaf6"/><stop offset="1" stop-color="#bfeee2"/></linearGradient>
+      <clipPath id="fDoorClip"><rect x="240" y="250" width="1120" height="412"/></clipPath>
+    </defs>
+
+    <rect x="0" y="0" width="1600" height="900" fill="url(#fSky)"/>
+    <!-- req #159 (phản hồi): thu nhỏ 15%, canh giữa (800,450) — chừa khoảng đệm
+         quanh biên để preserveAspectRatio="slice" không cắt mất đỉnh biển hiệu
+         trên các tỉ lệ màn hình khác 16:9. -->
+    <g id="fSceneScale" transform="translate(120,67.5) scale(0.85)">
+    <rect x="0" y="0" width="1600" height="150" fill="#dfeef0"/>
+    <rect x="120" y="60" width="1360" height="620" fill="#f2f7f5"/>
+
+    <!-- biển hiệu ngang -->
+    <rect x="150" y="70" width="1300" height="14" fill="#eef4f2"/>
+    <rect x="150" y="84" width="1300" height="8" fill="#d7e5e1"/>
+    <rect x="150" y="92" width="1300" height="150" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+    <!-- req #157: logo chính thức Trường Cao đẳng Y tế Hà Nội do giảng viên gửi -->
+    <rect x="168" y="104" width="126" height="126" rx="6" fill="#fff"/>
+    <image href="/img/gpp/logo-cdyt-hanoi.jpg" x="172" y="108" width="118" height="118"
+           preserveAspectRatio="xMidYMid meet"/>
+    <text x="800" y="152" text-anchor="middle" font-size="62" font-weight="900" fill="#fff" letter-spacing="6" font-family="'Baloo 2',system-ui,sans-serif">NHÀ THUỐC</text>
+    <text x="800" y="214" text-anchor="middle" font-size="46" font-weight="800" fill="#eafff8" letter-spacing="10" font-family="'Baloo 2',system-ui,sans-serif">THỰC HÀNH</text>
+    <!-- req #157 (lần 2): logo chỉ để góc trái, góc phải là chữ "Đạt chuẩn GPP" -->
+    <g font-family="'Baloo 2',system-ui,sans-serif" text-anchor="middle">
+      <circle cx="1369" cy="167" r="62" fill="none" stroke="#f6d77a" stroke-width="4"/>
+      <circle cx="1369" cy="167" r="54" fill="none" stroke="#f6d77a" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text x="1369" y="150" font-size="16" font-weight="800" fill="#fff" letter-spacing="1">ĐẠT CHUẨN</text>
+      <text x="1369" y="196" font-size="44" font-weight="900" fill="#f6d77a" letter-spacing="3">GPP</text>
+    </g>
+
+    <!-- cột biển dọc hai bên -->
+    <g font-family="'Nunito',system-ui,sans-serif" font-weight="800" fill="#fff" letter-spacing="2">
+      <rect x="150" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+      <text x="197" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+      <rect x="1360" y="242" width="90" height="420" fill="url(#fSign)" stroke="#1c4c40" stroke-width="2"/>
+      <text x="1407" y="300" font-size="17" writing-mode="tb" letter-spacing="2">NHÀ THUỐC THỰC HÀNH</text>
+    </g>
+
+    <!-- khoang cửa: nhìn thấy bên trong khi hai cánh trượt ra -->
+    <g clip-path="url(#fDoorClip)">
+      <rect x="240" y="250" width="1120" height="412" fill="url(#fGlow)"/>
+      <g opacity=".6">
+        <rect x="270" y="300" width="170" height="300" fill="#357a6c"/><rect x="278" y="312" width="154" height="276" fill="#eafaf6"/>
+        <rect x="470" y="300" width="220" height="300" fill="#2F6B5F"/><rect x="480" y="312" width="200" height="276" fill="#dff5ef"/>
+        <rect x="720" y="330" width="360" height="120" rx="6" fill="#10201c"/><rect x="732" y="342" width="336" height="96" fill="#7fd6b6"/>
+        <rect x="1120" y="300" width="210" height="300" fill="#357a6c"/><rect x="1130" y="312" width="190" height="276" fill="#eafaf6"/>
+      </g>
+      <!-- CÁNH TRÁI -->
+      <g id="doorL">
+        <rect x="240" y="250" width="560" height="412" fill="url(#fGlass)" opacity=".55"/>
+        <g fill="#ffffff" opacity=".7">
+          <rect x="250" y="404" width="540" height="12"/><rect x="250" y="424" width="540" height="12"/>
+          <rect x="250" y="444" width="540" height="12"/><rect x="250" y="464" width="540" height="12"/>
+          <rect x="250" y="484" width="540" height="12"/></g>
+        <g stroke="#225C4E" stroke-width="10" fill="none"><rect x="240" y="250" width="560" height="412"/><line x1="520" y1="250" x2="520" y2="662"/></g>
+        <rect x="770" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/>
+      </g>
+      <!-- CÁNH PHẢI -->
+      <g id="doorR">
+        <rect x="800" y="250" width="560" height="412" fill="url(#fGlass)" opacity=".55"/>
+        <g fill="#ffffff" opacity=".7">
+          <rect x="810" y="404" width="540" height="12"/><rect x="810" y="424" width="540" height="12"/>
+          <rect x="810" y="444" width="540" height="12"/><rect x="810" y="464" width="540" height="12"/>
+          <rect x="810" y="484" width="540" height="12"/></g>
+        <g stroke="#225C4E" stroke-width="10" fill="none"><rect x="800" y="250" width="560" height="412"/><line x1="1080" y1="250" x2="1080" y2="662"/></g>
+        <rect x="822" y="360" width="8" height="200" rx="4" fill="#cfd8d6"/>
+      </g>
+    </g>
+    <rect x="240" y="250" width="1120" height="412" fill="none" stroke="#225C4E" stroke-width="10"/>
+
+    <!-- vỉa hè + cây -->
+    <!-- bleed quá khổ 1600×900 gốc để sau khi co 15% vẫn phủ kín hết khung nhìn -->
+    <rect x="-150" y="662" width="1900" height="380" fill="#c9c9c9"/>
+    <rect x="-150" y="662" width="1900" height="8" fill="#a7b0ad"/>
+    <rect x="120" y="636" width="1360" height="30" fill="#2f7d3a"/>
+    <g>
+      <rect x="70" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="79" cy="450" r="70" fill="#2f8a3a"/><circle cx="120" cy="480" r="52" fill="#37a046"/>
+      <rect x="1512" y="470" width="18" height="200" fill="#7a5a3a"/><circle cx="1521" cy="450" r="70" fill="#2f8a3a"/><circle cx="1480" cy="480" r="52" fill="#37a046"/>
+    </g>
+
+    <!-- BIỂN "SẢNH TIỀN THỰC HÀNH GPP" — đặt NGOÀI CỬA, trên vỉa hè.
+         req #156: bấm vào biển này là vào khu luyện tập (Pharma Crush / Pharma
+         Sort); còn bấm vào cửa kính mới vào sơ đồ nhà thuốc. Hai lối tách bạch. -->
+    <g id="fSanhSign" style="cursor:pointer">
+      <rect x="470" y="690" width="660" height="128" rx="18" fill="#fffdf6" stroke="#e08c14" stroke-width="5"/>
+      <text x="800" y="728" text-anchor="middle" font-size="29" font-weight="900" fill="#3f5170" font-family="'Baloo 2',system-ui,sans-serif">SẢNH TIỀN THỰC HÀNH GPP</text>
+      <text x="800" y="757" text-anchor="middle" font-size="17" font-weight="700" fill="#8a6a2a" font-family="'Nunito',system-ui,sans-serif">Bấm vào biển này để luyện tập trước khi vào nhà thuốc</text>
+      <g id="fSanhBtns">
+        <rect x="512" y="770" width="270" height="36" rx="12" fill="#ffc93c" stroke="#b3700f" stroke-width="3"/>
+        <text x="647" y="795" text-anchor="middle" font-size="17" font-weight="800" fill="#4a3200" font-family="'Baloo 2',system-ui,sans-serif">💊 Pharma Crush</text>
+        <rect x="818" y="770" width="270" height="36" rx="12" fill="#5cc86e" stroke="#2c8341" stroke-width="3"/>
+        <text x="953" y="795" text-anchor="middle" font-size="17" font-weight="800" fill="#0b2b14" font-family="'Baloo 2',system-ui,sans-serif">🗂️ Pharma Sort</text>
+      </g>
+      <rect id="fGoCrush" x="512" y="770" width="270" height="36" fill="transparent" style="cursor:pointer"/>
+      <rect id="fGoSort"  x="818" y="770" width="270" height="36" fill="transparent" style="cursor:pointer"/>
+    </g>
+
+    <!-- req #159: khi đã có chìa khóa, sảnh nhường chỗ cho con đường trước nhà thuốc.
+         Xe cộ, người đi bộ do JS (roadTick) thả vào #fActors thỉnh thoảng một lần. -->
+    <g id="fRoad">
+      <rect x="-150" y="662" width="1900" height="70" fill="#d9d4c8"/>
+      <g stroke="#c4bdae" stroke-width="2"><line x1="0" y1="697" x2="1600" y2="697"/>
+        <line x1="100" y1="662" x2="100" y2="732"/><line x1="300" y1="662" x2="300" y2="732"/><line x1="500" y1="662" x2="500" y2="732"/>
+        <line x1="700" y1="662" x2="700" y2="732"/><line x1="900" y1="662" x2="900" y2="732"/><line x1="1100" y1="662" x2="1100" y2="732"/>
+        <line x1="1300" y1="662" x2="1300" y2="732"/><line x1="1500" y1="662" x2="1500" y2="732"/></g>
+      <rect x="0" y="732" width="1600" height="12" fill="#9a9a94"/>
+      <rect x="-150" y="744" width="1900" height="300" fill="#4b5058"/>
+      <line x1="0" y1="822" x2="1600" y2="822" stroke="#f2f2f2" stroke-width="6" stroke-dasharray="60 44"/>
+      <g id="fActors"></g>
+    </g>
+    <g id="fKeyHint">
+      <rect x="520" y="560" width="560" height="76" rx="22" fill="#fff4c8" stroke="#e08c14" stroke-width="4"/>
+      <text x="800" y="594" text-anchor="middle" font-size="27" font-weight="900" fill="#6b4a05" font-family="'Baloo 2',system-ui,sans-serif">🔑 Bạn đã có chìa khóa!</text>
+      <text x="800" y="622" text-anchor="middle" font-size="18" font-weight="800" fill="#8a6a2a" font-family="'Nunito',system-ui,sans-serif">Bấm vào cánh cửa để vào nhà thuốc</text>
+    </g>
+
+    <g id="fDoorDot"><g class="dot"><circle cx="800" cy="456" r="22" fill="#ffd400" stroke="#e08c14" stroke-width="4"/><text x="800" y="465" text-anchor="middle" font-size="24">🔑</text></g></g>
+    <!-- vùng bấm mở cửa (trong suốt, phủ đúng khoang cửa) -->
+    <rect id="fDoorHit" x="240" y="250" width="1120" height="412" fill="transparent" style="cursor:pointer"/>
+    </g><!-- /#fSceneScale -->
+  </svg>
+  <div id="fKeyGuide"></div>
+</div>
+
+<div id="doorPwMask" hidden>
+  <div id="doorPwBox" role="dialog" aria-modal="true" aria-labelledby="doorPwTitle">
+    <h3 id="doorPwTitle">🔒 Cửa nhà thuốc đang khóa</h3>
+    <p>Qua <b>màn 10</b> ở một trong hai trò dưới đây để nhận 🔑 chìa khóa:</p>
+    <div class="games">
+      <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush</a>
+      <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort</a>
+    </div>
+    <p>Hoặc nhập <b>mật khẩu</b> để vào ngay:</p>
+    <input id="doorPwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Mật khẩu">
+    <div id="doorPwErr"></div>
+    <div class="row">
+      <button id="doorPwGo" type="button">🔓 Mở cửa</button>
+      <button id="doorPwCancel" type="button">Để sau</button>
+    </div>
+  </div>
+</div>
+
+<div id="mapScreen">
+  <div class="map-stage" id="mapStage">
+  <aside class="map-guide" id="mapGuide" tabindex="0">
+    <div class="side-ico" title="Hướng dẫn luyện tập"><b>🎮</b><small>Hướng dẫn</small></div>
+    <div class="mg-top">
+      <span class="mh-user" id="mhUser">👤 Sinh viên</span>
+      <span class="mh-points" title="Tổng sao đã tích lũy khi xếp thuốc vào tủ kê đơn và không kê đơn">⭐ <b id="mhPoints">0</b></span>
+    </div>
+    <h3>🎮 Hướng dẫn luyện tập</h3>
+    <div class="mg-card">
+      <h4>🎯 5 nhiệm vụ của dược sĩ</h4>
+      <div id="mgLevel" style="margin:0 0 8px"></div>
+      <ul class="mg-missions" id="mgMissions"></ul>
+      <p class="mg-missions-note">Nhiệm vụ 4, 5 đang được xây dựng theo giáo trình — sẽ mở lần lượt.</p>
+    </div>
+    <div class="mg-card">
+      <h4>🧰 Công cụ hỗ trợ</h4>
+      <p id="mgTools">Bộ công cụ riêng (gợi ý, kiểm tra nhanh…) sẽ có cùng hệ nhiệm vụ mới, đang chờ giảng viên xác nhận.</p>
+    </div>
+    <div class="mg-card mg-tip">
+      <span class="who">👩‍⚕️</span>
+      <p><b>MẸO —</b> <span id="mgTip">—</span></p>
+    </div>
+    <button type="button" class="mg-book-btn" id="mgBookBtn">📖 Sổ tay dược sĩ</button>
+  </aside>
+  <div class="pharmacy-map iso" id="pharmacyMap">
+    <!-- req #164: nền là sơ đồ nhà thuốc do giảng viên gửi; mỗi khu là một vùng bấm trong suốt
+         đặt đè đúng vị trí (toạ độ theo ảnh 1180×936). -->
+    <div class="pm-zone z-special" data-zone="info" data-name="Tủ thuốc kiểm soát đặc biệt (có khóa): thuốc gây nghiện, hướng thần, tiền chất" data-short="Thuốc kiểm soát đặc biệt" data-ico="🔒" title="Thuốc kiểm soát đặc biệt" style="left:168px;top:22px;width:172px;height:146px;"></div>
+    <div class="pm-zone z-rx" data-zone="tu-rx" data-name="Tủ thuốc kê đơn (Rx) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc kê đơn" data-ico="℞" title="Tủ thuốc kê đơn" style="left:345px;top:22px;width:212px;height:146px;"></div>
+    <div class="pm-zone z-otc" data-zone="tu-otc" data-name="Tủ thuốc không kê đơn (OTC) — bấm để sắp xếp thuốc vào tủ" data-short="Tủ thuốc không kê đơn" data-ico="✚" title="Tủ thuốc không kê đơn" style="left:562px;top:22px;width:240px;height:146px;"></div>
+    <div class="pm-zone z-nondrug" data-zone="info" data-name="Sản phẩm không phải là thuốc (mỹ phẩm, vật tư y tế, TPCN, chăm sóc cá nhân)" data-short="Sản phẩm không phải thuốc" data-ico="🧴" title="Sản phẩm không phải thuốc" style="left:808px;top:22px;width:244px;height:146px;"></div>
+    <div class="pm-zone z-receive" data-zone="info" data-name="Khu vực chờ kiểm nhập (hàng mới về, chờ kiểm tra)" data-short="Khu vực chờ kiểm nhập" data-ico="📦" title="Khu vực chờ kiểm nhập" style="left:135px;top:178px;width:175px;height:176px;"></div>
+    <div class="pm-zone z-process" data-zone="info" data-name="Khu vực hàng chờ xử lý (hàng cận hạn, hỏng, thu hồi, hủy bỏ)" data-short="Khu vực hàng chờ xử lý" data-ico="⚠️" title="Khu vực hàng chờ xử lý" style="left:122px;top:370px;width:192px;height:122px;"></div>
+    <div class="pm-zone z-cashier" id="zCashier" data-zone="info" data-name="Quầy thu ngân: máy tính, máy quét mã vạch, máy in hóa đơn" data-short="Quầy thu ngân" data-ico="💵" title="Quầy thu ngân" style="left:405px;top:255px;width:392px;height:130px;"></div>
+    <div class="pm-zone z-fridge" data-zone="info" data-name="Tủ lạnh (bảo quản 2–8°C: vắc xin, insulin…)" data-short="Tủ lạnh" data-ico="❄️" title="Tủ lạnh" style="left:888px;top:175px;width:125px;height:160px;"></div>
+    <div class="pm-zone z-fire" data-zone="info" data-name="Bình chữa cháy" data-short="Bình chữa cháy" data-ico="🧯" title="Bình chữa cháy" style="left:1022px;top:190px;width:88px;height:172px;"></div>
+    <div class="pm-zone z-dispense" data-zone="info" data-name="Khu vực ra lẻ thuốc" data-short="Khu vực ra lẻ thuốc" data-ico="⚖️" title="Khu vực ra lẻ thuốc" style="left:880px;top:432px;width:272px;height:140px;"></div>
+    <div class="pm-zone z-consult" data-zone="info" data-name="Phòng tư vấn" data-short="Phòng tư vấn" data-ico="🧑‍⚕️" title="Phòng tư vấn" style="left:978px;top:542px;width:190px;height:150px;"></div>
+    <div class="pm-zone z-wait" data-zone="info" data-name="Khu vực ghế chờ cho khách" data-short="Ghế chờ" data-ico="🛋️" title="Ghế chờ" style="left:100px;top:598px;width:325px;height:100px;"></div>
+    <div class="pm-zone z-entrance" data-zone="door" data-name="Lối vào — bấm để ra ngoài mặt tiền nhà thuốc" data-short="Lối vào" data-ico="🚪" title="Lối vào" style="left:470px;top:672px;width:300px;height:190px;"></div>
+
+    <div class="pm-char" id="pmChar">
+      <div class="pm-body">
+        <span class="pm-arm pm-arm-l"></span>
+        <span class="pm-arm pm-arm-r"></span>
+        <span class="pm-leg pm-leg-l"></span>
+        <span class="pm-leg pm-leg-r"></span>
+        <span class="pm-torso"><span class="pm-cross"></span></span>
+        <span class="pm-head"><span class="pm-hair"></span><span class="pm-cap"></span><span class="pm-bill"></span></span>
+      </div>
+    </div>
+  </div>
+  <aside class="map-legend" id="mapLegend" tabindex="0">
+    <div class="side-ico" title="Tiến độ nhiệm vụ"><b>✅</b><small>Tiến độ</small></div>
+    <div class="ml-top">
+      <span class="map-key locked" id="mapKey">🔒 Chưa có Chìa khóa</span>
+      <button type="button" class="mh-ico" id="mhTrophy" title="Danh hiệu">🏆</button>
+    </div>
+    <div id="mcPanel"></div>
+    <details id="mlZones"><summary>🗂️ Các khu vực trong nhà thuốc</summary><ul id="mapLegendList"></ul></details>
+    <p class="ml-foot">Quản lý tốt hôm nay<br>Phục vụ sức khỏe ngày mai 💚</p>
+  </aside>
+  <div class="map-hud" id="mapHud">
+    <p class="map-hud-status">📍 <span id="pmZone">Đang ở lối vào</span></p>
+    <div class="map-action" id="mapAction"></div>
+  </div>
+  </div><!-- /#mapStage -->
+
+  <!-- req #164 (phản hồi): nút cài đặt gọn nhỏ, neo cố định ở góc màn hình
+       thay vì đè lên sơ đồ, để dành trọn diện tích cho nhà thuốc. -->
+  <button type="button" class="mh-gear" id="mhGear" title="Cài đặt">⚙️</button>
+  <button type="button" class="mh-fullscreen" id="mhFullscreen" title="Xem toàn màn hình">⛶</button>
+  <div class="mh-menu" id="mhMenu" hidden>
+    <button type="button" data-act="facade">🚪 Ra mặt tiền nhà thuốc</button>
+    <a href="/pharma-crush.html">💊 Chơi Pharma Crush</a>
+    <a href="/pharma-sort.html">🗂️ Chơi Pharma Sort</a>
+    <button type="button" data-act="home">📍 Đưa nhân vật về lối vào</button>
+    <button type="button" data-act="legend">🗂️ Ẩn/hiện bảng khu vực</button>
+    <button type="button" data-act="guide">📖 Ẩn/hiện bảng hướng dẫn</button>
+  </div>
+
+  <div class="overlay" id="gbOverlay">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-head">
+        <div><h2>📖 Sổ tay dược sĩ</h2><div class="sub">Kiến thức nền GPP cho việc sắp xếp &amp; cấp phát</div></div>
+        <button type="button" id="gbClose">✕</button>
+      </div>
+      <div class="modal-body" id="gbBody" style="padding:14px 18px"></div>
+    </div>
+  </div>
+
+  <!-- req #169 (ThS Hương Lý) — Nhiệm vụ 1: Lập dự trù và mua thuốc.
+       "Máy tính" ở Quầy thu ngân mở phần mềm bán hàng này; tab Dự trù là
+       tab duy nhất có nghiệp vụ thật ở bản đầu tiên, 4 tab còn lại chờ mở
+       cùng các nhiệm vụ 2/4/5 (Kiểm nhập, Kiểm kê, Thu hồi…). -->
+  <div class="overlay" id="posOverlay">
+    <div class="modal pos-modal">
+      <div class="modal-head">
+        <div><h2><span class="pos-dots" aria-hidden="true"><i></i><i></i><i></i></span>🖥️ Phần mềm bán hàng</h2><div class="sub">Nhiệm vụ 1 · Lập dự trù và mua thuốc</div></div>
+        <button type="button" id="posClose">✕</button>
+      </div>
+      <div class="modal-body pos-body">
+        <div class="pos-tabs" id="posTabs">
+          <button type="button" class="pos-tab" data-tab="quanly">📋 Quản lý thuốc</button>
+          <button type="button" class="pos-tab" data-tab="banhang">💵 Bán hàng</button>
+          <button type="button" class="pos-tab active" data-tab="dutru">📦 Dự trù</button>
+          <button type="button" class="pos-tab" data-tab="thucnhap">📥 Thực nhập</button>
+          <button type="button" class="pos-tab" data-tab="nhacc">🏭 Quản lý nhà cung ứng</button>
+        </div>
+        <div class="pos-panel" id="posPanel"></div>
+      </div>
+      <div class="pos-statusbar"><span>💻 Máy tính quầy thu ngân · Phần mềm quản lý nhà thuốc GPP</span><span id="posClock"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="pharmacyScreen">
+<!-- req #169 — Nhiệm vụ 1 bước 2: đứng ở đúng tủ (Rx/OTC), kiểm thực tế từng
+     mặt hàng cần dự trù. Nổi cố định như nút "Xếp bằng tay" cạnh bên, để
+     không phải sửa layout 2 cột cabinet-col/side-panel đã ổn định sẵn. -->
+<div class="m1-checklist" id="m1Checklist" hidden></div>
+<div class="side-panel">
+  <div class="page-head">
+    <h1><span class="mascot" aria-hidden="true"></span><span id="tuTitle">TỦ THUỐC KÊ ĐƠN</span></h1>
+    <a class="tu-switch" id="tuSwitch" href="?tu=otc">Sang tủ thuốc không kê đơn →</a>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" placeholder="🔍 Tìm tên hoạt chất, tên biệt dược, tên tủ...">
+    <button type="button" class="map-btn" id="toMapBtn" title="Ra sơ đồ toàn cảnh nhà thuốc">🗺️ Ra bản đồ</button>
+    <div class="stats" id="statsBar"></div>
+  </div>
+
+  <!-- req #153: hai trò luyện tập đặt NGAY trong sảnh thực hành (không chỉ ở màn
+       toàn cảnh) — sinh viên đang xếp tủ, muốn ôn nhóm dược lý là bấm sang được
+       luôn rồi quay lại xếp tiếp. Các tủ giữ nguyên cho nghiệp vụ bảo quản. -->
+  <div class="mini-games mini-games-in">
+    <a class="mg-btn mg-crush" href="/pharma-crush.html">💊 Pharma Crush<small>Ghép 3 cùng nhóm dược lý</small></a>
+    <a class="mg-btn mg-sort" href="/pharma-sort.html">🗂️ Pharma Sort<small>Phân loại thuốc theo nhóm</small></a>
+  </div>
+
+  <div class="search-results" id="searchResults"></div>
+
+  <div class="delivery-cart" id="deliveryCart">
+    <button class="mobile-map-btn" id="mobileMapBtn" type="button" title="Ra sơ đồ toàn cảnh nhà thuốc">🗺️</button>
+    <div class="cart-head">
+      <span class="cart-title"><span class="cart-icon">📦</span> Hàng mới về</span>
+      <span class="cart-sub">Bấm thùng để lấy 1 hộp → kéo vào đúng vị trí trên tủ. Xếp <b>đúng &amp; nhanh</b> để lên hạng!</span>
+      <div class="game-panel" id="gamePanel">
+        <div class="gp-detail">
+          <div class="gp-row">
+            <span class="gp-tier" id="gpTier">Siêu dễ · 2 tủ</span>
+            <span class="gp-title" id="gpTitle">🎖️ Học viên</span>
+          </div>
+          <div class="gp-barwrap" id="gpBarWrap" title="Chơi đúng &amp; nhanh → tiến độ tăng; chậm/nhầm → lùi. Đủ 100% lên mức khó hơn.">
+            <div class="gp-bar" id="gpBar"></div>
+            <span class="gp-barlabel" id="gpBarLabel">0%</span>
+          </div>
+        </div>
+        <div class="gp-row gp-rewards">
+          <span class="gp-stars" id="gpStars" title="Sao — xếp nhanh &amp; đúng lần đầu">⭐ 0</span>
+          <span class="gp-shields" id="gpShields" title="Thẻ Khiên — tự dùng để chặn tụt tiến độ">🛡️ 0</span>
+          <span class="gp-lot" id="cartProgress" title="Số hộp đã xếp trong lô này">Lô 0/5</span>
+          <span class="gp-toggle" id="gpToggle" title="Xem hạng & tiến độ chi tiết">ℹ️</span>
+        </div>
+      </div>
+    </div>
+    <div class="carton-stage">
+      <button class="carton" id="cartonBtn" type="button">
+        <span class="carton-face">📦</span>
+        <span class="carton-label">Hàng mới về</span>
+        <span class="carton-hint" id="cartonHint">Bấm để lấy hộp</span>
+      </button>
+      <div class="carton-slot" id="cartItems"></div>
+    </div>
+    <div class="cart-msg" id="cartMsg"></div>
+    <button class="cart-refresh" id="cartRefresh" title="Lấy lô 5 mặt hàng mới khác">🔄 Đổi lô khác</button>
+    <button class="hand-btn" id="handBtn" type="button" title="Bật camera, dùng cử chỉ chụm ngón cái + ngón trỏ để kéo hộp thuốc vào tủ">🖐️ Xếp bằng tay (camera)</button>
+  </div>
+</div>
+
+<canvas id="handCamPreview" width="180" height="135"></canvas>
+<div id="handCursor"></div>
+
+<div class="cabinet-col">
+  <div class="cabinet-tabs" id="cabinetTabs"></div>
+  <div class="pharmacy-scene">
+    <div class="cabinets-row" id="cabinetsRow"></div>
+    <div class="floor-strip"></div>
+  </div>
+</div>
+</div><!-- /#pharmacyScreen -->
+
+<div id="tooltip"></div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="mName">—</h2>
+        <div class="sub" id="mBrand"></div>
+      </div>
+      <button id="mClose">✕</button>
+    </div>
+    <div class="modal-body"><dl id="mFields"></dl><div id="mFefo"></div></div>
+    <div class="modal-foot" id="mFoot"></div>
+  </div>
+</div>
+
+<script src="/js/tu-thuoc/data.js?v=b5984e68"></script>
+<script src="/js/tu-thuoc/app.js?v=b8e7173d"></script>
+<script>
+/* req #240: trợ lý AI ở góc màn hình — gửi kèm nhiệm vụ/bước người học đang làm để AI trả lời đúng ngữ cảnh */
+window.EduTutorContext = function(){
+  try{
+    const n = (typeof m3Active === 'function' && m3Active()) ? 3 : (typeof m2Active === 'function' && m2Active()) ? 2 : 1;
+    const hint = n === 3 ? m3Hint() : n === 2 ? m2Hint() : (document.getElementById('pmZone')?.textContent || '');
+    return `Trang "Nhà thuốc thực hành" (mô phỏng 2D nhà thuốc đạt chuẩn GPP cho sinh viên dược). Người học đang làm nhiệm vụ ${n} `
+      + `(1: Lập dự trù và mua thuốc; 2: Kiểm nhập thuốc, niêm yết giá; 3: Bảo quản thuốc và sắp xếp hàng hóa). Gợi ý bước hiện tại trên màn hình: ${hint}. `
+      + (typeof hintsOffFor === 'function' && hintsOffFor(n) ? 'Người học đã làm nhiệm vụ này từ 2 lần, gợi ý trên màn hình đã ẩn: hướng dẫn theo kiểu gợi mở, hỏi lại để người học tự nghĩ. ' : '')
+      + 'Hãy hướng dẫn cách làm, giải thích quy định GPP liên quan; KHÔNG làm hộ hay đưa thẳng đáp án của bài.';
+  }catch(e){ return 'Trang Nhà thuốc thực hành GPP'; }
+};
+</script>
+<script src="/js/tt-access.js?v=3"></script>
+<script src="/js/tutor-floating.js?v=tt1" data-domain="pharmacy" data-context="tu-thuoc-mo-phong" data-label="Trợ lý AI"></script>
+</body>
+</html>

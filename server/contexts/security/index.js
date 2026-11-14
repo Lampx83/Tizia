@@ -133,10 +133,22 @@ export function attachSecurity(r) {
 // apiLimiter: CHỈ áp cho /api/* (mount app.use('/api', apiLimiter)), KHÔNG đụng
 // static asset (1 lần tải trang giàu asset không được tính). Key theo user khi đã
 // đăng nhập → 1 student spam không chặn cả lớp cùng IP trường. PHẢI mount SAU attachUser.
-export const apiLimiter = rateLimit({
+const baseApiLimiter = rateLimit({
   windowMs: 60000, max: 600, bucket: 'api',
   keyFn: (req) => (req.user?.id ? `u${req.user.id}` : `ip${clientIp(req)}`),
 });
+// req #238 — Pharmacomm/Nhà thuốc 3D: sinh viên tự khai danh tính, KHÔNG đăng nhập → cả lớp ≥120 SV sau một NAT dùng
+// chung 1 IP. 600 yêu cầu/phút/IP chỉ đủ ~5 yêu cầu/SV/phút (1 lượt chat ≈ 3 yêu cầu) → SV bị "rate_limited", hội thoại
+// và thao tác ghi không vào DB. Riêng /api/pharmacy/* khi chưa đăng nhập: hạn mức theo IP đủ cho cả lớp đông
+// (chat gọi AI giới hạn riêng, chặt hơn các lệnh ghi hội thoại/thao tác rẻ).
+const pharmacyChatLimiter = rateLimit({ windowMs: 60000, max: 2400, bucket: 'phchat', keyFn: (req) => `ip${clientIp(req)}` });
+const pharmacyLimiter = rateLimit({ windowMs: 60000, max: 12000, bucket: 'ph', keyFn: (req) => `ip${clientIp(req)}` });
+export function apiLimiter(req, res, next) {
+  if (!req.user?.id && req.path.startsWith('/pharmacy/')) {
+    return (/^\/pharmacy\/chat/.test(req.path) ? pharmacyChatLimiter : pharmacyLimiter)(req, res, next);
+  }
+  return baseApiLimiter(req, res, next);
+}
 // login/register: pre-auth nên key theo IP; nới đủ cho 1 lớp đăng nhập cùng lúc (60/phút).
 export const sensitiveAuthLimiter = rateLimit({ windowMs: 60000, max: 60, bucket: 'auth' });
 // Giữ alias cũ để không vỡ import (deprecated — dùng apiLimiter).

@@ -1,6 +1,7 @@
 // Pet đồng hành widget — bubble nhỏ bên trái dưới màn hình (đối xứng HUD bên phải).
 // Click → mở drawer chi tiết: feed, switch pet, nickname.
 // Side-effect import từ auth-header.js.
+import { fetchMe } from './auth.js';
 
 const CSS = `
   .tz-pet-bubble {
@@ -228,6 +229,8 @@ class PetWidget {
           if (!f.isUnlocked('pet')) { this.bubble.hidden = true; return; }
         }
       } catch {}
+      // Khách: /api/auth/me đã cho biết chưa đăng nhập, không gọi thêm API của tài khoản (chỉ ra 401 đỏ console).
+      if (!(await fetchMe())) { this.bubble.hidden = true; return; }
       const r = await fetch('/api/pet/me', { credentials: 'same-origin' });
       if (r.status === 401) { this.bubble.hidden = true; return; }
       if (!r.ok) throw new Error('http_' + r.status);

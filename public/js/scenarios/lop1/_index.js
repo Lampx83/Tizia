@@ -28,3 +28,16 @@ export const PRIMARY_LOP1_SCENARIOS = {
 for (const [id, sc] of Object.entries(PRIMARY_LOP1_SCENARIOS)) {
   if (LOP1_LESSONS[id]) sc.lesson = LOP1_LESSONS[id];
 }
+
+// <<EXAM-MERGE-START>>
+import { P1AN_EXAMS } from './am-nhac-exam.js';
+import { P1DD_EXAMS } from './dao-duc-exam.js';
+import { P1GDTC_EXAMS } from './gdtc-exam.js';
+import { P1HDTN_EXAMS } from './hdtn-exam.js';
+import { P1MT_EXAMS } from './my-thuat-exam.js';
+import { P1TA_EXAMS } from './tieng-anh-exam.js';
+import { P1TV_EXAMS } from './tieng-viet-exam.js';
+import { P1TNXH_EXAMS } from './tnxh-exam.js';
+import { P1_EXAMS } from './toan-exam.js';
+for (const EX of [P1AN_EXAMS, P1DD_EXAMS, P1GDTC_EXAMS, P1HDTN_EXAMS, P1MT_EXAMS, P1TA_EXAMS, P1TV_EXAMS, P1TNXH_EXAMS, P1_EXAMS]) Object.assign(PRIMARY_LOP1_SCENARIOS, EX);
+// <<EXAM-MERGE-END>>
