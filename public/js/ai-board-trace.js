@@ -44,7 +44,8 @@ export const callsOf = (step) => (step?.calls || []).flatMap(g => [...g.previous
   .map(c => ({ ...(c.evidence || {}), at: c.created_at }))
   .sort((a, b) => Number(a.at) - Number(b.at));
 export const TOOL_KIND = { ok: 'Done', finish_ok: 'Done', error: 'Failed', infra_error: 'Infra error', forbidden: 'Blocked',
-  finish_rejected: 'Finish rejected', repeated: 'Repeated', scope_warning: 'Scope warning', network_pending: 'Waiting for admin' };
+  finish_rejected: 'Finish rejected', repeated: 'Repeated', scope_warning: 'Scope warning', network_pending: 'Waiting for admin',
+  timeout: 'Model timeout', http_error: 'Model connection failed' };
 const clip = (text, max) => (String(text ?? '').length > max ? `${String(text).slice(0, max)}…` : String(text ?? ''));
 // Reply text that is not the tool JSON itself (the model's own words, if it wrote any).
 function thoughtOf(output) {
@@ -59,7 +60,7 @@ export const modelFailure = (call) => {
   if (call.result === 'error') return { class: 'product', kind: 'output' };
   return null;
 };
-/** One row per tool call of a step: tool, target, outcome, failure class, time, tokens, joined by tool_call_id. */
+/** One row per model call that asked for a tool, or failed before a tool ran: tool, target, outcome, class, time, retry, tokens. */
 export function toolRows(step, trace = {}) {
   const spanByModel = new Map();
   for (const span of step?.run?.spans || []) {
@@ -68,27 +69,33 @@ export function toolRows(step, trace = {}) {
     }
   }
   const rowByCall = new Map((trace.tool_steps || []).filter(r => r.call_id).map(r => [r.call_id, r]));
-  return callsOf(step).filter(c => describeModelCall(c).id === 'loop').map((call, i) => {
+  const calls = callsOf(step);
+  const attempts = attemptsOf(calls);
+  return calls.filter(c => describeModelCall(c).id === 'loop').map((call, i) => {
     const parsed = loopActions([call])[0];
     const span = spanByModel.get(call.call_id);
     const attrs = span?.attributes || {};
     const row = rowByCall.get(attrs['gen_ai.tool.call.id']) || null;
     const args = row?.args || {};
-    const kind = attrs['tizia.tool.status'] || row?.kind || (call.result === 'error' ? 'error' : null);
+    const attemptFailed = !span && modelFailure(call);
+    const kind = attrs['tizia.tool.status'] || row?.kind
+      || (attemptFailed ? (call.result === 'timeout' ? 'timeout' : 'http_error') : call.result === 'error' ? 'error' : null);
     const failing = Boolean(kind) && !['ok', 'finish_ok'].includes(kind);
     const failure = attrs['tizia.tool.error_class'] ? { class: attrs['tizia.tool.error_class'], kind: attrs['tizia.tool.error_kind'] || null }
       : failing ? modelFailure(call) : null;
     const ms = span && Number.isFinite(span.end_ms - span.start_ms) ? span.end_ms - span.start_ms : call.metrics?.wall_ms ?? null;
+    const named = attrs['gen_ai.tool.name'] || row?.tool;
+    const tool = named || (attemptFailed ? 'model_call' : parsed.tool !== '?' ? parsed.tool : 'not recorded');
     return {
-      n: i + 1, step: attrs['tizia.step'] ?? row?.step ?? null,
-      tool: attrs['gen_ai.tool.name'] || row?.tool || (parsed.tool !== '?' ? parsed.tool : 'not recorded'),
+      n: i + 1, step: attrs['tizia.step'] ?? row?.step ?? null, tool,
       target: String(args.file || args.test_file || args.query || args.pattern || parsed.target || ''),
       args: Object.keys(args).length ? args : null,
       observation: row?.observation ?? null,
       call_id: attrs['gen_ai.tool.call.id'] || row?.call_id || null,
       model_call_id: call.call_id || null,
       kind, label: kind ? (TOOL_KIND[kind] || kind) : 'No result recorded',
-      failure, ms, tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null,
+      failure, ms, retry: attempts.get(call.call_id) || null,
+      tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null,
       thought: thoughtOf(call.output),
     };
   });

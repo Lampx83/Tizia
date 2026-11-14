@@ -119,6 +119,38 @@ test('old native call with no span and no link shows "not recorded", not "?"', (
   assert.equal(row.label, 'No result recorded');
 });
 
+test('a failed model attempt with no span is a visible row with class and retry', () => {
+  const trace = fixture();
+  trace.runs[0].spans = [];
+  const timedOut = { ...trace.runs[0].calls[1], call_id: 'model-t1', result: 'timeout', error: 'timed out', output: '' };
+  const retried = { ...trace.runs[0].calls[1], call_id: 'model-t2', result: 'ok', error: '', output: '' };
+  const rows = toolRows(stepOf(trace, [{ ...timedOut, id: 201, created_at: 201 }, { ...retried, id: 202, created_at: 202 }]), trace);
+  assert.equal(rows[0].tool, 'model_call');
+  assert.equal(rows[0].label, 'Model timeout');
+  assert.equal(rows[0].failure.class, 'infra');
+  assert.equal(rows[0].failure.kind, 'timeout');
+  assert.deepEqual(rows[1].retry, { n: 2, of: 2, reason: 'timed out after 30s' });
+});
+
+test('model_call span from a stopped loop names the step and infra class', () => {
+  const trace = fixture();
+  trace.runs[0].spans = [{ name: 'execute_tool model_call', start_ms: 0, end_ms: 60000, attributes: { 'gen_ai.tool.name': 'model_call',
+    'gen_ai.tool.call.id': 'tc9', 'tizia.model_call_id': 'model-1', 'tizia.step': 4, 'tizia.tool.status': 'infra_error',
+    'tizia.tool.error_class': 'infra', 'tizia.tool.error_kind': 'timeout' } }];
+  const row = toolRows(stepOf(trace, [trace.runs[0].calls[0]]), trace)[0];
+  assert.equal(row.tool, 'model_call');
+  assert.equal(row.step, 4);
+  assert.equal(row.label, 'Infra error');
+  assert.equal(row.failure.class, 'infra');
+});
+
+test('view keeps the newest rows under the cap, oldest first', async () => {
+  const rows = [{ step: 9, updated_at: 9 }, { step: 8, updated_at: 8 }];
+  const store = { db: { all: async () => rows } };
+  const out = await createToolStepView(store).forRoot(7);
+  assert.deepEqual(out.map(r => r.step), [8, 9]);
+});
+
 test('retries count attempts and carry the reason of the attempt before', () => {
   const info = attemptsOf([{ call_id: 'implement-1', gate: 3, child: 0, iteration: 5, prompt_name: 'implement.md', result: 'retry', error: 'search miss' },
     { call_id: 'implement-2', gate: 3, child: 0, iteration: 5, prompt_name: 'implement.md', result: 'ok' }]);

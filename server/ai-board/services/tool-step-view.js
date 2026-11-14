@@ -51,8 +51,9 @@ export function createToolStepView(store) {
       const rows = await store.db.all(`SELECT CAST(s.proposal_id AS TEXT) AS proposal_id, s.child, s.step, s.call_id, s.tool, s.args_json,
           s.status, s.kind, s.observation, s.updated_at
         FROM tool_step s JOIN tool_run r ON r.proposal_id = s.proposal_id AND r.child = s.child
-        WHERE r.run_scope LIKE ? ORDER BY s.updated_at, s.step LIMIT ${MAX_ROWS}`, [`ticket-${Number(rootId)}:%`]);
-      return rows.map(projectToolStep);
+        WHERE r.run_scope LIKE ? ORDER BY s.updated_at DESC, s.step DESC LIMIT ${MAX_ROWS}`, [`ticket-${Number(rootId)}:%`]);
+      // Newest rows kept under the cap (a stopped step is the last one); returned oldest first.
+      return rows.map(projectToolStep).reverse();
     },
   };
 }

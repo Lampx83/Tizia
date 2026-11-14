@@ -1,4 +1,4 @@
-"""LF/259: native tool calls keep their tool and arguments in the trace; an unparseable reply is recorded as an error."""
+"""Native tool calls keep their tool and arguments in the trace; an unparseable reply is recorded as an error."""
 import json
 
 from runtime import meter, tool_loop
@@ -47,3 +47,19 @@ def test_unparseable_reply_marks_the_model_call_as_error():
     except IndexError:
         pass
     assert deps.trace.marks and deps.trace.marks[0][0] == "error"
+
+
+def test_http_checkpoint_sends_call_id_on_intent_and_done():
+    from repositories.server_checkpoint import HttpSteps
+
+    sent = []
+
+    class Client:
+        def post(self, url, body):
+            sent.append(body)
+            return {}
+
+    steps = HttpSteps(Client(), "http://server/checkpoint", {"worker_id": "w", "lease_token": "t"}, 123, 0, "ticket-7:r")
+    steps.intent(1, "write_file", {"file": "a"}, "tc:1")
+    steps.done(1, "write_file", {"file": "a"}, "ok", "ok", "tc:1")
+    assert [body["call_id"] for body in sent] == ["tc:1", "tc:1"]

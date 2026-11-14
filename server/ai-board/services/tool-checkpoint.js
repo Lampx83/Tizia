@@ -25,6 +25,7 @@ const json = (value, name) => {
   if (text.length > MAX_JSON) throw bad(`${name} too large`);
   return text;
 };
+const callIdOf = (body) => (typeof body.call_id === 'string' && body.call_id ? body.call_id.slice(0, 120) : null);
 const parse = (text) => { try { return JSON.parse(text); } catch { return null; } };
 
 export function createToolCheckpointService(store, repo = createToolCheckpointRepository(store.db)) {
@@ -98,7 +99,7 @@ export function createToolCheckpointService(store, repo = createToolCheckpointRe
       await needRun(ticketId, k);
       try {
         await repo.insertIntent({ proposalId: k.proposalId, child: k.child, step: Number(body.step), identity: identityOf(body),
-          tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), now: Date.now() });
+          tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), callId: callIdOf(body), now: Date.now() });
       } catch (error) {
         if (/duplicate key|unique/i.test(String(error?.message))) throw bad('step already has an intent', 'step_conflict', 409);
         throw error;
@@ -111,7 +112,7 @@ export function createToolCheckpointService(store, repo = createToolCheckpointRe
       const observation = String(body.observation ?? '');
       if (observation.length > MAX_OBSERVATION) throw bad('observation too large');
       await repo.upsertDone({ proposalId: k.proposalId, child: k.child, step: Number(body.step), identity: identityOf(body),
-        tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), kind: String(body.kind || '').slice(0, 40),
+        tool: String(body.tool).slice(0, 60), args: json(body.args, 'args'), kind: String(body.kind || '').slice(0, 40), callId: callIdOf(body),
         observation, digest: digest(observation), now: Date.now() });
       return { ok: true };
     },
