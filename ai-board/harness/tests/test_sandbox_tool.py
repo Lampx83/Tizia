@@ -291,3 +291,82 @@ def test_busy_runner_after_retries_raises_busy_instead_of_an_observation():
         runner(client)(["node", "--check", "a.js"], {})
     assert caught.value.failure_class == "busy"
     assert_every_vm_destroyed(client)
+
+
+ARM = "AI_BOARD_SANDBOX_REPO_SCRIPTS"
+REPO_ARGV = [["npm", "test"], ["npm", "run", "check:content"], ["node", "scripts/check-content-integrity.mjs"]]
+
+
+@pytest.mark.parametrize("argv", REPO_ARGV)
+def test_repo_script_argv_allowed_when_armed_runs_in_one_vm(monkeypatch, argv):
+    monkeypatch.setenv(ARM, "1")
+    client = FakeClient()
+    assert json.loads(runner(client)(argv, {}))["rc"] == 0
+    assert client.execs == [argv] and len(client.created) == 1
+    assert_every_vm_destroyed(client)
+
+
+@pytest.mark.parametrize("argv", REPO_ARGV)
+def test_repo_script_argv_refused_when_arm_off(argv):
+    client = FakeClient()
+    with pytest.raises(sandbox_tool.Refused):
+        runner(client)(argv, {})
+    assert client.created == []
+
+
+@pytest.mark.parametrize("argv", [
+    ["npm", "test", "--", "--grep=x"],
+    ["npm", "run", "check:content", "extra"],
+    ["npm", "run", "dev"],
+    ["npm", "install"],
+    ["npm", "test;", "id"],
+    ["node", "scripts/run-tests.mjs; id"],
+    ["node", "scripts/x.mjs", "arg"],
+    ["node", "scripts/$(id).mjs"],
+    ["node", "scripts/`id`.mjs"],
+    ["node", "scripts/a.mjs|sh"],
+    ["node", "scripts/a b.mjs"],
+    ["node", "scripts/../server/index.js"],
+    ["node", "scripts/../scripts/run-tests.mjs"],
+    ["node", "./scripts/run-tests.mjs"],
+    ["node", "/scripts/run-tests.mjs"],
+    ["node", "scripts/_src/x.mjs"],
+    ["node", "scripts/run-tests.sh"],
+    ["node", "scripts/ai-board-preflight.mjs"],
+    ["node", "scripts/AI-Board-skills-export.mjs"],
+    ["node", "scripts/fetch-inbox.mjs"],
+    ["node", "scripts/check-skills.mjs"],
+    ["node", "scripts\run-tests.mjs"],
+    ["node", "ai-board/harness/x.js"],
+])
+def test_repo_script_rejection_classes_refused_before_any_vm(monkeypatch, argv):
+    monkeypatch.setenv(ARM, "1")
+    client = FakeClient()
+    with pytest.raises(sandbox_tool.Refused):
+        runner(client)(argv, {})
+    assert client.created == []
+
+
+def test_arm_default_off_keeps_base_patterns_only():
+    from runtime import limits
+    assert limits.sandbox_tool()["allowed_argv"] == [("node", "--test", "<test>"), ("node", "--check", "<file>")]
+
+
+def test_arm_on_adds_repo_patterns(monkeypatch):
+    from runtime import limits
+    monkeypatch.setenv(ARM, "1")
+    assert {("npm", "test"), ("npm", "run", "check:content"), ("node", "<script>")} <= set(limits.sandbox_tool()["allowed_argv"])
+
+
+def test_repo_script_output_cut_at_cap_with_receipt(monkeypatch):
+    monkeypatch.setenv(ARM, "1")
+    client = FakeClient([{**OK, "stdout": "n" * 5000}])
+    r = runner(client)
+    out = json.loads(r(["npm", "test"], {}))
+    assert len(out["stdout"]) == 2000 and out["truncated"] is True
+    assert r.receipts[0]["argv"] == ["npm", "test"] and len(r.receipts[0]["output"]) > 2000
+
+
+@pytest.mark.parametrize("task_type,offered", [("backend", True), ("frontend", True), ("database", True), ("test", True), ("review", False), ("", False)])
+def test_gate3_offered_by_task_type(flag_on, task_type, offered):
+    assert sandbox_tool.offered(task_type) is offered

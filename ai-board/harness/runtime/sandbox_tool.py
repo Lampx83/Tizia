@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 from dataclasses import asdict
 import tarfile
 import tempfile
@@ -18,11 +19,12 @@ from verification.sandbox import SandboxError, SandboxSession
 
 NAME = "run_in_sandbox"
 SCHEMA = {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}}, "required": ["argv"]}
-DESCRIPTION = ("Chạy argv trong sandbox, chỉ mẫu allow-list: node --test test/<file>, node --check <file>. "
+DESCRIPTION = ("Chạy argv trong sandbox, chỉ mẫu allow-list: node --test test/<file>, node --check <file>, npm test, npm run check:content, node scripts/<file>. "
                "Không shell, không mạng. Output bị cắt; bản đầy đủ lưu thành artifact.")
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
 OUTPUT_CAP = 4000  # redacted stdout+stderr kept per receipt; the trace note clips again to its own cap
 SOURCE_SUFFIXES = (".js", ".mjs", ".cjs")
+_SCRIPT_NAME = re.compile(r"scripts/[A-Za-z0-9_.-]+")
 
 
 class Refused(ValueError):
@@ -87,6 +89,8 @@ def _token_ok(pattern: str, token: str) -> bool:
         return _repo_file(token, "test/")
     if pattern == "<file>":
         return _repo_file(token)
+    if pattern == "<script>":
+        return _script_file(token)
     return pattern == token
 
 
@@ -94,6 +98,13 @@ def _repo_file(token: str, prefix: str = "") -> bool:
     if path_policy.normalize(token) != token or not token.startswith(prefix) or not token.endswith(SOURCE_SUFFIXES):
         return False
     return not path_policy.denied(token, "exec")
+
+
+def _script_file(token: str) -> bool:
+    """scripts/<file>.js|mjs|cjs trực tiếp dưới scripts/, ngoài script_deny và deny_paths."""
+    if not _SCRIPT_NAME.fullmatch(token) or not _repo_file(token):
+        return False
+    return not re.search(limits.sandbox_tool()["script_deny"], token, re.I)
 
 
 def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
