@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 from settings import get_settings
+from verification.guest_inputs import guest_input
 
 
 NO_ORACLE = 'No trusted behavioral oracle for this request'
@@ -74,7 +75,7 @@ def quoted(raw: str) -> list[str]:
 
 
 def request_text(state):
-    text = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
+    text = str(guest_input(state, 'request_title') or '') + '\n' + str(guest_input(state, 'request_detail') or '')
     text = unicodedata.normalize('NFD', text.lower())
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn').replace('đ', 'd')
     return text
@@ -83,7 +84,7 @@ def request_text(state):
 def text_expectation(state):
     """Words the requester quoted + what should happen to them: {'present': [...], 'absent': [...]}.
     Empty when the request does not pin the text down (no quotes, no intent verb, add and remove at once)."""
-    raw = str(state.get('request_title') or '') + '\n' + str(state.get('request_detail') or '')
+    raw = str(guest_input(state, 'request_title') or '') + '\n' + str(guest_input(state, 'request_detail') or '')
     raw = _PAGE_LINE.sub('', raw)  # the requester's own page, not words they asked for
     quotes = _text_quotes(raw)
     ignored = [t for t, label in _quoted(raw) if not label]
@@ -381,7 +382,7 @@ def run_search(base, fixture):
 
 def _added(state):
     """Lines the diff adds (no +++ headers)."""
-    text = '\n'.join(str(item.get('diff', '')) for item in state.get('full_diff') or [])
+    text = '\n'.join(str(item.get('diff', '')) for item in guest_input(state, 'full_diff') or [])
     return [line[1:] for line in text.splitlines() if line.startswith('+') and not line.startswith('+++')]
 
 
@@ -396,7 +397,7 @@ def _added_routes(state):
 def _added_texts(state):
     """Visible text the diff adds to changed HTML; 12+ chars, at most 3 (short words appear everywhere)."""
     from gates import visual
-    return [t for t in visual.changed_texts(state.get('full_diff'), '+') if len(t) >= 12][:3]
+    return [t for t in visual.changed_texts(guest_input(state, 'full_diff'), '+') if len(t) >= 12][:3]
 
 
 def select_fallback(state, pages=()):

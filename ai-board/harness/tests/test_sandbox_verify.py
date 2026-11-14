@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verification import sandbox as sandbox_verify
+from verification import guest_inputs, sandbox as sandbox_verify
 from gates import gate5_guest
 from gates import verify as gate_verify
 from verification.sandbox import SandboxError
@@ -364,20 +364,72 @@ def test_state_json_ships_only_the_keys_the_guest_gate_reads(tmp_path):
           "plan": {"goal": "private planning"}, "acceptance": ["npm test"], "memory": "x", "github_token": "never", "evidence": {"x": 1}}
     with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
         data = json.loads(tar.extractfile("state.json").read())
-    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance", "surface_tests"}
+    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance", "surface_tests", "_required"}
     assert data["acceptance"] == ["npm test"]
     assert "plan" not in data and data["surface_tests"] == []
 
 
 def test_every_state_key_the_guest_gate_reads_is_uploaded():
-    """A new state.get('x') in the gate must be added to GUEST_STATE_KEYS, or the sandbox would silently see None."""
+    """A state key the guest gate reads must be in the registry, or the sandbox would silently see None."""
     import re
     root = Path(__file__).resolve().parents[1]
     read = set()
     for rel in ("gates/verify.py", "verification/functional.py", "gates/visual.py"):
-        read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", (root / rel).read_text(encoding="utf-8")))
-    written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout"}  # gate output / set by gate5_guest / replaced by checkout_dir
-    assert read - written_or_guest_side <= set(sandbox_verify.GUEST_STATE_KEYS), read
+        text = (root / rel).read_text(encoding="utf-8")
+        read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", text))
+        read |= set(re.findall(r"""guest_input\(state, ["']([a-z_]+)["']""", text))
+    written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout", "should_stop"}  # gate output / set by gate5_guest / replaced by checkout_dir
+    assert read - written_or_guest_side <= set(guest_inputs.GUEST_INPUTS), read
+
+
+def _ship(tmp_path, st):
+    root = checkout(tmp_path)
+    with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, {**state(root), **st}, {})), mode="r:gz") as tar:
+        return json.loads(tar.extractfile("state.json").read())
+
+
+PLANS = [None, {}, {"subtasks": []},
+         {"subtasks": [{"file": "server/contexts/x/index.js", "verify": "node --test test/x.test.js"}]},
+         {"subtasks": [{"file": "server/contexts/x/a.js", "verify": "node --test test/x.test.js test/y.test.js"},
+                       {"file": "server/contexts/y/b.js", "verify": "node --test test/z.test.js"},
+                       {"file": "public/p.html", "verify": "node --test test/p.test.js"}]}]
+
+
+@pytest.mark.parametrize("role", ["student", "teacher", "admin", None])
+@pytest.mark.parametrize("flag", [False, True])
+def test_surface_tests_derive_matches_direct_computation_for_every_role_and_flag(tmp_path, monkeypatch, role, flag):
+    import settings
+    from runtime import levels
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "1" if flag else "0")
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST", "x,y")
+    settings.reset_settings()
+    for plan in PLANS:
+        data = _ship(tmp_path, {"plan": plan, "requester_role": role})
+        assert data["surface_tests"] == levels.surface_tests(plan)
+        assert ("surface_tests" in data["_required"]) is flag
+        assert flag or data["surface_tests"] == []
+    assert flag == bool(levels.surface_tests(PLANS[4]))
+
+
+def test_derive_receives_the_requester_role(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setitem(guest_inputs.GUEST_INPUTS, "spy", guest_inputs.Input(derive=lambda st, role: seen.append(role) or role))
+    assert _ship(tmp_path, {"requester_role": "teacher"})["spy"] == "teacher"
+    assert _ship(tmp_path, {})["spy"] == "student" and seen == ["teacher", "student"]
+
+
+def test_adding_a_registry_entry_is_the_only_edit_needed_to_ship_a_key(tmp_path, monkeypatch):
+    assert "new_key" not in _ship(tmp_path, {"new_key": 1})
+    monkeypatch.setitem(guest_inputs.GUEST_INPUTS, "new_key", guest_inputs.Input())
+    assert _ship(tmp_path, {"new_key": 1})["new_key"] == 1
+
+
+def test_guest_input_fails_loudly_on_missing_required_or_unknown_name():
+    with pytest.raises(guest_inputs.GuestInputMissing):
+        guest_inputs.guest_input({"_required": ["surface_tests"]}, "surface_tests")
+    with pytest.raises(guest_inputs.GuestInputMissing):
+        guest_inputs.guest_input({}, "not_registered")
+    assert guest_inputs.guest_input({"_required": []}, "surface_tests") is None
 
 
 def test_busy_runner_at_create_blocks_as_busy_and_never_destroys(tmp_path, monkeypatch):
