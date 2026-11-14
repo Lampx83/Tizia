@@ -156,7 +156,14 @@ def site_personal_surfaces(checkout: str | Path | None, skip: frozenset[str] = f
 _CONTENT_DATA = re.compile(r"^public/(?:js/(?:scenarios|domains)/.+\.(?:js|json)|.+\.json)$")
 _ANSWER_KEY = re.compile(r"""(?:^|[\s{,"'])(?:answer|correct|ans|correctIndex|answerIndex)["']?\s*:""")
 _SOVEREIGNTY_MAP = re.compile(r"(?:^|/)(?:ban-do-vn|ban-do-viet-nam|vietnam-map|vn-map)[^/]*$|(?:^|/)maps?/.*(?:vn|vietnam)", re.I)
-_VISIBLE_FILE = re.compile(r"^(?:public/.+\.(?:html?|svg|m?js|json)|" + re.escape(path_policy.GENERATED_ROOT) + r".+\.m?js)$")
+_PUBLIC_VISIBLE = re.compile(r"^public/.+\.(?:html?|svg|m?js|json)$")
+_GENERATED_JS = re.compile(r".+\.m?js$")
+
+
+def visible_file(path: str) -> bool:
+    """File giao diện/nội dung người dùng thấy: public/ hoặc JS trong vùng backend sinh."""
+    return bool(_PUBLIC_VISIBLE.match(path)
+                or path_policy.may_edit(path) and _GENERATED_JS.match(path[len(path_policy.GENERATED_ROOT):]))
 _BLOCK = re.compile(r"<(script|style)\b.*?</\1\s*>", re.I | re.S)
 _TAG = re.compile(r"<[^>]*>")
 _ATTR_TEXT = re.compile(r"""\b(?:alt|title|placeholder|aria-label|content|value)\s*=\s*["']([^"']*)["']""", re.I)
@@ -282,7 +289,7 @@ def low_contrast(text: str) -> list[tuple[float, float]]:
 def visible_text(path: str, added: list[str]) -> str:
     """Chữ người dùng thấy trong dòng thêm: HTML bỏ tag (giữ alt/title/placeholder…) + chuỗi trong script;
     JS/JSON → nội dung chuỗi. Rỗng nếu path không phải file giao diện/nội dung."""
-    if not _VISIBLE_FILE.match(path):
+    if not visible_file(path):
         return ""
     body = "\n".join(added)
 

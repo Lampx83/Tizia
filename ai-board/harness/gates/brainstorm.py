@@ -45,7 +45,8 @@ SIZES = ("small", "large")
 SUBTASK_KEYS = ("title", "file", "verify", "size")
 LAYERS = ("db", "backend", "frontend", "wiring")
 GEN_CONTEXT = path_policy.GENERATED_ROOT
-DB_MIGRATION = re.compile(r"^server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
+_GEN = re.escape(GEN_CONTEXT)
+DB_MIGRATION = re.compile(rf"^{_GEN}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 # Plan nhiều lớp: verify/acceptance phải là lệnh chạy được, không phải câu mô tả.
 RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|bash\s|sh\s|docker compose\s|psql\s)")
 READONLY_CHECK = re.compile(r"^(grep|rg)\s")
@@ -56,8 +57,8 @@ PROSE_CHECK = re.compile(rf"(?P<path>\S+)\s+(?:chứa chuỗi|chứa|contains)\s
                          rf"(?:{_AND}(?:không còn|no longer contains)\s+(?P<gone>{_Q}))?\.?")
 _SAFE_PATH = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
-                     r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
-                     r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
+                     rf"|{_GEN}[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
+                     rf"|{_GEN}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
 RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly that. Output ONLY the JSON object."
 
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước

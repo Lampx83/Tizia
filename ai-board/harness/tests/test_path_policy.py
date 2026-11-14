@@ -118,3 +118,24 @@ def test_surface_context_never_opens_forbidden_contexts(name):
     path = f"server/contexts/{name}/routes.js"
     text = f"import test from 'node:test'; // {path}"
     assert not path_policy.surface_context(path, ["test/x.test.js"], {"test/x.test.js": text}.get, {name})
+
+
+@pytest.mark.parametrize("path,visible", [
+    ("server/contexts/_ai-generated/p/a.js", True),
+    ("server/contexts/_ai-generated/p/a.mjs", True),
+    ("server/contexts/_ai-generated/p/a.json", False),
+    ("server/contexts/_ai-generated/.js", False),
+    ("server/contexts/identity/a.js", False),
+    ("public/a.html", True),
+    ("public/a.json", True),
+    ("public/a.py", False),
+])
+def test_guard_visible_file_table(path, visible):
+    assert guard.visible_file(path) is visible
+
+
+def test_gates_follow_the_single_zone_decision(monkeypatch):
+    from gates import brainstorm
+    monkeypatch.setattr(path_policy, "may_edit", lambda path, role="student": path.startswith("zone/"))
+    assert not guard.visible_file("server/contexts/_ai-generated/p/a.js")
+    assert brainstorm.infer_layer("zone/a.js") == "backend"

@@ -26,6 +26,7 @@ Transport = Callable[[str, str, dict, dict], dict]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "ai-board" / "harness"))
 # Worker <-> server contract, shared with server/ai-board/store.js; loader in harness runtime/limits.py.
+import path_policy  # noqa: E402
 from runtime import coverage, feedback_cap, loop_guard, objection_repeat, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, contract, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings, pr_base  # noqa: E402
@@ -2021,7 +2022,7 @@ class HarnessPlanner:
                               old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
             ))
-            layer = subtask.get("layer") or ("backend" if file.startswith("server/contexts/_ai-generated/")
+            layer = subtask.get("layer") or ("backend" if path_policy.may_edit(file)
                                              else "db" if "/migrations/" in file and file.endswith(".sql")
                                              else "frontend" if file.startswith("public/") else "wiring")
             depends_on = subtask.get("depends_on")
