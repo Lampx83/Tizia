@@ -1,0 +1,36 @@
+{
+  "source": "hand-written 2026-11-14 for LF/234 replay; request, plan and question are SYNTHETIC. Each request is truly ambiguous: Gate 2.5 must still ask.",
+  "controls": [
+    {"id": "ctl-color-unspecified", "subject": "Đổi màu nút cho đẹp hơn",
+     "body": "Nút trên trang bài giảng nhìn chưa đẹp, đổi màu giúp em nhé.",
+     "plan": {"summary_vi": "Đổi màu nút bài giảng", "capabilities": [], "subtasks": [{"title": "Đổi màu nút .btn trong public/lesson.html", "file": "public/lesson.html", "verify": "nút đổi màu"}]},
+     "question": "Bạn muốn đổi màu nút nào và sang màu gì?"},
+    {"id": "ctl-which-text", "subject": "Sửa chữ trên trang cho đúng",
+     "body": "Có chữ bị sai trên trang chủ, sửa lại giúp em.",
+     "plan": {"summary_vi": "Sửa chữ trang chủ", "capabilities": [], "subtasks": [{"title": "Sửa chữ sai trong public/index.html", "file": "public/index.html", "verify": "chữ đúng"}]},
+     "question": "Chữ nào đang sai và bạn muốn sửa thành gì?"},
+    {"id": "ctl-new-text-missing", "subject": "Đổi chữ nút 'Viết phản hồi' thành chữ khác hay hơn",
+     "body": "Em thấy chữ 'Viết phản hồi' hơi nhạt, đổi sang chữ nào hay hơn nhé.",
+     "plan": {"summary_vi": "Đổi chữ nút phản hồi", "capabilities": [], "subtasks": [{"title": "Đổi chữ nút 'Viết phản hồi' trong public/lesson.html", "file": "public/lesson.html", "verify": "chữ mới hiện"}]},
+     "question": "Bạn muốn nút hiện chữ mới là gì?"},
+    {"id": "ctl-add-widget-vague", "subject": "Thêm một nút vào trang bài giảng",
+     "body": "Trang bài giảng cần thêm nút nữa, em chưa nghĩ ra nút gì.",
+     "plan": {"summary_vi": "Thêm nút bài giảng", "capabilities": [], "subtasks": [{"title": "Thêm nút vào public/lesson.html", "file": "public/lesson.html", "verify": "có nút mới"}]},
+     "question": "Nút mới có chữ gì, đặt ở đâu và bấm vào thì làm gì?"},
+    {"id": "ctl-remove-vague", "subject": "Xoá phần thừa trên trang",
+     "body": "Trang có phần thừa, bỏ đi giúp em.",
+     "plan": {"summary_vi": "Xoá phần thừa", "capabilities": [], "subtasks": [{"title": "Xoá phần thừa trong public/index.html", "file": "public/index.html", "verify": "phần thừa mất"}]},
+     "question": "Phần nào trên trang bị thừa và cần xoá?"},
+    {"id": "ctl-quoted-no-page", "subject": "Đổi chữ 'Quay lại' thành 'Trở về'",
+     "body": "Nút 'Quay lại' thành 'Trở về' nhé. Em không nhớ nút nằm ở trang nào, nhiều trang có.",
+     "adversarial": "both texts quoted but page not named: names_edit cannot see the missing page",
+     "plan": {"summary_vi": "Đổi chữ nút quay lại", "capabilities": [], "subtasks": [{"title": "Đổi 'Quay lại' thành 'Trở về' trong public/lesson.html", "file": "public/lesson.html", "verify": "'Trở về' hiện"}]},
+     "question": "Nút 'Quay lại' xuất hiện ở nhiều trang, bạn muốn đổi ở trang nào?"}
+  ],
+  "saved_notes": {
+    "B0-r4-replace_text-l2-71c5fa": {"question": "Giữ hay đổi hành vi nút (luật repo cấm 'onclick=')?", "verbatim": false,
+      "source": "paraphrase of request_messages, .scratch/ab-driver/lf161-g1-g3-confirm.md; the stored message was not kept"},
+    "A-r1-replace_text-l1-5a0b0b": {"question": "Đổi mọi trang hay chỉ trang này?", "verbatim": false,
+      "source": "paraphrase of request_messages, .scratch/ab-driver/lf161-g1-g3-confirm.md; the stored message was not kept"}
+  }
+}
