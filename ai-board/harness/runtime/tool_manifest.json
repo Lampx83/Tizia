@@ -18,7 +18,10 @@
       "effect": "read",
       "max_arg_bytes": 1000,
       "max_output_chars": 16000,
-      "max_seconds": 10
+      "max_seconds": 10,
+      "example": {
+        "path": "public"
+      }
     },
     {
       "name": "outline",
@@ -37,7 +40,10 @@
       "effect": "read",
       "max_arg_bytes": 1000,
       "max_output_chars": 16000,
-      "max_seconds": 10
+      "max_seconds": 10,
+      "example": {
+        "file": "public/index.html"
+      }
     },
     {
       "name": "grep",
@@ -65,7 +71,14 @@
       "effect": "read",
       "max_arg_bytes": 2000,
       "max_output_chars": 16000,
-      "max_seconds": 10
+      "max_seconds": 10,
+      "example": {
+        "words": [
+          "login",
+          "signup"
+        ],
+        "file": "public/index.html"
+      }
     },
     {
       "name": "read_file",
@@ -90,7 +103,12 @@
       "effect": "read",
       "max_arg_bytes": 500,
       "max_output_chars": 16000,
-      "max_seconds": 5
+      "max_seconds": 5,
+      "example": {
+        "file": "public/index.html",
+        "start_line": 1,
+        "end_line": 40
+      }
     },
     {
       "name": "edit_file",
@@ -116,7 +134,16 @@
       "effect": "draft_write",
       "max_arg_bytes": 60000,
       "max_output_chars": 4000,
-      "max_seconds": 90
+      "max_seconds": 90,
+      "example": {
+        "file": "public/index.html",
+        "edits": [
+          {
+            "after_line": 12,
+            "insert": "<p>Hello</p>"
+          }
+        ]
+      }
     },
     {
       "name": "write_test",
@@ -139,7 +166,11 @@
       "effect": "draft_write",
       "max_arg_bytes": 60000,
       "max_output_chars": 500,
-      "max_seconds": 5
+      "max_seconds": 5,
+      "example": {
+        "test_file": "test/index.test.js",
+        "test": "import test from 'node:test';\n// public/index.html\n"
+      }
     },
     {
       "name": "run_check",
@@ -158,7 +189,10 @@
       "effect": "read",
       "max_arg_bytes": 100,
       "max_output_chars": 4000,
-      "max_seconds": 90
+      "max_seconds": 90,
+      "example": {
+        "profile": "light"
+      }
     },
     {
       "name": "finish",
@@ -171,7 +205,8 @@
       "effect": "control",
       "max_arg_bytes": 100,
       "max_output_chars": 500,
-      "max_seconds": 100
+      "max_seconds": 100,
+      "example": {}
     }
   ],
   "command_policy": {

@@ -11,6 +11,7 @@ from pathlib import Path
 PATH = Path(__file__).resolve().parent / "tool_manifest.json"
 EFFECTS = ("read", "draft_write", "control")
 FIELDS = ("name", "description", "parameters", "effect", "max_arg_bytes", "max_output_chars", "max_seconds")
+OPTIONAL = ("example",)
 
 
 class ManifestError(ValueError):
@@ -26,6 +27,7 @@ class ToolSpec:
     max_arg_bytes: int
     max_output_chars: int
     max_seconds: float
+    example: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -76,7 +78,7 @@ def parse(data: dict, *, known: set[str]) -> Manifest:
         raise ManifestError("manifest cần version nguyên và danh sách tools")
     tools: dict[str, ToolSpec] = {}
     for raw in data["tools"]:
-        if not isinstance(raw, dict) or set(raw) != set(FIELDS):
+        if not isinstance(raw, dict) or not set(FIELDS) <= set(raw) <= set(FIELDS + OPTIONAL):
             raise ManifestError(f"tool phải có đúng các trường {FIELDS}")
         if raw["name"] in tools:
             raise ManifestError(f"tool trùng tên: {raw['name']}")
