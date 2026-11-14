@@ -1,5 +1,5 @@
 """Gate 5.5 scores the actual patch without model or filesystem I/O."""
-import main
+from runtime import pipeline as main
 from gates import risk_triage
 
 

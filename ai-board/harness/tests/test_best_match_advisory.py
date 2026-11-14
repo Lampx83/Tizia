@@ -2,11 +2,11 @@
 import dataclasses
 import subprocess
 
-import functional
-import meter
+from verification import functional
+from runtime import meter
 import pytest
 import tools
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import best_match, brainstorm, plan_validate
 from test_code_index import _SeqModels

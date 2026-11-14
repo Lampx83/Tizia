@@ -1,7 +1,7 @@
 """repomap.py (sơ đồ repo của AI Board) + wiring vào gates/brainstorm.py, gates/implement.py."""
-import repomap
+from services import repomap
 import tools
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import brainstorm, implement, plan_validate
 from test_code_index import _commit, _git
@@ -35,7 +35,7 @@ def test_related_ranks_matching_page_then_its_import_neighbours(tmp_path):
 
 
 def test_gate1_repo_hint_ranks_by_the_whole_request_not_only_its_subject(monkeypatch, tmp_path):
-    import context
+    from services import context
     monkeypatch.setattr(repomap, "related", _real_related)
     src = tmp_path / "src"
     src.mkdir()
@@ -77,7 +77,7 @@ def _crowded_repo(tmp_path):
 
 def test_matching_files_prefers_the_file_holding_most_of_the_requests_multiword_phrases(monkeypatch, tmp_path):
     monkeypatch.setattr(tools, "matching_files", _real_matching)
-    import file_context
+    from services import file_context
     src = _crowded_repo(tmp_path)
     said = file_context.phrases("Thêm bộ đếm", "Trong hộp thoại gửi đề nghị, ô tiêu đề chưa có bộ đếm; hiển thị khi gõ và cập nhật như ô mô tả chi tiết.")
     (top, score, grams), *_ = tools.matching_files(src, "HEAD", said)
@@ -87,7 +87,7 @@ def test_matching_files_prefers_the_file_holding_most_of_the_requests_multiword_
 
 def test_gate1_puts_the_best_matching_file_ahead_of_the_page_it_was_submitted_from(monkeypatch, tmp_path):
     monkeypatch.setattr(tools, "matching_files", _real_matching)
-    import context
+    from services import context
     src = _crowded_repo(tmp_path)
     request = {"subject": "Thêm bộ đếm ký tự", "body": "[Trang: Trường CNTT] /school.html\nTrong hộp thoại gửi đề nghị, ô tiêu đề chưa có bộ đếm; làm giống ô mô tả chi tiết."}
     out = context.build_context(1, request, None, src, "HEAD")

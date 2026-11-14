@@ -2,7 +2,7 @@
 base..HEAD diff, plus changed-path rules. Pure text in, findings out — no subprocess."""
 from dataclasses import replace
 
-import main
+from runtime import pipeline as main
 from gates import guard
 
 

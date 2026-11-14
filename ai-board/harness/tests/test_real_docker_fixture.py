@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-import main
-from budget import Budget
+from runtime import pipeline as main
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

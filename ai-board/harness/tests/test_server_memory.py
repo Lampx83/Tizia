@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from worker import WorkerClient
 from worker import HttpWorker
-import memory
+from repositories import memory
 from repositories.server_memory import RemoteLessons
 
 

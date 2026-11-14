@@ -1,7 +1,7 @@
 """Cổng 1 dùng context: màu chữ trên trang → file CSS trang liên kết; file bịa → hỏi lại 1 lần."""
-from budget import Budget
+from runtime.budget import Budget
 from conftest import deps_with
-import context
+from services import context
 from gates import brainstorm, plan_validate
 from test_code_index import _SeqModels, repo  # noqa: F401 — repo là fixture
 
@@ -71,7 +71,7 @@ def test_gate1_and_2_5_prompts_start_with_aiboard_manual_and_fixed_prefix():
 
 def test_gate1_trace_shows_what_the_planner_knew_which_tools_ran_and_how_each_plan_was_judged(repo):
     import dataclasses
-    import meter
+    from runtime import meter
     src, sha = repo
     tracer, batches = meter.Tracer(None), []
     tracer.begin(1, batches.append)

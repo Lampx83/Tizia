@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import candidate
+from services import candidate
 import tools
 from gates import implement, static_check, subtask_contract
 from runtime import schedule, tool_loop

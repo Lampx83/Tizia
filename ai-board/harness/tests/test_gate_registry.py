@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import deps_with, plan_with
-from main import run_once
+from runtime.pipeline import run_once
 from runtime import pipeline
 from runtime.pipeline import GATES, UnknownGateError, run_gate
 

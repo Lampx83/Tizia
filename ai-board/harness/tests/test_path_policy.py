@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import code_index
+from repositories import code_index
 import path_policy
 from gates import guard
 from runtime import tool_loop

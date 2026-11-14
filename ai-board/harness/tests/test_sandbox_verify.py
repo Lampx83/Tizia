@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-import sandbox_verify
+from verification import sandbox as sandbox_verify
 from gates import gate5_guest
 from gates import verify as gate_verify
-from sandbox_verify import SandboxError
+from verification.sandbox import SandboxError
 
 
 class FakeClient:

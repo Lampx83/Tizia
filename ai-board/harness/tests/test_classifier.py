@@ -4,11 +4,11 @@ import json
 import math
 from types import SimpleNamespace
 
-import classifier
-from budget import Budget
+from security import classifier
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import intake_guard, static_check
-from models import OllamaClient
+from providers.client import OllamaClient
 
 
 def body(top):

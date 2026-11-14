@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-import classifier
+from security import classifier
 from gates import guard
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")

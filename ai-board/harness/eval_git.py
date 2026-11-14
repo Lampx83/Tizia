@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_judge  # noqa: E402
 import eval_recall  # noqa: E402
 from gates import static_check  # noqa: E402
-from main import ROOT  # noqa: E402
+from runtime.pipeline import ROOT  # noqa: E402
 from settings import get_settings
 
 DIR = "corpus-git"

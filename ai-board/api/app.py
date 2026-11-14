@@ -86,7 +86,7 @@ def plan_operation(snapshot, workspace, checkpoint):
     """Use HttpWorker's existing planner, with deadline checks between its gates."""
     from worker import HarnessPlanner, PlanBlockedError, _load_harness
     _load_harness()
-    from meter import Tracer, redact
+    from runtime.meter import Tracer, redact
 
     collected = []
     tracer = Tracer(path=None)

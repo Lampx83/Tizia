@@ -15,9 +15,9 @@ HARNESS = Path(__file__).resolve().parents[1]
 if str(HARNESS) not in sys.path:
     sys.path.insert(0, str(HARNESS))
 
-from budget import Budget  # noqa: E402
-from main import Deps  # noqa: E402
-from models import OllamaClient  # noqa: E402
+from runtime.budget import Budget  # noqa: E402
+from runtime.pipeline import Deps  # noqa: E402
+from providers.client import OllamaClient  # noqa: E402
 
 
 def skill_text(name: str) -> str:

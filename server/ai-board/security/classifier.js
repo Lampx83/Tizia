@@ -1,5 +1,5 @@
 // Logprob classifier: one token from AI_BOARD_CLASSIFIER_MODEL, softmax over the task's letters
-// only. Same labels, prompt and thresholds as ai-board/harness/classifier.py (classifier-calibration.json).
+// only. Same labels, prompt and thresholds as ai-board/harness/security/classifier.py (classifier-calibration.json).
 // Clarity stays log-only (mode 'shadow'). Danger is 'active' but escalate-only: it adds human review and
 // never rejects on its own (reject_min null), while the intake route's deterministic guard owns reject/critical.
 import fs from 'node:fs';

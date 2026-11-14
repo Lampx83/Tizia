@@ -13,7 +13,7 @@ import time
 import unicodedata
 from pathlib import Path
 
-import code_index
+from repositories import code_index
 import eval_corpus
 import eval_fast
 from evaluation import gold as gold_eval

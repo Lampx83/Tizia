@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import worker  # noqa: E402
-import candidate  # noqa: E402
+from services import candidate  # noqa: E402
 from repositories import server_hsm  # noqa: E402
 from repositories.server_gate_proof import gate4_pins  # noqa: E402
 

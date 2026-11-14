@@ -182,7 +182,7 @@ def _bar(total: int):
 
 
 def cmd_run(args, deps=None) -> int:
-    from main import ENV_FILE, ROOT
+    from runtime.pipeline import ENV_FILE, ROOT
     from runtime.pipeline import Deps
     real_run = deps is None
     if args.case_ids and (args.cases or args.kinds):
@@ -424,7 +424,7 @@ def cmd_reconcile(args) -> int:
 
 
 def cmd_pack_check(args) -> int:
-    from main import ROOT
+    from runtime.pipeline import ROOT
     problems = taskpack.validate(json.loads(Path(args.pack).read_text(encoding="utf-8")), ROOT)
     print(json.dumps({"entries": len(json.loads(Path(args.pack).read_text(encoding="utf-8"))), "problems": problems}, ensure_ascii=False, indent=1))
     return 1 if problems else 0
@@ -443,7 +443,7 @@ def cmd_pack_build(args) -> int:
 
 
 def cmd_check(args) -> int:
-    from main import ROOT
+    from runtime.pipeline import ROOT
     run_dir = Path(args.root) / "suite" / args.name
     meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     store = Store(run_dir / "results.jsonl", Path(args.root) / eval_corpus.VAULT / "suite" / args.name / "results.jsonl")

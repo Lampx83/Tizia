@@ -5,9 +5,9 @@ file folder sở hữu và không bị coi là chức năng mới; luật độ 
 phải hỏi lại (clarity_fp, thấp là tốt) và phải bắt yêu cầu mơ hồ (clarity_miss). Quy tắc nhận thay đổi: không nhóm
 nào tụt quá MAX_DROP điểm so với mốc evaluation/strata-baseline.json (tests/test_eval_strata.py); mốc ghi kèm mã cấu hình.
 
-    python eval_strata.py                 # in bảng theo nhóm
-    python eval_strata.py --write-baseline  # ghi mốc mới (chỉ khi thay đổi đã được chấp nhận)
-    python eval_strata.py --live          # thêm cổng 1→2.5 với model thật: đạt/chặn, GPU-s, độ dài tầng
+    python evaluation/strata.py                 # in bảng theo nhóm
+    python evaluation/strata.py --write-baseline  # ghi mốc mới (chỉ khi thay đổi đã được chấp nhận)
+    python evaluation/strata.py --live          # thêm cổng 1→2.5 với model thật: đạt/chặn, GPU-s, độ dài tầng
 """
 from __future__ import annotations
 

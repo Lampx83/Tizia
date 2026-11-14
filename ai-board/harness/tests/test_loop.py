@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-import main
-from budget import Budget
-from dbconn import harness_db
-from main import Deps, Unavailable, load_inbox, run_once
+from runtime import pipeline as main
+from runtime.budget import Budget
+from repositories.dbconn import harness_db
+from runtime.pipeline import Deps, Unavailable, load_inbox, run_once
 
 
 def rows(db_file):
@@ -142,7 +142,7 @@ def test_wall_clock_accumulates_across_resume():
 
 
 def test_ollama_client_takes_seckey_from_injected_env_only():
-    from models import OllamaClient
+    from providers.client import OllamaClient
 
     client = OllamaClient.from_env({"OLLAMA_URL": "http://fake:1", "OLLAMA_SECKEY": "tu-env-gia"})
     assert client.seckey == "tu-env-gia"
@@ -152,7 +152,7 @@ def test_ollama_client_takes_seckey_from_injected_env_only():
 def test_ollama_client_from_env_has_no_hardcoded_fallback():
     # Bien moi truong la nguon su that duy nhat -- thieu bien thi rong, khong
     # am tham roi ve 1 endpoint/model mac dinh nao do nam trong source.
-    from models import OllamaClient
+    from providers.client import OllamaClient
 
     client = OllamaClient.from_env({})
     assert client.base_url == ""
@@ -163,7 +163,7 @@ def test_ollama_client_from_env_has_no_hardcoded_fallback():
 
 
 def test_ollama_client_post_raises_clearly_when_base_url_missing():
-    from models import OllamaClient
+    from providers.client import OllamaClient
 
     client = OllamaClient.from_env({})
     with pytest.raises(RuntimeError, match="OLLAMA_URL"):
@@ -174,8 +174,8 @@ def test_ollama_client_uses_seckey_header_not_bearer(monkeypatch):
     # server/ai.js goi gateway noi bo bang header x-ollama-seckey -- harness
     # phai gui DUNG header do de noi chuyen duoc voi cung gateway, khong phai
     # Authorization: Bearer (gateway khong hieu header do).
-    import models as models_mod
-    from models import OllamaClient
+    import providers.client as models_mod
+    from providers.client import OllamaClient
 
     captured = {}
     client = OllamaClient.from_env({"OLLAMA_URL": "http://fake.invalid", "OLLAMA_SECKEY": "s3cr3t"})

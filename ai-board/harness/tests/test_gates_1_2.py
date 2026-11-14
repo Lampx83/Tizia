@@ -2,7 +2,7 @@
 import dataclasses
 import pytest
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import deps_with, plan_with
 from gates import brainstorm, scope_check
 
@@ -28,7 +28,7 @@ def test_gate_2_accepts_server_surface_catalog_without_widening_legacy_rights():
     assert not scope_check.run({'plan': mixed, 'catalog': catalog})['blocked']
     mixed['subtasks'].append({'file': 'server/index.js'})
     assert scope_check.run({'plan': mixed, 'catalog': catalog})['blocked']
-from main import run_once
+from runtime.pipeline import run_once
 
 
 # ── cổng 2 thuần: capability names đọc từ capabilities.js thật ──────────────

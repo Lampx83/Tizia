@@ -20,7 +20,7 @@ function fakeRepo(files) {
 
 const BASE = {
   'ai-board/harness/gates/verify.py': 'a = 1\n',
-  'ai-board/harness/functional.py': 'b = 2\n',
+  'ai-board/harness/verification/functional.py': 'b = 2\n',
   'server/ai-board/guard-lexicon.json': '{}\n',
   'scripts/smoke-user-state.sh': 'echo hi\n',
   'ai-board/sandbox-runner/guest/guest-boot.sh': 'echo boot\n',
@@ -39,7 +39,7 @@ test('the hash covers what the guest image bakes in and ignores what it does not
   fs.writeFileSync(path.join(root, 'ai-board/harness/tests/test_x.py'), 'changed\n');
   fs.writeFileSync(path.join(root, 'server/ai-board/store.js'), 'changed\n');
   assert.equal(guestInputsHash(root), h, 'tests and admin-only server code do not need a new guest');
-  fs.writeFileSync(path.join(root, 'ai-board/harness/functional.py'), 'b = 3\n');
+  fs.writeFileSync(path.join(root, 'ai-board/harness/verification/functional.py'), 'b = 3\n');
   assert.notEqual(guestInputsHash(root), h, 'a Gate 5 file change needs a new guest');
 });
 

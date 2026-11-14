@@ -22,9 +22,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import context  # noqa: E402
-import file_context  # noqa: E402
-from eval_strata import _exemplars  # noqa: E402
+from services import context  # noqa: E402
+from services import file_context  # noqa: E402
+from evaluation.strata import _exemplars  # noqa: E402
 from gates import implement  # noqa: E402
 from settings import get_settings
 

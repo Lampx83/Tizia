@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import path_policy
-from budget import Budget
+from runtime.budget import Budget
 from conftest import plan_with
 from gates import brainstorm, react_plan
 from tools import readonly

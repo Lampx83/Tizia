@@ -42,7 +42,7 @@ def test_preview_limit_applies_to_compressed_transport_not_uncompressed_git_tar(
 
 
 def test_oracle_unavailable_capture_keeps_verdict_blocked_and_deletes_the_real_git_branch(tmp_path):
-    import candidate
+    from services import candidate
     from worker import execute_pre_pr, _preview_eligible
     repo = tmp_path / 'repo'; repo.mkdir()
     def git(at, *args):

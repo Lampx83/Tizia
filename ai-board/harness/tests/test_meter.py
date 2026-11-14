@@ -2,8 +2,8 @@
 import dataclasses
 import json
 
-import meter
-from budget import Budget
+from runtime import meter
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 
 OLLAMA_BODY = {"response": "{}", "total_duration": 21_000_000_000, "load_duration": 150_000_000,

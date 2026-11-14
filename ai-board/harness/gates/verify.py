@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from gates import visual
 from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
-from meter import redact
+from runtime.meter import redact
 from settings import get_settings
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
@@ -342,7 +342,7 @@ def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: li
 def _loader_pages(checkout: Path, assets: list[str], depth: int = 3) -> list[str]:
     """Trang HTML nạp file JS/CSS đã đổi (link/script trực tiếp hoặc qua import, ≤ depth bước), gần trước rồi theo tên.
     ponytail: quét lại public/ mỗi lần (~600 file, dưới 1 s); dùng code_index.json lưu sẵn nếu chậm."""
-    import code_index
+    from repositories import code_index
 
     owners: dict[str, set[str]] = {}
     for file in sorted((checkout / "public").rglob("*")):
@@ -376,7 +376,7 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
     """Chép bản base của file public đã đổi vào container đang chạy (server đọc file mỗi request) để chụp BEFORE
     không phải build base. Trả file mới ở candidate (base không có → không chụp BEFORE); None = không biết base.
     ponytail: file mới vẫn nằm trong container; trang base không trỏ tới nên không ảnh hưởng ảnh."""
-    import code_index
+    from repositories import code_index
 
     base_sha = state.get("base_sha")
     if not base_sha:

@@ -1,9 +1,9 @@
 """B02: chuỗi trong nháy → file ứng viên (git grep -F ở sha pin) vào context cổng 1, sau cờ AI_BOARD_RETRIEVAL=literal."""
-import context
-import file_context
+from services import context
+from services import file_context
 import pytest
 import tools
-from budget import Budget
+from runtime.budget import Budget
 from conftest import deps_with
 from gates import brainstorm
 from test_code_index import _SeqModels, _commit, repo  # noqa: F401 — repo là fixture

@@ -1,5 +1,5 @@
 """Long-term memory: bài học JSONL ghi sau verdict, truy xuất theo file và từ khoá."""
-import memory
+from repositories import memory
 
 
 def test_recall_ranks_same_file_first_then_keyword_and_skips_unrelated(tmp_path):

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import plan_validate
 

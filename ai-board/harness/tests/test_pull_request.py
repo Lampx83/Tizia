@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import candidate
-from candidate import Candidates, GitHub
+from services import candidate
+from services.candidate import Candidates, GitHub
 
 AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:

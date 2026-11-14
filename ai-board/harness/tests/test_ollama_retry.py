@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-import models
+from providers import client as models
 
 
 class _Reply:

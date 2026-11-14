@@ -41,7 +41,7 @@ def _fresh_intake_cache():
 def _no_repomap(monkeypatch, request):
     """repomap.related dựng chỉ mục cả public/ (~20 s/process): mọi test mặc định nhận [] — test của repomap
     tự monkeypatch lại khi cần kiểm tra hành vi có gợi ý."""
-    import repomap
+    from services import repomap
     import tools
     tools._files_with.cache_clear()  # keyed by (source, commit, gram); a stubbed index must not see another test's real-index hits
     tools._ranked.cache_clear()
@@ -49,7 +49,7 @@ def _no_repomap(monkeypatch, request):
     monkeypatch.setattr(tools, "matching_files", lambda *a, **kw: [])  # same index build, same reason
     if request.module.__name__ == "test_eval_strata":
         return  # The deterministic baseline must retain real product-repository retrieval.
-    import code_index
+    from repositories import code_index
     ui_index = code_index.ui_index
     def fixture_index(source, *args, **kwargs):
         # Corpus tests use fixed gold replies; retrieval tests keep their actual temporary repositories.
@@ -210,7 +210,7 @@ def deps_with(models):
     """Deps với model fake (FakeModels hoặc plan cho FakeModels); telegram là
     MagicMock để khẳng định không bao giờ bị gọi."""
     from unittest.mock import MagicMock
-    from main import Deps
+    from runtime.pipeline import Deps
     if not isinstance(models, FakeModels):
         models = FakeModels(models)
     return Deps(models=models, notify=MagicMock(name="telegram"),

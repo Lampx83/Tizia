@@ -2,10 +2,10 @@
 skill_proposals, best-effort khi DB lỗi."""
 import pytest
 
-import gate_trace
-from dbconn import harness_db
+from repositories import gate_trace
+from repositories.dbconn import harness_db
 from conftest import connect, deps_with, plan_with
-from main import run_once
+from runtime.pipeline import run_once
 
 
 def rows(db_file, table):
@@ -14,7 +14,7 @@ def rows(db_file, table):
 
 
 def test_full_loop_writes_one_gate_trace_row_per_model_call(inbox_file, db_file, fake_deps):
-    from main import load_inbox
+    from runtime.pipeline import load_inbox
     (item,) = load_inbox(inbox_file)
 
     out = run_once(item, db_path=db_file, deps=fake_deps)
@@ -29,7 +29,7 @@ def test_full_loop_writes_one_gate_trace_row_per_model_call(inbox_file, db_file,
 
 
 def test_gate_trace_joins_to_its_skill_proposal(inbox_file, db_file, fake_deps):
-    from main import load_inbox
+    from runtime.pipeline import load_inbox
     (item,) = load_inbox(inbox_file)
 
     out = run_once(item, db_path=db_file, deps=fake_deps)
@@ -49,7 +49,7 @@ def test_gate_trace_joins_to_its_skill_proposal(inbox_file, db_file, fake_deps):
 
 
 def test_gate_trace_carries_ollama_cache_evidence_fields(inbox_file, db_file, fake_deps):
-    from main import load_inbox
+    from runtime.pipeline import load_inbox
     (item,) = load_inbox(inbox_file)
 
     run_once(item, db_path=db_file, deps=fake_deps)
@@ -63,7 +63,7 @@ def test_gate_trace_carries_ollama_cache_evidence_fields(inbox_file, db_file, fa
 
 
 def test_blocked_at_gate_2_writes_only_gate_1_trace(inbox_file, db_file):
-    from main import load_inbox
+    from runtime.pipeline import load_inbox
     (item,) = load_inbox(inbox_file)
     deps = deps_with(plan_with(["db"]))  # capability core -> chặn ở cổng 2, không gọi model
 
@@ -93,7 +93,7 @@ def test_gate_trace_record_noop_without_db_path_or_proposal_id(inbox_file, db_fi
     main.run_once, như phần lớn test hiện có) không truyền db_path/proposal_id
     -> không ghi trace, không lỗi."""
     from gates import brainstorm
-    from budget import Budget
+    from runtime.budget import Budget
 
     out = brainstorm.run({"id": "req-x", "subject": "s", "body": "b"}, fake_deps, Budget(max_wall_clock_s=999))
 

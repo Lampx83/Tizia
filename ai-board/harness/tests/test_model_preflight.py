@@ -99,7 +99,7 @@ def test_non_http_error_is_also_model_unavailable():
 
 
 def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypatch):
-    import main
+    from runtime import pipeline as main
     roles = []
     monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, role=None, **k: roles.append(role) or {})
     routing = type('Router', (), {'candidates': staticmethod(lambda role: [] if role == 'classifier' else [{}]), 'cooldowns': {}})()
@@ -109,7 +109,7 @@ def test_classifier_without_calibrated_candidate_does_not_block_intake(monkeypat
 
 
 def test_probe_is_skipped_while_the_endpoint_cools_down(monkeypatch):
-    import main
+    from runtime import pipeline as main
     calls = []
     monkeypatch.setattr(main.Deps, 'call_model', lambda self, *a, **k: calls.append(1) or {})
     routing = type('Router', (), {'candidates': staticmethod(lambda role, exclude=(): []), 'cooldowns': {}})()
@@ -180,7 +180,7 @@ def routed_call(ollama, now):
 
 
 def test_failed_preflight_probe_does_not_arm_cooldown(monkeypatch):
-    import main
+    from runtime import pipeline as main
     now = [0.0]
     ollama = RoutedOllama(now)
     monkeypatch.setattr(main.Deps, 'call_model', routed_call(ollama, now))
@@ -199,7 +199,7 @@ def test_real_call_failure_still_arms_cooldown():
 
 
 def test_next_probe_after_backoff_actually_probes_and_clears_backoff(monkeypatch):
-    import main
+    from runtime import pipeline as main
     now = [0.0]
     ollama = RoutedOllama(now)
     monkeypatch.setattr(main.Deps, 'call_model', routed_call(ollama, now))
@@ -215,7 +215,7 @@ def test_next_probe_after_backoff_actually_probes_and_clears_backoff(monkeypatch
 
 def test_gate1_probe_timeout_default_is_45s(monkeypatch):
     import worker
-    from models import OllamaClient
+    from providers.client import OllamaClient
     from settings import reset_settings
     monkeypatch.delenv('AI_BOARD_GATE1_PROBE_TIMEOUT_S', raising=False)
     monkeypatch.setattr(OllamaClient, 'from_env', lambda *a, **kw: OllamaClient())
@@ -225,7 +225,7 @@ def test_gate1_probe_timeout_default_is_45s(monkeypatch):
 
 def test_gate1_probe_timeout_comes_from_env(monkeypatch):
     import worker
-    from models import OllamaClient
+    from providers.client import OllamaClient
     from settings import reset_settings
     monkeypatch.setenv('AI_BOARD_GATE1_PROBE_TIMEOUT_S', '120')
     monkeypatch.setattr(OllamaClient, 'from_env', lambda *a, **kw: OllamaClient())

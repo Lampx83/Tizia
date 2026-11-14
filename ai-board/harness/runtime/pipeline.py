@@ -462,7 +462,7 @@ def _smoke(request, deps, budget, state, **_) -> dict:
     if deps.verify is not None:
         return deps.verify.run(state, deps, budget)
     if get_settings().sandbox_url:  # Gate 5 inside a Microsandbox microVM instead of worker-side Docker
-        import sandbox_verify
+        from verification import sandbox as sandbox_verify
         return candidate.ensure(state, 5) or sandbox_verify.run(state, deps, budget)
     return candidate.ensure(state, 5) or verify.run(state, deps, budget)
 
