@@ -274,3 +274,36 @@ def test_wrong_quote_still_blocks_and_carries_evidence(tmp_path):
     out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
     assert out['blocked'] and out['reason'] == 'plan_ungrounded'
     assert out['evidence']['item'] == 'public/js/domains/it/modules.js' and out['evidence']['quote'].startswith('KHÔNG CÓ')
+
+
+def test_advquote_quote_mismatch_on_target_file_is_advisory_with_note(tmp_path, monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'quotes,ellipsis,advquote')
+    _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];'})
+    request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,
+               'type': 'feature'}
+    state = {'plan': _so_tay_plan(), 'checkout_source': str(tmp_path)}
+    bad = {'target': 'public/js/domains/it/modules.js', 'file': 'public/js/domains/it/modules.js', 'quote': 'KHÔNG CÓ CHỮ NÀY TRONG FILE',
+           'before': 'a', 'after': 'b', 'verify': 'c'}
+    new = lambda f: {'target': f, 'file': f, 'quote': '', 'before': 'chưa có file', 'after': 'x', 'verify': 'y'}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok',
+                  'grounding': [new('public/so-tay-git.html'), bad, new('test/so-tay-git.test.js')]}
+    out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
+    assert not out['blocked']
+    assert 'modules.js' in state['validator_note'] and 'không chặn' in state['validator_note']
+    assert state['grounding']['evidence'][1]['quote'] == '' and state['grounding']['evidence'][1]['target'] == 'public/js/domains/it/modules.js'
+
+
+def test_advquote_still_blocks_quote_copied_from_another_file(tmp_path, monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'quotes,ellipsis,advquote')
+    _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];',
+                          'public/js/domains/it/other.js': 'export const OTHER = 1;'})
+    request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,
+               'type': 'feature'}
+    state = {'plan': _so_tay_plan(), 'checkout_source': str(tmp_path)}
+    wrong_file = {'target': 'public/js/domains/it/modules.js', 'file': 'public/js/domains/it/other.js', 'quote': 'export const OTHER = 1;',
+                  'before': 'a', 'after': 'b', 'verify': 'c'}
+    new = lambda f: {'target': f, 'file': f, 'quote': '', 'before': 'chưa có file', 'after': 'x', 'verify': 'y'}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok',
+                  'grounding': [new('public/so-tay-git.html'), wrong_file, new('test/so-tay-git.test.js')]}
+    out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
+    assert out['blocked'] and out['reason'] == 'plan_ungrounded'
