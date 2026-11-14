@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import deps_with, plan_with
 from gates import plan_validate
 from test_gate25_answered import Scripted
