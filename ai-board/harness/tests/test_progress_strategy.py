@@ -10,6 +10,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 from runtime import progress  # noqa: E402
 import worker  # noqa: E402
+import worker_execution  # noqa: E402
 
 ON = {"AI_BOARD_PROGRESS_LOOP": "1"}
 
@@ -63,8 +64,8 @@ class Ticks:
 
 
 def _verdict(monkeypatch):
-    monkeypatch.setattr(worker, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 4, "no_progress_rounds": 99})
-    monkeypatch.setattr(worker, "MAX_REPAIRS", 4)
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 4, "no_progress_rounds": 99})
+    monkeypatch.setattr(worker_execution, "MAX_REPAIRS", 4)
     plan = {"capabilities": ["public.ui"],
             "steps": [{"order": 1, "title": "a", "allowed_scope": ["public/js/campus/building.js"],
                        "tests": ["t"], "risk": "low"}]}

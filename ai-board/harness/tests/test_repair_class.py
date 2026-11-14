@@ -8,6 +8,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 import pytest
 
 import worker
+import worker_execution  # noqa: E402
 from runtime import repair_class
 from worker import execute_pre_pr
 
@@ -88,9 +89,9 @@ class Ticks:
 
 def drive(monkeypatch, failures, hard=4, plan=TWO_STEP_PLAN):
     """failures: list of (gate-5 result extras, diff text) per attempt; last attempt past the list passes."""
-    monkeypatch.setattr(worker, "REPAIR_REPLAN", {"enabled": True, "max_repairs": hard, "no_progress_rounds": 2,
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {"enabled": True, "max_repairs": hard, "no_progress_rounds": 2,
                                                   "soft": {"soft_start": 2, "soft_step": 1}})
-    monkeypatch.setattr(worker, "MAX_REPAIRS", 1)
+    monkeypatch.setattr(worker_execution, "MAX_REPAIRS", 1)
     attempts, reuse_seen = [0], []
 
     def run_gate(gate, _request, _deps, _budget, state):

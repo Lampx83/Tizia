@@ -11,6 +11,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 from runtime import levels, progress  # noqa: E402
 import worker  # noqa: E402
+import worker_execution  # noqa: E402
 
 CODE = "const a = 1;\nrender();\n"
 TEST = "test('a', () => {});\n"
@@ -87,8 +88,8 @@ def proposal(**overrides):
 def flags(monkeypatch):
     monkeypatch.setenv("AI_BOARD_PROGRESS_LOOP", "1")
     monkeypatch.setenv("AI_BOARD_MODEL_REPAIR", "1")
-    monkeypatch.setattr(worker, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 12})
-    monkeypatch.setattr(worker, "MAX_REPAIRS", 12)
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 12})
+    monkeypatch.setattr(worker_execution, "MAX_REPAIRS", 12)
 
 
 def test_a_valid_repair_is_one_heavy_call_applied_to_the_produced_files():
@@ -116,8 +117,8 @@ def visual_result(tmp_path, monkeypatch, *, shots=1, max_images=None):
         records.append({"phase": "after", "page": f"/page{index}.html", "width": 1280, "path": str(path)})
     monkeypatch.setattr(agent.tempfile, "gettempdir", lambda: str(tmp_path))
     if max_images is not None:
-        original = worker.repair_agent_limits
-        monkeypatch.setattr(worker, "repair_agent_limits", lambda env=None: {**original(env), "max_images": max_images})
+        original = worker_execution.repair_agent_limits
+        monkeypatch.setattr(worker_execution, "repair_agent_limits", lambda env=None: {**original(env), "max_images": max_images})
     return {"gate": 5, "blocked": True, "failure_class": "ordinary",
             "reason": "giao diện tệ hơn bản trước — /page0.html 1280px: tương phản 2.1 < 3.0",
             "evidence": {"text": "Cổng ảnh: tương phản kém", "screenshots": records}}

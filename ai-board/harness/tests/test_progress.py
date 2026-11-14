@@ -10,6 +10,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 from runtime import exec_graph, limits, progress  # noqa: E402
 import worker  # noqa: E402
+import worker_execution  # noqa: E402
 
 
 def test_signal_registry_is_empty_by_default_for_every_node_and_task_type():
@@ -130,8 +131,8 @@ def test_the_repair_ladder_uses_the_registry_only_when_the_flag_is_on(monkeypatc
     plan = {"capabilities": ["public.ui"],
             "steps": [{"order": 1, "title": "a", "allowed_scope": ["public/js/campus/building.js"],
                        "tests": ["t"], "risk": "low"}]}
-    monkeypatch.setattr(worker, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 4, "no_progress_rounds": 2})
-    monkeypatch.setattr(worker, "MAX_REPAIRS", 4)
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 4, "no_progress_rounds": 2})
+    monkeypatch.setattr(worker_execution, "MAX_REPAIRS", 4)
     monkeypatch.setitem(progress.ACTIONS, "syntax", ("stop_admin",))
     attempts = [0]
 

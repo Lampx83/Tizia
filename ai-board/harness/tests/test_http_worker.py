@@ -97,7 +97,8 @@ def test_off_mode_makes_no_http_calls():
 
 def test_real_change_runner_hands_off_legacy_unverified_plan_before_model_or_checkout(monkeypatch, tmp_path):
     import worker
-    monkeypatch.setattr(worker, '_real_deps', lambda *_: object())
+    import worker_execution
+    monkeypatch.setattr(worker_execution, '_real_deps', lambda *_: object())
     out = worker.harness_change_runner(checkout_source=tmp_path)({'steps':[]},7,200)
     assert out['outcome'] == 'blocked' and out['gate_reached'] == 3
     assert out['failure_class'] == 'plan' and out['budget_used'] == 0 and out['candidate'] is None
@@ -719,7 +720,8 @@ def test_repair_is_bounded_to_one_child():
 def test_repair_replan_flag_allows_a_second_repair_for_a_new_failure(monkeypatch):
     """LF/74: cờ bật nâng trần sửa lên 2; lỗi mới (khác lý do) dùng được lượt thứ hai."""
     import worker
-    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    import worker_execution
+    monkeypatch.setattr(worker_execution, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
     first = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
     second = {'blocked': True, 'reason': 'css class lệch', 'failure_class': 'ordinary'}
     verdict, calls = run({4: [first, second, {}]})
@@ -731,7 +733,8 @@ def test_repair_replan_flag_allows_a_second_repair_for_a_new_failure(monkeypatch
 
 def test_repair_replan_flag_still_stops_at_the_hard_bound(monkeypatch):
     import worker
-    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    import worker_execution
+    monkeypatch.setattr(worker_execution, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
     script = {4: [{'blocked': True, 'reason': f'lỗi {n}', 'failure_class': 'ordinary'} for n in ('a', 'b', 'c')]}
     verdict, calls = run(script)
     assert verdict['outcome'] == 'blocked' and verdict['failure_class'] == 'ordinary'
@@ -742,7 +745,8 @@ def test_repair_replan_flag_still_stops_at_the_hard_bound(monkeypatch):
 def test_repair_replan_flag_stops_when_the_same_failure_repeats(monkeypatch):
     """Thất bại mơ hồ (y hệt lần trước) thì dừng, không đốt lượt sửa thứ hai."""
     import worker
-    monkeypatch.setattr(worker, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
+    import worker_execution
+    monkeypatch.setattr(worker_execution, 'REPAIR_REPLAN', {'enabled': True, 'max_repairs': 2})
     same = {'blocked': True, 'reason': 'node --check lỗi', 'failure_class': 'ordinary'}
     verdict, calls = run({4: [same]})
     assert verdict['outcome'] == 'blocked'

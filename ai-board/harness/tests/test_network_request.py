@@ -181,6 +181,7 @@ def test_tests_calling_real_external_apis_are_refused(test_text, host):
 
 def test_snapshot_decisions_reach_the_execution_as_a_queue(monkeypatch):
     import worker
+    import worker_execution
     from runtime.pipeline import Deps
     seen = {}
 
@@ -190,7 +191,7 @@ def test_snapshot_decisions_reach_the_execution_as_a_queue(monkeypatch):
 
         def run(self):
             return {}
-    monkeypatch.setattr(worker, "_Execution", Capture)
+    monkeypatch.setattr(worker_execution, "_Execution", Capture)
     decisions = {"pkg:lodash": {"decision": "rejected", "reason": "no"}}
     worker.execute_pre_pr({}, ticket_id=1, checkout_source=".", deps=Deps(models=None, notify=None), budget=None, run_gate=None,
                           cleanup=None, checkpoint=object(), network_decisions=decisions)
