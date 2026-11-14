@@ -484,7 +484,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
     pages = _public_paths(state.get("diffs") or [])
-    if not pages:
+    server_route = not pages and functional.select_fallback(state) == functional.ROUTE_PROBE
+    if not pages and not server_route:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
         return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
                 "evidence": None, "failure_class": STAGE_CLASS["plan"]}
@@ -503,7 +504,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     screenshot = None
     smoke_ok = False
     http_observed = False
-    probe_id = functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
+    probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
     teardown_confirmed = False
 
@@ -644,6 +645,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             functional_result = (functional_probe(base, probe_id) if functional_probe
                                  else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
+            if server_route and functional_result.get('probe_id') != functional.ROUTE_PROBE:
+                raise RuntimeError(functional_result.get('note') or functional_result.get('reason') or functional.NO_ORACLE)
             if not functional_result.get('passed'):
                 if oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
@@ -661,7 +664,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs.append('Oracle từ diff đạt nhưng generated test đỏ: needs_review, admin xem xét, không tự đạt')
             stage = 'ordinary'
             # Changed HTML page, else the page the requester was on (CSS/JS change); none named = no shot.
-            shot_pages = _shot_pages(checkout, pages, primary)
+            shot_pages = [] if server_route else _shot_pages(checkout, pages, primary)
             skipped = [page for page in html if page not in shot_pages]
             if skipped:
                 logs.append(f"Chỉ chụp {len(shot_pages)} trong {len(html)} trang đổi; không chụp: {', '.join(skipped)}")

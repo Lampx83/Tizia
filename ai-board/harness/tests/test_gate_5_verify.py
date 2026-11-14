@@ -1097,3 +1097,54 @@ def test_curl_shim_is_not_installed_when_curl_exists_or_is_unused(tmp_path):
         (tmp_path / str(index)).mkdir()
         verify.run({**state(checkout(tmp_path / str(index))), "acceptance": acceptance}, runner=runner)
         assert not any("/usr/local/bin/curl" in args for args, _ in runner.calls)
+
+
+ROUTE_DIFF = ("diff --git a/server/contexts/x/index.js b/server/contexts/x/index.js\n"
+              "--- a/server/contexts/x/index.js\n+++ b/server/contexts/x/index.js\n"
+              "+  app.get('/api/x/ping', (req, res) => res.json({ ok: true }));\n")
+
+
+def server_only(tmp_path, diff=ROUTE_DIFF):
+    s = state(checkout(tmp_path))
+    s["diffs"] = [{"file": "server/contexts/x/index.js", "test_file": None, "diff": diff}]
+    s["full_diff"] = [{"file": "server/contexts/x/index.js", "diff": diff}]
+    return s
+
+
+def test_server_only_diff_with_a_new_route_is_probed_over_http(tmp_path, monkeypatch):
+    from verification import functional
+    seen = []
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: seen.append((method, url)) or (200, b'{"ok":true}'))
+    runner = FakeRunner()
+    s = server_only(tmp_path)
+    out = verify.run(s, runner=runner, functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is False, out["reason"]
+    assert seen == [("GET", "http://127.0.0.1:49152/api/x/ping")]
+    assert out["evidence"]["functional"]["probe_id"] == functional.ROUTE_PROBE
+    assert out["evidence"]["screenshots"] == [] and out["evidence"]["teardown_confirmed"] is True
+
+
+def test_server_only_route_that_does_not_answer_blocks(tmp_path, monkeypatch):
+    from verification import functional
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: (404, b"nope"))
+    s = server_only(tmp_path)
+    out = verify.run(s, runner=FakeRunner(), functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is True and "/api/x/ping" in out["reason"]
+
+
+def test_server_only_route_probe_that_cannot_run_is_a_plan_failure(tmp_path, monkeypatch):
+    from verification import functional
+
+    def refuse(method, url):
+        raise OSError("refused")
+    monkeypatch.setattr(functional, "_fetch", refuse)
+    s = server_only(tmp_path)
+    out = verify.run(s, runner=FakeRunner(), functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is True and out["failure_class"] == "plan"
+
+
+def test_server_only_diff_without_a_route_is_still_a_plan_failure_before_docker(tmp_path):
+    runner = FakeRunner()
+    out = verify.run(server_only(tmp_path, "+  const x = 1;\n"), runner=runner)
+    assert out["blocked"] is True and out["failure_class"] == "plan"
+    assert runner.calls == []
