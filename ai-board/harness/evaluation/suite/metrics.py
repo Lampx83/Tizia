@@ -5,9 +5,19 @@ import math
 import random
 from collections import Counter
 
+from runtime import limits
+
 CELLS = ("kind", "level", "style", "split")
-INFRA_MAX_RATE = 0.1
-MIN_GROUP_TASKS = 10
+
+
+def infra_max_rate() -> float:
+    """Contract evaluation.infra_max_rate: infra-error share above which a comparison is inconclusive."""
+    return float(limits.contract()["evaluation"]["infra_max_rate"])
+
+
+def min_group_tasks() -> int:
+    """Contract evaluation.min_group_tasks: common tasks needed for a per-cell verdict."""
+    return int(limits.contract()["evaluation"]["min_group_tasks"])
 
 
 def infra_rate(rows: list[dict]) -> float:
@@ -77,7 +87,7 @@ def summarize(rows: list[dict]) -> dict:
         "shipped": rate(sum(bool(r.get("shipped")) for r in rows), n),
         "clean_fixture_shipped": rate(sum(r["resolved"] and not r["collateral"] and bool(r.get("shipped")) for r in rows), n),
         "valid": rate(sum(not r.get("infra_error") for r in rows), n),
-        "conclusive": infra_rate(rows) <= INFRA_MAX_RATE,
+        "conclusive": infra_rate(rows) <= infra_max_rate(),
         "pass_any": rate(sum(any(v) for v in tasks.values()), len(tasks)),
         "pass_all": rate(sum(all(v) for v in tasks.values()), len(tasks)),
         "flaky_tasks": sum(0 < sum(v) < len(v) for v in tasks.values()),
@@ -179,7 +189,7 @@ def _binom_two_sided(b: int, c: int) -> float:
 def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int = 4000) -> dict:
     """Paired by task id (mean resolved over repeats). A = baseline, B = candidate. Verdict needs both the bootstrap CI and the sign test to agree."""
     valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
-    infra = bool(rows_a and rows_b) and max(infra_rate(rows_a), infra_rate(rows_b)) > INFRA_MAX_RATE
+    infra = bool(rows_a and rows_b) and max(infra_rate(rows_a), infra_rate(rows_b)) > infra_max_rate()
     keys_a = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_a]
     keys_b = [(r.get("id"), r.get("mode"), r.get("repeat")) for r in rows_b]
     fail = {"verdict": "incomparable", "valid_percent": valid, "inconclusive_infra": infra}
@@ -209,12 +219,12 @@ def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int 
 
 
 def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:
-    """Verdict per cell group with >= MIN_GROUP_TASKS common tasks; smaller groups only show counts."""
+    """Verdict per cell group with >= min_group_tasks() common tasks; smaller groups only show counts."""
     out = {}
     for cell in CELLS:
         for value in sorted({str(r[cell]) for r in rows_a if r.get(cell) is not None}):
             ga = [r for r in rows_a if str(r.get(cell)) == value]
             gb = [r for r in rows_b if str(r.get(cell)) == value]
             tasks = len(set(per_task(ga)) & set(per_task(gb)))
-            out[f"{cell}={value}"] = compare(ga, gb, **kw) if tasks >= MIN_GROUP_TASKS else {"verdict": None, "display_only": True, "tasks": tasks}
+            out[f"{cell}={value}"] = compare(ga, gb, **kw) if tasks >= min_group_tasks() else {"verdict": None, "display_only": True, "tasks": tasks}
     return out

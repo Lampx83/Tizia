@@ -1,5 +1,6 @@
 """Approved report arithmetic, no corpus/model/operator access."""
 from evaluation.suite import metrics, runner
+from runtime import limits
 import json
 from types import SimpleNamespace
 
@@ -224,3 +225,36 @@ def test_cmd_compare_pin_mismatch_keeps_validity_fields(tmp_path, capsys):
     result = _compare_cli(tmp_path, capsys, infra=3, model_b="other")
     assert result["verdict"] == "incomparable" and "missing or different pin: model" in result["reasons"]
     assert result["valid_percent"] == {"baseline": 100.0, "candidate": 70.0} and result["inconclusive_infra"] is True
+
+
+def ctrial(i, infra=False, kind="k"):
+    return {"id": f"t{i}", "mode": "gold", "repeat": 0, "resolved": True, "infra_error": infra, "kind": kind,
+            "collateral": [], "shipped": True}
+
+
+def test_contract_thresholds_match_previous_constants():
+    assert metrics.infra_max_rate() == 0.1
+    assert metrics.min_group_tasks() == 10
+
+
+def test_infra_branch_over_and_at_contract_threshold():
+    base = [ctrial(i) for i in range(10)]
+    assert metrics.compare([ctrial(i, infra=i < 2) for i in range(10)], base)["inconclusive_infra"] is True
+    assert metrics.compare([ctrial(i, infra=i < 1) for i in range(10)], base)["inconclusive_infra"] is False
+    assert metrics.summarize([dict(row(), infra_error=i < 2) for i in range(10)])["conclusive"] is False
+    assert metrics.summarize([dict(row(), infra_error=i < 1) for i in range(10)])["conclusive"] is True
+
+
+def test_group_size_branch_small_and_large_from_contract():
+    small = metrics.compare_groups([ctrial(i) for i in range(9)], [ctrial(i) for i in range(9)])
+    large = metrics.compare_groups([ctrial(i) for i in range(10)], [ctrial(i) for i in range(10)])
+    assert small["kind=k"] == {"verdict": None, "display_only": True, "tasks": 9}
+    assert large["kind=k"]["verdict"] is not None and "display_only" not in large["kind=k"]
+
+
+def test_changed_contract_value_changes_verdict(monkeypatch):
+    base = [ctrial(i) for i in range(10)]
+    infra_rows = [ctrial(i, infra=i < 2) for i in range(10)]
+    monkeypatch.setattr(limits, "contract", lambda: {"evaluation": {"infra_max_rate": 0.5, "min_group_tasks": 5}})
+    assert metrics.compare(infra_rows, base)["inconclusive_infra"] is False
+    assert metrics.compare_groups([ctrial(i) for i in range(9)], [ctrial(i) for i in range(9)])["kind=k"]["verdict"] is not None

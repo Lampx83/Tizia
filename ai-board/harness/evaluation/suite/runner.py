@@ -146,7 +146,7 @@ def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list
     if any(set(r.get("served") or []) - {meta.get("model")} for r in rows):
         problems.append("a different served model id answered")
     infra = sum(bool(r.get("infra_error")) for r in rows)
-    if rows and infra / len(rows) > metrics.INFRA_MAX_RATE:
+    if rows and infra / len(rows) > metrics.infra_max_rate():
         problems.append(f"{infra}/{len(rows)} trials ended in infrastructure errors")
     gate1_rows = [r for r in rows if r["mode"].startswith("e2e") and (r.get("plan") or {}).get("attempts")]
     if meta.get("reasoning", {}).get("gate1") and gate1_rows and not any(r.get("reasoning_chars") for r in gate1_rows):
