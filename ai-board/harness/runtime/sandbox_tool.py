@@ -171,11 +171,12 @@ class Runner:
     def _observe(self, receipt: dict, outcome: dict, started: float) -> str:
         limit = self.cfg["output_chars"]
         stdout, stderr = meter.redact(outcome["stdout"]), meter.redact(outcome["stderr"])
-        receipt["rc"] = outcome["rc"]
+        receipt["rc"], receipt["timed_out"] = outcome["rc"], outcome["timed_out"]
         receipt["output"] = f"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"[:OUTPUT_CAP]
         self._record(receipt, started)
         truncated = outcome["truncated"] or len(stdout) > limit or len(stderr) > limit
-        return json.dumps({"rc": outcome["rc"], "stdout": stdout[:limit], "stderr": stderr[:limit], "truncated": truncated},
+        return json.dumps({"rc": outcome["rc"], "stdout": stdout[:limit], "stderr": stderr[:limit], "truncated": truncated,
+                           "timed_out": outcome["timed_out"]},
                           ensure_ascii=False)
 
     def _record(self, receipt: dict, started: float) -> None:
@@ -189,5 +190,5 @@ class Runner:
             self.trace.add_span("sandbox_exec", {
                 "tizia.sandbox.run_id": receipt["run_id"] or "", "tizia.tool_call_id": receipt["tool_call_id"] or "", "tizia.sandbox.argv": " ".join(receipt["argv"])[:200],
                 "tizia.sandbox.rc": receipt["rc"] if receipt["rc"] is not None else -1, "tizia.sandbox.attempt": receipt["attempt"],
-                "tizia.sandbox.error": receipt["error"] or "",
+                "tizia.sandbox.error": receipt["error"] or "", "tizia.sandbox.timed_out": bool(receipt.get("timed_out")),
             }, start_ms=now - receipt["duration_ms"], end_ms=now, status="error" if receipt["error"] else "ok")

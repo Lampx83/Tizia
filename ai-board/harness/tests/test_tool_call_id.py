@@ -10,6 +10,7 @@ from test_sandbox_tool import FakeClient
 from test_tool_checkpoint import MemSteps
 
 RUNNERS: list = []
+OUTCOMES: list = []
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "t", "file": "public/a.html", "verify": "v", "task_type": "backend"}
 ARGVS = [["node", "--test", "test/a.test.js"], ["node", "--check", "public/a.js"], ["node", "--test", "test/b.test.js"]]
@@ -54,7 +55,8 @@ def setup(monkeypatch):
     monkeypatch.setattr(sandbox_tool, "_stage", lambda *a: None)
     real = sandbox_tool.Runner
     RUNNERS.clear()
-    monkeypatch.setattr(sandbox_tool, "Runner", lambda *a, **k: RUNNERS.append(real(*a, client=FakeClient(), **k)) or RUNNERS[-1])
+    OUTCOMES.clear()
+    monkeypatch.setattr(sandbox_tool, "Runner", lambda *a, **k: RUNNERS.append(real(*a, client=FakeClient(list(OUTCOMES)), **k)) or RUNNERS[-1])
 
 
 def test_three_tools_show_each_id_once_in_every_store():

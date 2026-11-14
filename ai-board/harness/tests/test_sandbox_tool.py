@@ -155,8 +155,10 @@ def test_transient_error_then_success_uses_second_vm():
 
 def test_guest_timeout_still_destroys_vm():
     client = FakeClient([{**OK, "code": None, "timed_out": True}])
-    out = json.loads(runner(client)(ALLOWED, {}))
-    assert out["truncated"] is True
+    r = runner(client)
+    out = json.loads(r(ALLOWED, {}))
+    assert out["timed_out"] is True and out["truncated"] is False
+    assert r.receipts[0]["timed_out"] is True
     assert_every_vm_destroyed(client)
 
 
