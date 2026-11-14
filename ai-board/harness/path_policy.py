@@ -79,6 +79,13 @@ def surface_context(path, tests, read, allowed) -> bool:
     for test in tests:
         test = normalize(test)
         text = read(test) if test and _TEST_FILE.match(test) else None
-        if text and "node:test" in text and names_scope(text, [normalized]):
+        if text and "node:test" in text and _names_context_path(text, name, normalized):
             return True
     return False
+
+
+def _names_context_path(text: str, ctx: str, path: str) -> bool:
+    """Test nêu <ctx>/<file> (có thể là đuôi của đường dẫn đầy đủ); tên file trần không tính."""
+    rest = path.split("/", 3)[3]
+    pattern = r"(?<![\w.-])" + re.escape(f"{ctx}/{rest}") + r"(?!\w)"
+    return re.search(pattern, text, re.I) is not None
