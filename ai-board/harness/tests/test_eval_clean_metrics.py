@@ -61,6 +61,13 @@ def test_render_new_report_and_legacy_report_are_compatible():
     assert "2.0" in text
 
 
+def test_render_flags_inconclusive_group_and_shows_valid_share():
+    over = runner.render(metrics.report([dict(row(resolved=False), infra_error=i < 3) for i in range(10)]))
+    assert "KHÔNG KẾT LUẬN (lỗi hạ tầng)" in over and "hợp lệ 70.0%" in over
+    clean = runner.render(metrics.report([row() for _ in range(10)]))
+    assert "KHÔNG KẾT LUẬN" not in clean and "hợp lệ 100.0%" in clean
+
+
 def test_compare_requires_the_dataset_pin_only_when_a_run_records_it(tmp_path, capsys):
     paths = [tmp_path / arm / "results.jsonl" for arm in ("control", "candidate")]
     meta = {"ref": "source", "dirty": False, "model": "model", "routing_catalog": "catalog",
