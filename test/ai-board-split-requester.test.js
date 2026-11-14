@@ -16,6 +16,7 @@ const WORKER_KEY = 'split-requester-worker-key-0000000000';
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)]);
 const users = {
   1: { id: 1, username: 'lan', display_name: 'Lan', role: 'pupil', enrolled_domain: 'pharmacy' },
+  2: { id: 2, username: 'new', display_name: 'New', role: 'pupil', enrolled_domain: null },
   9: { id: 9, username: 'admin', display_name: 'Admin', role: 'admin', enrolled_domain: 'pharmacy' },
 };
 
@@ -68,6 +69,9 @@ test('a request created on the web is claimed by the worker and shown in the adm
     assert.equal(trace.status, 200);
     assert.equal((await trace.json()).request.id, requestId);
 
+    const traced = await json(env.site.base, 'GET', `/api/admin/ai-board/requests/${requestId}/trace`, { user: 9 });
+    assert.equal(traced.status, 200);
+
     const progress = await json(env.site.base, 'GET', `/api/requests/${requestId}/progress`, { user: 1 });
     assert.equal(progress.status, 200);
   } finally { await env.close(); }
@@ -98,5 +102,10 @@ test('an attachment uploaded through the web lands on the board volume and is se
 
     const guest = await fetch(`${env.site.base}/api/requests/attachments`, { method: 'POST', body: PNG, headers: { 'content-type': 'image/png' } });
     assert.equal(guest.status, 401);
+
+    const unenrolled = await fetch(`${env.site.base}/api/requests/attachments`, { method: 'POST', body: PNG,
+      headers: { 'content-type': 'image/png', 'x-test-user': '2' } });
+    assert.equal(unenrolled.status, 403);
+    assert.equal((await unenrolled.json()).error, 'enrollment_required');
   } finally { await env.close(); }
 });

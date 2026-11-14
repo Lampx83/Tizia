@@ -57,9 +57,12 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   const requireAdmin = (req, res, next) => (req.user?.role === 'admin'
     ? next() : res.status(403).json({ error: 'forbidden' }));
   const pass = (_req, _res, next) => next();
+  // Same rule as the web requireEnrolled: admins pass, others need a signed enrolled domain.
+  const requireEnrolled = (req, res, next) => (req.user?.role === 'admin' || req.user?.enrolled_domain
+    ? next() : res.status(403).json({ error: 'enrollment_required', needEnroll: true }));
 
   // Before the JSON parser: attachments are raw bodies with their own size limit.
-  attachRequestUpload(app, { dir: uploadsDir, requireAuth, requireEnrolled: pass });
+  attachRequestUpload(app, { dir: uploadsDir, requireAuth, requireEnrolled });
   app.use(express.json({ limit: '2mb' }));
 
   attachAiBoardIntake(app, { db: handle.d, store: services.store, requireAuth, requireStrictCsrf: pass,
