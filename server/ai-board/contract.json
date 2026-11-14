@@ -165,6 +165,10 @@
       "script_deny": "^scripts/(ai-board|fetch-inbox|admin-reply|delete-requests|reset-requests|check-skills|skill-|migrate-skills)",
       "task_types": {"backend": [3], "frontend": [3], "database": [3], "test": [3], "all": [3], "review": []}
     },
+    "fetch_url": {
+      "_why": "fetch_url broker (runtime/network_request.py FetchBroker). allow_hosts: exact host or subdomain, auto-approved; other hosts wait for admin. Private/loopback/link-local resolved IPs and non-http(s) schemes are always refused. max_bytes = raw body cap before HTML strip.",
+      "allow_hosts": [], "max_bytes": 65536, "timeout_s": 10
+    },
     "global_rate": {
       "_why": "Trần toàn cục mọi phương án xử lý: request tạo mới và tin nhắn chat trong 60 giây, chặn spam trước khi ghi DB/đưa cho Claude. Đếm trên DB nên nhiều tiến trình vẫn đúng.",
       "requests_per_minute": 30,

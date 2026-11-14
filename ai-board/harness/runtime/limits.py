@@ -166,6 +166,11 @@ def sandbox_tool(env=None) -> dict:
     return {**spec, "enabled": settings.sandbox_tool, "allowed_argv": argv}
 
 
+def fetch_url() -> dict:
+    """fetch_url broker limits: allow_hosts, max_bytes, timeout_s (contract limits.fetch_url)."""
+    return dict(_parsed()["limits"]["fetch_url"])
+
+
 def scaled_limit(kind: str, n: int) -> int:
     """Trần mỗi lượt theo số subtask n, cùng công thức với store-contract.js scaledLimit."""
     limits = _parsed()["limits"]
