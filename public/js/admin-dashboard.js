@@ -409,12 +409,16 @@ let myAdminId = null;
 let userCache = [];
 let currentTab = 'dashboard';
 
+let netPendingByRequest = {};
+
 async function loadRequests() {
-  const [r, ai] = await Promise.all([
+  const [r, ai, net] = await Promise.all([
     // Owner rule: 10 newest suggestions, read from the board DB so request ids match the board pages.
     api('/api/admin/ai-board/requests?limit=10'),
     api('/api/admin/ai-board/queue'),
+    api('/api/admin/ai-board/network-requests/pending-count'),
   ]);
+  netPendingByRequest = net.ok ? (net.data.counts || {}) : {};
   reqCache = r.data.requests || [];
   reqTotal = Number(r.data.total) || reqCache.length;
   for (const rid of [...elevationContexts.keys()]) {
@@ -709,7 +713,7 @@ function renderRequests() {
             <div style="font-size:11px;opacity:.55;white-space:nowrap">ID ${r.id}</div>
           </td>
           <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
-          <td style="max-width:260px">${esc(r.title)}${traceSub(ticket?.trace_ref)}</td>
+          <td style="max-width:260px">${esc(r.title)}${netPendingByRequest[r.id] ? ` <span class="pill ai-warn" title="Mục mạng đang chờ admin duyệt trong yêu cầu này">Chờ duyệt mạng: ${esc(netPendingByRequest[r.id])}</span>` : ''}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>
           <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
           <td>${esc(r.student)}</td>
