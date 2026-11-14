@@ -97,7 +97,7 @@ export function attachAiBoardRequestRoutes(router, {
       executionMode = body.execution_mode;
     }
     const language = checkLanguage(body.title, body.detail);
-    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+    if (language.block) return res.status(422).json({ error: language.code, message: language.message });
     const intake = checkIntake(body.title, body.detail);
     if (intake.block) {
       try { await aux.recordIntakeRejection(db, req.user.id, intake); } catch (error) { return next(error); }
@@ -280,7 +280,7 @@ export function attachAiBoardRequestRoutes(router, {
       return res.status(422).json({ error: 'invalid_title', message: 'Tiêu đề cần từ 4 đến 200 ký tự.' });
     }
     const language = checkLanguage(detail || title);
-    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+    if (language.block) return res.status(422).json({ error: language.code, message: language.message });
     const intake = checkIntake(title, detail);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     const gibberish = checkGibberish(detail || title);

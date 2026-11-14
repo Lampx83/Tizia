@@ -57,7 +57,7 @@ export function attachRequesterThread(router, { requests, store, db, requireAuth
     const role = isOwner ? 'student' : 'admin';
     if (role === 'student') {
       const language = checkLanguage(body);
-      if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+      if (language.block) return res.status(422).json({ error: language.code, message: language.message });
       const intake = checkIntake('', body);
       if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
       if (checkContentSafety(body).safe === false) {

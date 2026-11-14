@@ -197,7 +197,6 @@ test('clean request records no flag and flag recording never throws', async () =
 const SUPPORTED = [
   'Please change the button colour to blue',
   'Sửa nút Quay lại trên trang IT cho to hơn',
-  'Doi mau nut bam sang mau xanh', // tiếng Việt gõ không dấu
   'Thêm nút Get started vào hero section',
   'Thêm dòng "你好, 世界" vào cuối trang', // chữ cần hiển thị nằm trong ngoặc kép
   'Add the text “Здравствуйте” at the bottom of the page',
@@ -235,6 +234,25 @@ test('POST /api/requests rejects other languages with 422, creates nothing and r
     }
     const ok = await post('lang-ok-001', { title: 'Đổi màu nút', detail: 'Đổi màu nút Quay lại sang xanh' });
     assert.equal(ok.status, 200);
+  } finally {
+    await close();
+    db.close();
+  }
+});
+
+test('POST /api/requests bounces unaccented Vietnamese with needs_diacritics, creates nothing and raises no alert', async () => {
+  const db = await fixtureDb();
+  const { post, close } = await serve(db);
+  try {
+    const response = await post('lang-diacritics-001', { title: 'Yêu cầu sửa trang', detail: 'Tat bo loc ky tu dac biet o o nhap lieu de em dan ma HTML truc tiep.' });
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.equal(body.error, 'needs_diacritics');
+    assert.match(body.message, /with diacritics/);
+    for (const table of ['requests', 'ai_tickets', 'ai_alerts']) {
+      assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ${table}`).get()).n, 0, table);
+    }
+    assert.equal((await post('lang-diacritics-002', { title: 'Đổi màu nút', detail: 'Doi mau nut Quay lại sang xanh' })).status, 200);
   } finally {
     await close();
     db.close();
