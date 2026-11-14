@@ -54,3 +54,18 @@ def test_prompt_carries_rules_only_when_flag_on(monkeypatch):
     assert "5d. NAMED EDIT" in plan_validate.build_prompt(NAMED, plan)
     monkeypatch.setenv("AI_BOARD_PLAN_VALIDATE_CLARIFY_RULES", "")
     assert "5d. NAMED EDIT" not in plan_validate.build_prompt(NAMED, plan)
+
+
+def _plan(file="public/lesson.html"):
+    return {"summary_vi": "Đổi chữ nút", "capabilities": [], "subtasks": [{"title": "Đổi 'Quay lại' thành 'Trở về'", "file": file, "verify": "'Trở về' hiện"}]}
+
+
+@pytest.mark.parametrize("body,dropped", [
+    ("Nút 'Quay lại' thành 'Trở về' nhé. Em không nhớ nút nằm ở trang nào.", False),
+    ("Đổi 'Quay lại' thành 'Trở về'. Nhiều trang có nút này.", False),
+    ("Ở trang bài giảng, nút 'Quay lại' đổi thành 'Trở về'.", True),
+    ("Trong public/lesson.html đổi 'Quay lại' thành 'Trở về'.", True),
+    ("Trang lesson: 'Quay lại' thành 'Trở về'.", True),
+])
+def test_names_edit_requires_page(body, dropped):
+    assert plan_validate.names_edit({"subject": "Đổi chữ", "body": body}, _plan()) is dropped
