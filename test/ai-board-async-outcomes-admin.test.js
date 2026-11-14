@@ -114,6 +114,7 @@ test('rollback (discard / revert / failure), PR recording and model-call traces'
   assert.equal(out.submit_r.outcome, 'revert_ready', 'revert path opens a revert branch for admin');
   assert.equal(out.submit_r.status, 'waiting_admin');
   assert.equal(out.submit_r.pull_request.number, 77, 'revert PR number recorded with revert_ready');
+  assert.equal(out.trace_r.pull_request.number, 12, 'trace keeps the original PR after the revert PR is recorded');
   assert.equal(out.submit_f.pull_request, null);
   assert.equal(out.pr_f.number, 13);
   assert.equal(out.submit_f.outcome, 'failed');

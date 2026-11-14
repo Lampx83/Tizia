@@ -1083,10 +1083,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     return row ? { role: row.role, tech_level: row.tech_level, domain_expertise: parseJson(row.domain_expertise) ?? [] } : null;
   }
 
-  // PR của root (mở gần nhất); worker không mở PR thứ hai khi đã có.
+  // PR của root (mở gần nhất); worker không mở PR thứ hai khi đã có. Run rollback có PR revert lồng trong evidence.rollback, bỏ qua.
   async function latestPullRequest(rootId) {
     const row = await db.get(`
-      SELECT evidence_json FROM ai_runs WHERE ticket_id=? AND evidence_json LIKE '%"pull_request"%'
+      SELECT evidence_json FROM ai_runs WHERE ticket_id=? AND trigger <> 'rollback' AND evidence_json LIKE '%"pull_request"%'
       ORDER BY id DESC LIMIT 1
     `, [rootId]);
     return parseJson(row?.evidence_json)?.pull_request ?? null;
