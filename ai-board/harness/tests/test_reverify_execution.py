@@ -10,7 +10,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-import candidate
+from services import candidate
 from runtime.budget import Budget
 from worker import execute_pre_pr
 

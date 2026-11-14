@@ -4,10 +4,10 @@ import time
 
 import pytest
 
-import calibrate
+from evaluation import calibrate
 from conftest import FakeModels, connect, deps_with, plan_with
-from main import Deps, Unavailable
-from prescreen import AI_DECISIONS_DDL
+from runtime.pipeline import Deps, Unavailable
+from services.prescreen import AI_DECISIONS_DDL
 
 
 def insert_decision(db_path, *, request_id, action, snapshot):

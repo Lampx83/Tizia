@@ -61,8 +61,8 @@ def _load_harness():
     harness_dir = Path(__file__).resolve().parent / "harness"
     if str(harness_dir) not in os.sys.path:
         os.sys.path.insert(0, str(harness_dir))
-    from budget import Budget
-    from main import Deps, run_gate
+    from runtime.budget import Budget
+    from runtime.pipeline import Deps, run_gate
     return Budget, Deps, run_gate
 
 
@@ -275,7 +275,7 @@ class _Execution:
         return self.result
 
     def _checkout_head(self) -> str | None:
-        import code_index
+        from repositories import code_index
         try:
             return code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip()
         except Exception:  # noqa: BLE001 - khong phai repo: khong resume
@@ -472,7 +472,7 @@ class _Execution:
             state["reuse"] = {file: entry for file, entry in self.produced.items() if file not in self.repair_files}
         state["repairs_left"] = repair_cap() - len(self.repairs)  # reviewer fix spends the same repair cap
         if self.plan.get("grounding"):
-            import code_index
+            from repositories import code_index
             if (code_index.git(self.checkout_source, "rev-parse", "HEAD").decode().strip() != self.plan["grounding"]["sha"]
                     or state.get("base_sha", self.plan["grounding"]["sha"]) != self.plan["grounding"]["sha"]):
                 self.gates = [{"gate": 3, "blocked": True, "reason": "source changed since grounded plan"}]
@@ -534,7 +534,7 @@ class _Execution:
         if not self.open:
             return
         self.open = False
-        import candidate as candidates
+        import services.candidate as candidates
 
         state = self.state
         lease_lost = bool(self.should_stop and self.should_stop())
@@ -987,7 +987,7 @@ def _gate4_with_proof(run_gate, deps, budget, state, plan_hash):
     except Exception:
         verdict = {"reuse": False}  # verifier unreachable: verify for real
     if verdict.get("reuse"):
-        import candidate
+        from services import candidate
         patch = verdict["result"].pop("_state", {})
         state.update({key: patch[key] for key in ("ui_changed", "guard_flags", "review_required") if key in patch})
         failed = candidate.ensure(state, 4)  # the worktree is rebuilt for real; only the scan and review are reused
@@ -1047,7 +1047,7 @@ def _remember(memory_path, plan: dict, ticket_id: int, repairs: list[dict], kind
               last: dict, passed: bool) -> None:
     """Ghi bài học: mỗi lần sửa (đã sửa được hay chưa) + lý do chặn cuối nếu là lỗi của code/plan.
     Lỗi môi trường (transient) và budget không dạy gì về code nên bỏ qua."""
-    import memory
+    from repositories import memory
 
     files = [(step.get("allowed_scope") or [""])[0] for step in plan.get("steps") or []]
     lessons = [{"files": files, "gate": r["gate"], "failure_class": "ordinary", "reason": r["reason"],
@@ -1217,7 +1217,7 @@ def _plan_repairable(stopped: dict) -> bool:
 def _plan_pins(source) -> dict:
     """Pins a blocked plan attempt ran under; the server warns when a rerun would repeat them (LF/143)."""
     from runtime import exec_graph, limits
-    import code_index
+    from repositories import code_index
     try:
         base = code_index.git(source, "rev-parse", "HEAD").decode("utf-8", "replace").strip()
     except OSError:
@@ -1330,7 +1330,7 @@ def _forge(candidate, token):
 
 def observe_base(client: WorkerClient, repo) -> dict:
     """Report the current tip of the PR base branch so the server can tell which kept candidates were verified on an older base."""
-    import candidate
+    from services import candidate
     from services import reverify
 
     tip = reverify.base_tip(repo)
@@ -1390,7 +1390,7 @@ def screenshot_payload(shots: list[dict]) -> list[dict]:
 
 def gate1_probe_client():
     """OllamaClient cho preflight; timeout = AI_BOARD_GATE1_PROBE_TIMEOUT_S (mặc định 45s), không ảnh hưởng call thật."""
-    from models import OllamaClient
+    from providers.client import OllamaClient
     return dataclasses.replace(OllamaClient.from_env(), timeout_s=get_settings().gate1_probe_timeout_s)
 
 
@@ -1400,8 +1400,8 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
 
     def check() -> dict | None:
         if getattr(ollama, 'routing', None):
-            from budget import Budget
-            from main import Deps
+            from runtime.budget import Budget
+            from runtime.pipeline import Deps
             # Classifier is fail-open: with no calibrated candidate it must not block intake.
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
                 if role in ok_at and clock() - ok_at[role] < ttl:
@@ -1593,7 +1593,7 @@ class HttpWorker:
         folder_src = None
         try:
             if snapshot.get("folder") and self.planner and self.candidates and trigger not in ("rollback", "reverify"):
-                import candidate
+                from services import candidate
                 folder = snapshot["folder"]
                 branch = folder.get("branch") or candidate.folder_branch(folder["slug"], folder.get("cycle") or 1)
                 try:
@@ -1616,7 +1616,7 @@ class HttpWorker:
         finally:
             self._report_gate = None
             if folder_src:
-                import candidate
+                from services import candidate
                 candidate.drop_source(self.candidates.repo, folder_src["path"])
             if self.tracer:
                 self.tracer.flush()
@@ -1625,7 +1625,7 @@ class HttpWorker:
                  tier: str | None, verdict: dict) -> str | None:
         """Push the verified candidate and open its one PR into dev, then report it. Return why not, else None.
         GitHub/git trouble is not the candidate's fault: the verdict stands, the admin sees the reason."""
-        import candidate
+        from services import candidate
         existing = snapshot.get("pull_request")
         if existing:
             return f"root already has PR #{existing.get('number')}; not opening another"
@@ -1851,7 +1851,7 @@ class HttpWorker:
                     type_kwargs["eval_tasks"] = self.client.post("/api/ai-board/worker/eval-tasks", {}).get("test") or []
                 limit = max(int((snapshot.get("ticket") or {}).get("budget_limit") or DEFAULT_BUDGET_LIMIT),
                             scaled_limit("units", len(plan.get("steps") or [])))  # cùng công thức store.js: snapshot chụp trước khi server nới trần
-                import memory
+                from repositories import memory
                 from repositories.server_memory import RemoteLessons
                 from repositories import server_hsm
 
@@ -2155,8 +2155,8 @@ class HarnessPlanner:
 def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> Callable[..., dict]:
     """Accepted HTTP plan → Gates 3→5.5 on the full checkout. Return HttpWorker.change_runner."""
     Budget, Deps, run_gate = _load_harness()
-    import candidate
-    from memory import DEFAULT_PATH
+    from services import candidate
+    from repositories.memory import DEFAULT_PATH
     deps = _real_deps(Deps, tracer, progress)
 
     def run(plan: dict, ticket_id: int, max_units: int, source=None, **kwargs) -> dict:
@@ -2240,12 +2240,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(observe_base(WorkerClient(base_url, key), Path(repo_dir) if repo_dir else REPO_ROOT), ensure_ascii=False))
         return 0
     if args.sync_prs:
-        import candidate
+        from services import candidate
         github = _forge(candidate, github_token)
         print(json.dumps(sync_pull_requests(WorkerClient(base_url, key), github), ensure_ascii=False))
         return 0
-    import meter
-    from memory import DEFAULT_PATH
+    from runtime import meter
+    from repositories.memory import DEFAULT_PATH
     tracer = meter.Tracer(Path(DEFAULT_PATH).with_name("traces.jsonl"))
     worker = HttpWorker(
         WorkerClient(base_url, key),
@@ -2260,11 +2260,11 @@ def main(argv: list[str] | None = None) -> int:
     repo_dir = get_settings().repo_dir
     repo = Path(repo_dir) if repo_dir else REPO_ROOT
     if repo_dir:
-        import candidate
+        from services import candidate
         base = os.getenv("PR_BASE_BRANCH", "dev")
         worker.sync = lambda: candidate.sync(repo, base)
         worker.folder_base_ref = f"origin/{base}"
-    import memory
+    from repositories import memory
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
         worker.model_check = model_preflight(gate1_probe_client())
@@ -2284,7 +2284,7 @@ def main(argv: list[str] | None = None) -> int:
             if not args.execute:
                 worker.model_check = worker.planner.preflight
     if args.execute:
-        import candidate
+        from services import candidate
         worker.change_runner = harness_change_runner(checkout_source=repo, tracer=tracer,
                                                      progress=worker.gate_started)
         github = _forge(candidate, github_token)

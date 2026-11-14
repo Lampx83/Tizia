@@ -4,7 +4,7 @@ Mỗi case = 1 subtask cố định trên file thật ở HEAD + oracle kiểm n
 Chạy cổng 3 trong repo scratch (không Docker, không đụng checkout). Kết quả ghi
 ai-board/memory/eval/ (gitignored) để so model nhẹ/nặng theo capability, không chỉ theo budget.
 
-    python eval_gold.py --models qwen2.5-coder:14b,qwen3:8b [--repeat 1] [--cases insert-text,css-color]
+    python evaluation/gold.py --models qwen2.5-coder:14b,qwen3:8b [--repeat 1] [--cases insert-text,css-color]
 """
 from __future__ import annotations
 

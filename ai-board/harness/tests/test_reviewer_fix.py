@@ -4,7 +4,7 @@ import subprocess
 from dataclasses import replace
 from pathlib import Path
 
-import main
+from runtime import pipeline as main
 from gates import reviewer_fix, static_check
 from runtime.budget import Budget
 

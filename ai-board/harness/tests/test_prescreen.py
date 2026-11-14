@@ -3,10 +3,10 @@ từ 4 đầu vào đo được, ghi ai_decisions.priority_score."""
 import json
 from datetime import datetime, timedelta, timezone
 
-import prescreen
+from services import prescreen
 from conftest import FakeModels, connect, deps_with, plan_with
-from main import record_proposal, run_once
-from budget import Budget
+from runtime.pipeline import record_proposal, run_once
+from runtime.budget import Budget
 
 NOW = datetime(2026, 9, 12, tzinfo=timezone.utc)
 
@@ -112,7 +112,7 @@ def test_merged_candidate_records_all_request_ids_in_skill_proposals(db_file):
 
 def test_prescreen_off_leaves_items_untouched(monkeypatch, inbox_file, db_file, fake_deps):
     """PRESCREEN=0: walking skeleton chạy y như trước, không embed, không ai_decisions."""
-    import main
+    from runtime import pipeline as main
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.setenv("PRESCREEN", "0")
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))
@@ -128,7 +128,7 @@ def test_prescreen_off_leaves_items_untouched(monkeypatch, inbox_file, db_file, 
 
 
 def test_prescreen_on_by_default_runs_before_gate_1(monkeypatch, inbox_file, db_file, fake_deps):
-    import main
+    from runtime import pipeline as main
     monkeypatch.setenv("DRY_RUN", "1")
     monkeypatch.delenv("PRESCREEN", raising=False)
     monkeypatch.setenv("TIZIA_INBOX_PATH", str(inbox_file))

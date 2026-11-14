@@ -9,7 +9,7 @@ from types import SimpleNamespace
 root = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(root / 'ai-board'), str(root / 'ai-board/harness')]
 from worker import HttpWorker, WorkerClient, execute_pre_pr
-from budget import Budget
+from runtime.budget import Budget
 from gates import static_check
 
 calls = []

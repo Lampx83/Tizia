@@ -4,11 +4,11 @@ import urllib.error
 
 import pytest
 
-from budget import Budget
-from main import Deps
-from meter import Tracer
-from model_routing import ModelRouter, validate_catalog
-from models import OllamaClient
+from runtime.budget import Budget
+from runtime.pipeline import Deps
+from runtime.meter import Tracer
+from providers.routing import ModelRouter, validate_catalog
+from providers.client import OllamaClient
 
 
 def catalog():
@@ -273,7 +273,7 @@ def test_endpoint_validation_does_not_disclose_credentials():
 
 
 def test_classifier_reports_actual_candidate_without_legacy_model_setting(monkeypatch):
-    import classifier
+    from security import classifier
     monkeypatch.setattr(classifier, 'task_mode', lambda _: 'active')
     body = {'response': 'A', 'logprobs': [{'token': 'A', 'logprob': 0, 'top_logprobs': [{'token': 'A', 'logprob': 0}]}]}
     mock_gateway(monkeypatch, [http_error(503)] * 3 + [body])
@@ -295,7 +295,7 @@ def test_vllm_classifier_needs_logprobs_and_matching_calibration_and_embed_stays
 
 
 def test_classifier_routes_to_vllm_chat_logprobs(monkeypatch):
-    import classifier
+    from security import classifier
     monkeypatch.setattr(classifier, 'task_mode', lambda _: 'active')
     config = catalog()
     config['candidates']['a']['provider'] = 'vllm'

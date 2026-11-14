@@ -17,7 +17,7 @@ import pytest
 
 import eval_fast
 import eval_run
-from main import Deps
+from runtime.pipeline import Deps
 
 pytestmark = pytest.mark.slow
 

@@ -1,10 +1,10 @@
 """tools/ + skills/ + context.build_context. Repo git tạm (fixture từ test_code_index)."""
-import code_index
-import context
-import file_context
-import memory
+from repositories import code_index
+from services import context
+from services import file_context
+from repositories import memory
 import pytest
-import repomap
+from services import repomap
 import tools
 from test_code_index import SCHOOL, _commit, repo  # noqa: F401 — repo là fixture
 

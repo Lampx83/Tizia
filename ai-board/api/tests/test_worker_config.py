@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 def test_cli_selects_remote_planning_with_local_revision_fallback(monkeypatch, tmp_path):
     import dotenv
     import worker
-    import memory
-    from models import OllamaClient
+    from repositories import memory
+    from providers.client import OllamaClient
     from api.client import RemotePlanner
 
     monkeypatch.setattr(dotenv, 'load_dotenv', lambda *a, **kw: None)

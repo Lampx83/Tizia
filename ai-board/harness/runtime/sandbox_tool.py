@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path, PurePosixPath
 
-import code_index
+from repositories import code_index
 import path_policy
 from repositories import server_hsm
 from runtime import limits, meter, tool_manifest

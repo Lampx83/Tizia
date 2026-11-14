@@ -404,7 +404,7 @@ def test_ambiguous_verdict_response_keeps_candidate():
 
 def test_candidates_discard_removes_candidate_branch(tmp_path):
     import subprocess
-    from candidate import Candidates
+    from services.candidate import Candidates
 
     repo = tmp_path / 'source'
     repo.mkdir()
@@ -678,7 +678,7 @@ def test_retries_run_up_to_the_cap_and_none_once_it_is_reached():
 
 
 def test_reaching_the_retry_cap_does_not_exhaust_the_run_budget():
-    from budget import Budget
+    from runtime.budget import Budget
     budget = Budget(max_retries=1, max_wall_clock_s=999)
     budget.spend("retries")
     assert budget.tick() is True
@@ -805,7 +805,7 @@ def test_worker_id_defaults_to_a_valid_per_machine_name(monkeypatch):
 def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     import json
     from worker import HarnessPlanner
-    from budget import Budget
+    from runtime.budget import Budget
 
     big_plan = {'summary_vi': 'x' * 5000, 'capabilities': ['features', 'quiz'],
                 'subtasks': [{'title': 'a', 'file': 'server/index.js', 'verify': 'v', 'size': 'small'}]}
@@ -892,7 +892,7 @@ def test_revoked_lease_during_cleanup_drops_kept_candidate():
 
 
 def test_verdicts_leave_lessons_that_later_runs_can_recall(tmp_path):
-    import memory
+    from repositories import memory
     lessons = tmp_path / "lessons.jsonl"
     failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
     seen = []
@@ -936,7 +936,7 @@ def test_catalog_changed_since_plan_acceptance_is_a_plan_failure_before_any_gate
 
 
 def test_model_call_traces_are_posted_under_the_lease_and_run():
-    import meter
+    from runtime import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -956,7 +956,7 @@ def test_model_call_traces_are_posted_under_the_lease_and_run():
 
 
 def test_worker_pauses_claims_over_the_hourly_gpu_cap():
-    import meter
+    from runtime import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -969,7 +969,7 @@ def test_worker_pauses_claims_over_the_hourly_gpu_cap():
 
 def test_trace_posts_are_split_under_the_server_body_limit():
     import json
-    import meter
+    from runtime import meter
 
     tracer = meter.Tracer(None)
     batches = []
@@ -984,7 +984,7 @@ def test_trace_posts_are_split_under_the_server_body_limit():
 
 
 def test_pending_traces_are_sent_before_the_lease_is_released():
-    import meter
+    from runtime import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -1055,9 +1055,9 @@ def test_http_execution_missing_contract_never_calls_change_runner():
 
 
 def test_gate_start_is_reported_as_an_idempotent_event():
-    import meter
+    from runtime import meter
 
-    import main as harness_main
+    import runtime.pipeline as harness_main
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -1113,7 +1113,7 @@ def test_rollback_lease_runs_the_rollback_and_reports_failures():
 
 def test_candidates_rollback_deletes_unmerged_and_reverts_merged(tmp_path, monkeypatch):
     import subprocess
-    from candidate import Candidates
+    from services.candidate import Candidates
 
     monkeypatch.setenv('PR_BASE_BRANCH', 'dev')
     repo = tmp_path / 'source'
@@ -1243,7 +1243,7 @@ def test_idle_claim_does_not_touch_the_clone():
 
 def test_sync_moves_the_dedicated_clone_to_the_latest_origin_base(tmp_path):
     import subprocess
-    import candidate
+    from services import candidate
 
     def git(cwd, *args):
         return subprocess.run(['git', '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', *args], cwd=cwd,
@@ -1269,7 +1269,7 @@ def test_sync_moves_the_dedicated_clone_to_the_latest_origin_base(tmp_path):
 
 
 def test_gate_1_reads_context_from_the_checkout_source(monkeypatch, fake_deps, tmp_path):
-    import main
+    from runtime import pipeline as main
 
     seen = {}
     monkeypatch.setattr(main.intake_guard, 'run', lambda *_a, **_k: {'verdict': 'allow', 'labels': ['ok']})
@@ -1327,7 +1327,7 @@ def test_passing_verdict_opens_one_pr_and_reports_it_before_release():
 
 
 def test_denied_path_stops_before_pr_and_releases_waiting():
-    import candidate
+    from services import candidate
     transport = FakeTransport()
     _publishing_worker(transport, PublishingCandidates(fail=candidate.PathDenied('path_denied: write: ai-board/worker.py'))).run_once()
     assert 'pull-request' not in [call[1].rsplit('/', 1)[-1] for call in transport.calls]
@@ -1451,7 +1451,7 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
             state['plan'] = {'summary_vi': 'x', 'subtasks': [{'title': 't', 'file': 'public/x.html', 'verify': 'v'}]}
         return {'gate': gate, 'blocked': False}
 
-    from budget import Budget
+    from runtime.budget import Budget
     planner = HarnessPlanner.__new__(HarnessPlanner)
     planner.Budget, planner.deps, planner.run_gate = Budget, object(), run_gate
     plan, _ = planner(snapshot)
@@ -1460,7 +1460,7 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
 
 def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
     """Same formula as store.js scaledLimit; worker hourly cap fits the biggest run."""
-    import meter
+    from runtime import meter
     from worker import LIMITS, scaled_limit
     units = LIMITS["per_run"]["units"]
     assert scaled_limit("units", 3) == units["base"] + 3 * units["per_subtask"]
@@ -1481,7 +1481,7 @@ class FolderTransport(FakeTransport):
 
 
 def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
-    import candidate
+    from services import candidate
     dropped, seen = [], {}
     monkeypatch.setattr(candidate, 'folder_source', lambda repo, branch, base, *known: ('/tmp/folder-src', 'c' * 40))
     monkeypatch.setattr(candidate, 'drop_source', lambda repo, path: dropped.append(path))
@@ -1506,7 +1506,7 @@ def test_folder_root_plans_and_commits_on_the_folder_branch(monkeypatch):
 
 
 def test_folder_conflict_with_dev_waits_for_a_human(monkeypatch):
-    import candidate
+    from services import candidate
 
     def conflict(repo, branch, base, *known):
         raise candidate.FolderConflict('public/a.html')
@@ -1677,7 +1677,7 @@ TEST_PART = [{'id': i, 'request_text': f'mới {i}', 'expected_files': [f'public
 
 
 def _self_run(tmp_path, variant_hits):
-    import self_eval
+    from evaluation import self_eval
 
     class SelfTransport(FakeTransport):
         def __call__(self, method, path, payload, headers):
@@ -1806,7 +1806,7 @@ def test_poll_only_swallows_connection_trouble_other_failures_still_stop_the_wor
 
 def test_sync_removes_worktrees_a_dead_job_left_on_the_candidate_branch(tmp_path):
     import subprocess
-    import candidate
+    from services import candidate
 
     def git(cwd, *args):
         return subprocess.run(['git', '-c', 'user.name=T', '-c', 'user.email=t@example.invalid', *args], cwd=cwd,
@@ -1883,7 +1883,7 @@ def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first
 
 
 def test_a_cursor_from_another_base_is_ignored_and_the_work_starts_over(monkeypatch):
-    import code_index
+    from repositories import code_index
     monkeypatch.setattr(code_index, 'git', lambda *args: b'new-sha')
     checkpoint = MemCursorCheckpoint()
     checkpoint.cursor = {'base': 'old-sha', 'repairs': [{'gate': 5, 'reason': 'x'}], 'repair_reason': 'cổng 5: x'}

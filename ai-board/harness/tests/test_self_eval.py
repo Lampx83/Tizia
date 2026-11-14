@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-import self_eval
+from evaluation import self_eval
 
 
 def _plan(*files, goal="Sửa trang"):
@@ -138,7 +138,7 @@ def git(repo, *args):
 
 def test_each_sha_is_measured_by_its_own_code_in_a_detached_worktree_removed_afterwards(tmp_path):
     repo = tmp_path / "repo"
-    script = repo / "ai-board" / "harness" / "self_eval.py"
+    script = repo / "ai-board" / "harness" / "evaluation" / "self_eval.py"
     script.parent.mkdir(parents=True)
     shas = []
     for version in ("gốc", "biến thể"):
@@ -157,7 +157,7 @@ def test_each_sha_is_measured_by_its_own_code_in_a_detached_worktree_removed_aft
 
 
 def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_model(monkeypatch, tmp_path):
-    import main
+    from runtime import pipeline as main
     from conftest import FakeModels, deps_with
 
     (tmp_path / 'public').mkdir()
@@ -184,7 +184,7 @@ def test_the_tasks_job_plans_each_test_task_through_gates_1_to_2_5_with_the_mode
 
 
 def test_gate_5_runs_the_eval_only_for_a_self_request(monkeypatch, fake_deps):
-    import main
+    from runtime import pipeline as main
 
     monkeypatch.setattr(self_eval, "run", lambda state, deps, budget: {"gate": 5, "eval": state["request_type"]})
     ready = {"full_checkout": "checkout"}  # worktree đã dựng: không tạo lại
@@ -326,7 +326,7 @@ def test_run_frozen_with_no_frozen_tasks_yet_still_measures_strata_and_gold():
 
 def test_run_frozen_opens_and_removes_its_own_detached_worktree(tmp_path):
     repo = tmp_path / "frozen-repo"
-    script = repo / "ai-board" / "harness" / "self_eval.py"
+    script = repo / "ai-board" / "harness" / "evaluation" / "self_eval.py"
     script.parent.mkdir(parents=True)
     script.write_text(
         "import json, sys\njson.load(sys.stdin)\n"

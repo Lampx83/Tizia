@@ -8,7 +8,7 @@ import subprocess
 import pytest
 
 import eval_run
-from main import Deps
+from runtime.pipeline import Deps
 
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 AJS = "export const GREETING = 'xin chao';\nexport const FAREWELL = 'tam biet';\nexport function greet(name) {\n  return GREETING + ', ' + name;\n}\n"

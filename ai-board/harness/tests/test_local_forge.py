@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from candidate import Candidates, GitHub
+from services.candidate import Candidates, GitHub
 from services.local_forge import LocalForge, local_github
 
 BRANCH = 'ai-board/2026-10-17-ticket-9-abc123'

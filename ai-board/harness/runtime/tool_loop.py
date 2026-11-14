@@ -17,9 +17,9 @@ from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import file_context  # noqa: E402
+from services import file_context  # noqa: E402
 import tools  # noqa: E402
-import code_index
+from repositories import code_index
 import path_policy
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError

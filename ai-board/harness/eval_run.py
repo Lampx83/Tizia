@@ -33,11 +33,11 @@ import eval_fast  # noqa: E402
 import eval_feature  # noqa: E402
 import eval_git  # noqa: E402
 import eval_recall  # noqa: E402
-import file_context  # noqa: E402
+from services import file_context  # noqa: E402
 from eval_corpus import WORDS, sentence as _sentence  # noqa: E402
-from eval_gold import run_case  # noqa: E402
-from eval_strata import MAX_DROP  # noqa: E402
-from main import ROOT, Deps  # noqa: E402
+from evaluation.gold import run_case  # noqa: E402
+from evaluation.strata import MAX_DROP  # noqa: E402
+from runtime.pipeline import ROOT, Deps  # noqa: E402
 from settings import get_settings
 
 DEFAULT_ROOT = ROOT / ".scratch" / "ai-board-eval"
@@ -313,7 +313,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     source = "synthetic-candidate" if deps is not None else "pure-ollama"  # deps bơm vào = hạ tầng/candidate tổng hợp
     if deps is None:
         from dotenv import load_dotenv
-        from main import ENV_FILE
+        from runtime.pipeline import ENV_FILE
         load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
         deps = Deps.real()
     if hasattr(args, "handler"):  # lệnh của eval_git (cần model)

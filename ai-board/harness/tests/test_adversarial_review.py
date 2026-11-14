@@ -2,7 +2,7 @@
 import json
 from dataclasses import replace
 
-import main
+from runtime import pipeline as main
 from gates import adversarial_review
 from runtime.budget import Budget
 

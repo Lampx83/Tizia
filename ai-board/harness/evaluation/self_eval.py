@@ -1,11 +1,11 @@
 """Cổng eval của yêu cầu self, chạy thay Docker smoke ở cổng 5.
 
 Đo sha gốc và sha biến thể, mỗi sha trong 1 worktree + process riêng (trọng số truy xuất, skill, prompt nạp lúc
-import: đo đúng code production sẽ chạy). Thứ tự: bộ đo tất định (eval_strata, không GPU) → tụt quá ngưỡng thì
+import: đo đúng code production sẽ chạy). Thứ tự: bộ đo tất định (evaluation/strata.py, không GPU) → tụt quá ngưỡng thì
 chặn ngay; cổng 1–2.5 với model thật trên phần kiểm tra → thắng/thua/hoà từng task; biến thể sửa prompt cổng 3
-chạy thêm gold set (eval_gold). Nhận khi thắng > thua và không nhóm nào tụt. Ngân sách: limits.self_improve.
+chạy thêm gold set (evaluation/gold.py). Nhận khi thắng > thua và không nhóm nào tụt. Ngân sách: limits.self_improve.
 
-    python ai-board/harness/self_eval.py strata|tasks|gold < {"tasks": [...], "limit": giây GPU}
+    python ai-board/harness/evaluation/self_eval.py strata|tasks|gold < {"tasks": [...], "limit": giây GPU}
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def _plan_attempt():
 
 
 def _gold_attempt():
-    """Gold set cổng 3 (eval_gold) với model cổng 3 đang cấu hình."""
+    """Gold set cổng 3 (evaluation/gold.py) với model cổng 3 đang cấu hình."""
     from evaluation.gold import CASES, run_case
     from runtime.pipeline import Deps
 
@@ -129,9 +129,11 @@ def _checkouts(repo, shas):
             candidate._git_out(["worktree", "add", "-q", "--detach", paths[sha], sha], repo)
 
         def run_at(sha: str, job: str, payload: dict) -> dict:
-            done = subprocess.run([sys.executable, str(Path(paths[sha], "ai-board", "harness", "self_eval.py")), job],
+            harness = Path(paths[sha], "ai-board", "harness")
+            done = subprocess.run([sys.executable, str(harness / "evaluation" / "self_eval.py"), job],
                                   cwd=paths[sha], input=json.dumps(payload), capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+                                  encoding="utf-8", errors="replace",
+                                  env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(harness)})
             if done.returncode:
                 raise RuntimeError(f"eval {job} @ {sha[:10]} exit {done.returncode}: {done.stderr.strip()[-300:]}")
             return json.loads(done.stdout.strip().splitlines()[-1])
@@ -143,7 +145,7 @@ def _checkouts(repo, shas):
 
 def run_frozen(sha: str, tasks: list[dict], budget: float, *, checkout_repo=None, run_at=None) -> dict:
     """Đo bộ đánh giá đóng băng 1 lần ở `sha` (gọi sau khi 1 thay đổi self vừa merge):
-    bộ đo tất định hiện tại (eval_strata) + gold cổng 3 (eval_gold) + task đóng băng đã gắn nhãn (server lọc qua
+    bộ đo tất định hiện tại (eval_strata) + gold cổng 3 (evaluation/gold.py) + task đóng băng đã gắn nhãn (server lọc qua
     eval-tasks.js frozenTasks) — cùng process con job strata/gold/tasks self_eval.py đã có cho cổng eval của
     yêu cầu self, không chạy lại logic riêng, trong 1 worktree tách rời của đúng sha đó (run_at tiêm được cho
     test). Không bao giờ chọn biến thể, chỉ ghi lại để vẽ đường cong học trước hội đồng.

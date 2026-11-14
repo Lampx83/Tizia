@@ -2,7 +2,7 @@
 (nới bán kính cho bề mặt một chiều); targets/tools rỗng thì chặn, không gọi model."""
 import subprocess
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import change_class, implement
 

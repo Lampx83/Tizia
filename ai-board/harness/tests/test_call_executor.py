@@ -4,9 +4,9 @@ import urllib.error
 
 import pytest
 
-from budget import Budget
-from main import Deps
-from models import OllamaClient
+from runtime.budget import Budget
+from runtime.pipeline import Deps
+from providers.client import OllamaClient
 from runtime import call_executor
 from runtime.budget import BudgetExhausted
 from settings import reset_settings

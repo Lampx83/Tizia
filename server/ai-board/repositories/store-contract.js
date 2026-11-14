@@ -89,7 +89,7 @@ const PRE_PR_GATES = new Set(CONTRACT.gates.pre_pr);
 const ALL_GATES = [...CONTRACT.gates.plan, ...CONTRACT.gates.pre_pr];
 const PRE_PR_SEQUENCE = CONTRACT.gates.pre_pr;
 // Harness-owned behavioural oracles the server trusts, and the coverage flags each must report true.
-// Keep in sync with ai-board/harness/functional.py ORACLES.
+// Keep in sync with ai-board/harness/verification/functional.py ORACLES.
 const ORACLE_COVERAGE = {
   'queue-worker-availability-v1': ['requester_api', 'mounted_ui', 'recovery'],
   'text-visible-v1': ['rendered_text'],

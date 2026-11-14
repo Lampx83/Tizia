@@ -14,11 +14,11 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-import code_index
+from repositories import code_index
 import path_policy
-import repomap
-import file_context
-import memory
+from services import repomap
+from services import file_context
+from repositories import memory
 
 
 @dataclass(frozen=True)

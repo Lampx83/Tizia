@@ -1919,7 +1919,7 @@ function resumeSummary(journal) {
       phase = 'partial';
       note = 'Đã hoàn thành một phần kế hoạch; bấm "Tiếp tục" để làm nốt phần còn lại.';
     } else if (verdict.failure_class === 'transient') {
-      // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (main.py MODEL_RETRY_BACKOFF_S). Plan vẫn
+      // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (runtime/pipeline.py MODEL_RETRY_BACKOFF_S). Plan vẫn
       // hợp lệ (chỉ hạ tầng hỏng, không phải plan sai) nên dùng lại đúng đường "đã duyệt, chờ worker" của một
       // plan protected vừa được cho phép: status='queued', phase='authorized' → claimTransaction (nhánh
       // PLAN_QUEUE) tự nhận lại, worker thực hiện lại từ cổng 3 như một lượt execute mới.

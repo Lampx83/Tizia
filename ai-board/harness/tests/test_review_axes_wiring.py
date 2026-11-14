@@ -1,7 +1,7 @@
 """Two-axis review skill wiring: off = review system prompt unchanged; on = one advisory block per review call."""
 import pytest
 
-import main
+from runtime import pipeline as main
 from gates import adversarial_review, reviewer_fix
 from runtime import pipeline, prompt_roles
 from runtime.budget import Budget

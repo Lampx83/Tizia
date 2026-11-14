@@ -9,10 +9,10 @@ from pathlib import Path
 
 HARNESS = Path(__file__).resolve().parents[1]
 REPO = HARNESS.parents[1]
-VERIFIER_ENTRIES = ("gates/static_check.py", "gates/guard.py", "gates/risk_triage.py", "candidate.py",
+VERIFIER_ENTRIES = ("gates/static_check.py", "gates/guard.py", "gates/risk_triage.py", "services/candidate.py",
                     "gates/adversarial_review.py", "gates/change_class.py")
 DATA_GLOBS = ((HARNESS, "prompts/*"), (REPO, "server/ai-board/*.json"))
-DYNAMIC_IMPORTERS = ("import_module", "__import__", "redirect")
+DYNAMIC_IMPORTERS = ("import_module", "__import__")
 
 
 def digest(value) -> str:
@@ -33,14 +33,11 @@ def _ancestors(root: Path, parts: tuple) -> list[Path]:
 
 
 def _targets(path: Path, root: Path):
-    """(dotted parts to resolve, uncertain) của một file nguồn; import tương đối và redirect được quy về tên tuyệt đối."""
+    """(dotted parts to resolve, uncertain) của một file nguồn; import tương đối được quy về tên tuyệt đối."""
     tree = ast.parse(path.read_bytes(), filename=str(path))
     pkg = path.relative_to(root).parts[:-1]
     found, uncertain = [], False
-    impl = {id(n) for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef) and fn.name == "redirect" for n in ast.walk(fn)}
     for node in ast.walk(tree):
-        if id(node) in impl:
-            continue
         if isinstance(node, ast.Import):
             found += [tuple(alias.name.split(".")) for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
@@ -58,7 +55,7 @@ def _targets(path: Path, root: Path):
             name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
             if name not in DYNAMIC_IMPORTERS:
                 continue
-            arg = node.args[1] if name == "redirect" and len(node.args) > 1 else (node.args[0] if node.args else None)
+            arg = node.args[0] if node.args else None
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                 found.append(tuple(arg.value.split(".")))
             else:
@@ -67,7 +64,7 @@ def _targets(path: Path, root: Path):
 
 
 def verifier_closure(entries=VERIFIER_ENTRIES, harness=HARNESS, repo=REPO, data=DATA_GLOBS) -> tuple[bool, dict]:
-    """(uncertain, {repo-relative path: sha256}) của bao đóng import in-repo, shim redirect và file dữ liệu."""
+    """(uncertain, {repo-relative path: sha256}) của bao đóng import in-repo và file dữ liệu."""
     files, uncertain = {}, False
     queue = [harness / entry for entry in entries]
     seen = set()

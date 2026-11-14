@@ -2,8 +2,8 @@
 import dataclasses
 import json
 
-import eval_gold
-from main import Deps
+from evaluation import gold as eval_gold
+from runtime.pipeline import Deps
 
 
 @dataclasses.dataclass

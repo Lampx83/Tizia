@@ -1,10 +1,10 @@
 """Model chỉ thấy code không comment; repo/file thật giữ nguyên, số dòng thật giữ nguyên."""
-import code_index
-import context
-import file_context
+from repositories import code_index
+from services import context
+from services import file_context
 import pytest
 import tools
-from file_context import apply_edits, excerpt, strip_comments
+from services.file_context import apply_edits, excerpt, strip_comments
 from test_code_index import _commit, repo  # noqa: F401 — repo là fixture
 
 

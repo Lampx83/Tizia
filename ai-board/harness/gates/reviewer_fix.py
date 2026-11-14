@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-import file_context
+from services import file_context
 from gates import change_class, gate3_guards, implement
 from repositories import server_hsm
 from runtime import meter, prompt_roles, subtask_files

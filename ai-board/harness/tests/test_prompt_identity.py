@@ -5,8 +5,8 @@ import json
 import logging
 from pathlib import Path
 
-import meter
-from budget import Budget
+from runtime import meter
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 
 HARNESS = Path(__file__).resolve().parent.parent

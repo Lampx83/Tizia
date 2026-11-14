@@ -54,7 +54,7 @@ def configured_deps(model):
 
 
 def code_pins(deps):
-    from main import ROOT
+    from runtime.pipeline import ROOT
     pins = runner.provenance(ROOT, deps.models.routing.first('gate3_heavy')['model'], deps.models.routing)
     pins['untracked'] = bool(subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '--others', '--exclude-standard']).strip())
     return pins

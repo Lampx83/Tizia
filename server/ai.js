@@ -9,7 +9,7 @@
 // Cấu hình env — KHÔNG có fallback cứng trong code (một
 // endpoint dev-tunnel + shared secret nằm thẳng trong source là rò rỉ, và mỗi
 // nơi đọc biến này lại tự chép một bản default riêng, chưa kể phải sync tay
-// với ai-board/harness/models.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu
+// với ai-board/harness/providers/client.py). Nguồn sự thật DUY NHẤT là `.env` — thiếu
 // biến nào thì `/api/ai/*` trả 503 rõ ràng thay vì âm thầm gọi ra một endpoint
 // không ai biết trước là gì:
 //   OLLAMA_URL     — base URL của Ollama; client nối thêm /api/generate hoặc /chat

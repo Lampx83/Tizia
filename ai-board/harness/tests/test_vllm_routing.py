@@ -9,10 +9,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from budget import Budget
-from main import Deps
-from meter import Tracer, measure, units
-from models import OllamaClient
+from runtime.budget import Budget
+from runtime.pipeline import Deps
+from runtime.meter import Tracer, measure, units
+from providers.client import OllamaClient
 
 
 @contextmanager

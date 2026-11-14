@@ -1,7 +1,7 @@
 import pytest
 import json
 
-import eval_strata
+from evaluation import strata as eval_strata
 
 pytestmark = pytest.mark.slow
 

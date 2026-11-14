@@ -2,7 +2,7 @@ import json
 import subprocess
 
 import pytest
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import plan_validate
 
@@ -198,7 +198,7 @@ def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
 
 def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):
     import dataclasses
-    import meter
+    from runtime import meter
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     file = tmp_path / 'public' / 'js' / 'suggestion-fab.js'
     file.parent.mkdir(parents=True)

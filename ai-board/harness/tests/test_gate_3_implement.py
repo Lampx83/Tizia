@@ -25,7 +25,7 @@ def test_revoked_authority_prevents_candidate_file_writes(tmp_path):
     assert not (tmp_path / 'public/new.html').exists()
     assert not (tmp_path / 'test/new.test.js').exists()
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import implement, subtask_contract
 
@@ -308,7 +308,7 @@ def test_ensure_scratch_repo_never_reuses_real_tizia_repo(tmp_path):
 
 
 def test_heavy_gate3_model_reads_only_gate3_model_heavy():
-    from models import OllamaClient
+    from providers.client import OllamaClient
     assert OllamaClient.from_env({"GATE3_MODEL_HEAVY": "heavy"}).gate3_model == "heavy"
     assert OllamaClient.from_env({"GATE3_MODEL": "old"}).gate3_model == ""
 
@@ -395,7 +395,7 @@ def test_a_first_subtask_failure_is_still_repairable_ordinary(tmp_path):
 
 
 def test_lessons_from_past_verdicts_are_added_to_the_prompt(tmp_path):
-    import memory
+    from repositories import memory
     source = _source_with(tmp_path, "public/flashcards.html", BIG_PAGE)
     lessons = tmp_path / "lessons.jsonl"
     memory.record(lessons, [{"files": ["public/flashcards.html"], "gate": 5, "failure_class": "ordinary",

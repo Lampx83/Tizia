@@ -11,7 +11,7 @@ import pytest
 import eval_corpus
 import eval_run
 from evaluation.suite import metrics, runner, trial
-from main import ROOT, Deps
+from runtime.pipeline import ROOT, Deps
 
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}
 SEED = 11
@@ -626,7 +626,7 @@ def test_gate3_context_sends_a_small_file_whole_and_env_can_pin_the_excerpt(monk
 
 
 def test_norepomap_arm_drops_the_repomap_tool_at_gate_1_only_and_default_restores_it():
-    import context
+    from services import context
     from evaluation.suite import ablation
     calls = [("tree", {}), ("repomap", {"question": "q"}), ("lessons", {})]
     original = dict(ablation._ORIGINAL)

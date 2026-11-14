@@ -31,8 +31,8 @@ import unicodedata
 from pathlib import Path
 
 from repositories import repo_at_commit
-import context
-import functional
+from services import context
+from verification import functional
 import path_policy
 from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names

@@ -149,7 +149,7 @@ ROOT43_REQUEST = {"subject": "Thêm trang Sổ tay Git cho Trường CNTT", "typ
 
 def test_gate1_run_accepts_root43_plan_without_a_test_subtask(repo):
     import json
-    from budget import Budget
+    from runtime.budget import Budget
     from conftest import FakeModels, deps_with
     from gates import brainstorm
 

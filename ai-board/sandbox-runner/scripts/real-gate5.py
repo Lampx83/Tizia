@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, "/opt/ai-board/ai-board/harness")
-import sandbox_verify  # noqa: E402
+from verification import sandbox as sandbox_verify  # noqa: E402
 
 base_sha = sys.argv[1]
 TEST = "test/e2e-probe.test.js"

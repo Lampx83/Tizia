@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-import candidate
-import main
+from services import candidate
+from runtime import pipeline as main
 from gates import implement
 
 
@@ -191,7 +191,7 @@ def test_gate_4_blocks_a_path_outside_the_catalog_before_docker(tmp_path, source
 
 
 def test_gate_4_model_outage_stays_transient_so_it_is_retried_instead_of_repaired(tmp_path, source, fake_deps):
-    from budget import Budget
+    from runtime.budget import Budget
 
     class Down:
         def generate(self, *args, **kwargs):

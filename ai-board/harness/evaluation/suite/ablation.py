@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-import context
+from services import context
 from gates import implement
 
 ARMS = ("default", "excerpt", "fullfile", "nosiblings", "hybrid", "norepomap")

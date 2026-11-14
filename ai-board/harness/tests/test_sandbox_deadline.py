@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-import sandbox_verify as sandbox
-from budget import Budget
+import verification.sandbox as sandbox
+from runtime.budget import Budget
 from test_sandbox_verify import FakeClient, checkout, state
 
 

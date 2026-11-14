@@ -1,4 +1,4 @@
-import functional
+from verification import functional
 from gates import verify
 
 

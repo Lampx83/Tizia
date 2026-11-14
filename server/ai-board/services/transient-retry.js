@@ -2,7 +2,7 @@
 // Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (áp mọi loại yêu cầu, không riêng self)
 // ============================================================
 // Cổng eval (self) và cổng 5 (mọi loại) đều có thể trả verdict blocked, failure_class='transient' sau khi
-// backoff gọi model (main.py MODEL_RETRY_BACKOFF_S) đã hết. submitPrePrVerdictTransaction (store.js) đọc công
+// backoff gọi model (runtime/pipeline.py MODEL_RETRY_BACKOFF_S) đã hết. submitPrePrVerdictTransaction (store.js) đọc công
 // tắc này: bật → dời lease sang retry_after_ms, ticket tự về hàng đợi qua claimTransaction hiện có; tắt (mặc
 // định) → status='waiting_admin', phase='transient_blocked', admin tự xem Grafana rồi bấm "Chạy lại ngay".
 // ============================================================

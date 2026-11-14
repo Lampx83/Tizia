@@ -17,8 +17,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-import context as repo_context
-import file_context
+import services.context as repo_context
+from services import file_context
 import path_policy
 from gates import change_class, gate3_guards, subtask_contract
 from repositories import repo_at_commit
@@ -26,9 +26,9 @@ from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, state_file, subtask_files, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
-import memory
+from repositories import memory
 from services import conflict_markers
-import repomap
+from services import repomap
 from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]

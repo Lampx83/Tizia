@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from budget import Budget
+from runtime.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import implement
 from test_http_worker import MemCursorCheckpoint, ONE_STEP_PLAN, TickBudget, execute_pre_pr, scripted_gates

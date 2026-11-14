@@ -1,6 +1,6 @@
 import urllib.error
 
-import functional
+from verification import functional
 from gates import verify
 from test_gate_5_verify import FakeRunner, checkout, state
 

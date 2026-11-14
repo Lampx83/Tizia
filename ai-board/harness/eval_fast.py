@@ -26,9 +26,9 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import functional  # noqa: E402
+from verification import functional  # noqa: E402
 from gates import guard, implement, static_check, verify  # noqa: E402
-from main import ROOT  # noqa: E402
+from runtime.pipeline import ROOT  # noqa: E402
 from settings import get_settings
 
 APP_PATHS = ("server", "public", "scripts", "package.json", "ai-board/harness/prompts")  # như COPY của Dockerfile; thiếu ở commit ghim thì bỏ

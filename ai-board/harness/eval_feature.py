@@ -32,7 +32,7 @@ def register(subs) -> None:
 
 def pins(model: str) -> dict:
     import eval_run
-    from main import ROOT
+    from runtime.pipeline import ROOT
     base = eval_run.pins(model, SimpleNamespace(models=SimpleNamespace()))
     manifest = ROOT / "ai-board" / "harness" / "runtime" / "tool_manifest.json"
     return {**base, "tool_manifest": hashlib.sha256(manifest.read_bytes().replace(b"\r\n", b"\n")).hexdigest()[:16] if manifest.exists() else None,

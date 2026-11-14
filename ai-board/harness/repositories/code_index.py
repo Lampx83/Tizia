@@ -6,7 +6,7 @@ Lớp ghi chú (`notes`): {summary ≤300, anchors[], by, file_hash, at, stale} 
 viết qua prompts/note_refresh.md; anchor phải có thật trong lớp cấu trúc.
 
 Mọi đọc repo đi qua git ở 1 sha cố định (show / ls-tree / diff), không đọc working tree.
-CLI: python code_index.py build --source <repo> --sha <sha>
+CLI (cwd ai-board/harness): python -m repositories.code_index build --source <repo> --sha <sha>
 """
 from __future__ import annotations
 

@@ -19,7 +19,7 @@ from pathlib import Path
 HARNESS = Path(__file__).resolve().parent / "harness"
 sys.path.insert(0, str(HARNESS))
 
-import candidate as candidates  # noqa: E402
+import services.candidate as candidates  # noqa: E402
 from settings import get_settings, pr_base  # noqa: E402
 
 EVIDENCE_DIR = Path(__file__).resolve().parent / "memory" / "reviews"

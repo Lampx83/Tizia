@@ -1,7 +1,7 @@
 """Short-term memory cho cổng 3: trích file theo từ khoá và áp khối tìm/thay."""
 import pytest
 
-import file_context
+from services import file_context
 
 
 def test_keywords_prefer_quoted_phrases_and_drop_stopwords():

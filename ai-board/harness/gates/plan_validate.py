@@ -50,10 +50,10 @@ import re
 import time
 from pathlib import Path
 
-import context
-import file_context
+from services import context
+from services import file_context
 import path_policy
-from dbconn import harness_db
+from repositories.dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
 from repositories import repo_at_commit
 from runtime import coverage, levels, limits, subtask_files
@@ -922,7 +922,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if request.get('grounding_required'):
         validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
         try:
-            import functional
+            from verification import functional
             targets = {task['file'] for task in plan['subtasks']}
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required and not required.intersection(targets):

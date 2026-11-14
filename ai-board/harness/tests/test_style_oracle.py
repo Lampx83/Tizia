@@ -1,6 +1,6 @@
 import pytest
 
-import functional
+from verification import functional
 from verification import style
 
 SIZE_TITLE = 'Đổi cỡ chữ của .feedback từ 22px thành 29px'

@@ -20,9 +20,9 @@ from pathlib import Path
 
 import path_policy
 
-import candidate
-import classifier
-import functional
+from services import candidate
+from security import classifier
+from verification import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import repo_at_commit, server_hsm
 from runtime import levels, subtask_files
