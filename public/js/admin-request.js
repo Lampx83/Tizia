@@ -24,7 +24,7 @@ const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
-const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null,
+const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null, toolFilter: { failure: '', tool: '' },
   elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '',
   net: { pending: [], approved: [], idx: 0, reason: '', msg: '' } };
 let view = null;
@@ -773,7 +773,7 @@ function renderAiBoard(t, messages = []) {
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
     </div>`;
   const events = minimalEvents(t.events || []);
-  return renderTicketGraph(t, ui.node, Date.now(), { summary, events });
+  return renderTicketGraph(t, ui.node, Date.now(), { summary, events, filter: ui.toolFilter });
 }
 
 // Last few user-facing events only; technical ones stay out of the page.
@@ -916,6 +916,14 @@ document.addEventListener('input', (e) => {
   if (input) ui.elevationReason = input.value;
   const net = e.target.closest?.('[data-net-reason]');
   if (net) ui.net.reason = net.value;
+});
+// Filter selects in the execution log: failure class and tool. Re-draws the log with the chosen value.
+document.addEventListener('change', (e) => {
+  const select = e.target.closest?.('#app [data-tool-filter]');
+  if (!select) return;
+  ui.toolFilter = { ...ui.toolFilter, [select.dataset.toolFilter]: select.value };
+  render();
+  $(`#app [data-tool-filter="${select.dataset.toolFilter}"]`)?.focus();
 });
 document.addEventListener('click', e => {
   const node = e.target.closest('#app [data-node]');  if (node && !e.target.closest('[data-action]') && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }

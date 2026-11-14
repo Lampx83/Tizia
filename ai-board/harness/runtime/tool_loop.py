@@ -963,6 +963,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             observation = f"{error} (hạ tầng/thời gian, không phải lỗi nội dung; thử lại hoặc đổi cách)"
         except ToolError as error:
             name, kind, failure, invalid = "lỗi", "error", _error_of(error), True
+            if called is None and hasattr(trace, "mark_last"):
+                trace.mark_last("error", str(error))
             observation = f"{error} (tham số/định dạng sai; thử lại, không tính lượt sửa nội dung)"
             bad_n = bad_n + 1 if called and called == bad_tool else int(bool(called))
             bad_tool = called

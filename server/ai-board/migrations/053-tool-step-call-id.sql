@@ -1,0 +1,1 @@
+ALTER TABLE tool_step ADD COLUMN IF NOT EXISTS call_id TEXT;

@@ -132,6 +132,22 @@ def redact(text: str) -> str:
     return _SECRET.sub("[đã che]", text or "")
 
 
+def output_text(body: dict) -> str:
+    """Reply text, or the single native tool call as {tool, arguments} JSON (empty text otherwise)."""
+    text = body.get("response") or ""
+    native = body.get("tool_calls")
+    if text or not isinstance(native, list) or len(native) != 1 or not isinstance(native[0], dict):
+        return text
+    call = native[0].get("function", native[0])
+    args = call.get("arguments", {})
+    if isinstance(args, str):
+        try:
+            args = json.loads(args or "{}")
+        except ValueError:
+            pass
+    return json.dumps({"tool": call.get("name"), "arguments": args}, ensure_ascii=False)
+
+
 def _clip(value, cap: int) -> str:
     """Text (hoặc JSON của giá trị) đã che secret, cắt ở `cap` ký tự."""
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
