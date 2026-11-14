@@ -298,3 +298,17 @@ def test_admin_trust_is_part_of_cache_key(monkeypatch):
     args = ("Sửa trang", "Thêm nút cấp quyền cho giáo viên")
     assert intake_guard.run(*args, llm(["privileged_area"]), Budget(), requester_role="admin")["verdict"] == "allow"
     assert intake_guard.run(*args, llm(["privileged_area"]), Budget(), requester_role="student")["verdict"] == "human_review"
+
+
+NARROWED = [
+    ("Đổi tên hàm trong shop/pricing.py và billing/total.py, cập nhật invoice.py", "money",
+     "Đổi giá trong pricing của gói và thêm invoice cho học viên"),
+    ("Route ghi cần csrf strict", "privileged_area", "Tắt kiểm tra csrf cho form góp ý"),
+    ("Thêm hoàn tiền một phần cho sổ cái", "privileged_area", "Tự động hoàn tiền cho học viên"),
+]
+
+
+def test_narrowed_terms_allow_benign_context_and_keep_attack_phrasing():
+    for benign, label, attack in NARROWED:
+        assert label not in intake_guard.deterministic(benign), benign
+        assert label in intake_guard.deterministic(attack), attack

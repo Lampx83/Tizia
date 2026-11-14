@@ -173,13 +173,13 @@
       "intake": "human_review", "diff": null,
       "terms": [
         "(xoa|delete|remove) (tai khoan|account|container|database)",
-        "mật khẩu", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "thanh toán", "nạp tiền", "chuyển khoản", "hoàn tiền",
+        "mật khẩu", "xác thực", "phân quyền", "quyền admin", "quyền quản trị", "thanh toán", "nạp tiền", "chuyển khoản", "(duyệt|tự động|cấp|thực hiện|yêu cầu) hoàn tiền", "hoàn tiền (cho|vào|về|ngay|tự động)",
         "sửa điểm", "đổi điểm", "tăng điểm", "cộng điểm cho", "chấm điểm lại", "bảng điểm", "điểm thi",
         "cộng sao", "cộng xu", "tặng xu", "hack điểm", "hack xu",
         "dữ liệu của (bạn|người) khác", "thông tin (của )?(học sinh|sinh viên|người dùng) khác",
         "danh sách (học sinh|sinh viên|người dùng)", "tắt (bảo mật|xác thực|captcha)", "biến môi trường", "bien moi truong", "khóa bí mật", "khoa bi mat", "khóa api", "khoa api", "quyền (giáo viên|giảng viên)", "quyen (giao vien|giang vien)", "kiểm tra quyền", "kiem tra quyen", "tôi là (admin|quản trị viên)", "toi la (admin|quan tri vien)",
         "mat khau", "phan quyen", "thanh toan", "nap tien", "chuyen khoan", "sua diem", "hack diem",
-        "password", "oauth", "csrf", "session", "cookie", "(giả|mạo|chiếm|leo thang|bypass|vượt|đăng nhập bằng|dùng) (quyền )?admin", "admin (password|token|secret|key|session|cookie)", "(become|impersonate|escalate to|elevate to) admin", "đặc quyền admin", "payment", "hack",
+        "password", "oauth", "(tắt|bỏ|xóa|xoá|vô hiệu hóa|vô hiệu|bỏ qua|disable|bypass|skip|remove|ignore|turn off) (kiểm tra )?csrf", "(tat|bo|xoa|vo hieu hoa|vo hieu|bo qua) (kiem tra )?csrf", "csrf (bypass|disabled?|off)", "session", "cookie", "(giả|mạo|chiếm|leo thang|bypass|vượt|đăng nhập bằng|dùng) (quyền )?admin", "admin (password|token|secret|key|session|cookie)", "(become|impersonate|escalate to|elevate to) admin", "đặc quyền admin", "payment", "hack",
         "rate limit", "captcha", "api key", "secret key", "\\.env"
       ]
     },
@@ -201,7 +201,7 @@
         "trả phí", "thu phí", "tính phí", "phí dịch vụ", "phí thành viên", "mã giảm giá", "mã khuyến mãi",
         "rút tiền", "tiền thật", "ví điện tử", "thẻ tín dụng", "thẻ ngân hàng", "tài khoản ngân hàng", "số tài khoản",
         "vnpay", "momo", "zalopay", "hoc phi", "thu phi",
-        "pricing", "billing", "invoice", "refund", "subscription", "premium plan", "credit card"
+        "(?<![/.])pricing(?!\\.\\w|/)", "(?<![/.])billing(?!\\.\\w|/)", "(?<![/.])invoice(?!\\.\\w|/)", "refund", "subscription", "premium plan", "credit card"
       ]
     },
     "health_legal_finance_claim": {
