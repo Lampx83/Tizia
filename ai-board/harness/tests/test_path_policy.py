@@ -103,6 +103,16 @@ def test_surface_context_needs_approved_context_and_node_test(path, tests, allow
     assert path_policy.surface_context(path, tests, READ, allowed) is expected
 
 
+@pytest.mark.parametrize("ctx,file", [("campus", "index.js"), ("content", "index.js"), ("content", "layout.js"), ("learning", "routes.js")])
+def test_surface_context_bare_basename_does_not_count(ctx, file):
+    path = f"server/contexts/{ctx}/{file}"
+    read = {"test/x.test.js": f"import test from 'node:test'; // {file}", "test/y.test.js": f"import test from 'node:test'; // other{ctx}/{file}x",
+            "test/ok.test.js": f"import test from 'node:test'; // {ctx}/{file}"}.get
+    assert not path_policy.surface_context(path, ["test/x.test.js"], read, {ctx})
+    assert not path_policy.surface_context(path, ["test/y.test.js"], read, {ctx})
+    assert path_policy.surface_context(path, ["test/ok.test.js"], read, {ctx})
+
+
 @pytest.mark.parametrize("name", sorted(path_policy.FORBIDDEN_CONTEXTS) + ["ai-board-intake", "_ai-generated"])
 def test_surface_context_never_opens_forbidden_contexts(name):
     path = f"server/contexts/{name}/routes.js"
