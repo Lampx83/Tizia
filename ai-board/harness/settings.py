@@ -117,6 +117,8 @@ class Settings(BaseSettings):
     uploads_dir: Path | None = None
     eval_dir: Path | None = None
     eval_node_modules: Path | None = None
+    package_broker_dir: Path | None = None
+    package_layer_cap: int = 5
     qwen_tokenizer: Path | None = None
     retrieval_weights: Path | None = None
 

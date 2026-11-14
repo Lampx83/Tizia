@@ -73,7 +73,7 @@ def denied(reason: str | None) -> str:
 
 
 class UnavailableBroker:
-    """Stand-in until the package/fetch brokers land."""
+    """Stand-in when no broker is configured."""
 
     def resolve(self, request: dict) -> dict:
         return {"decision": "unavailable", "reason": BROKER_UNAVAILABLE, "metadata": {}}
@@ -85,6 +85,7 @@ class Queue:
     def __init__(self, decisions: dict | None = None, *, eval_mode: bool = False, broker=None):
         self.decisions, self.eval_mode, self.broker = dict(decisions or {}), eval_mode, broker or UnavailableBroker()
         self.pending: list[dict] = []
+        self.approved: list[dict] = []
         self.auto_denied = 0
 
     def settled(self, call_id: str) -> bool:
@@ -97,12 +98,24 @@ class Queue:
             return denied(EVAL_REASON)
         decision = self.decisions.get(request["call_id"])
         if decision is None:
+            if request["kind"] == "package" and hasattr(self.broker, "screen"):
+                screened = self.broker.screen(request)
+                if screened["decision"] == REJECTED:
+                    return denied(screened["reason"])
+                request = {**request, "metadata": screened["metadata"]} if screened["metadata"] else request
             if all(item["call_id"] != request["call_id"] for item in self.pending):
                 self.pending.append(request)
             return None
         if decision.get("decision") == REJECTED:
             return denied(decision.get("reason"))
-        return str(self.broker.resolve(request).get("reason") or BROKER_UNAVAILABLE)
+        result = self.broker.resolve(request)
+        if result.get("decision") == APPROVED and result.get("diff"):
+            if all(item["call_id"] != request["call_id"] for item in self.approved):
+                self.approved.append({"call_id": request["call_id"], "name": request["name"], "diff": result["diff"],
+                                      "layer_key": result.get("layer_key"), "metadata": result.get("metadata") or {}})
+            return str(result["reason"])
+        reason = str(result.get("reason") or BROKER_UNAVAILABLE)
+        return denied(reason) if result.get("decision") == REJECTED else reason
 
     def report(self) -> dict:
-        return {"pending": list(self.pending), "auto_denied": self.auto_denied}
+        return {"pending": list(self.pending), "auto_denied": self.auto_denied, "dependencies": list(self.approved)}
