@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     tool_native: bool = False
     thinking_budget: bool = False
     multi_file_subtask: bool = False
+    backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
     multi_file_max: int = Field(default=3, ge=2, le=6)
     graph_persistence: bool = False
     plan_repair: bool = True
@@ -96,6 +97,7 @@ class Settings(BaseSettings):
     gate25_fixes: Annotated[frozenset[str], NoDecode] = DEFAULT_GATE25_FIXES
     gate3_guards: Annotated[frozenset[str], NoDecode] = frozenset()
     skill_variant: Annotated[tuple[str, ...], NoDecode] = ()
+    backend_contexts_surface_list: Annotated[frozenset[str], NoDecode] = frozenset()
 
     # model, URL, đường dẫn
     classifier_model: str = ""
@@ -161,7 +163,7 @@ class Settings(BaseSettings):
     def _best_match(cls, value):
         return "advisory" if str(value).strip().lower() == "advisory" else "enforce"
 
-    @field_validator("gate25_fixes", "gate3_guards", mode="before")
+    @field_validator("gate25_fixes", "gate3_guards", "backend_contexts_surface_list", mode="before")
     @classmethod
     def _set_text(cls, value):
         parsed = _csv(value)
