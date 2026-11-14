@@ -162,7 +162,7 @@
       "output_chars": 2000,
       "allowed_argv": [["node", "--test", "<test>"], ["node", "--check", "<file>"], ["npm", "test"], ["npm", "run", "check:content"], ["node", "<script>"]],
       "repo_script_argv": [["npm", "test"], ["npm", "run", "check:content"], ["node", "<script>"]],
-      "script_deny": "^scripts/(ai-board|fetch-inbox|admin-reply|delete-requests|reset-requests|check-skills|skill-|migrate-skills)",
+      "script_deny": "^scripts/(ai-board|fetch-inbox|admin-reply|delete-requests|reset-requests|check-skills|skill-|migrate-skills|audit-s3-objects|generate-hsm-diagram)",
       "task_types": {"backend": [3], "frontend": [3], "database": [3], "test": [3], "all": [3], "review": []}
     },
     "fetch_url": {
