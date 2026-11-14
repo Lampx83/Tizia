@@ -99,7 +99,8 @@ def test_crash_between_nodes_resumes_by_reentry_without_double_counting_ledger(f
 
 def test_flag_on_resume_needs_no_tool_loop_flag(flag, monkeypatch):
     import worker as worker_module
-    monkeypatch.setattr(worker_module, "_worker_checkpoint", lambda *a, **k: None)
+    import worker_execution
+    monkeypatch.setattr(worker_execution, "_worker_checkpoint", lambda *a, **k: None)
     log, seen = [], {}
     cp = FakeCheckpoint(FakeServer())
     worker(cp, gates(log, seen), Budget()).run()

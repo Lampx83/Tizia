@@ -62,12 +62,13 @@ def test_private_input_boundary_and_busy_engine(tmp_path):
 
 def test_real_http_remote_planner_uses_shared_guard_without_model_calls(monkeypatch, tmp_path):
     import worker
+    import worker_planner
     class NoModels:
         def generate(self, *args, **kwargs):
             raise AssertionError('model transport must not be called for hard guard')
     def deps(Deps, tracer, progress):
         return Deps(models=NoModels(), notify=None)
-    monkeypatch.setattr(worker, '_real_deps', deps)
+    monkeypatch.setattr(worker_planner, '_real_deps', deps)
     phase = {'clarify': False}
     def operation(snapshot, workspace, checkpoint):
         if phase['clarify']:
@@ -119,7 +120,7 @@ def test_real_http_remote_planner_uses_shared_guard_without_model_calls(monkeypa
             def generate(self, *args, **kwargs):
                 return {'response': json.dumps({'labels': ['money'], 'reason': 'fixture review'}),
                         'prompt_eval_count': 12, 'eval_count': 3, 'eval_duration': 1000000}
-        monkeypatch.setattr(worker, '_real_deps', lambda Deps, tracer, progress: Deps(models=GuardModel(), notify=None, trace=tracer))
+        monkeypatch.setattr(worker_planner, '_real_deps', lambda Deps, tracer, progress: Deps(models=GuardModel(), notify=None, trace=tracer))
         from runtime.meter import Tracer
         observed = []
         trace = Tracer(path=None)

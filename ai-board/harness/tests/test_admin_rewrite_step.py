@@ -36,6 +36,6 @@ def test_no_queued_job_returns_nothing():
 
 
 def test_worker_has_no_retro_or_self_improve_or_proposal_path():
-    source = (ROOT / 'worker.py').read_text(encoding='utf-8')
+    source = ''.join(path.read_text(encoding='utf-8') for path in sorted(ROOT.glob('worker*.py')))
     for banned in ('skill_retro', 'run_self_improve_night', 'skill-proposals', 'self-improve'):
         assert banned not in source, banned

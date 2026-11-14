@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 def test_cli_selects_remote_planning_with_local_revision_fallback(monkeypatch, tmp_path):
     import dotenv
     import worker
+    import worker_main
     from repositories import memory
     from providers.client import OllamaClient
     from api.client import RemotePlanner
@@ -25,7 +26,7 @@ def test_cli_selects_remote_planning_with_local_revision_fallback(monkeypatch, t
     monkeypatch.setattr(memory, 'DEFAULT_PATH', tmp_path / 'lessons.jsonl')
     monkeypatch.setattr(memory, 'prune', lambda *a, **kw: 0)
     local = object()
-    monkeypatch.setattr(worker, 'HarnessPlanner', lambda *a, **kw: local)
+    monkeypatch.setattr(worker_main, 'HarnessPlanner', lambda *a, **kw: local)
 
     def poll(instance):
         assert isinstance(instance.planner, RemotePlanner)
@@ -35,5 +36,5 @@ def test_cli_selects_remote_planning_with_local_revision_fallback(monkeypatch, t
         assert instance.model_check.__self__ is instance.planner
         return {'status': 'off'}
 
-    monkeypatch.setattr(worker, 'poll', poll)
+    monkeypatch.setattr(worker_main, 'poll', poll)
     assert worker.main(['--mode', 'off', '--plan', '--once']) == 0

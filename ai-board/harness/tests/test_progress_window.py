@@ -11,6 +11,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 from runtime import progress  # noqa: E402
 import worker  # noqa: E402
+import worker_execution  # noqa: E402
 
 
 def window(**overrides):
@@ -118,8 +119,8 @@ class Ticks:
 
 def test_a_repeated_failure_stops_on_the_window_and_reports_progress(monkeypatch):
     monkeypatch.setenv("AI_BOARD_PROGRESS_LOOP", "1")
-    monkeypatch.setattr(worker, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 6, "no_progress_rounds": 99})
-    monkeypatch.setattr(worker, "MAX_REPAIRS", 6)
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {"enabled": True, "max_repairs": 6, "no_progress_rounds": 99})
+    monkeypatch.setattr(worker_execution, "MAX_REPAIRS", 6)
     plan = {"capabilities": ["public.ui"],
             "steps": [{"order": 1, "title": "a", "allowed_scope": ["public/js/campus/building.js"],
                        "tests": ["t"], "risk": "low"}]}
