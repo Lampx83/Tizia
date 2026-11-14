@@ -39,7 +39,10 @@ class LoopBudget:
     def allow(self) -> bool:
         return self.steps < self.soft_limit()
 
-    def step(self, tool: str, args: dict, observation: str, *, ok: bool = True):
+    def step(self, tool: str, args: dict, observation: str, *, ok: bool = True, infra: bool = False):
+        if infra:  # infrastructure failure says nothing about the model: no repeat or idle count
+            self.steps += 1
+            return Continue()
         sig = None if tool == "finish" else json.dumps([tool, args], sort_keys=True, ensure_ascii=False)
         self.steps += 1
         self.repeats = self.repeats + 1 if sig is not None and sig == self.last_sig else 0

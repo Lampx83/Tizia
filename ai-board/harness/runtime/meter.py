@@ -287,6 +287,10 @@ class Tracer:
             notes.append({"kind": kind, "name": _clip(name, 80), "summary": _clip(summary, NOTE_SUMMARY_CAP),
                           "data": None if data is None else _clip(data, NOTE_DATA_CAP)})
 
+    def last_call_id(self) -> str | None:
+        """call_id của lần gọi model VỪA XONG của thread này."""
+        return (getattr(self._local, "last", None) or {}).get("call_id")
+
     def attach_last(self, section: str, value: dict) -> None:
         """Đính kết quả vào lần gọi VỪA XONG của thread này: "edits" (AI sửa gì) ghi đè; "evaluation" nối thêm từng phép."""
         last = getattr(self._local, "last", None)

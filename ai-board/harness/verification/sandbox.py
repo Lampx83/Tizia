@@ -359,7 +359,7 @@ class SandboxSession:
         if self.lease.revoked or not self.lease_ok():
             raise SandboxError("lease_lost", "lease")
         return {"rc": outcome.get("code"), "stdout": outcome.get("stdout", ""), "stderr": outcome.get("stderr", ""),
-                "truncated": bool(outcome.get("truncated") or outcome.get("timed_out"))}
+                "truncated": bool(outcome.get("truncated")), "timed_out": bool(outcome.get("timed_out"))}
 
     def _limits(self) -> dict:
         return {} if self.deadline is None else {"deadline": self.deadline}
