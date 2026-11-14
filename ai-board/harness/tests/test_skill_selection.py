@@ -73,7 +73,7 @@ def test_admin_topic_overlap_with_default_is_dropped(monkeypatch):
     original = default_skills.catalog
     monkeypatch.setattr(default_skills, 'catalog', lambda: [dataclasses.replace(s, topic='frontend-style')
         if s.name == 'default-frontend' else s for s in original()])
-    text = approved()['text'].replace('task_type: frontend\n', 'task_type: frontend\ntopic: frontend-style\n')
+    text = approved()['text'].replace('  task_type: "frontend"\n', '  task_type: "frontend"\n  topic: "frontend-style"\n')
     skill = default_skills.parse(text)
     row = {**approved(), 'text': text, 'hash': skill.digest, 'token_count': len(default_skills.admin_text(skill).encode())}
     with root_scope(CatalogClient([row]), 1, {}):

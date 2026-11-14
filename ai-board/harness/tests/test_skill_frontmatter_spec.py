@@ -1,7 +1,6 @@
-"""Skill frontmatter follows the Agent Skills spec: spec keys top-level, harness knobs in metadata (strings)."""
+"""Skill frontmatter follows the Agent Skills spec: spec keys top-level, harness knobs in metadata (quoted strings)."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -10,14 +9,21 @@ from services import skill_frontmatter
 
 SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 FILES = sorted(SKILLS_DIR.glob("*/SKILL.md")) + sorted(SKILLS_DIR.glob("proposed/*/SKILL.md"))
-SPEC_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
-USE_WHEN = re.compile(r"^.{3,}\. Use when .{3,}\.$", re.S)
-
-
-def _front(path: Path) -> tuple[dict, dict]:
-    text = path.read_text(encoding="utf-8")
-    assert text.startswith("---\n")
-    return skill_frontmatter.split(text.split("---\n", 2)[1])
+GOOD = 'name: a-b\ndescription: "Do X. Use when Y now."\nmetadata:\n  version: "1"\n'
+GOOD_TEXT = f"---\n{GOOD}---\nbody\n"
+CASES = {
+    "ok": (GOOD_TEXT, "a-b", []),
+    "uppercase_name": (GOOD_TEXT.replace("a-b", "A-b"), "A-b", ["name"]),
+    "name_not_folder": (GOOD_TEXT, "other", ["folder"]),
+    "name_too_long": (GOOD_TEXT.replace("a-b", "a" * 65), "a" * 65, ["name"]),
+    "no_use_when": (GOOD_TEXT.replace("Use when", "Apply to"), "a-b", ["Use when"]),
+    "description_too_long": (GOOD_TEXT.replace("Do X.", "X" * 1020 + "."), "a-b", ["description"]),
+    "knob_at_top_level": (GOOD_TEXT.replace('metadata:\n  version: "1"\n', 'version: "1"\n'), "a-b", ["non-spec"]),
+    "unquoted_metadata": (GOOD_TEXT.replace('"1"', "1"), "a-b", ["quoted"]),
+    "missing_description": (GOOD_TEXT.replace('description: "Do X. Use when Y now."\n', ""), "a-b", ["description"]),
+    "crlf": (GOOD_TEXT.replace("\n", "\r\n"), "a-b", ["LF"]),
+    "duplicate_key": (GOOD_TEXT.replace("name: a-b\n", "name: a-b\nname: a-b\n"), "a-b", ["duplicate"]),
+}
 
 
 def test_every_skill_folder_is_covered():
@@ -26,14 +32,34 @@ def test_every_skill_folder_is_covered():
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.parent.name)
 def test_frontmatter_matches_spec(path):
-    top, meta = _front(path)
-    assert set(top) <= SPEC_KEYS, f"non-spec top-level keys: {set(top) - SPEC_KEYS}"
-    assert {"name", "description"} <= set(top)
-    assert re.fullmatch(r"[a-z0-9-]{1,64}", top["name"])
-    assert top["name"] == path.parent.name
-    assert 1 <= len(top["description"]) <= 1024
-    assert USE_WHEN.match(top["description"]), top["description"]
-    assert all(isinstance(k, str) and isinstance(v, str) for k, v in meta.items())
+    assert skill_frontmatter.spec_errors(path.read_text(encoding="utf-8"), path.parent.name) == []
+
+
+@pytest.mark.parametrize("case", list(CASES))
+def test_spec_errors_table(case):
+    text, folder, expect = CASES[case]
+    errors = skill_frontmatter.spec_errors(text, folder)
+    if not expect:
+        assert errors == [], errors
+    else:
+        assert errors and all(any(word in e for e in errors) for word in expect), errors
+
+
+def test_relock_refuses_spec_invalid_skill_before_writing_lock(tmp_path, monkeypatch):
+    from services import candidate
+
+    skills = tmp_path / "ai-board/harness/skills"
+    (skills / "bad").mkdir(parents=True)
+    (skills / "bad/SKILL.md").write_text("---\nname: bad\ndescription: x\ntask_type: test\n---\nbody\n", encoding="utf-8")
+    lock = skills / "skills.lock.json"
+    lock.write_text("{}", encoding="utf-8")
+
+    def no_git(*args, **kwargs):
+        raise AssertionError("git must not run before the spec check passes")
+    monkeypatch.setattr(candidate, "_git_out", no_git)
+    with pytest.raises(ValueError, match="bad"):
+        candidate.relock({"full_checkout": str(tmp_path), "commits": [{"files": []}]})
+    assert lock.read_text(encoding="utf-8") == "{}"
 
 
 def test_flat_and_metadata_forms_read_the_same():

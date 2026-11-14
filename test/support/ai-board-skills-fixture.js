@@ -5,7 +5,7 @@ import { createAsyncAiBoardStore } from '../../server/ai-board/store-async.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../../server/ai-board/routes.js';
 
 export const KEY = 'fixture-worker-key-32-characters-long';
-export const text = (name = 'frontend-example', body = '1. Keep labels clear.') => `---\nname: ${name}\ndescription: UI guidance\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n${body}\n`;
+export const text = (name = 'frontend-example', body = '1. Keep labels clear.') => `---\nname: ${name}\ndescription: UI guidance. Use when the skill applies.\nmetadata:\n  task_type: "frontend"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n${body}\n`;
 export async function setup({ classifySkillText } = {}) {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'it'], [9, 'admin', 'Admin', 'admin', null]] });
   await db.d.exec('CREATE TABLE sessions(token TEXT PRIMARY KEY,user_id BIGINT REFERENCES users(id),expires_at BIGINT NOT NULL)');

@@ -6,7 +6,7 @@ import { createSkillRepository } from '../server/ai-board/repositories/skills.js
 
 const ADMIN = { id: 9, role: 'admin' };
 const ADMIN2 = { id: 10, role: 'admin' };
-const draft = (name) => ({ name, task_types: ['test'], original_text: `---\nname: ${name}\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Chạy kiểm thử.\n` });
+const draft = (name) => ({ name, task_types: ['test'], original_text: `---\nname: ${name}\ndescription: Kiểm thử. Use when the skill applies.\nmetadata:\n  task_type: "test"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Chạy kiểm thử.\n` });
 
 async function fixture(names = ['rw-cycle']) {
   const db = await openBoard({ users: [[9, 'admin', 'Admin', 'admin', null], [10, 'admin2', 'Admin2', 'admin', null]] });

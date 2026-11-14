@@ -94,7 +94,7 @@ test('failed lint keeps raw response in a child version that blocks approval; re
     await confirm(t, item); await idle(t);
     const job = (await claim(t)).body.job;
     assert.equal((await report(t, job, { claim_token: 'stale' })).status, 409);
-    const bad = text('frontend-example', '1. Keep labels clear; name each label by its action.').replace('task_type: frontend', 'task_type: backend');
+    const bad = text('frontend-example', '1. Keep labels clear; name each label by its action.').replace('task_type: "frontend"', 'task_type: "backend"');
     assert.equal((await report(t, job, { rewritten_text: bad, raw_response: 'RAW-KEPT' })).status, 200);
     const row = await t.db.d.get('SELECT * FROM ai_skill_rewrites');
     assert.equal(row.raw_response, 'RAW-KEPT');

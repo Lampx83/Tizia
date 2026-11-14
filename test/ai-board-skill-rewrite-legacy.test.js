@@ -5,7 +5,7 @@ import { createSkillService } from '../server/ai-board/services/skills.js';
 import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
 const ADMIN = { id: 9, role: 'admin' };
-const LEGACY = '---\nname: frontend-example\ndescription: UI guidance\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Keep labels clear; name each label by its action.';
+const LEGACY = '---\nname: frontend-example\ndescription: UI guidance. Use when the skill applies.\nmetadata:\n  task_type: "frontend"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Keep labels clear; name each label by its action.';
 
 async function draftWithLegacyRewrite(t) {
   const up = (await t.api('/api/admin/ai-board/skills', { name: 'frontend-example', task_types: ['frontend'], original_text: text() })).body;

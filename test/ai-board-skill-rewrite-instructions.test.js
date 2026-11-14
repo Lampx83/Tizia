@@ -6,7 +6,7 @@ import { createSkillRepository } from '../server/ai-board/repositories/skills.js
 import { checkIntake } from '../server/ai-board/security/intake-guard.js';
 
 const ADMIN = { id: 9, role: 'admin' };
-const draft = () => ({ name: 'rw-instructions', task_types: ['test'], original_text: '---\nname: rw-instructions\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Chạy kiểm thử.\n' });
+const draft = () => ({ name: 'rw-instructions', task_types: ['test'], original_text: '---\nname: rw-instructions\ndescription: Kiểm thử. Use when the skill applies.\nmetadata:\n  task_type: "test"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Chạy kiểm thử.\n' });
 
 async function fixture() {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'pupil', 'primary'], [9, 'admin', 'Admin', 'admin', null]] });

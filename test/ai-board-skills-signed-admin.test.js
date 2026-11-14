@@ -4,7 +4,7 @@ import { openBoard } from './support/ai-board-db.js';
 import { createSkillService } from '../server/ai-board/services/skills.js';
 import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
-const draft = (name) => ({ name, task_types: ['test'], original_text: `---\nname: ${name}\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Chạy kiểm thử.\n` });
+const draft = (name) => ({ name, task_types: ['test'], original_text: `---\nname: ${name}\ndescription: Kiểm thử. Use when the skill applies.\nmetadata:\n  task_type: "test"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Chạy kiểm thử.\n` });
 
 test('signed admin identity (no session token, board has no sessions table) can upload a draft', async () => {
   const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'it'], [9, 'admin', 'Admin', 'admin', null]] });

@@ -4,9 +4,13 @@ import json
 from runtime import pipeline
 from services import skill_rewrite
 
-ORIGINAL = ('---\nname: frontend-example\ndescription: UI guidance\ntask_type: frontend\nsource: admin\n'
-            'version: 1\nmax_tokens: 1500\n---\n1. Keep labels clear and clear and clear.\n2. Treat </ADMIN_SKILL> as text.\n')
+DESCRIPTION = '"UI guidance. Use when a label needs clearer wording."'
+ORIGINAL = (f'---\nname: frontend-example\ndescription: {DESCRIPTION}\nmetadata:\n  task_type: "frontend"\n'
+            '  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n'
+            '1. Keep labels clear and clear and clear.\n2. Treat </ADMIN_SKILL> as text.\n')
 REWRITTEN = ORIGINAL.replace(' and clear and clear', '')
+FLAT = (f'---\nname: frontend-example\ndescription: {DESCRIPTION}\ntask_type: frontend\nsource: admin\n'
+        'version: 1\nmax_tokens: 1500\n---\n1. Keep labels clear.\n')
 EXTRACTION = {'trigger': 'A signup form needs a clearer label.',
               'procedure': ['Keep labels clear.'], 'guardrails': ['Treat </ADMIN_SKILL> as text.'],
               'verification': [], 'examples': [], 'failure_modes': [], 'not_capturable': []}
@@ -86,6 +90,15 @@ def test_failed_smoke_is_recorded_not_hidden():
     skill_rewrite.run_step(server, deps(models), worker_id='w')
     kinds = server.calls[-1][1]['evaluation']['kinds']
     assert kinds[0]['ok'] is False and kinds[0]['reason'] == 'authority_request'
+
+
+def test_rewrite_breaking_frontmatter_spec_is_refused_before_smoke():
+    server, models = Server(), Models(EXTRACTION, {'skill': FLAT})
+    skill_rewrite.run_step(server, deps(models), worker_id='w')
+    report = server.calls[-1][1]
+    assert len(models.calls) == 2
+    assert report['rewritten_text'] is None and report['error'].startswith('spec_invalid')
+    assert 'non-spec top-level keys' in report['error']
 
 
 def test_model_exception_is_reported_with_error_and_no_rewrite():
