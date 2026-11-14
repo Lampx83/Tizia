@@ -17,7 +17,7 @@ const LOCK = 'skills.lock.json';
 
 // Skill có trong thư mục nhưng không khoá: harness nạp qua VARIANT_FILES (context.py),
 // candidate.relock chỉ quét */SKILL.md nên khoá sẽ bị xoá.
-const UNLOCKED = new Set(['proposed/review-two-axes']);
+const UNLOCKED = new Set(['proposed/review-two-axes', 'proposed/test-frame', 'proposed/review-frame', 'proposed/all-frame']);
 
 // Format harness (context.py parse_skill), server không lint được. Vẫn kiểm LF, khóa, image.
 const HARNESS_FORMAT = new Set(['add-html-section', 'default', 'edit-css-style', 'edit-html-text',
