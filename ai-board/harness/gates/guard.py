@@ -450,7 +450,7 @@ def _pii(line: str, allowed: set[str]) -> bool:
 
 
 def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts: set[str] = frozenset(),
-         request_text: str | None = None, request_type: str | None = None) -> dict:
+         request_text: str | None = None, request_type: str | None = None, broker_diffs=()) -> dict:
     """Findings [{check, severity, failure_class, detail}] chặn + flags [{check, severity, detail}] không chặn
     + checks ran + ui_changed + visible_text_changed + review_required (có flag high). Detail never echoes
     a secret or the offending text. PII skips allowed_contacts (base public/, see contacts_in) and tizia.vn
@@ -467,6 +467,8 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     ui_changed = visible_changed = False
     colors, theme_colors = [], []
     sections = _sections(diff_text)
+    from runtime import package_broker
+    broker_exempt = bool(broker_diffs) and package_broker.digest([diff_text]) == package_broker.digest(broker_diffs)
     new_paths = frozenset(path for path, _, _, _, existing, _ in sections if not existing)
     for path, deleted, added, removed, existing, binary in sections:
         is_test = bool(_TEST_PATH.search(path))
@@ -474,7 +476,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
         ui_changed |= path.startswith("public/")
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
-        if path_policy.denied(path, "write"):
+        if path_policy.denied(path, "write") and not (broker_exempt and path in package_broker.FILES):
             add("protected_path", "critical", f"{path}: path hạ tầng/registry/AI Board cần con người")
         if path in MONEY_PATHS:
             add("protected_path", "critical", f"{path}: file tiền/thanh toán cần con người")

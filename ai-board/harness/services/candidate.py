@@ -276,6 +276,14 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
             _git_out([*_AUTHOR, "commit", "-q", "-m", title], checkout)
             commits.append({"sha": _git_out(["rev-parse", "HEAD"], checkout).strip(), "title": title,
                             "files": written})
+        if state.get("broker_diffs"):
+            from runtime import package_broker
+            change = package_broker.attach(checkout, state["broker_diffs"], state.get("broker_receipts") or None)
+            title = f"{package_broker.DEPS_COMMIT_PREFIX}{', '.join(item['name'] for item in state['broker_diffs'])} {change[:16]}"
+            _git_out(["add", "--", *package_broker.FILES], checkout)
+            _git_out([*_AUTHOR, "commit", "-q", "-m", title], checkout)
+            commits.append({"sha": _git_out(["rev-parse", "HEAD"], checkout).strip(), "title": title,
+                            "files": list(package_broker.FILES)})
         diff = _git_out(["diff", "--no-ext-diff", base, "HEAD"], checkout)
     except BaseException:
         cleanup(owned, keep_branch=False)
@@ -357,15 +365,22 @@ def record(state: dict) -> dict | None:
 class Candidates:
     """Nhánh candidate đã giữ trong repo nguồn: mở PR, bỏ hoặc hoàn tác."""
 
-    def __init__(self, repo, github: GitHub | None = None):
+    def __init__(self, repo, github: GitHub | None = None, broker_receipts=None):
         self.repo = repo
         self.github = github
+        self.broker_receipts = broker_receipts
 
     def denied_paths(self, candidate: dict) -> list[str]:
         """Reasons for paths the candidate changes that path_policy denies for writes; [] when none."""
         changed = _git_out(["diff", "--no-renames", "--name-only", f"{candidate['base_sha']}..{candidate['head_sha']}"],
                            self.repo).split()
-        return [path_policy.check(path, "write")["reason"] for path in changed if path_policy.denied(path, "write")]
+        from runtime import package_broker
+        broker_ok = False
+        if self.broker_receipts and set(package_broker.FILES) & set(changed):
+            actual = _git_out(["diff", "--no-renames", f"{candidate['base_sha']}..{candidate['head_sha']}", "--", *package_broker.FILES], self.repo)
+            broker_ok = package_broker.attached(self.broker_receipts, package_broker.digest([actual]))
+        return [path_policy.check(path, "write")["reason"] for path in changed
+                if path_policy.denied(path, "write") and not (broker_ok and path in package_broker.FILES)]
 
     def publish(self, candidate: dict, *, title: str, body: str, labels=()) -> dict:
         """Push candidate, open (or find) its one PR into dev. Return server pull_request record.

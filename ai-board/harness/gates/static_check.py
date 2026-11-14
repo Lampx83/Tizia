@@ -381,7 +381,8 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     diffs = state.get("full_diff") or state.get("diffs") or []
     text = "".join(item.get("diff", "") for item in diffs)
     scanned = guard.scan(text, state.get("full_checkout"), allowed_contacts=_base_public_contacts(state),
-                         request_text=state.get("request_detail"), request_type=state.get("request_type"))
+                         request_text=state.get("request_detail"), request_type=state.get("request_type"),
+                         broker_diffs=[item["diff"] for item in state.get("broker_diffs") or []])
     state["ui_changed"] = scanned["ui_changed"]
     state["guard_flags"] = scanned["flags"]
     state["review_required"] = scanned["review_required"]

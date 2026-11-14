@@ -215,3 +215,16 @@ def test_queue_attaches_the_approved_diff_and_screens_install_scripts(checkout, 
     clean = network_request.Queue(broker=broker)
     assert clean.observe({**REQUEST, "call_id": "pkg:new"}) is None
     assert clean.pending[0]["metadata"]["weekly_downloads"] == 5_000_000
+
+
+def test_one_queue_routes_packages_to_the_package_broker_and_fetches_to_the_fetch_broker(checkout, tmp_path):
+    package, _ = make(checkout, tmp_path)
+    fetch = network_request.FetchBroker({"allow_hosts": ["docs.example.com"], "max_bytes": 1000, "timeout_s": 1},
+                                        fetcher=lambda url, cap: (200, "text/plain", b"hello"), resolver=lambda host: ["93.184.216.34"],
+                                        fallback=package)
+    queue = network_request.Queue({"pkg:lodash": {"decision": "approved"}}, broker=fetch)
+    assert queue.observe(REQUEST) == "approved lodash@4.17.21" and queue.report()["dependencies"][0]["name"] == "lodash"
+    doc = {"kind": "fetch_url", "url": "https://docs.example.com/a", "reason": "r", "call_id": "net:1"}
+    assert "UNTRUSTED DATA" in queue.observe(doc) and queue.receipts[0]["decision"] == "auto"
+    assert queue.broker_state()["broker_diffs"][0]["name"] == "lodash" and queue.broker_state()["broker_receipts"].endswith("receipts.jsonl")
+    assert queue.observe({"kind": "package", "name": "dayjs", "version_range": "^1", "reason": "r", "call_id": "pkg:dayjs"}) is None

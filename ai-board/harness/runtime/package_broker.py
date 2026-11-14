@@ -4,6 +4,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import time
@@ -16,11 +17,12 @@ FILES = (MANIFEST, LOCKFILE)
 INSTALL_SCRIPTS = ("preinstall", "install", "postinstall")
 DEFAULT_LAYER_CAP = 5
 APPROVED, REJECTED, ERROR = "approved", "rejected", "error"
+DEPS_COMMIT_PREFIX = "ai-board(deps): "
 DEPS_DOCKERFILE = ("FROM node:20-alpine AS tizia-deps\nWORKDIR /app\nCOPY package*.json ./\n"
                    "RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund\n")
 
 
-class BrokerError(Exception):
+class BrokerError(ValueError):
     """Registry, npm or docker step failed; message is the observation text."""
 
 
@@ -35,6 +37,17 @@ def lock_key(lock_text: str) -> str:
 def unified(path: str, old: str, new: str) -> str:
     body = "".join(difflib.unified_diff(old.splitlines(True), new.splitlines(True), f"a/{path}", f"b/{path}"))
     return f"diff --git a/{path} b/{path}\n{body}" if body else ""
+
+
+def digest(diffs) -> str:
+    """sha256 over the +/- lines per manifest path, merged across diffs; independent of hunk headers and context."""
+    merged: dict[str, list[str]] = {}
+    for text in diffs:
+        for chunk in re.split(r"^(?=diff --git )", text, flags=re.M):
+            if chunk.startswith("diff --git ") and (path := chunk.splitlines()[0].split(" b/", 1)[-1].strip()) in FILES:
+                merged.setdefault(path, []).extend(line for line in chunk.splitlines()
+                                                   if line[:1] in "+-" and not line.startswith(("+++", "---")))
+    return hashlib.sha256(json.dumps({path: sorted(lines) for path, lines in sorted(merged.items())}).encode()).hexdigest()
 
 
 def check_scope(old: dict[str, str], new: dict[str, str], name: str, version: str) -> list[str]:
@@ -95,7 +108,8 @@ class Broker:
     def _receipt(self, action: str, request: dict, result: dict, **extra) -> dict:
         row = {"action": action, "call_id": request.get("call_id"), "name": request.get("name"),
                "version": (result.get("metadata") or {}).get("version"), "decision": result["decision"],
-               "reason": result.get("reason"), "layer_key": result.get("layer_key"), "at": self.clock(), **extra}
+               "reason": result.get("reason"), "layer_key": result.get("layer_key"), "at": self.clock(),
+               **{k: result[k] for k in ("diff_sha256", "change_sha256") if k in result}, **extra}
         self.receipts.append(row)
         with self.receipts_file.open("a", encoding="utf-8") as out:
             out.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
@@ -148,17 +162,43 @@ class Broker:
                 return self._receipt("resolve", request, {"decision": ERROR, "metadata": metadata, "reason": str(error)[:500]})
         diff = "".join(unified(file, old[file], new[file]) for file in FILES)
         return self._receipt("resolve", request, {"decision": APPROVED, "diff": diff, "layer_key": key, "metadata": metadata,
-                                                  "reason": f"approved {name}@{version}"}, reused=reused, layer_ref=ref)
+                                                  "reason": f"approved {name}@{version}",
+                                                  "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
+                                                  "change_sha256": digest([diff])}, reused=reused, layer_ref=ref)
 
 
-def attach(checkout, approved: list[dict]) -> None:
-    """Apply broker diffs to the candidate checkout; refuse any path outside package.json / package-lock.json."""
+def attach(checkout, approved: list[dict], receipts_file=None) -> str:
+    """Apply broker diffs to the candidate checkout; refuse any path outside package.json / package-lock.json.
+    Returns the change digest, appended as an `attach` receipt when receipts_file is given."""
     for item in approved:
         paths = {line.split(" b/", 1)[1] for line in item["diff"].splitlines() if line.startswith("diff --git ")}
         if not paths or paths - set(FILES):
             raise BrokerError(f"broker diff touches {sorted(paths - set(FILES)) or 'nothing'}")
-        subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=checkout, input=item["diff"].encode(), check=True,
-                       capture_output=True)
+        done = subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=checkout, input=item["diff"].encode(), capture_output=True)
+        if done.returncode:
+            raise BrokerError(f"broker diff for {item.get('name')} does not apply: {done.stderr.decode(errors='replace')[:200]}")
+    change = digest(item["diff"] for item in approved)
+    if receipts_file:
+        row = {"action": "attach", "names": [item["name"] for item in approved], "change_sha256": change,
+               "diff_sha256": [hashlib.sha256(item["diff"].encode()).hexdigest() for item in approved]}
+        with Path(receipts_file).open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row, sort_keys=True) + "\n")
+    return change
+
+
+def attached(receipts_file, change: str) -> bool:
+    """True when an `attach` receipt has this change digest and each of its diffs has an approved `resolve` receipt."""
+    try:
+        rows = [json.loads(line) for line in Path(receipts_file).read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, ValueError, TypeError):
+        return False
+    approved = {row.get("diff_sha256") for row in rows if row.get("action") == "resolve" and row.get("decision") == APPROVED}
+    return any(row.get("action") == "attach" and row.get("change_sha256") == change and all(d in approved for d in row["diff_sha256"])
+               for row in rows)
+
+
+def receipts_path(directory) -> Path | None:
+    return Path(directory) / "cache" / "receipts.jsonl" if directory else None
 
 
 class NpmCli:

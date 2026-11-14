@@ -260,6 +260,14 @@ class Queue:
             return denied(reason) if result.get("decision") == REJECTED else reason
         return str(result.get("observation") or result.get("reason") or BROKER_UNAVAILABLE)
 
+    def broker_state(self) -> dict:
+        """{broker_diffs, broker_receipts} for the candidate state: approved package diffs + the broker's receipts file."""
+        return {"broker_diffs": list(self.approved), "broker_receipts": str(getattr(self._packages(), "receipts_file", "") or "")}
+
+    def broker_state(self) -> dict:
+        """{broker_diffs, broker_receipts} for the candidate state: approved package diffs + the broker's receipts file."""
+        return {"broker_diffs": list(self.approved), "broker_receipts": str(getattr(self._packages(), "receipts_file", "") or "")}
+
     def report(self) -> dict:
         return {"pending": list(self.pending), "auto_denied": self.auto_denied, "receipts": list(self.receipts),
                 "dependencies": list(self.approved)}
