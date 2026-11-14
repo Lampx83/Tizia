@@ -59,7 +59,7 @@ def test_bad_manifest_is_refused(change):
 
 def test_effects_drive_the_write_set():
     assert tool_loop.WRITE_TOOLS == ("edit_file", "write_test")
-    assert tool_loop.MANIFEST.names("control") == ("finish",)
+    assert tool_loop.MANIFEST.names("control") == ("request_package", "fetch_url", "finish")
 
 
 def test_argument_byte_cap_is_enforced_before_the_tool_runs():

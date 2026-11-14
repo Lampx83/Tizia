@@ -233,6 +233,7 @@ class _Execution:
         self.reuse_next = None
         self.halt: dict = {}
         self.stop_note: str | None = None
+        self.settled_packages: set[str] = set()
         self.feedback_stop: dict | None = None
         self.shots: list[dict] = []
         self.gates: list[dict] = []
@@ -568,6 +569,8 @@ class _Execution:
         last = self.gates[-1]
         if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
+        if self._package_request(last):
+            return "done"
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
             from runtime import repair_agent as agent
             if agent.applies(last.get("repair_action")) and self._agent_available() and self._diagnose_routes(last):
@@ -577,7 +580,7 @@ class _Execution:
         if feedback_cap.enabled():
             from runtime import repair_class
             scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
-            entry["kind"] = repair_class.classify(self.last_result, self.produced, scope)["class"]
+            entry["kind"] = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)["class"]
             count = feedback_cap.prior(self.repairs, last["gate"], entry["kind"])
             if count >= feedback_cap.CAP:
                 self.feedback_stop = feedback_cap.stop_fields(last["gate"], entry["kind"], count, last.get("evidence"))
@@ -596,12 +599,29 @@ class _Execution:
         self.repair_evidence = repair_session.compact(last.get("evidence"))
         return "repair"
 
+    def _package_request(self, last: dict) -> bool:
+        """Missing npm package in the gate evidence: queue an admin request and stop. False = not pending (decided, denied, eval)."""
+        from runtime import network_request, repair_class
+        scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
+        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)
+        if cls["class"] != network_request.PACKAGE_REQUEST:
+            return False
+        queue = getattr(self.deps, "network", None)
+        request = network_request.package_request(cls["package"])
+        text = queue.observe(request) if queue else network_request.denied(network_request.NO_QUEUE_REASON)
+        if text is None:
+            self.kind, self.stop_note = network_request.FAILURE_CLASS, f"{network_request.PACKAGE_REQUEST}: {cls['package']}"
+            return True
+        self.settled_packages.add(cls["package"])
+        last["reason"] = f"{last['reason']} | {text}"
+        return False
+
     def _repair_allowed(self, last: dict) -> bool:
         """Classify the failure, then spend a repair only while rounds make progress inside the hard cap."""
         from runtime import repair_class
         scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
         scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
-        cls = repair_class.classify(self.last_result, self.produced, scope)
+        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)
         choice = None
         if progress.enabled():
             window = self._progress_window()
@@ -832,10 +852,14 @@ class _Execution:
                                          "repair_evidence": self.repair_evidence, "graph": _dependency_graph(self.plan)})
         return "passed"
 
+    def _network_fields(self) -> dict:
+        report = getattr(getattr(self.deps, "network", None), "report", lambda: {})()
+        return {"network_requests": report} if report.get("pending") or report.get("auto_denied") else {}
+
     def verdict(self) -> str:
         gates, kind, last = self.gates, self.kind, self.gates[-1]
         passed = _passed(gates, kind)
-        if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial"):
+        if self.checkpoint is not None and kind not in ("transient", "critical", "busy", "partial", "network_request"):
             self.checkpoint.purge()  # lượt có kết luận cuối; transient/critical/busy/partial giữ lại để resume hoặc đối chiếu
         smoke = next((gate for gate in gates if gate["gate"] == 5), {})
         oracle = smoke.get("functional") or {}
@@ -866,6 +890,7 @@ class _Execution:
         self.result = {
             "outcome": outcome, "gate_reached": last["gate"], "reason": reason,
             "failure_class": None if passed else kind, "repairs": self.repairs,
+            **self._network_fields(),
             **({"stop_report": stop} if stop else {}),
             **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
@@ -1015,7 +1040,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                    should_stop: Callable[[], bool] | None = None, candidate_opts: dict | None = None,
                    request_type: str | None = None, eval_tasks: list[dict] | None = None, preview_capture=None,
                    checkpoint=None, plan_hash: str | None = None, reverify: dict | None = None,
-                   resume_node: str | None = None) -> dict:
+                   resume_node: str | None = None, network_decisions: dict | None = None) -> dict:
     """Run Gates 3→5.5, repairing an ordinary failure at most repair_cap() times. Return a redacted verdict.
 
     policy = snapshot catalog {hash, capabilities}; None only outside the HTTP worker (no catalog check).
@@ -1032,6 +1057,9 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
                 "repairs": [], "candidate": None, "budget_used": 0,
                 "gates": [{"gate": 3, "blocked": True, "reason": reason}]}
     catalog = policy.get("capabilities") if policy is not None else None
+    if network_decisions is not None and dataclasses.is_dataclass(deps):
+        from runtime import network_request
+        deps = dataclasses.replace(deps, network=network_request.Queue(network_decisions))
     extra = {"carried": reverify["candidate"], "tip": reverify["tip"]} if reverify else {}
     execution = (_Reverification if reverify else _Execution)(
         plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget, run_gate=run_gate, cleanup=cleanup,
@@ -1875,6 +1903,7 @@ class HttpWorker:
                                 + ((snapshot.get('request') or {}).get('clarified_spec')
                                    or (snapshot.get('request') or {}).get('detail') or '')),
                             should_stop=lost, **run_kwargs, **type_kwargs, journal=journal_hook, resume=resume,
+                            network_decisions=snapshot.get('network_decisions') or {},
                             resume_node=(snapshot.get('ticket') or {}).get('resume_node'),
                         **({"plan_hash": planned["plan_hash"]} if planned.get("plan_hash") else {}),
                         ), ticket_id, lease,

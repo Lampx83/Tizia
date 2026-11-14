@@ -93,6 +93,7 @@ export async function afterVerdict(repo, ticketId, verdict, now = Date.now()) {
   if (PASSING.has(verdict?.outcome)) return { ...root, kind: 'draft' };
   // Dừng giữa plan nhưng đã xong một phần: không phải lượt hỏng, chuông mời người gửi bấm "Tiếp tục".
   if (verdict?.failure_class === 'partial') return { ...root, kind: 'partial' };
+  if (verdict?.failure_class === 'network_request') return { ...root, kind: 'network' };
   const state = await retryState(repo, root.id, root.phase);
   if (state === 'admin') {
     await repo.markWaitingAdmin(root.id, HANDOFF_NOTE, now);
@@ -124,6 +125,7 @@ const NOTICES = {
   retry: ['🏛️ Lượt này chưa làm được', (t) => `Ban chưa làm được ${t} ở lượt này. Bấm «Thử cách khác» để Ban lập kế hoạch mới.`],
   handoff: ['🏛️ Đã chuyển quản trị viên', (t) => `Ban đã thử 2 lượt chưa làm được ${t} — đã chuyển quản trị viên xem giúp.`],
   admin: ['🏛️ Lượt này chưa làm được', (t) => `Ban chưa làm được ${t}; quản trị viên sẽ xem giúp.`],
+  network: ['🏛️ Đang chờ duyệt', (t) => `Ban cần quản trị viên duyệt một yêu cầu mạng để làm tiếp ${t}.`],
   partial: ['🏛️ Đã xong một phần', (t) => `Ban đã làm xong một phần ${t}. Bấm «Tiếp tục» để làm nốt phần còn lại.`],
 };
 

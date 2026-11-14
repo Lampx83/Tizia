@@ -23,7 +23,7 @@ import path_policy
 from gates import change_class, gate3_guards, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
-from runtime import limits, loop_guard, state_file, subtask_files, tool_loop
+from runtime import limits, loop_guard, network_request, state_file, subtask_files, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 from repositories import memory
@@ -720,6 +720,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         _check_rest(candidate, current, subtask["file"])
         gate3_guards.check(candidate, current, subtask["file"], known)
         check_merge_markers(subtask, candidate)
+        if host := network_request.real_api_call(candidate.get("test", "")):
+            raise ValueError(f"test gọi API ngoài thật ({host}); test phải kín: dùng server cục bộ hoặc stub")
 
     def run_loop():
         """(proposal | None, blocked gate result | None); (None, None) falls back to one-shot."""

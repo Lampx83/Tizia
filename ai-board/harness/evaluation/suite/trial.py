@@ -20,7 +20,7 @@ from evaluation import gold as gold_eval
 from evaluation.suite import candidate_grade, taskpack
 from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
 from runtime.budget import Budget
-from runtime import tool_loop
+from runtime import network_request, tool_loop
 from runtime.pipeline import Deps
 from settings import get_settings
 
@@ -76,7 +76,8 @@ class RecordingDeps(Deps):
 
 
 def recording(base: Deps) -> RecordingDeps:
-    return RecordingDeps(**{f.name: getattr(base, f.name) for f in dataclasses.fields(Deps)}, ledger=[])
+    fields = {f.name: getattr(base, f.name) for f in dataclasses.fields(Deps)}
+    return RecordingDeps(**{**fields, "network": network_request.Queue(eval_mode=True)}, ledger=[])
 
 
 def request_of(task: dict, variant: str | None = None) -> dict:
@@ -338,6 +339,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "error": error or ("model_cleanup_pending" if cleanup_pending else None), "plan": plan_facts, "capture": capture,
         "model_calls": budget.model_calls, "loop_tools": list(deps.capture.get("loop_tools") or []), "loop_errors": list(deps.capture.get("loop_errors") or []), "retries": row.get("retries", 0),
         "cleanup_pending": cleanup_pending, "cost_status": "unknown" if unknown_usage else "complete",
+        "network_auto_denied": deps.network.auto_denied,
         "stuck": any(a == b for a, b in zip(texts, texts[1:])),
         "truncated": any(b.get("done_reason") == "length" for b in deps.ledger) or "length" in (row.get("done_reasons") or []),
         "tokens_in": None if unknown_usage else row.get("tokens_in", 0) + p_in,

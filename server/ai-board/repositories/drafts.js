@@ -17,7 +17,7 @@ export function createDraftRepository(db) {
       const failureClass = db.jsonText('evidence_json', 'verdict.failure_class');
       return db.get(`
         SELECT COUNT(*) AS n FROM ai_runs WHERE ticket_id=? AND outcome='blocked'
-          AND COALESCE(${failureClass}, 'ordinary') <> 'partial' AND id > COALESCE(
+          AND COALESCE(${failureClass}, 'ordinary') NOT IN ('partial', 'network_request') AND id > COALESCE(
           (SELECT MAX(id) FROM ai_runs WHERE ticket_id=? AND outcome IN ('ready_for_pr', 'needs_review')), 0)
       `, [rootId, rootId]);
     },

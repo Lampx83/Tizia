@@ -100,6 +100,7 @@ def summarize(rows: list[dict]) -> dict:
     out["cost"] = {
         "model_calls_mean": average("model_calls", n, 2),
         "retries_mean": round(sum(r["retries"] for r in rows) / n, 2),
+        "network_auto_denied": sum(r.get("network_auto_denied", 0) for r in rows),
         "stuck": rate(sum(bool(r["stuck"]) for r in rows), n),
         "truncated": rate(sum(bool(r["truncated"]) for r in rows), n),
         "tokens_in_total": sum(r["tokens_in"] for r in rows) if total("tokens") is not None else None,
