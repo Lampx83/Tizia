@@ -22,6 +22,13 @@ still what a request shows, but it no longer decides whether a safe step may run
   (`continuePartialRequest` → `queued/authorized` → `resumeAuthorizedPlan`). The same plan revision and
   `plan_hash` are reused, so the tool-step checkpoint skips finished subtasks.
 - A core step is never auto-implemented, even after approval.
+- Backend context surface (Python harness, `path_policy.surface_context` + `runtime/levels.py`):
+  `server/contexts/<name>/` file is surface only when `AI_BOARD_BACKEND_CONTEXTS_SURFACE=1`, `<name>` is in
+  `AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST` (owner-approved), `<name>` is not in `FORBIDDEN_CONTEXTS`
+  (billing, payment, economy, security, identity, auth, session, admin) nor `ai-board*`/`_*`, and a subtask
+  `test/*.test.js` with `node:test` names that file. Flag and list default off. Gate 5 runs those tests and
+  the route probe. `server/index.js`, `server/db.js`, money paths and deny paths stay core/protected.
+  Status: implemented (LF/189); qualified by unit tests only, no live Gate 5 run.
 
 ## Where this lives
 
