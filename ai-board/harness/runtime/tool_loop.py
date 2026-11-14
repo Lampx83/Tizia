@@ -8,6 +8,7 @@ import posixpath
 import re
 import sys
 import time
+import urllib.error
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -84,6 +85,10 @@ def provider_call_id(body: dict):
     """Id the provider gave the single native tool call, else None."""
     native = body.get("tool_calls")
     return native[0].get("id") if isinstance(native, list) and len(native) == 1 and isinstance(native[0], dict) else None
+THOUGHT_MAX = 200
+THOUGHT_TEXT = ('\nPut one short line (max 200 characters) of reasoning in `thought`: reply as '
+                '{"thought": "...", "tool": "<name>", "arguments": {...}}.\n')
+THOUGHT_NATIVE = "\nPut one short line (max 200 characters) of reasoning in the `thought` argument of every call.\n"
 NATIVE = "\nCall the tools through the tool-calling interface, one call per reply; do not write the call as JSON text.\n"
 
 
@@ -115,6 +120,43 @@ def _native_turn(messages: list, n: int, name: str, args: dict, observation: str
     messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": cid, "type": "function",
                   "function": {"name": tool, "arguments": json.dumps(args if tool == name else {}, ensure_ascii=False)}}]},
                  {"role": "tool", "tool_call_id": cid, "content": text}]
+
+
+def schema_enabled() -> bool:
+    return get_settings().react_schema
+
+
+def _thought_prop() -> dict:
+    return {"type": "string", "maxLength": THOUGHT_MAX}
+
+
+def turn_schema() -> dict:
+    """JSON Schema of one text-path reply: thought + one manifest tool with its own parameters."""
+    return {"type": "object", "anyOf": [
+        {"type": "object", "additionalProperties": False, "required": ["thought", "tool", "arguments"],
+         "properties": {"thought": _thought_prop(), "tool": {"const": name}, "arguments": spec.parameters}}
+        for name, spec in _specs().items()]}
+
+
+def _native_schemas() -> list[dict]:
+    """Native tool schemas with a required `thought` argument added to each manifest tool."""
+    return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": {
+        **spec.parameters, "properties": {"thought": _thought_prop(), **spec.parameters["properties"]},
+        "required": ["thought", *spec.parameters["required"]]}}} for name, spec in _specs().items()]
+
+
+def thought_of(body: dict) -> str | None:
+    """Capped, redacted thought of a reply (text key or native argument); None when absent or malformed."""
+    try:
+        native = body.get("tool_calls")
+        if native:
+            args = native[0].get("function", native[0]).get("arguments", {})
+            raw = (json.loads(args or "{}") if isinstance(args, str) else args).get("thought")
+        else:
+            raw = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", (body.get("response") or "").strip())).get("thought")
+    except (ValueError, AttributeError, IndexError, TypeError):
+        return None
+    return meter.redact(" ".join(raw.split()))[:THOUGHT_MAX] if isinstance(raw, str) and raw.strip() else None
 
 
 def verified_enabled() -> bool:
@@ -239,6 +281,8 @@ def parse_request(body: dict) -> tuple[str, dict]:
         raise ToolError(f"tool lạ: {name!r}; có: {', '.join(_specs())}")
     if not isinstance(args, dict):
         raise ToolError("arguments phải là object")
+    if native and schema_enabled():
+        args = {k: v for k, v in args.items() if k != "thought"}
     return name, args
 
 
@@ -737,7 +781,7 @@ def check_command(argv: list[str]) -> None:
 
 
 def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, started_ms: int, cid: str | None = None, model_call=None,
-               failure: tuple[str, str] | None = None) -> None:
+               failure: tuple[str, str] | None = None, thought: str | None = None) -> None:
     """Span `execute_tool <tool>` dưới span cổng đang mở; chỉ digest của observation, không nội dung.
 
     Observation record (admin step view): tizia.step, tizia.child, gen_ai.tool.name, gen_ai.tool.call.id, tizia.model_call_id,
@@ -752,6 +796,7 @@ def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, s
         "tizia.step": step, "tizia.child": child, "tizia.tool.status": kind,
         "tizia.tool.error_class": failure[0] if failure else None, "tizia.tool.error_kind": failure[1] if failure else None, "tizia.observation_digest": sha_of(observation or ""),
         "tizia.policy_denied": kind == 'forbidden', "tizia.tool_manifest": MANIFEST.hash,
+        **({"tizia.thought": thought} if thought else {}),
     }, start_ms=started_ms, end_ms=int(time.time() * 1000), status="error" if kind in ("error", KIND_INFRA, "forbidden", "finish_rejected", "repeated") else "ok")
 
 
@@ -870,6 +915,10 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         messages = []
         prompt += NATIVE
         pins = {**(pins or {}), "native": True}
+    schema_on, schema_off = schema_enabled(), False
+    if schema_on:
+        prompt += THOUGHT_NATIVE if messages is not None else THOUGHT_TEXT
+        pins = {**(pins or {}), "react_schema": True}
     if get_settings().context_compaction:
         from runtime.compaction import History, pin
         history = History(native=messages is not None)
@@ -910,13 +959,28 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             server_hsm.authorize_action('model', tool_manifest=MANIFEST.hash)
         except server_hsm.AuthorityError as error:
             return _result('blocked', str(error), error.failure_class, steps=steps)
-        try:
-            extra = ({**(call_extra or {}), "tools": _tool_schemas(), "messages": list(messages)}
+        def ask():
+            use = schema_on and not schema_off
+            extra = (({**(call_extra or {}), "tools": _native_schemas() if use else _tool_schemas(), "messages": list(messages),
+                       **({"tool_choice": "required"} if use else {})})
                      if messages is not None else call_extra)
-            body = deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format=None if messages is not None else "json",
+            fmt = None if messages is not None else turn_schema() if use else "json"
+            return deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format=fmt,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="tool_loop.md", child=child,
                                    iteration=len(steps), role=role, skill_context=skill_context,
                                    **({"extra": extra} if extra else {}))
+
+        try:
+            try:
+                body = ask()
+            except urllib.error.HTTPError as error:
+                if not schema_on or schema_off or error.code not in (400, 422):
+                    raise
+                schema_off = True
+                if hasattr(trace, "note"):
+                    trace.note("tool", "react_schema_fallback",
+                               f"provider rejected schema/tool_choice (HTTP {error.code}); legacy format for this subtask")
+                body = ask()
         except default_skills.SkillPolicyChanged as error:
             return _result('paused', str(error), 'critical', steps=steps)
         except OSError as error:  # TimeoutError, URLError, connection loss
@@ -931,6 +995,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         ws.call_id = cid
         started_ms = int(time.time() * 1000)
         called, invalid = None, False
+        thought = thought_of(body) if schema_on else None
         try:
             name, args = parse_request(body)
             called = name
@@ -1017,7 +1082,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                 if store:
                     store.done(n, name, args, json.dumps(out.get('verification') or {}, sort_keys=True), "finish_ok", cid)
                     store.save_ledger(budget.snapshot())
-                _tool_span(deps, name, n, child, "finish_ok", "", started_ms, cid, model_call)
+                _tool_span(deps, name, n, child, "finish_ok", "", started_ms, cid, model_call, thought=thought)
                 return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
             except Forbidden as error:
                 return _result('blocked', str(error), 'critical', steps=steps)
@@ -1035,7 +1100,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
         if store:
             store.done(n, name, args, observation, kind, cid)
             store.save_ledger(budget.snapshot())
-        _tool_span(deps, name, n, child, kind, observation, started_ms, cid, model_call, failure)
+        _tool_span(deps, name, n, child, kind, observation, started_ms, cid, model_call, failure, thought)
         steps.append(name)
         prompt = _show_step(prompt, history, messages, n, name, args, observation, kind, cid)
 

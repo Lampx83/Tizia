@@ -178,6 +178,8 @@ class OllamaClient:
                 payload['chat_template_kwargs'] = {'enable_thinking': bool(extra['thinking'])}
             if extra and extra.get('tools'):
                 payload['tools'] = extra['tools']
+                if extra.get('tool_choice'):
+                    payload['tool_choice'] = extra['tool_choice']
             logprobs = bool(extra and extra.get('logprobs'))
             if logprobs:  # classifier: one token + top-N logprobs, thinking off (Ollama `think: false`)
                 payload.update(logprobs=True, top_logprobs=extra.get('top_logprobs', 20),
