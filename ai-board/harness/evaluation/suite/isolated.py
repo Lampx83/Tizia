@@ -46,7 +46,7 @@ def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dic
 
 def main() -> None:
     from dotenv import load_dotenv
-    import eval_fast
+    from evaluation import eval_fast
     from evaluation.suite import ablation, trial
     from evaluation.suite.launcher import sqlite_launcher
     from runtime.budget import Budget

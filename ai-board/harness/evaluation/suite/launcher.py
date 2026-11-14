@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-import eval_fast
+from evaluation import eval_fast
 
 STARTUP_ATTEMPTS = 4
 FIXTURE = Path(__file__).with_name("queue_fixture_sqlite.mjs")

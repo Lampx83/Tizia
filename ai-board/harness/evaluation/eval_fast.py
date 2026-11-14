@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from verification import functional  # noqa: E402
 from gates import guard, implement, static_check, verify  # noqa: E402
 from runtime.pipeline import ROOT  # noqa: E402
@@ -79,7 +78,7 @@ def build_tree(checkout: Path, root: Path) -> Path:
 def _fixture(tree: Path, env: dict) -> Callable[[str], dict | None]:
     """Phiên học viên cho oracle chữ, từ queue_fixture.mjs của Gate 5 (PostgreSQL; import /app/ → cây native). Bỏ import store ai-board:
     commit ghim có thể chưa có server/ai-board, và oracle chữ chỉ cần token → mọi stage (seed/session) đều trả {token}."""
-    source = (Path(__file__).resolve().parent / "queue_fixture.mjs").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[1] / "queue_fixture.mjs").read_text(encoding="utf-8")
     lines = [line for line in source.splitlines() if "createAsyncAiBoardStore }" not in line]
     script = tree / "verify-session.mjs"
     script.write_text("\n".join(lines).replace("'/app/", f"'{tree.as_posix()}/"), encoding="utf-8")

@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-import eval_run
+from evaluation import eval_run
 from runtime.pipeline import Deps
 
 FILLER = {"test_file": "test/x.test.js", "test": "import test from 'node:test';\n"}

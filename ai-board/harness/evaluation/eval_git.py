@@ -24,9 +24,8 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import eval_judge  # noqa: E402
-import eval_recall  # noqa: E402
+from evaluation import eval_judge  # noqa: E402
+from evaluation import eval_recall  # noqa: E402
 from gates import static_check  # noqa: E402
 from runtime.pipeline import ROOT  # noqa: E402
 from settings import get_settings
@@ -238,7 +237,7 @@ def case_record(case: dict, root: Path, meta: dict) -> dict:
 
 
 def register(subs) -> None:
-    import eval_run
+    from evaluation import eval_run
     root = str(get_settings().eval_dir or eval_run.DEFAULT_ROOT)
     parser = subs.add_parser("git-build", help="lọc commit sạch → corpus-git (không model)")
     parser.add_argument("--repo", default=str(ROOT))
@@ -258,7 +257,7 @@ def register(subs) -> None:
 
 def run(args, deps, source) -> int:
     """Cùng vòng lặp resume/budget như `quick`; corpus = corpus-git, nhãn lớp 1."""
-    import eval_run
+    from evaluation import eval_run
     root = Path(args.root)
     cases, meta = load(root)
     if not cases:
@@ -321,7 +320,7 @@ def run(args, deps, source) -> int:
 
 def report(info: dict, cases: list[dict], rows: list[dict], total: int, cut_short: bool, baseline: dict | None) -> dict:
     """build_report của quick + nhãn tier (b), nhóm theo style, funnel đặt tên lớp 1."""
-    import eval_run
+    from evaluation import eval_run
     rep = eval_run.build_report(info, cases, rows, total, cut_short, baseline)
     rep["label"] = "GIT TIER (b)"
     rep["tier_label"] = "tier (b), fast: lớp 1 tất định; không trộn vào ship rate chính thức"

@@ -4,7 +4,7 @@ Corpus synthetic 3 trang do eval_run.write_corpus dựng (quick đã chuyển sa
 import json
 from pathlib import Path
 
-import eval_run
+from evaluation import eval_run
 
 pytestmark = pytest.mark.slow
 

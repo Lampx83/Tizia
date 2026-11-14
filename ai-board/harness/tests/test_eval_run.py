@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-import eval_fast
-import eval_run
+from evaluation import eval_fast
+from evaluation import eval_run
 from runtime.pipeline import Deps
 
 pytestmark = pytest.mark.slow
@@ -390,7 +390,7 @@ def test_held_out_detail_from_the_fast_tier_never_leaves_its_vault_and_the_repor
 def test_the_run_records_the_pinned_config_next_to_the_numbers_and_refuses_to_resume_under_a_changed_pin(root, monkeypatch, capsys):
     assert run(root, "--cases", "2", "--repeats", "1") == 0
     rep = report(root, f"quick-s{SEED}")
-    harness = Path(eval_run.__file__).parent
+    harness = Path(eval_run.__file__).resolve().parents[1]
     sha = lambda path: eval_run.hashlib.sha256(Path(path).read_text(encoding="utf-8").encode("utf-8")).hexdigest()[:16]  # noqa: E731 — read_text gộp CRLF
     assert rep["pins"] == {"model_digest": "sha256:fake-fake", "prompt_lock": sha(harness / "prompts" / "prompts.lock.json"),
                            "skill_lock": sha(harness / "skills" / "skills.lock.json"), "retrieval_weights": sha(harness / "retrieval_weights.json"),

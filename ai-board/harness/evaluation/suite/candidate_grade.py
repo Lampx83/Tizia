@@ -1,7 +1,7 @@
 """Independent frozen-corpus grading shared by both harnesses; never agent feedback."""
 from pathlib import Path
 
-import eval_fast
+from evaluation import eval_fast
 
 PROTOCOL = 'frozen-corpus-oracle-v1-no-ship'
 

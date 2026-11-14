@@ -16,7 +16,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-import eval_corpus
+from evaluation import eval_corpus
 
 MAX_FILES, MAX_GOLD_LINES = 4, 60
 _CHECKOUT_LOCK = threading.Lock()

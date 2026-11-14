@@ -18,8 +18,8 @@ import threading
 import time
 from pathlib import Path
 
-import eval_corpus
-import eval_fast
+from evaluation import eval_corpus
+from evaluation import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import tool_loop, tool_manifest
 from runtime.budget import Budget

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-import eval_run
+from evaluation import eval_run
 from runtime.pipeline import Deps
 
 pytestmark = pytest.mark.slow

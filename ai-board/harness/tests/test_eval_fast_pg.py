@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import eval_fast  # noqa: E402
+from evaluation import eval_fast  # noqa: E402
 
 
 def test_with_db_replaces_only_the_database_name():
