@@ -5,7 +5,7 @@ import { tokenCounter } from '../server/ai-board/services/token-count.js';
 import { adminSkillBlock, lintSkill } from '../server/ai-board/services/skills.js';
 
 const ENV = 'AI_BOARD_QWEN_TOKENIZER';
-const SKILL = '---\nname: frontend-guide\ndescription: Hướng dẫn giao diện\ntask_type: frontend\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Giữ nhãn nút rõ ràng.\n';
+const SKILL = '---\nname: frontend-guide\ndescription: Hướng dẫn giao diện. Use when the skill applies.\nmetadata:\n  task_type: "frontend"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Giữ nhãn nút rõ ràng.\n';
 
 function withEnv(value, fn) {
   const before = process.env[ENV];

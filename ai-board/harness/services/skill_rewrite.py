@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from runtime import meter, prompt_roles
 from runtime.budget import Budget, BudgetExhausted
-from services import default_skills
+from services import default_skills, skill_frontmatter
 
 CLAIM = '/api/ai-board/worker/skill-rewrite/claim'
 REPORT = '/api/ai-board/worker/skill-rewrite/report'
@@ -163,7 +163,10 @@ def run_step(client, deps, *, worker_id):
             rewritten = json.loads(raw).get('skill')
         except (ValueError, AttributeError):
             rewritten = None
-        if isinstance(rewritten, str) and rewritten.strip():
+        spec = skill_frontmatter.spec_errors(rewritten, job['name']) if isinstance(rewritten, str) else []
+        if spec:
+            report['error'] = ('spec_invalid: ' + '; '.join(spec))[:200]
+        elif isinstance(rewritten, str) and rewritten.strip():
             report['rewritten_text'] = rewritten
             report['evaluation'] = {'kinds': smoke(deps, budget, system, rewritten, job)}
         else:

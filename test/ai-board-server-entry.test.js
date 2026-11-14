@@ -115,7 +115,7 @@ test('skill upload on the board entry accepts a signed admin and refuses a signe
   const app = await serve();
   try {
     const body = JSON.stringify({ name: 'signed-route-draft', task_types: ['test'],
-      original_text: '---\nname: signed-route-draft\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Chạy kiểm thử.\n' });
+      original_text: '---\nname: signed-route-draft\ndescription: Kiểm thử. Use when the skill applies.\nmetadata:\n  task_type: "test"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n1. Chạy kiểm thử.\n' });
     const send = (user) => fetch(`${app.base}/api/admin/ai-board/skills`, {
       method: 'POST', headers: { 'content-type': 'application/json', ...signInternalHeaders(user, SECRET) }, body });
     const refused = await send({ id: 1, role: 'pupil', displayName: 'Lan', domain: 'primary' });

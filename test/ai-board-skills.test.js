@@ -75,7 +75,7 @@ test('concurrent uploads allocate unique immutable versions and role selection p
     const item = drafts.find(r => r.body.version.version === 3).body;
     assert.equal((await t.api(`/api/admin/ai-board/skills/${item.skill.id}/approve`, { version_id:item.version.id, confirmed:true })).status, 200);
     const shared = (await t.api('/api/admin/ai-board/skills', { name:'aaa-shared', task_types:['all'],
-      original_text:text('aaa-shared').replace('task_type: frontend', 'task_type: all') })).body;
+      original_text:text('aaa-shared').replace('task_type: "frontend"', 'task_type: "all"') })).body;
     assert.equal((await t.api(`/api/admin/ai-board/skills/${shared.skill.id}/approve`, { version_id:shared.version.id, confirmed:true })).status, 200);
     const review = await t.api(`/api/ai-board/worker/tickets/${t.ticket.id}/skills`, { ...t.lease, task_type:'frontend', role:'gate4_review' }, { 'x-ai-worker-key':KEY });
     assert.deepEqual(review.body.skills, []);

@@ -21,6 +21,7 @@ import path_policy
 from gates import implement
 from repositories import repo_at_commit
 from runtime import subtask_files
+from services import skill_frontmatter
 from settings import pr_base
 
 _CONTRACT = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json")
@@ -293,8 +294,13 @@ _LOCKS = {
 
 def relock(state: dict) -> None:
     """Yêu cầu self, sau khi diff qua guard: tính lại sha256 skill/prompt vào file khoá, gộp vào commit cuối
-    của candidate (model không bao giờ viết file khoá: guard chặn). Raise OSError khi git lỗi."""
+    của candidate (model không bao giờ viết file khoá: guard chặn). Raise OSError khi git lỗi,
+    ValueError khi skill sai spec (chưa ghi khoá nào)."""
     checkout = Path(state["full_checkout"])
+    spec = [f"{p.parent.name}: {e}" for p in sorted((checkout / "ai-board/harness/skills").glob("*/SKILL.md"))
+            for e in skill_frontmatter.spec_errors(p.read_text(encoding="utf-8"), p.parent.name)]
+    if spec:
+        raise ValueError("skill sai frontmatter spec: " + "; ".join(spec)[:1000])
     changed = []
     for lock, (folder, pattern, key) in _LOCKS.items():
         fresh = {key(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (checkout / folder).glob(pattern)}

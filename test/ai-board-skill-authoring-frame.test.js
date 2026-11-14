@@ -5,7 +5,7 @@ import { createSkillService, lintSkill } from '../server/ai-board/services/skill
 import { createSkillRepository } from '../server/ai-board/repositories/skills.js';
 
 const ADMIN = { id: 9, role: 'admin' };
-const HEAD = (v = 1) => `---\nname: frame-demo\ndescription: Kiểm thử\ntask_type: test\nsource: admin\nversion: ${v}\nmax_tokens: 1500\n---\n`;
+const HEAD = (v = 1) => `---\nname: frame-demo\ndescription: Kiểm thử. Use when the skill applies.\nmetadata:\n  task_type: "test"\n  source: "admin"\n  version: "${v}"\n  max_tokens: "1500"\n---\n`;
 const ORIGINAL = HEAD() + '1. Validate request payload before saving records.\n2. Report failures with the failing command output.\n';
 const STEPS = Array.from({ length: 10 }, (_, i) => `${i + 1}. Step ${i + 1}: validate request payload, report failures with the failing command output.`).join('\n');
 const FRAMED = HEAD() + ['Trigger: validate request payload before saving records.', 'Procedure:', STEPS,
