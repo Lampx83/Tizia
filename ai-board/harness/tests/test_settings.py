@@ -21,7 +21,7 @@ def test_defaults(monkeypatch):
     assert s.react_plan is None and s.adaptive_budget is None
     assert not (s.multimodal or s.sandbox_tool or s.prompt_role_split or s.scope_first_warning or s.repair_diagnose)
     assert all((s.plan_repair, s.repair_same_session, s.gate_feedback_cap, s.stop_report_v2, s.gate1_arbiter,
-                s.no_oracle_review_any))
+                s.no_oracle_review_any, s.gate1_unified_verify))
     assert s.sandbox_url is None and s.project == "tizia"
 
 
