@@ -1,10 +1,11 @@
 ---
 name: plan-from-request
-description: Plan from request as goal, acceptance criteria and scope, grounded in repo evidence
-max_tokens: 1500
-budget: 2200
-budget3: 5000
-priority: 99
+description: "Plan from the request as goal, acceptance criteria and out-of-scope items grounded in repo evidence, with one small first slice. Use when the experiment variant is on and gate 1 plans from the request."
+metadata:
+  max_tokens: "1500"
+  budget: "2200"
+  budget3: "5000"
+  priority: "99"
 ---
 ## gate 1
 1. Write the goal in one sentence, taken from the request. Do not add work the request does not ask for.

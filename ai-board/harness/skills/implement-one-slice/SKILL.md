@@ -1,10 +1,11 @@
 ---
 name: implement-one-slice
-description: Implement one small slice, self-check it against acceptance criteria, then stop
-max_tokens: 1500
-budget: 2200
-budget3: 5000
-priority: 99
+description: "Implement one given slice only, check each acceptance criterion as met or not met, then stop. Use when the experiment variant is on and gate 3 implements one planned slice."
+metadata:
+  max_tokens: "1500"
+  budget: "2200"
+  budget3: "5000"
+  priority: "99"
 ---
 ## gate 3
 1. Change only the slice you were given. Do not edit other files or start the next subtask.

@@ -1,10 +1,11 @@
 ---
 name: default-frontend
-description: Existing public UI changes
-task_type: frontend
-source: default
-version: 1
-max_tokens: 1500
+description: "Frontend rules: reuse page layout and components, keep keyboard access, contrast and mobile layout, cover loading, empty and error states. Use when a step changes an existing public UI page."
+metadata:
+  task_type: "frontend"
+  source: "default"
+  version: "1"
+  max_tokens: "1500"
 ---
 1. Reuse the existing page layout, components and spacing.
 2. Keep labels clear and actions keyboard accessible.

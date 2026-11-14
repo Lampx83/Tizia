@@ -1,11 +1,13 @@
 ---
 name: add-html-section
-match: thêm mục, thêm phần, thêm khối, thêm khung, thêm ô, thêm nút, thêm bảng, thêm danh sách, thêm đoạn, thêm liên kết, thêm link, thêm hình, thêm ảnh, thêm chú thích, thêm ghi chú, thêm lời chào, thêm dòng, chèn, add section, add block, add button, add link, add table, insert
-tools: outline, repomap, lessons
-tools3: grep, outline, lessons
-budget: 2200
-budget3: 5000
-priority: 3
+description: "Insert a new static block (section, button, link, table, note) next to an anchor in an existing HTML page. Use when the request asks to add, insert or append a block to a page without changing its scripts."
+metadata:
+  match: "thêm mục, thêm phần, thêm khối, thêm khung, thêm ô, thêm nút, thêm bảng, thêm danh sách, thêm đoạn, thêm liên kết, thêm link, thêm hình, thêm ảnh, thêm chú thích, thêm ghi chú, thêm lời chào, thêm dòng, chèn, add section, add block, add button, add link, add table, insert"
+  tools: "outline, repomap, lessons"
+  tools3: "grep, outline, lessons"
+  budget: "2200"
+  budget3: "5000"
+  priority: "3"
 ---
 ## gate 1
 1. "file" = the page itself. An empty `<div id="...-host">` is filled by JS: put the new static block next to it, not inside it.

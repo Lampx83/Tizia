@@ -1,10 +1,11 @@
 ---
 name: default-security-audit
-description: Review an AI Board privilege-elevation request before an administrator approves it.
-task_type: review
-source: default
-version: 2
-max_tokens: 1500
+description: "Rubric for reviewing an AI Board privilege-elevation request: requested path and level, worker reason and plan steps. Use when an administrator is about to approve or reject an elevation."
+metadata:
+  task_type: "review"
+  source: "default"
+  version: "2"
+  max_tokens: "1500"
 ---
 ## Purpose
 Review one existing elevation request: the path and the requested level, the worker's reason, and the plan steps. Do not decide on behalf of the administrator, and do not unlock anything yourself.

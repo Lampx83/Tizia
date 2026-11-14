@@ -1,14 +1,16 @@
 ---
 name: frontend-design-core
-match:
-files:
-types:
-tools: outline, lessons
-tools3: grep, outline, lessons
-follow_css: false
-budget: 1200
-budget3: 1600
-priority: 6
+description: "UI design rules: reuse page layout and fonts, one primary action, readable contrast, 375px screens. Use when the experiment variant is on and a step changes public UI."
+metadata:
+  match: ""
+  files: ""
+  types: ""
+  tools: "outline, lessons"
+  tools3: "grep, outline, lessons"
+  follow_css: "false"
+  budget: "1200"
+  budget3: "1600"
+  priority: "6"
 ---
 ## gate 1
 1. Read the page's existing layout, components and spacing first. Reuse them, do not add a new visual system.

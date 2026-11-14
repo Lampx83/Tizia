@@ -1,13 +1,15 @@
 ---
 name: new-static-page
-match: trang mới, tạo trang, thêm trang, làm trang, trang riêng, một trang, page mới, new page, create page, landing page
-types: game, lab, theory
-files: new:*.html
-tools: tree, repomap, lessons
-tools3: tree, lessons
-budget: 2200
-budget3: 3000
-priority: 4
+description: "Create a new static Vietnamese HTML page with one style block and no scripts, named in ascii kebab-case. Use when the request asks for a new standalone page that does not exist in the tree."
+metadata:
+  match: "trang mới, tạo trang, thêm trang, làm trang, trang riêng, một trang, page mới, new page, create page, landing page"
+  types: "game, lab, theory"
+  files: "new:*.html"
+  tools: "tree, repomap, lessons"
+  tools3: "tree, lessons"
+  budget: "2200"
+  budget3: "3000"
+  priority: "4"
 ---
 ## gate 1
 1. "file" = public/<ascii-kebab-name>.html with a name NOT in the tree listing (e.g. public/meo-hoc-tap.html).

@@ -1,10 +1,11 @@
 ---
 name: default-database
-description: Database and migration changes
-task_type: database
-source: default
-version: 1
-max_tokens: 1500
+description: "Database rules: additive PostgreSQL migrations, explicit transaction and lock order, indexed bounded queries. Use when a step changes schema, migrations or queries."
+metadata:
+  task_type: "database"
+  source: "default"
+  version: "1"
+  max_tokens: "1500"
 ---
 1. Use additive PostgreSQL migrations; expand before contracting a schema.
 2. Preserve existing data and ownership constraints.

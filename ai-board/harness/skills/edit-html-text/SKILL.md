@@ -1,11 +1,13 @@
 ---
 name: edit-html-text
-match: đổi chữ, sửa chữ, thay chữ, dòng chữ, câu chữ, đoạn chữ, chính tả, lỗi chính tả, viết sai, ghi sai, sai chữ, đổi tiêu đề, sửa tiêu đề, đổi tên nút, sửa tên nút, đổi nội dung, sửa nội dung, đổi câu, sửa câu, đổi thành chữ, dịch sang, text, typo, wording, heading, title, label, spelling
-tools: outline, grep, lessons
-tools3: grep, lessons
-budget: 2200
-budget3: 5000
-priority: 2
+description: "Replace existing wording in a page, keeping tags, attributes and ids unchanged. Use when the request asks to fix a typo, rename a heading or button, or change visible text."
+metadata:
+  match: "đổi chữ, sửa chữ, thay chữ, dòng chữ, câu chữ, đoạn chữ, chính tả, lỗi chính tả, viết sai, ghi sai, sai chữ, đổi tiêu đề, sửa tiêu đề, đổi tên nút, sửa tên nút, đổi nội dung, sửa nội dung, đổi câu, sửa câu, đổi thành chữ, dịch sang, text, typo, wording, heading, title, label, spelling"
+  tools: "outline, grep, lessons"
+  tools3: "grep, lessons"
+  budget: "2200"
+  budget3: "5000"
+  priority: "2"
 ---
 ## gate 1
 1. "file" = the file whose lines (in "(trích)" or "file khớp từ khoá") contain the old text. If a script sets it (textContent = '...'), "file" is where that string literal is.

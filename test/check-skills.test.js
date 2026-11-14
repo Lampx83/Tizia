@@ -83,7 +83,7 @@ test('skill failing server lint fails even with matching lock', t => {
 
 test('default skill declaring source admin fails server lint even with matching lock', t => {
   const dir = fixture(t);
-  const text = fs.readFileSync(skillPath(dir, 'default-test'), 'utf8').replace('source: default', 'source: admin');
+  const text = fs.readFileSync(skillPath(dir, 'default-test'), 'utf8').replace('source: "default"', 'source: "admin"');
   editSkill(dir, 'default-test', text);
   const errors = errorsOf(dir);
   assert.ok(errors.some(e => /default-test.*lint/.test(e)), errors.join('\n'));

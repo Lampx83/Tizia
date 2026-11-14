@@ -18,7 +18,7 @@ from pathlib import Path
 
 from repositories import code_index, repo_at_commit
 from runtime import coverage, limits
-from services import file_context, skill_selection
+from services import file_context, skill_frontmatter, skill_selection
 import tools
 from verification import functional
 from services.file_context import keywords
@@ -88,8 +88,7 @@ def _csv(value: str) -> tuple[str, ...]:
 def parse_skill(text: str) -> Skill:
     """SKILL.md = frontmatter `key: value` giữa 2 dòng --- + thân chia `## gate 1` / `## gate 3`."""
     _, front, body = text.replace("\r\n", "\n").split("---\n", 2)
-    meta = dict(line.split(":", 1) for line in front.splitlines() if ":" in line)
-    meta = {k.strip(): v.strip() for k, v in meta.items()}
+    meta = skill_frontmatter.flat(front)
     parts = _SECTION.split(body)
     sections = {int(parts[i]): parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
     unknown = [t for t in _csv(meta.get("tools", "") + "," + meta.get("tools3", "")) if t not in tools.TOOLS]

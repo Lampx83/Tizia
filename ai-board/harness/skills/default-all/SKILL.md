@@ -1,10 +1,11 @@
 ---
 name: default-all
-description: Shared execution guidance
-task_type: all
-source: default
-version: 1
-max_tokens: 1500
+description: "Shared execution rules: reuse existing code, make the smallest change, verify and report observed results. Use when a plan step has task type all or no narrower default skill applies."
+metadata:
+  task_type: "all"
+  source: "default"
+  version: "1"
+  max_tokens: "1500"
 ---
 1. Search existing code and reuse its patterns before adding code.
 2. Make the smallest change, preserving unrelated behavior and interfaces.

@@ -84,9 +84,9 @@ def test_admin_topic_overlap_with_default_is_dropped(monkeypatch):
 
 def test_topic_field_parses_and_is_validated():
     text = default_skills.ROOT.joinpath('default-all/SKILL.md').read_text(encoding='utf-8')
-    assert default_skills.parse(text.replace('source: default', 'source: default\ntopic: shared-style')).topic == 'shared-style'
+    assert default_skills.parse(text.replace('source: "default"', 'source: "default"\n  topic: "shared-style"')).topic == 'shared-style'
     with pytest.raises(ValueError, match='invalid skill topic'):
-        default_skills.parse(text.replace('source: default', 'source: default\ntopic: Bad Topic'))
+        default_skills.parse(text.replace('source: "default"', 'source: "default"\n  topic: "Bad Topic"'))
 
 
 def test_context_variant_sharing_picked_topic_is_dropped(monkeypatch):

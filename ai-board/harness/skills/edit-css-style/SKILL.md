@@ -1,13 +1,15 @@
 ---
 name: edit-css-style
-match: màu chữ, màu nền, màu sắc, đổi màu, tô màu, sang màu, thành màu, xanh dương, xanh lá, xanh lam, màu xanh, màu đỏ, màu vàng, màu tím, màu cam, màu hồng, màu đen, màu trắng, font, phông chữ, kiểu chữ, cỡ chữ, kích thước chữ, chữ to, chữ nhỏ, to hơn, nhỏ hơn, in đậm, in nghiêng, khoảng cách, giãn dòng, căn giữa, căn lề, bo góc, đường viền, đổ bóng, hình nền, color, colour, background, font size, css, style, padding, margin, spacing, bold
-files: *.css
-tools: outline, lessons
-tools3: grep, outline, lessons
-follow_css: true
-budget: 2200
-budget3: 5000
-priority: 1
+description: "Change one CSS rule (color, font, size, spacing, border, background) via a named selector in the page's linked stylesheet or style block. Use when the request asks to restyle or recolor existing page elements."
+metadata:
+  match: "màu chữ, màu nền, màu sắc, đổi màu, tô màu, sang màu, thành màu, xanh dương, xanh lá, xanh lam, màu xanh, màu đỏ, màu vàng, màu tím, màu cam, màu hồng, màu đen, màu trắng, font, phông chữ, kiểu chữ, cỡ chữ, kích thước chữ, chữ to, chữ nhỏ, to hơn, nhỏ hơn, in đậm, in nghiêng, khoảng cách, giãn dòng, căn giữa, căn lề, bo góc, đường viền, đổ bóng, hình nền, color, colour, background, font size, css, style, padding, margin, spacing, bold"
+  files: "*.css"
+  tools: "outline, lessons"
+  tools3: "grep, outline, lessons"
+  follow_css: "true"
+  budget: "2200"
+  budget3: "5000"
+  priority: "1"
 ---
 ## gate 1
 1. Find the page in REPO DATA and read its "css liên kết" line.
