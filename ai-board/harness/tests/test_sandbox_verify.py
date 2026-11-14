@@ -364,8 +364,9 @@ def test_state_json_ships_only_the_keys_the_guest_gate_reads(tmp_path):
           "plan": {"goal": "private planning"}, "acceptance": ["npm test"], "memory": "x", "github_token": "never", "evidence": {"x": 1}}
     with tarfile.open(fileobj=io.BytesIO(sandbox_verify.package(root, st, {})), mode="r:gz") as tar:
         data = json.loads(tar.extractfile("state.json").read())
-    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance"}
+    assert set(data) == {"skill_id", "diffs", "request_title", "request_detail", "full_diff", "base_sha", "acceptance", "surface_tests"}
     assert data["acceptance"] == ["npm test"]
+    assert "plan" not in data and data["surface_tests"] == []
 
 
 def test_every_state_key_the_guest_gate_reads_is_uploaded():

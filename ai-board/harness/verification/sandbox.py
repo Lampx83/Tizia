@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Callable
 
 from gates import verify
-from runtime import limits
+from runtime import levels, limits
 from settings import get_settings
 
 PROTOCOL = "1"
@@ -30,7 +30,7 @@ CREATE_TIMEOUT_S = float(_CLIENT["create_timeout_s"])
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", ".cache", ".scratch"}
 GUEST_STATE = "state.json"
 # What gates.verify.run / functional read from `state` inside the guest; nothing else of the worker's state is uploaded.
-GUEST_STATE_KEYS = ("skill_id", "diffs", "full_diff", "request_title", "request_detail", "base_sha", "acceptance")
+GUEST_STATE_KEYS = ("skill_id", "diffs", "full_diff", "request_title", "request_detail", "base_sha", "acceptance", "surface_tests")
 GUEST_OUT = "out"
 MANIFEST = [{"name": "result", "path": f"{GUEST_OUT}/result.json"}, {"name": "shots", "path": f"{GUEST_OUT}/shots.tgz"}]
 GUEST_ENTRY = ("mkdir -p /workspace/out && chmod 777 /workspace/out && cd /opt/ai-board/ai-board/harness && "
@@ -248,7 +248,9 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
                 archive.addfile(info, io.BytesIO(data))
             else:
                 archive.add(file, arcname="checkout/" + name, recursive=False, filter=_normalise(file))
+        # WHY: the plan is private to the worker; the guest only gets the derived list of surface test files.
         guest_state = {key: state[key] for key in GUEST_STATE_KEYS if key in state}
+        guest_state["surface_tests"] = levels.surface_tests(state.get("plan"))
         add_bytes(GUEST_STATE, json.dumps(guest_state, ensure_ascii=False, default=lambda _value: None).encode("utf-8"))
         for page, blob in base_pages.items():
             add_bytes("base/" + page.lstrip("/"), blob)
