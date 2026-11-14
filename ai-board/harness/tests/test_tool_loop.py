@@ -457,3 +457,33 @@ def test_injection_happens_once_per_streak(doc_on):
 def test_flag_off_injects_nothing():
     _, _, deps = run([BAD_GREP, BAD_GREP, EDIT, TEST, FINISH])
     assert all("TOOL DOC" not in p for p in deps.prompts)
+
+
+def _skill_fixture(tmp_path, body):
+    folder = tmp_path / 'demo'
+    (folder / 'references').mkdir(parents=True)
+    (folder / 'references' / 'api.md').write_text('API DOC\n' + 'x' * 40000, encoding='utf-8')
+    (folder / 'scripts').mkdir()
+    (folder / 'scripts' / 'run.py').write_text('print(1)\n', encoding='utf-8')
+    return {'demo': tool_loop.ActiveSkill(folder, body)}
+
+
+def _read_skill(skills, path):
+    return tool_loop.Workspace('.', 'abc', 'public/a.html', PAGE, skills=skills).run('read_skill_resource', {'path': path})
+
+
+def test_read_skill_resource_returns_capped_reference_the_body_mentions(tmp_path):
+    out = _read_skill(_skill_fixture(tmp_path, 'Xem references/api.md khi cần.'), 'demo/references/api.md')
+    assert out.startswith('API DOC') and len(out) < 40000
+
+
+@pytest.mark.parametrize('path', ['demo/references/other.md', 'demo/scripts/run.py', 'demo/references/../../scripts/run.py',
+                                  'nope/references/api.md', '/etc/passwd', 'demo/references/', 'demo\\references\\api.md'])
+def test_read_skill_resource_refuses_unknown_escaping_or_non_reference_paths(tmp_path, path):
+    with pytest.raises(tool_loop.ToolError):
+        _read_skill(_skill_fixture(tmp_path, 'Xem references/api.md và scripts/run.py.'), path)
+
+
+def test_read_skill_resource_refuses_reference_the_body_does_not_mention(tmp_path):
+    with pytest.raises(tool_loop.ToolError, match='không nhắc'):
+        _read_skill(_skill_fixture(tmp_path, 'Không nhắc tài liệu nào.'), 'demo/references/api.md')

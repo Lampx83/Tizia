@@ -13,7 +13,7 @@ import fnmatch
 import posixpath
 import re
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
 
 from repositories import code_index, repo_at_commit
@@ -74,8 +74,19 @@ class Skill:
     budget3: int
     follow_css: bool
     priority: int
-    sections: dict  # {1: text, 3: text}
+    path: Path
     topic: str | None = None
+
+    @cached_property
+    def body(self) -> str:
+        """SKILL.md sau frontmatter; đọc file lần đầu khi kích hoạt."""
+        return self.path.read_text(encoding="utf-8").replace("\r\n", "\n").split("---\n", 2)[2]
+
+    @cached_property
+    def sections(self) -> dict:
+        """{gate: text} từ thân; đọc thân lần đầu khi truy cập."""
+        parts = _SECTION.split(self.body)
+        return {int(parts[i]): parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
 
 
 fold = file_context.fold
@@ -85,12 +96,10 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(v.strip() for v in value.split(",") if v.strip())
 
 
-def parse_skill(text: str) -> Skill:
-    """SKILL.md = frontmatter `key: value` giữa 2 dòng --- + thân chia `## gate 1` / `## gate 3`."""
-    _, front, body = text.replace("\r\n", "\n").split("---\n", 2)
+def parse_skill(path: Path) -> Skill:
+    """SKILL.md -> Skill từ frontmatter `key: value`; thân (gate 1/3) đọc lúc kích hoạt."""
+    front = path.read_text(encoding="utf-8").replace("\r\n", "\n").split("---\n", 2)[1]
     meta = skill_frontmatter.flat(front)
-    parts = _SECTION.split(body)
-    sections = {int(parts[i]): parts[i + 1].strip() for i in range(1, len(parts) - 1, 2)}
     unknown = [t for t in _csv(meta.get("tools", "") + "," + meta.get("tools3", "")) if t not in tools.TOOLS]
     if unknown:
         raise ValueError(f"skill {meta.get('name')}: tool lạ {unknown}")
@@ -98,10 +107,10 @@ def parse_skill(text: str) -> Skill:
                  types=_csv(meta.get("types", "")), files=_csv(meta.get("files", "")),
                  tools=_csv(meta.get("tools", "")), tools3=_csv(meta.get("tools3") or meta.get("tools", "")), budget=int(meta.get("budget", 2000)),
                  budget3=int(meta.get("budget3", 5000)), follow_css=meta.get("follow_css") == "true",
-                 priority=int(meta.get("priority", 5)), sections=sections, topic=meta.get("topic") or None)
+                 priority=int(meta.get("priority", 5)), path=path, topic=meta.get("topic") or None)
 
 
-SKILLS = {s.name: s for s in (parse_skill(p.read_text(encoding="utf-8"))
+SKILLS = {s.name: s for s in (parse_skill(p)
                               for p in sorted(SKILLS_DIR.glob("*/SKILL.md")) if not p.parent.name.startswith('default-'))}
 
 
@@ -109,9 +118,10 @@ def skill_text(skill: Skill, gate: int) -> str:
     """Skill section; AI_BOARD_SKILL_PAD_CHARS=N pads it to N chars with other skills' sections (length ablation)."""
     text = skill.sections.get(gate, "").strip()
     target = get_settings().skill_pad_chars
-    filler = "\n\n".join(t.strip() for n, s in sorted(SKILLS.items()) if n != skill.name and n not in VARIANT_FILES for _, t in sorted(s.sections.items()))
-    while len(text) < target and filler:
-        text += "\n\n" + filler
+    if target and len(text) < target:
+        filler = "\n\n".join(t.strip() for n, s in sorted(SKILLS.items()) if n != skill.name and n not in VARIANT_FILES for _, t in sorted(s.sections.items()))
+        while len(text) < target and filler:
+            text += "\n\n" + filler
     return text[:target] if target else text
 
 
@@ -120,7 +130,7 @@ def variant_skill(name: str) -> Skill:
     """Parse skill biến thể; ValueError nếu tên lạ."""
     if name not in VARIANT_FILES:
         raise ValueError(f"skill biến thể lạ: {name}")
-    return parse_skill(VARIANT_FILES[name].read_text(encoding="utf-8"))
+    return parse_skill(VARIANT_FILES[name])
 
 
 def skill_block(skill: Skill, gate: int) -> str:

@@ -19,7 +19,7 @@ REQUESTS = [
 
 @pytest.mark.parametrize('name,gate', [('plan-from-request', 1), ('implement-one-slice', 3)])
 def test_skill_parses_and_fits_budget(name, gate):
-    skill = context.parse_skill((SKILLS_DIR / name / 'SKILL.md').read_text(encoding='utf-8'))
+    skill = context.parse_skill(SKILLS_DIR / name / 'SKILL.md')
     assert set(skill.sections) == {gate}
     for body in skill.sections.values():
         assert len(body.encode('utf-8')) < 1500

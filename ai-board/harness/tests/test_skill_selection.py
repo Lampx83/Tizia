@@ -117,3 +117,15 @@ def test_chat_span_and_evidence_carry_selected_names_only(monkeypatch):
         assert chat['attributes']['tizia.skills.selected'] == ['default-frontend', 'frontend-example']
         assert chat['attributes']['tizia.skills.dropped'] == ['default-all: max_per_prompt']
         assert 'Keep labels clear' not in str(chat['attributes'])
+
+
+def test_skill_body_is_read_only_on_first_activation(tmp_path):
+    path = tmp_path / 'demo' / 'SKILL.md'
+    path.parent.mkdir()
+    path.write_text('---\nname: demo\nmatch: merge\n---\n## gate 1\nfirst\n', encoding='utf-8')
+    skill = context.parse_skill(path)
+    assert 'body' not in skill.__dict__ and 'sections' not in skill.__dict__
+    path.write_text('---\nname: demo\nmatch: merge\n---\n## gate 1\nsecond\n', encoding='utf-8')
+    assert skill.sections == {1: 'second'}
+    path.write_text('---\nname: demo\nmatch: merge\n---\n## gate 1\nthird\n', encoding='utf-8')
+    assert skill.sections == {1: 'second'}
