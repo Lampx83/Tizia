@@ -36,9 +36,10 @@ def test_untracked_running_and_outside_spans_flag():
 def test_rows_use_child_runs_and_root_events_only():
     tickets = [{"id": 1, "parent_id": None}, {"id": 2, "parent_id": 1}]
     roots = [{"id": 1, "created_at": 0, "updated_at": 20_000}]
-    events = [{"ticket_id": 1, **_ev(0, "queued->running")}, {"ticket_id": 2, **_ev(5_000, "queued->done")}]
-    spans = [{"run_id": 9, **_sp("chat m", 0, 20_000)}]
-    got = wt.rows(roots, tickets, events, [{"id": 9, "ticket_id": 2}], spans)
+    events = [{"id": 1, "ticket_id": 1, "run_id": None, **_ev(0, "queued->running")},
+              {"id": 2, "ticket_id": 2, "run_id": 9, **_ev(5_000, "queued->done")}]
+    spans = [{"run_id": 9, **_sp("chat m", 0, 20_000)}, {"run_id": 8, **_sp("chat m", 0, 20_000)}]
+    got = wt.rows(roots, tickets, events, spans)
     assert got[0]["parts"] == {"model": 20.0} and got[0]["ok"]
 
 
