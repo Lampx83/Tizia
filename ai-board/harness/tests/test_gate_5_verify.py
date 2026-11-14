@@ -1162,7 +1162,17 @@ def test_opened_context_runs_its_related_test_and_route_probe(tmp_path, monkeypa
     s = server_only(tmp_path)
     s["plan"] = {"subtasks": [{"file": "server/contexts/x/index.js", "verify": "node --test test/x.test.js"}]}
     s["surface_tests"] = levels.surface_tests(s["plan"])  # the guest receives this derived list, never the plan
+    s["_required"] = ["surface_tests"]
     out = verify.run(s, runner=runner, functional_probe=lambda base, _: functional.run_route(base, s))
     assert out["blocked"] is False, out["reason"]
     assert any("/app/test/x.test.js" in args for args, _ in runner.calls)
     assert out["evidence"]["functional"]["probe_id"] == functional.ROUTE_PROBE
+
+
+def test_missing_required_guest_input_blocks_gate_5_as_infra_not_pass(tmp_path):
+    runner = FakeRunner()
+    s = server_only(tmp_path)
+    s["_required"] = ["surface_tests"]
+    out = verify.run(s, runner=runner)
+    assert out["blocked"] is True and out["failure_class"] == "transient" and "surface_tests" in out["reason"]
+    assert runner.calls == []

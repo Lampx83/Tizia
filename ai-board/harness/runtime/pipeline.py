@@ -574,7 +574,7 @@ def run_once(request: dict, *, db_path, deps: Deps, budget: Budget | None = None
     reached: float = 0.0
     outcome = "ok"
     reason = None
-    state: dict = {"skill_id": request.get("id") or ""}
+    state: dict = {"skill_id": request.get("id") or "", "requester_role": request.get("requester_role")}
     result = {}
     if checkout_source is not None:
         state["checkout_source"] = checkout_source

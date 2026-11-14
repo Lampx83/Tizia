@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 from gates import visual
 from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
+from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
 from runtime.meter import redact
 from settings import get_settings
 
@@ -33,7 +34,7 @@ CA_DIR = Path('/usr/local/share/ca-certificates')
 def acceptance_commands(state: dict) -> list[str]:
     """Lệnh acceptance cấp feature của plan, chỉ những lệnh chạy được (cổng 1 đã bắt buộc với plan nhiều lớp)."""
     from gates.brainstorm import RUNNABLE  # cùng định nghĩa "lệnh chạy được" với cổng 1
-    items = state.get("acceptance") or []
+    items = guest_input(state, "acceptance") or []
     return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
 
 
@@ -57,7 +58,7 @@ def expand_nfd_literals(item: str) -> str:
 
 def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
     """Oracle verdict (not an infra error) loses to green evidence: user-stated acceptance ran and passed, generated tests and smoke passed."""
-    request = f"{state.get('request_title') or ''} {state.get('request_detail') or ''}"
+    request = f"{guest_input(state, 'request_title') or ''} {guest_input(state, 'request_detail') or ''}"
     stated = [item for item in acceptance if item in request]
     return bool(stated and generated_ok and smoke_ok and result.get("probe_id") and result.get("observations"))
 
@@ -209,7 +210,7 @@ def _request_page(detail: str | None) -> str | None:
 def _expected_lines(state: dict, checkout: Path, page: str) -> list[str]:
     """Trimmed lines the candidate added to the page (base..HEAD diff); whole file when no diff is known."""
     rel = "public" + page
-    text = "".join(item.get("diff", "") for item in state.get("full_diff") or [])
+    text = "".join(item.get("diff", "") for item in guest_input(state, "full_diff") or [])
     added, in_page = [], False
     for line in text.splitlines():
         if line.startswith("diff --git "):
@@ -378,7 +379,7 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
     ponytail: file mới vẫn nằm trong container; trang base không trỏ tới nên không ảnh hưởng ảnh."""
     from repositories import code_index
 
-    base_sha = state.get("base_sha")
+    base_sha = guest_input(state, "base_sha")
     if not base_sha:
         return None
     base_dir = state.get("base_pages_dir")  # sandbox run: the worker staged base pages, the upload has no .git
@@ -477,13 +478,19 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         return {"gate": 5, "blocked": True, "reason": "full_checkout thiếu Dockerfile/docker-compose.yml", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
 
-    skill_id = re.sub(r"[^a-z0-9-]+", "-", str(state.get("skill_id") or "").lower()).strip("-")
+    ensure_guest_inputs(state)
+    absent = missing_guest_inputs(state)
+    if absent:
+        return {"gate": 5, "blocked": True, "reason": "thiếu guest input bắt buộc: " + ", ".join(absent), "evidence": None,
+                "failure_class": STAGE_CLASS["preflight"]}
+
+    skill_id = re.sub(r"[^a-z0-9-]+", "-", str(guest_input(state, "skill_id") or "").lower()).strip("-")
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
-    pages = _public_paths(state.get("diffs") or [])
+    pages = _public_paths(guest_input(state, "diffs") or [])
     server_route = not pages and functional.select_fallback(state) == functional.ROUTE_PROBE
     if not pages and not server_route:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
@@ -491,7 +498,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 "evidence": None, "failure_class": STAGE_CLASS["plan"]}
     html = [page for page in pages if page.endswith(".html")]
     # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
-    primary = html[0] if html else _request_page(state.get("request_detail"))
+    primary = html[0] if html else _request_page(guest_input(state, "request_detail"))
     shots: list[dict] = []
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     runner = runner or subprocess.run
@@ -559,8 +566,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
             stage = "ordinary"
 
-            test_files = sorted({item.get("test_file") for item in state.get("diffs") or []
-                                 if item.get("test_file")} | set(state.get("surface_tests") or []))
+            test_files = sorted({item.get("test_file") for item in guest_input(state, "diffs") or []
+                                 if item.get("test_file")} | set(guest_input(state, "surface_tests") or []))
             review_any = get_settings().no_oracle_review_any
             if not test_files and not probe_id and not review_any:
                 raise RuntimeError("không có generated test để chạy")
@@ -680,9 +687,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                         logs.append(f"Ảnh chụp như khách (không lấy được phiên học viên): {exc}")
                     shots = _capture_all(base, shot_pages, primary,
                                          lambda: _restore_base(state, checkout, pages, cp), logs,
-                                         visual.changed_selectors(state.get("full_diff")), shot_token,
-                                         {"after": visual.changed_texts(state.get("full_diff"), "+"),
-                                          "before": visual.changed_texts(state.get("full_diff"), "-")})
+                                         visual.changed_selectors(guest_input(state, "full_diff")), shot_token,
+                                         {"after": visual.changed_texts(guest_input(state, "full_diff"), "+"),
+                                          "before": visual.changed_texts(guest_input(state, "full_diff"), "-")})
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     stage = "plan" if isinstance(exc, ScreenshotTargetError) else "screenshot"
