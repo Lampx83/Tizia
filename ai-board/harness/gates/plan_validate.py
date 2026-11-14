@@ -63,6 +63,7 @@ from settings import DEFAULT_GATE25_FIXES, get_settings
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
 VALIDATOR_INPUTS = ("subject", "body", "domain", "thread", "clarified_spec")
+CLARIFY_RULES = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate_clarify.md").read_text(encoding="utf-8")
 ANSWERABLE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_answerable.md").read_text(encoding="utf-8")
 
 # 2 vùng an toàn chuẩn model được phép nhắm (đúng giới hạn trong
@@ -121,7 +122,8 @@ def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)', 
     """AIBOARD.md (context.manual) đứng đầu, trước prompt đã khoá — prefix KV giống hệt mọi lần gọi.
     `repair`: harness note naming the defect of the previous pass, empty on the first pass."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
-    return context.manual() + PROMPT.format(
+    template = PROMPT.replace("\nSCHEMA", "\n" + CLARIFY_RULES + "\nSCHEMA", 1) if clarify_rules_on() else PROMPT
+    return context.manual() + template.format(
         domain=request.get("domain") or "(core)",
         subject=request.get("subject", ""),
         body=request.get("body", ""),
@@ -627,6 +629,29 @@ def write_clarification(db_path, request: dict, question: str) -> None:
         con.execute("UPDATE requests SET updated_at = %s WHERE id = %s", (now, db_id))
 
 
+def clarify_rules_on() -> bool:
+    """AI_BOARD_PLAN_VALIDATE_CLARIFY_RULES truthy: named edits and repo rules never become student questions."""
+    return get_settings().plan_validate_clarify_rules
+
+
+_QUOTED = re.compile(r"[\"“”«»]([^\"“”«»]{2,}?)[\"“”«»]|'([^']{2,}?)'|‘([^’]{2,}?)’")
+_REPO_RULE = re.compile(r"\bonclick\b|inline (?:handler|script|style)|\bCSP\b|\blint\b|luật (?:repo|của repo)|quy tắc (?:repo|của repo)|\bcấm\b", re.I)
+
+
+def names_edit(request: dict, plan: dict) -> bool:
+    """Request quotes old and new text (two distinct spans) and the plan carries both: scope is decided."""
+    text = " ".join(str(request.get(k) or "") for k in ("subject", "body"))
+    spans = {next(g for g in m.groups() if g).strip() for m in _QUOTED.finditer(text)}
+    carried = json.dumps(plan, ensure_ascii=False)
+    spans = {s for s in spans if s in carried}
+    return len(spans) >= 2 and len({task["file"] for task in plan["subtasks"]}) == 1
+
+
+def asks_repo_rule(question: str | None) -> bool:
+    """Question restates a repo rule (forbidden attribute, lint, CSP): the plan obeys it, the student cannot decide it."""
+    return bool(question and _REPO_RULE.search(question))
+
+
 def answered_on() -> bool:
     """AI_BOARD_GATE25_ANSWERED truthy: a clarification answerable by a verbatim request/source quote is answered, validator reruns."""
     return get_settings().gate25_answered
@@ -852,6 +877,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if not validation['clear'] and asks_about_code(validation.get('question')):
         state['assumption'] = validation['question']
         judge('code question dropped', True, validation['question'])
+        validation = {**validation, 'clear': True, 'question': None}
+    if clarify_rules_on() and not validation['clear'] and validation.get('question') and (asks_repo_rule(validation['question']) or names_edit(request, plan)):
+        state['assumption'] = validation['question']
+        judge('named edit or repo rule: question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
     anchored = bool(request.get('grounding_required')) and target_anchored(plan, files, request)
     if anchored and not validation['clear'] and validation.get('grounded'):

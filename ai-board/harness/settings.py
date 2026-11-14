@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     prompt_role_split: bool = False
     procedure_in_split: bool = False  # tạm thời để đo LF/166; gỡ khi có kết quả
     gate25_answered: bool = False
+    plan_validate_clarify_rules: bool = False
     gate25_sim_user: bool = False
     private_preview_enabled: bool = False
     model_routing: bool = False
