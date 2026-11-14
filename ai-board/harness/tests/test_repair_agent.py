@@ -101,10 +101,10 @@ def test_a_search_block_must_match_the_file_once():
 
 
 def test_only_read_and_draft_write_tools_are_accepted():
-    loaded = tool_manifest.load(known={"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"})
+    loaded = tool_manifest.load(known={"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "request_package", "fetch_url", "finish"})
     allowed = agent.allowed_tools(loaded)
     assert "edit_file" in allowed and "read_file" in allowed
-    assert "run_check" not in allowed and "finish" not in allowed
+    assert not {"run_check", "finish", "request_package", "fetch_url"} & set(allowed)
     out = agent.check(proposal(tool="run_check"), scope=SCOPE, code=CODE, manifest=loaded)
     assert not out["ok"]
 
