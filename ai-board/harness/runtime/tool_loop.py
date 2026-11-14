@@ -9,6 +9,7 @@ import re
 import sys
 import time
 from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from runtime import limits, meter, repair_session, sandbox_tool, subtask_files, tool_manifest
@@ -29,7 +30,7 @@ from settings import get_settings
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
-IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
+IMPLEMENTED = {"tree", "outline", "grep", "read_file", "read_skill_resource", "edit_file", "write_test", "run_check", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
 REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIFEST.tools)
 WRITE_TOOLS = MANIFEST.names("draft_write")
@@ -131,6 +132,12 @@ MODEL_CALL = "model_call"
 class ToolError(ValueError):
     """Request sai hình dạng/tham số: sửa được trong trần, không tính lượt sửa nội dung."""
     error_class, error_kind = PRODUCT, "args"
+
+
+@dataclass(frozen=True)
+class ActiveSkill:
+    folder: Path | None  # None: skill admin, không có thư mục trên đĩa
+    body: str
 
 
 class ToolTimeout(ToolError):
@@ -249,8 +256,9 @@ class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
     def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None,
-                 extras: dict[str, str | None] | None = None):
+                 extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
+        self.skills = dict(skills or {})
         self.extra_base = dict(extras or {})
         self.extra_content = {path: base or "" for path, base in self.extra_base.items()}
         self.base_hash = None if current is None else sha_of(current)
@@ -387,6 +395,8 @@ class Workspace:
                         break
                 return _fit('\n'.join(hits), name)
             return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name) or "(không có kết quả)"
+        if name == "read_skill_resource":
+            return _fit(_skill_resource(self.skills, args["path"]), name)
         if name == "read_file":
             if self.checks:
                 content = self._read(args['file'])
@@ -452,6 +462,34 @@ class Workspace:
         return {"code": self.content, "test_file": self.test_file, "test": self.test,
                 **({"extra_files": changed} if changed else {}),
                 **({'verification': self.proofs} if self.checks else {})}
+
+
+def _active_skills(role: str, context: dict) -> dict[str, ActiveSkill]:
+    """Skill đã chọn cho node (cùng nguồn với pin) kèm thư mục đĩa; admin skill không có thư mục."""
+    from services import default_skills, skill_plan
+    selected = skill_plan.build(role, context).skills if skill_plan.enabled() else default_skills.select(role, context)
+    return {s.name: ActiveSkill(default_skills.ROOT / s.name if s.source == 'default' else None, s.body) for s in selected}
+
+
+def _skill_resource(skills: dict[str, ActiveSkill], path: str) -> str:
+    """Nội dung references/ của skill kích hoạt mà thân skill nhắc tới; ToolError khi ngoài phạm vi."""
+    parts = path.split("/")
+    if len(parts) < 3 or parts[1] != "references" or any(p in ("", ".", "..") for p in parts) or "\\" in path or path.startswith("/"):
+        raise ToolError("read_skill_resource: path phải có dạng <skill>/references/<file>")
+    skill = skills.get(parts[0])
+    if skill is None or skill.folder is None:
+        raise ToolError(f"read_skill_resource: skill không kích hoạt: {parts[0]!r}")
+    rel = "/".join(parts[1:])
+    if not re.search(re.escape(rel) + r"(?![\w./-])", skill.body):
+        raise ToolError(f"read_skill_resource: thân skill không nhắc {rel!r}")
+    root = (skill.folder / "references").resolve()
+    target = (skill.folder / rel).resolve()
+    if not target.is_relative_to(root) or not target.is_file():
+        raise ToolError(f"read_skill_resource: không có file {rel!r}")
+    try:
+        return target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ToolError(f"read_skill_resource: không đọc được {rel!r}: {error}") from None
 
 
 def _cap(name: str) -> int:
@@ -771,6 +809,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     pins = {**(pins or {}), 'skills': pin_skills(role or 'gate3_light', skill_context)
             if prompt_roles.enabled() else 'off'}
     if prompt_roles.enabled():
+        ws.skills = _active_skills(role or 'gate3_light', dict(skill_context))
         skill_context['expected_pin'] = pins['skills']
     last_sig, repeats = None, 0
     trace = getattr(deps, "trace", None)

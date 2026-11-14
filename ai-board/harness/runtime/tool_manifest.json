@@ -93,6 +93,25 @@
       "max_seconds": 5
     },
     {
+      "name": "read_skill_resource",
+      "description": "Read one file under references/ of an active skill, as <skill>/references/<file>. Allowed only when the skill body mentions that file; scripts/ is never readable or run.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "effect": "read",
+      "max_arg_bytes": 500,
+      "max_output_chars": 16000,
+      "max_seconds": 5
+    },
+    {
       "name": "edit_file",
       "description": "Apply edits {after_line, insert} or {search, replace} to the target file; line numbers follow the current draft.",
       "parameters": {
