@@ -401,8 +401,8 @@ def _added_texts(state):
 
 
 def select_fallback(state, pages=()):
-    """Oracle from the diff when select() names none: added page text, else an added route."""
-    if select(state):
+    """Oracle from the diff when select() names none (pages only): added page text, else an added route."""
+    if pages and select(state):
         return None
     if pages and _added_texts(state):
         return FALLBACK_TEXT_PROBE

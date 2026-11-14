@@ -27,6 +27,12 @@ def test_fallback_never_overrides_a_request_specific_oracle():
     assert functional.select_fallback(s, ['/x.html']) is None
 
 
+def test_server_only_route_is_probed_even_when_the_request_quotes_text():
+    s = diff_state(ROUTE, title='', detail="Thêm 'Tizia cập nhật' vào chân trang")
+    assert functional.select(s) is not None
+    assert functional.select_fallback(s, []) == functional.ROUTE_PROBE
+
+
 def test_parameterised_route_and_server_only_edit_have_no_fallback():
     assert functional.select_fallback(diff_state(PARAM), []) is None
     assert functional.select_fallback(diff_state(('server/x.js', '+const a = 1;\n')), []) is None

@@ -1150,6 +1150,31 @@ def test_server_only_diff_without_a_route_is_still_a_plan_failure_before_docker(
     assert runner.calls == []
 
 
+def test_server_only_route_probe_keeps_isolation_secret_check_and_teardown(tmp_path, monkeypatch):
+    from verification import functional
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: (200, b"{}"))
+    leaky = FakeRunner(container_env="NODE_ENV=production\nOLLAMA_SECKEY=do-not-log\n")
+    s = server_only(tmp_path)
+    out = verify.run(s, runner=leaky, functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is True and "do-not-log" not in json.dumps(out)
+    assert any(args[-2:] == ["down", "-v"] for args, _ in leaky.calls)
+    ok = FakeRunner()
+    verify.run(s, runner=ok, functional_probe=lambda base, _: functional.run_route(base, s))
+    config = json.loads(ok.override)
+    assert config["services"]["tizia"]["ports"] == ["127.0.0.1::8041"]
+    assert any(args[-2:] == ["down", "-v"] for args, _ in ok.calls)
+
+
+def test_server_only_route_is_probed_when_the_request_names_a_text_oracle(tmp_path, monkeypatch):
+    from verification import functional
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: (200, b"{}"))
+    s = server_only(tmp_path)
+    s["request_detail"] = "Thêm API trả 'Tizia cập nhật' cho chân trang"
+    out = verify.run(s, runner=FakeRunner(), functional_probe=lambda base, _: functional.run_route(base, s))
+    assert out["blocked"] is False, out["reason"]
+    assert out["evidence"]["functional"]["probe_id"] == functional.ROUTE_PROBE
+
+
 def test_opened_context_runs_its_related_test_and_route_probe(tmp_path, monkeypatch):
     import settings
     from runtime import levels
