@@ -638,13 +638,29 @@ _QUOTED = re.compile(r"[\"“”«»]([^\"“”«»]{2,}?)[\"“”«»]|'([^']
 _REPO_RULE = re.compile(r"\bonclick\b|inline (?:handler|script|style)|\bCSP\b|\blint\b|luật (?:repo|của repo)|quy tắc (?:repo|của repo)|\bcấm\b", re.I)
 
 
+_PAGE_PHRASE = re.compile(r"\b(?:trang|page)\s+(\w+)", re.I)
+_NOT_A_PAGE = {"nào", "này", "đó", "kia", "khác", "nữa", "có", "web", "em", "mình", "ấy", "nao", "which", "this", "that", "other", "any"}
+
+
+def _names_page(text: str, file: str) -> bool:
+    """Request names the plan's single file (path, basename, stem) or a 'trang <name>' phrase; unsure -> False."""
+    low = text.lower()
+    path = file.lower()
+    base = path.rsplit("/", 1)[-1]
+    stem = base.rsplit(".", 1)[0]
+    if path in low or base in low or (len(stem) >= 4 and re.search(rf"\b{re.escape(stem)}\b", low)):
+        return True
+    return any(m.group(1).lower() not in _NOT_A_PAGE for m in _PAGE_PHRASE.finditer(text))
+
+
 def names_edit(request: dict, plan: dict) -> bool:
-    """Request quotes old and new text (two distinct spans) and the plan carries both: scope is decided."""
+    """Request names the page and quotes old and new text (two distinct spans) the plan carries, one target file: scope is decided."""
     text = " ".join(str(request.get(k) or "") for k in ("subject", "body"))
     spans = {next(g for g in m.groups() if g).strip() for m in _QUOTED.finditer(text)}
     carried = json.dumps(plan, ensure_ascii=False)
     spans = {s for s in spans if s in carried}
-    return len(spans) >= 2 and len({task["file"] for task in plan["subtasks"]}) == 1
+    files = {task["file"] for task in plan["subtasks"]}
+    return len(spans) >= 2 and len(files) == 1 and _names_page(text, next(iter(files)))
 
 
 def asks_repo_rule(question: str | None) -> bool:
