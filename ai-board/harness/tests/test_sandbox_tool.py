@@ -338,6 +338,8 @@ def test_repo_script_argv_refused_when_arm_off(argv):
     ["node", "scripts/AI-Board-skills-export.mjs"],
     ["node", "scripts/fetch-inbox.mjs"],
     ["node", "scripts/check-skills.mjs"],
+    ["node", "scripts/audit-s3-objects.mjs"],
+    ["node", "scripts/generate-hsm-diagram.mjs"],
     ["node", "scripts\run-tests.mjs"],
     ["node", "ai-board/harness/x.js"],
 ])
@@ -372,3 +374,9 @@ def test_repo_script_output_cut_at_cap_with_receipt(monkeypatch):
 @pytest.mark.parametrize("task_type,offered", [("backend", True), ("frontend", True), ("database", True), ("test", True), ("review", False), ("", False)])
 def test_gate3_offered_by_task_type(flag_on, task_type, offered):
     assert sandbox_tool.offered(task_type) is offered
+
+
+def test_sandbox_observation_capped_by_tokens(offered_tool):
+    from services import token_count
+    observation = tool_loop._fit("中" * 2000, sandbox_tool.NAME)
+    assert token_count.measure(observation) <= tool_loop._cap(sandbox_tool.NAME)
