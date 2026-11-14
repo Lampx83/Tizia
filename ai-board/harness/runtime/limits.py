@@ -160,7 +160,10 @@ def sandbox_client() -> dict:
 def sandbox_tool(env=None) -> dict:
     """run_in_sandbox limits; enabled only when flag env == "1" (contract default off)."""
     spec = _parsed()["limits"]["sandbox_tool"]
-    return {**spec, "enabled": get_settings(env).sandbox_tool, "allowed_argv": [tuple(p) for p in spec["allowed_argv"]]}
+    settings = get_settings(env)
+    gated = {tuple(p) for p in spec.get("repo_script_argv", [])}
+    argv = [tuple(p) for p in spec["allowed_argv"] if settings.sandbox_repo_scripts or tuple(p) not in gated]
+    return {**spec, "enabled": settings.sandbox_tool, "allowed_argv": argv}
 
 
 def scaled_limit(kind: str, n: int) -> int:

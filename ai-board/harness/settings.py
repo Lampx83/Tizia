@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     model_repair: bool | None = None
     repair_diagnose: bool = False
     sandbox_tool: bool = False
+    sandbox_repo_scripts: bool = False
     skill_select: bool | None = None
     multimodal: bool = False
     verified_loop: bool = False
