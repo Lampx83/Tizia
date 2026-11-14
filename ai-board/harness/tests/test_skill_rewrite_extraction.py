@@ -4,8 +4,8 @@ import json
 from runtime import pipeline
 from services import skill_rewrite
 
-SOURCE = ('---\nname: backend-checks\ndescription: Backend check flow\ntask_type: backend\nsource: admin\n'
-          'version: 1\nmax_tokens: 1500\n---\n'
+SOURCE = ('---\nname: backend-checks\ndescription: Backend check flow. Use when a migration or model changes.\n'
+          'metadata:\n  task_type: "backend"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n'
           'Run the migration check before touching models.\n'
           '1. Run `pytest -k migrations` and read the failure line.\n'
           '2. Run `ruff check server/` before asking for review.\n'
@@ -18,8 +18,8 @@ EXTRACTION = {'trigger': 'A migration or model change needs a checked path.',
               'examples': [],
               'failure_modes': ['A stale migration breaks the claim.'],
               'not_capturable': ['The worker GPU profile.']}
-REWRITTEN = ('---\nname: backend-checks\ndescription: Backend check flow\ntask_type: backend\nsource: admin\n'
-             'version: 1\nmax_tokens: 1500\n---\n'
+REWRITTEN = ('---\nname: backend-checks\ndescription: Backend check flow. Use when a migration or model changes.\n'
+             'metadata:\n  task_type: "backend"\n  source: "admin"\n  version: "1"\n  max_tokens: "1500"\n---\n'
              '1. When a migration or model change needs a checked path, run `pytest -k migrations` and read the failure line.\n'
              '2. Run `ruff check server/` before asking for review.\n'
              '3. Never edit a migration that already shipped.\n')
