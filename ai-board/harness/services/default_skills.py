@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from runtime import limits
-from services import skill_selection
+from services import skill_frontmatter, skill_selection
 from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
@@ -62,12 +62,12 @@ def parse(text):
     parts = text.split('---\n', 2)
     if len(parts) != 3:
         raise ValueError('incomplete skill frontmatter')
-    meta = {}
-    for line in parts[1].splitlines():
-        key, sep, value = line.partition(':')
-        if not sep or key in meta or key not in FIELDS | OPTIONAL_FIELDS or not value.strip():
-            raise ValueError('invalid or duplicate skill field')
-        meta[key] = value.strip()
+    try:
+        meta = skill_frontmatter.flat(parts[1])
+    except ValueError:
+        raise ValueError('invalid or duplicate skill field') from None
+    if not all(meta.values()) or not set(meta) <= FIELDS | OPTIONAL_FIELDS:
+        raise ValueError('invalid or duplicate skill field')
     if not FIELDS <= set(meta) <= FIELDS | OPTIONAL_FIELDS or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', meta['name']):
         raise ValueError('missing skill fields or invalid name')
     if 'topic' in meta and not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', meta['topic']):

@@ -1,12 +1,14 @@
 ---
 name: fix-js-behavior
-match: không bấm được, bấm không được, khi bấm, khi nhấn, nhấn vào, bấm vào, nút không, không chạy, không hoạt động, không hiện, không hiển thị, bị lỗi, báo lỗi, bị treo, bị đơ, đếm sai, tính sai, sự kiện, javascript, js, script, click, bug, broken, not working, crash
-files: *.js, *.mjs
-tools: outline, grep, lessons
-tools3: grep, outline, lessons
-budget: 2200
-budget3: 5500
-priority: 5
+description: "Make the smallest fix to a module or inline script whose behavior is broken, keeping names, exports and imports. Use when the request reports a button, event, calculation or display that does not work."
+metadata:
+  match: "không bấm được, bấm không được, khi bấm, khi nhấn, nhấn vào, bấm vào, nút không, không chạy, không hoạt động, không hiện, không hiển thị, bị lỗi, báo lỗi, bị treo, bị đơ, đếm sai, tính sai, sự kiện, javascript, js, script, click, bug, broken, not working, crash"
+  files: "*.js, *.mjs"
+  tools: "outline, grep, lessons"
+  tools3: "grep, outline, lessons"
+  budget: "2200"
+  budget3: "5500"
+  priority: "5"
 ---
 ## gate 1
 1. The behaviour lives in a module under the page's "js liên kết" line, or in the page's inline module script. Pick the file whose outline or excerpt shows the function, id or string involved.

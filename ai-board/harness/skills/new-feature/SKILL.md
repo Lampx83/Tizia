@@ -1,13 +1,15 @@
 ---
 name: new-feature
-match: chức năng mới, tính năng mới, trò chơi mới, trò mới, bảng xếp hạng, trang chức năng, feature mới, new feature
-types: feature
-files: new:*.html, new:index.js
-tools: exemplar, repomap, tree, lessons
-tools3: exemplar, lessons
-budget: 3200
-budget3: 5000
-priority: 5
+description: "Draft a new feature as a page, an ES module with fake data and optionally a second screen, copying an exemplar page. Use when the request asks for a new game, leaderboard or feature page."
+metadata:
+  match: "chức năng mới, tính năng mới, trò chơi mới, trò mới, bảng xếp hạng, trang chức năng, feature mới, new feature"
+  types: "feature"
+  files: "new:*.html, new:index.js"
+  tools: "exemplar, repomap, tree, lessons"
+  tools3: "exemplar, lessons"
+  budget: "3200"
+  budget3: "5000"
+  priority: "5"
 ---
 ## gate 1
 1. This is the FIRST draft of a new feature (the FEATURE BRIEF has no "Đã làm" section). At most 3 subtasks, in this order:

@@ -1,11 +1,13 @@
 ---
 name: default
-match:
-tools: tree, repomap, lessons
-tools3: grep, outline, lessons
-budget: 2200
-budget3: 5000
-priority: 9
+description: "Fallback guidance for planning and coding one small change to an existing public page or one protected server file. Use when no other skill matches the request text, request type or file."
+metadata:
+  match: ""
+  tools: "tree, repomap, lessons"
+  tools3: "grep, outline, lessons"
+  budget: "2200"
+  budget3: "5000"
+  priority: "9"
 ---
 ## gate 1
 1. Prefer changing one existing page in public/ over creating anything new.

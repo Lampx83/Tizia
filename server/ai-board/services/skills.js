@@ -52,9 +52,13 @@ export function lintSkill(text, { source = 'admin', version = null, name = null 
     const parts = text.split('---\n');
     if (parts.length < 3) throw bad('Incomplete frontmatter');
     const meta = {};
-    for (const line of parts[1].trimEnd().split('\n')) {
-      const i = line.indexOf(':'), key = line.slice(0, i), value = line.slice(i + 1).trim();
-      if (i < 1 || !FIELDS.includes(key) || Object.hasOwn(meta, key) || !value) throw bad('Invalid skill field');
+    let inMeta = false;
+    for (const raw of parts[1].trimEnd().split('\n')) {
+      const indented = /^\s/.test(raw), line = raw.trim(), i = line.indexOf(':'), key = line.slice(0, i);
+      let value = line.slice(i + 1).trim();
+      if (!indented) { inMeta = key === 'metadata' && !value; if (inMeta) continue; }
+      if (i < 1 || (indented && !inMeta) || !FIELDS.includes(key) || Object.hasOwn(meta, key) || !value) throw bad('Invalid skill field');
+      if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) value = JSON.parse(value);
       meta[key] = value;
     }
     if (Object.entries(meta).length !== FIELDS.length || !/^[a-z][a-z0-9-]{0,63}$/.test(meta.name)) throw bad('Missing fields or invalid name');

@@ -1,10 +1,11 @@
 ---
 name: default-review
-description: Independent review of a candidate
-task_type: review
-source: default
-version: 1
-max_tokens: 1500
+description: "Independent review of a candidate against the request, changed files and test evidence for correctness, authority and data-loss defects. Use when a gate 4 reviewer checks a candidate before verdict."
+metadata:
+  task_type: "review"
+  source: "default"
+  version: "1"
+  max_tokens: "1500"
 ---
 1. Compare the request, changed files and test evidence.
 2. Identify concrete correctness, authority or data-loss defects.

@@ -1,10 +1,11 @@
 ---
 name: default-merge
-description: Resolve an in-progress git merge or rebase conflict
-task_type: merge
-source: default
-version: 3
-max_tokens: 1200
+description: "Resolve an in-progress git merge or rebase conflict by keeping both sides' intent, then check no conflict markers remain. Use when the working tree has unmerged files or a rebase stopped on a conflict."
+metadata:
+  task_type: "merge"
+  source: "default"
+  version: "3"
+  max_tokens: "1200"
 ---
 1. Check the merge/rebase state: conflicted files, and the commit history of both branches.
 2. Find the original intent of each change in the commit message, PR, or related ticket before editing.
