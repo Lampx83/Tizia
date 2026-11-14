@@ -73,9 +73,9 @@ def test_native_call_carries_manifest_tools_and_message_history(on):
     assert all(t["type"] == "function" and t["function"]["parameters"]["type"] == "object" for t in first["tools"])
     assert deps.calls[0]["prompt"] == deps.calls[1]["prompt"] == deps.calls[2]["prompt"]
     assistant, result = second["messages"]
-    assert assistant["role"] == "assistant" and assistant["tool_calls"][0]["id"] == "call_0"
+    assert assistant["role"] == "assistant" and assistant["tool_calls"][0]["id"] == "c0"
     assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == EDIT["arguments"]
-    assert result["role"] == "tool" and result["tool_call_id"] == "call_0" and "đã áp 1 edit" in result["content"]
+    assert result["role"] == "tool" and result["tool_call_id"] == "c0" and "đã áp 1 edit" in result["content"]
     assert len(third["messages"]) == 4
 
 
@@ -84,8 +84,10 @@ def test_two_calls_in_one_reply_is_a_fixable_error_and_loop_continues(on):
     out, deps = run([two, native(EDIT, 1), native(TEST, 2), native(FINISH, 3)])
     assert out["status"] == "proposed"
     reply = deps.calls[1]["extra"]["messages"]
-    assert reply[0]["role"] == "assistant" and "tool_calls" not in reply[0]
-    assert reply[1]["role"] == "user" and "MỘT tool" in reply[1]["content"] and "nhận 2" in reply[1]["content"]
+    call = reply[0]["tool_calls"][0]
+    assert reply[0]["role"] == "assistant" and call["function"]["name"] == tool_loop.INVALID_CALL
+    assert reply[1]["role"] == "tool" and reply[1]["tool_call_id"] == call["id"]
+    assert "MỘT tool" in reply[1]["content"] and "nhận 2" in reply[1]["content"]
 
 
 def test_text_json_reply_still_works_inside_native_mode(on):
@@ -165,4 +167,6 @@ def test_resume_replay_rebuilds_the_live_native_history(on):
     assert out["status"] == "proposed"
     history = live.calls[-1]["extra"]["messages"]
     assert len(history) == 10 and resumed.calls[0]["extra"]["messages"] == history
-    assert [m["tool_call_id"] for m in history if m["role"] == "tool"] == ["call_3", "call_4"]
+    ids = [m["tool_call_id"] for m in history if m["role"] == "tool"]
+    assert len(ids) == len(set(ids)) == 5 and ids[-2:] == ["c7", "c8"]
+    assert [c["id"] for m in history for c in m.get("tool_calls", [])] == ids

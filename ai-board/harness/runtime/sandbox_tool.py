@@ -131,14 +131,14 @@ class Runner:
         self.cfg = limits.sandbox_tool(env)
         self.receipts: list[dict] = [] if receipts is None else receipts
 
-    def __call__(self, argv, drafts: dict[str, str]) -> str:
+    def __call__(self, argv, drafts: dict[str, str], call_id: str | None = None) -> str:
         check_argv(argv, self.cfg["allowed_argv"])
         deadline = time.monotonic() + self.cfg["wall_clock_s"]
         with tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-") as stage:
             _stage(self.source, self.sha, drafts, Path(stage))
             for attempt in range(self.cfg["max_retries"] + 1):
                 started = time.monotonic()
-                receipt = {"run_id": None, "argv": list(argv), "attempt": attempt, "rc": None, "error": None}
+                receipt = {"run_id": None, "tool_call_id": call_id, "argv": list(argv), "attempt": attempt, "rc": None, "error": None}
                 session = SandboxSession(stage, client=self.client, lease_ok=self.lease_ok, deadline=deadline)
                 receipt["run_id"] = session.run_id
                 outcome, error = None, None
@@ -187,7 +187,7 @@ class Runner:
         if hasattr(self.trace, "add_span"):
             now = int(time.time() * 1000)
             self.trace.add_span("sandbox_exec", {
-                "tizia.sandbox.run_id": receipt["run_id"] or "", "tizia.sandbox.argv": " ".join(receipt["argv"])[:200],
+                "tizia.sandbox.run_id": receipt["run_id"] or "", "tizia.tool_call_id": receipt["tool_call_id"] or "", "tizia.sandbox.argv": " ".join(receipt["argv"])[:200],
                 "tizia.sandbox.rc": receipt["rc"] if receipt["rc"] is not None else -1, "tizia.sandbox.attempt": receipt["attempt"],
                 "tizia.sandbox.error": receipt["error"] or "",
             }, start_ms=now - receipt["duration_ms"], end_ms=now, status="error" if receipt["error"] else "ok")

@@ -40,17 +40,17 @@ class MemSteps:
     def save_ledger(self, snapshot):
         self.db["ledger"] = dict(snapshot)
 
-    def intent(self, step, tool, args):
+    def intent(self, step, tool, args, call_id=None):
         self._hit("intent", step)
         assert step not in self.db["steps"]
         self.db["steps"][step] = {"step": step, "identity": self.identity(step, tool, args), "tool": tool,
-                                  "args": json.loads(json.dumps(args)), "status": "intent", "kind": None, "observation": None}
+                                  "args": json.loads(json.dumps(args)), "status": "intent", "kind": None, "observation": None, "call_id": call_id}
 
-    def done(self, step, tool, args, observation, kind):
+    def done(self, step, tool, args, observation, kind, call_id=None):
         self._hit("done", step)
         self.db["steps"][step] = {"step": step, "identity": self.identity(step, tool, args), "tool": tool,
                                   "args": json.loads(json.dumps(args)), "status": "done", "kind": kind,
-                                  "observation": observation}
+                                  "observation": observation, "call_id": call_id}
 
     def mark(self, step, status):
         self.db["steps"][step]["status"] = status

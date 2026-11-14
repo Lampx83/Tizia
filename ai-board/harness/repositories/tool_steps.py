@@ -41,6 +41,10 @@ DO $$ BEGIN
     ALTER TABLE tool_step ADD COLUMN resolution_reason TEXT, ADD COLUMN resolution_evidence TEXT,
                           ADD COLUMN resolved_at BIGINT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+                 AND table_name = 'tool_step' AND column_name = 'call_id') THEN
+    ALTER TABLE tool_step ADD COLUMN call_id TEXT;
+  END IF;
 END $$;
 """
 # status: intent (ghi trước khi chạy) | done | unknown (dừng chờ đối chiếu) | applied | void | compensate (kết quả đối chiếu)
@@ -72,7 +76,7 @@ class PgSteps:
         with harness_db(self.dsn, ddl=DDL, dict_rows=True) as con:
             run = con.execute("SELECT pins_json, ledger_json FROM tool_run WHERE proposal_id=%s AND child=%s",
                               where).fetchone()
-            rows = con.execute("SELECT step, identity, tool, args_json, status, kind, observation FROM tool_step "
+            rows = con.execute("SELECT step, identity, tool, args_json, status, kind, observation, call_id FROM tool_step "
                                "WHERE proposal_id=%s AND child=%s ORDER BY step", where).fetchall()
         steps = [{**row, "args": json.loads(row["args_json"])} for row in rows]
         return {"pins": json.loads(run["pins_json"]) if run else None,
@@ -89,22 +93,23 @@ class PgSteps:
             con.execute("UPDATE tool_run SET ledger_json=%s, updated_at=%s WHERE proposal_id=%s AND child=%s",
                         (json.dumps(snapshot), _now(), self.proposal_id, self.child))
 
-    def intent(self, step: int, tool: str, args: dict) -> None:
+    def intent(self, step: int, tool: str, args: dict, call_id: str | None = None) -> None:
         """INSERT trước khi chạy; trùng khoá (2 worker cùng chạy 1 bước) raise."""
         with harness_db(self.dsn, ddl=DDL) as con:
-            con.execute("INSERT INTO tool_step (proposal_id, child, step, identity, tool, args_json, status, updated_at) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, 'intent', %s)",
+            con.execute("INSERT INTO tool_step (proposal_id, child, step, identity, tool, args_json, status, updated_at, call_id) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, 'intent', %s, %s)",
                         (self.proposal_id, self.child, step, self.identity(step, tool, args),
-                         tool, json.dumps(args, sort_keys=True), _now()))
+                         tool, json.dumps(args, sort_keys=True), _now(), call_id))
 
-    def done(self, step: int, tool: str, args: dict, observation: str, kind: str) -> None:
+    def done(self, step: int, tool: str, args: dict, observation: str, kind: str, call_id: str | None = None) -> None:
         with harness_db(self.dsn, ddl=DDL) as con:
             con.execute("INSERT INTO tool_step (proposal_id, child, step, identity, tool, args_json, status, kind, "
-                        "observation, updated_at) VALUES (%s, %s, %s, %s, %s, %s, 'done', %s, %s, %s) "
+                        "observation, updated_at, call_id) VALUES (%s, %s, %s, %s, %s, %s, 'done', %s, %s, %s, %s) "
                         "ON CONFLICT (proposal_id, child, step) DO UPDATE SET status='done', kind=EXCLUDED.kind, "
-                        "observation=EXCLUDED.observation, updated_at=EXCLUDED.updated_at",
+                        "observation=EXCLUDED.observation, updated_at=EXCLUDED.updated_at, "
+                        "call_id=COALESCE(EXCLUDED.call_id, tool_step.call_id)",
                         (self.proposal_id, self.child, step, self.identity(step, tool, args), tool,
-                         json.dumps(args, sort_keys=True), kind, observation, _now()))
+                         json.dumps(args, sort_keys=True), kind, observation, _now(), call_id))
 
     def mark(self, step: int, status: str) -> None:
         with harness_db(self.dsn, ddl=DDL) as con:
