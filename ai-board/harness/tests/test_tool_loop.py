@@ -410,3 +410,50 @@ def test_check_command_refuses_outside_allowlist():
     tool_loop.check_command(['git', 'status'])
     with pytest.raises(tool_loop.Forbidden):
         tool_loop.check_command(['rm', '-rf', 'public'])
+
+
+BAD_GREP = {"tool": "grep", "arguments": {"words": "abc"}}
+BAD_TREE = {"tool": "tree", "arguments": {"path": 3}}
+DOC_MARK = "TOOL DOC grep"
+
+
+@pytest.fixture
+def doc_on(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_TOOL_DOC_INJECT", "1")
+
+
+def test_tool_doc_flag_off_by_default():
+    from settings import get_settings
+    assert get_settings().tool_doc_inject is False
+
+
+def test_two_invalid_same_tool_calls_inject_schema_and_example(doc_on):
+    _, _, deps = run([BAD_GREP, BAD_GREP, EDIT, TEST, FINISH])
+    assert DOC_MARK not in deps.prompts[1] and DOC_MARK in deps.prompts[2]
+    doc = deps.prompts[2].split(DOC_MARK, 1)[1]
+    example = tool_loop.MANIFEST.tools["grep"].example
+    assert '"words"' in doc and example is not None
+    assert json.dumps(example, ensure_ascii=False) in doc
+
+
+def test_different_tools_or_single_invalid_inject_nothing(doc_on):
+    _, _, deps = run([BAD_GREP, BAD_TREE, BAD_GREP, EDIT, TEST, FINISH])
+    assert all("TOOL DOC" not in p for p in deps.prompts)
+    _, _, deps = run([BAD_GREP, EDIT, TEST, FINISH])
+    assert all("TOOL DOC" not in p for p in deps.prompts)
+
+
+def test_valid_call_between_resets_the_streak(doc_on):
+    ok = {"tool": "tree", "arguments": {"path": "public"}}
+    _, _, deps = run([BAD_GREP, ok, BAD_GREP, EDIT, TEST, FINISH])
+    assert all("TOOL DOC" not in p for p in deps.prompts)
+
+
+def test_injection_happens_once_per_streak(doc_on):
+    _, _, deps = run([BAD_GREP, BAD_GREP, BAD_GREP, BAD_GREP, EDIT, TEST, FINISH])
+    assert deps.prompts[-1].count("TOOL DOC") == 1
+
+
+def test_flag_off_injects_nothing():
+    _, _, deps = run([BAD_GREP, BAD_GREP, EDIT, TEST, FINISH])
+    assert all("TOOL DOC" not in p for p in deps.prompts)
