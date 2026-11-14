@@ -15,13 +15,13 @@ export function createToolCheckpointRepository(db) {
       ON CONFLICT DO NOTHING`, [proposalId, child, pins, now, scope]),
     setLedger: ({ proposalId, child, ledger, now }) => exec('UPDATE tool_run SET ledger_json=?, updated_at=? WHERE proposal_id=? AND child=?',
       [ledger, now, proposalId, child]),
-    insertIntent: ({ proposalId, child, step, identity, tool, args, now }) => exec(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'intent', ?)`, [proposalId, child, step, identity, tool, args, now]),
-    upsertDone: r => exec(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, kind, observation, observation_digest, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'done', ?, ?, ?, ?)
+    insertIntent: ({ proposalId, child, step, identity, tool, args, callId, now }) => exec(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, updated_at, call_id)
+      VALUES (?, ?, ?, ?, ?, ?, 'intent', ?, ?)`, [proposalId, child, step, identity, tool, args, now, callId]),
+    upsertDone: r => exec(`INSERT INTO tool_step(proposal_id, child, step, identity, tool, args_json, status, kind, observation, observation_digest, updated_at, call_id)
+      VALUES (?, ?, ?, ?, ?, ?, 'done', ?, ?, ?, ?, ?)
       ON CONFLICT (proposal_id, child, step) DO UPDATE SET status='done', kind=EXCLUDED.kind, observation=EXCLUDED.observation,
-        observation_digest=EXCLUDED.observation_digest, updated_at=EXCLUDED.updated_at`,
-      [r.proposalId, r.child, r.step, r.identity, r.tool, r.args, r.kind, r.observation, r.digest, r.now]),
+        observation_digest=EXCLUDED.observation_digest, updated_at=EXCLUDED.updated_at, call_id=COALESCE(EXCLUDED.call_id, tool_step.call_id)`,
+      [r.proposalId, r.child, r.step, r.identity, r.tool, r.args, r.kind, r.observation, r.digest, r.now, r.callId]),
     setStepStatus: ({ proposalId, child, step, status, now }) => exec('UPDATE tool_step SET status=?, updated_at=? WHERE proposal_id=? AND child=? AND step=?',
       [status, now, proposalId, child, step]),
     deleteSteps: (proposalId, child) => exec('DELETE FROM tool_step WHERE proposal_id=? AND child=?', [proposalId, child]),

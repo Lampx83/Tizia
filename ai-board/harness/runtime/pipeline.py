@@ -350,7 +350,7 @@ class Deps:
         if error is None and db_path is not None and proposal_id is not None:
             gate_trace.record(db_path, skill_proposal_id=proposal_id, gate=gate, model=model, prompt=prompt, body=body)
         result = ('timeout' if isinstance(error, TimeoutError) else 'http_error') if error else 'ok'
-        self._trace(gate, model, prompt, prompt_name, '' if error else body.get('response', ''), metrics, n,
+        self._trace(gate, model, prompt, prompt_name, '' if error else meter.output_text(body), metrics, n,
                     result, str(error) if error else None, child, iteration, provider=provider, request=request)
         return metrics
 

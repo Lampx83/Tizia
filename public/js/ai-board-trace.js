@@ -40,6 +40,85 @@ export function loopActions(rows = []) {
     return { n: i + 1, tool: typeof act.tool === 'string' ? act.tool : '?', target: String(target), result: call.result, ms: call.metrics?.wall_ms ?? null, error: call.error || '' };
   });
 }
+export const callsOf = (step) => (step?.calls || []).flatMap(g => [...g.previous, g.current])
+  .map(c => ({ ...(c.evidence || {}), at: c.created_at }))
+  .sort((a, b) => Number(a.at) - Number(b.at));
+export const TOOL_KIND = { ok: 'Done', finish_ok: 'Done', error: 'Failed', infra_error: 'Infra error', forbidden: 'Blocked',
+  finish_rejected: 'Finish rejected', repeated: 'Repeated', scope_warning: 'Scope warning', network_pending: 'Waiting for admin',
+  timeout: 'Model timeout', http_error: 'Model connection failed' };
+const clip = (text, max) => (String(text ?? '').length > max ? `${String(text).slice(0, max)}…` : String(text ?? ''));
+// Reply text that is not the tool JSON itself (the model's own words, if it wrote any).
+function thoughtOf(output) {
+  const text = String(output || '').trim();
+  if (!text) return '';
+  try { const value = JSON.parse(text); if (value && typeof value === 'object' && 'tool' in value) return ''; } catch { /* plain text */ }
+  return clip(text, 200);
+}
+export const modelFailure = (call) => {
+  if (call.result === 'timeout') return { class: 'infra', kind: 'timeout' };
+  if (call.result === 'http_error') return { class: 'infra', kind: 'io' };
+  if (call.result === 'error') return { class: 'product', kind: 'output' };
+  return null;
+};
+/** One row per model call that asked for a tool, or failed before a tool ran: tool, target, outcome, class, time, retry, tokens. */
+export function toolRows(step, trace = {}) {
+  const spanByModel = new Map();
+  for (const span of step?.run?.spans || []) {
+    if (String(span.name || '').startsWith('execute_tool') && span.attributes?.['tizia.model_call_id']) {
+      spanByModel.set(span.attributes['tizia.model_call_id'], span);
+    }
+  }
+  const rowByCall = new Map((trace.tool_steps || []).filter(r => r.call_id).map(r => [r.call_id, r]));
+  const calls = callsOf(step);
+  const attempts = attemptsOf(calls);
+  return calls.filter(c => describeModelCall(c).id === 'loop').map((call, i) => {
+    const parsed = loopActions([call])[0];
+    const span = spanByModel.get(call.call_id);
+    const attrs = span?.attributes || {};
+    const row = rowByCall.get(attrs['gen_ai.tool.call.id']) || null;
+    const args = row?.args || {};
+    const attemptFailed = !span && modelFailure(call);
+    const kind = attrs['tizia.tool.status'] || row?.kind
+      || (attemptFailed ? (call.result === 'timeout' ? 'timeout' : 'http_error') : call.result === 'error' ? 'error' : null);
+    const failing = Boolean(kind) && !['ok', 'finish_ok'].includes(kind);
+    const failure = attrs['tizia.tool.error_class'] ? { class: attrs['tizia.tool.error_class'], kind: attrs['tizia.tool.error_kind'] || null }
+      : failing ? modelFailure(call) : null;
+    const ms = span && Number.isFinite(span.end_ms - span.start_ms) ? span.end_ms - span.start_ms : call.metrics?.wall_ms ?? null;
+    const named = attrs['gen_ai.tool.name'] || row?.tool;
+    const tool = named || (attemptFailed ? 'model_call' : parsed.tool !== '?' ? parsed.tool : 'not recorded');
+    return {
+      n: i + 1, step: attrs['tizia.step'] ?? row?.step ?? null, tool,
+      target: String(args.file || args.test_file || args.query || args.pattern || parsed.target || ''),
+      args: Object.keys(args).length ? args : null,
+      observation: row?.observation ?? null,
+      call_id: attrs['gen_ai.tool.call.id'] || row?.call_id || null,
+      model_call_id: call.call_id || null,
+      kind, label: kind ? (TOOL_KIND[kind] || kind) : 'No result recorded',
+      failure, ms, retry: attempts.get(call.call_id) || null,
+      tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null,
+      thought: thoughtOf(call.output),
+    };
+  });
+}
+/** Attempts of one model call: same gate, child, iteration and prompt. Keyed by call_id; attempts 2..n only. */
+export function attemptsOf(calls = []) {
+  const groups = new Map();
+  for (const call of calls) {
+    const key = [call.gate, call.child, call.iteration, call.prompt_name].join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(call);
+  }
+  const info = new Map();
+  for (const rows of groups.values()) {
+    if (rows.length < 2) continue;
+    rows.forEach((call, i) => {
+      if (i === 0 || !call.call_id) return;
+      const prev = rows[i - 1];
+      info.set(call.call_id, { n: i + 1, of: rows.length, reason: prev.error || prev.result || '' });
+    });
+  }
+  return info;
+}
 export function stepTotals(step) {
   const rows = step.calls.flatMap(g => [...g.previous, g.current]).map(c => c.evidence || {});
   return { calls: rows.length, ms: rows.reduce((a, r) => a + (r.metrics?.wall_ms || 0), 0), failed: rows.filter(r => r.result && r.result !== 'ok') };

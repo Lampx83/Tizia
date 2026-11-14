@@ -1,5 +1,5 @@
 // Ticket graph: node states from the trace projection. View only; authority stays on the server.
-import { projectPipeline, describeModelCall, loopActions, stepTotals } from './ai-board-trace.js';
+import { projectPipeline, describeModelCall, stepTotals, callsOf, toolRows, attemptsOf, modelFailure } from './ai-board-trace.js';
 import { gateEta, typicalGateMs } from './ai-board-gate-timing.js';
 import { visitedNodes } from './ai-board-hsm.js';
 
@@ -51,13 +51,7 @@ const gateStage = (gate) => (gate < 3 ? 'plan' : 'execute');
 const EPOCH_MIN = Date.UTC(2000, 0, 1);
 const MAX_RUN_MS = 30 * 24 * 3600 * 1000;
 
-function callsOf(step) {
-  return (step?.calls || []).flatMap(g => [...g.previous, g.current])
-    .map(c => ({ ...(c.evidence || {}), at: c.created_at }))
-    .sort((a, b) => Number(a.at) - Number(b.at));
-}
-
-function modelCall(call) {
+function modelCall(call, retry = null) {
   const purpose = describeModelCall(call);
   const prompt = String(call.prompt_name || '').split(/[\\/]/).pop() || '';
   return {
@@ -65,6 +59,8 @@ function modelCall(call) {
     prompt,
     call_id: call.call_id || '',
     result: CALL_LABEL[call.result] || 'No result yet',
+    failure: modelFailure(call),
+    retry,
     error: call.error || '',
     model: call.model || '',
     ms: call.metrics?.wall_ms ?? null,
@@ -175,8 +171,9 @@ function stopText(stop) {
 function gateDetail(step, trace) {
   const calls = callsOf(step);
   const totals = stepTotals(step);
-  const models = calls.filter(c => describeModelCall(c).id !== 'loop').map(modelCall);
-  const tools = calls.filter(c => describeModelCall(c).id === 'loop').flatMap(c => loopActions([c]));
+  const attempts = attemptsOf(calls);
+  const models = calls.filter(c => describeModelCall(c).id !== 'loop').map(c => modelCall(c, attempts.get(c.call_id) || null));
+  const tools = toolRows(step, trace);
   const failedCall = calls.find(c => c.error);
   const latest = models.at(-1);
   const earlier = (step.previousResults || []).map(r => r.public_reason).filter(Boolean);
@@ -399,19 +396,35 @@ function repairLog(repair = {}) {
 }
 
 // Execution log: AI calls, tool calls, sandbox runs, skills, earlier attempts and the raw record, in mono.
-function logPanel(node) {
+const FAILURE_CLASS_TEXT = { infra: 'Infrastructure (timeout, I/O, sandbox)', product: 'Content (args, path, scope, policy, output)' };
+// Filter controls: failure class and tool. Values come from ui state in admin-request.js (data-tool-filter).
+function filterBar(node, filter = {}) {
+  const tools = [...new Set(node.tools.map(t => t.tool).filter(Boolean))];
+  const opt = (value, label, current) => `<option value="${esc(value)}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
+  return `<div class="g-filter" role="group" aria-label="Filter steps">
+    <label>Failure class <select data-tool-filter="failure">${opt('', 'All', filter.failure || '')}${Object.entries(FAILURE_CLASS_TEXT).map(([v, l]) => opt(v, l, filter.failure || '')).join('')}</select></label>
+    <label>Tool <select data-tool-filter="tool">${opt('', 'All', filter.tool || '')}${tools.map(t => opt(t, t, filter.tool || '')).join('')}</select></label>
+  </div>`;
+}
+const toolLine = (t) => `<li class="${t.failure ? 'is-failed' : ''}"><b>#${esc(t.n)} ${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(t.label)}${t.failure ? ` · <span class="g-class">${esc(t.failure.class)}${t.failure.kind ? `/${esc(t.failure.kind)}` : ''}</span>` : ''} · ${esc(secs(t.ms))}${t.tokens_in != null || t.tokens_out != null ? ` · ${esc(num(t.tokens_in))} vào / ${esc(num(t.tokens_out))} ra` : ''}${t.call_id ? ` <span class="meta">${esc(t.call_id)}</span>` : ''}${t.retry ? `<div class="meta">Attempt ${esc(t.retry.n)} of ${esc(t.retry.of)} · retried after: ${esc(t.retry.reason || 'unknown')}</div>` : ''}${t.thought ? `<div class="meta">Thought: ${esc(t.thought)}</div>` : ''}${t.args || t.observation ? `<details><summary>Arguments and result</summary><pre class="mono">${esc(JSON.stringify({ args: t.args, result: t.observation }, null, 2))}</pre></details>` : ''}</li>`;
+function logPanel(node, filter = {}) {
   if (!node) return '<p class="meta g-empty">Chọn một bước để xem nhật ký.</p>';
   if (!node.step) return repairLog(node.repair || {}) || `<p class="meta g-empty">${esc(node.name)} chưa có nhật ký.</p>`;
   const total = (node.tokens?.in || 0) + (node.tokens?.out || 0);
   const tokens = `<h4>Token</h4><p>vào ${esc(num(node.tokens?.in))} · ra ${esc(num(node.tokens?.out))} · tổng ${esc(num(total))}</p>`;
-  const models = node.models.length ? `<h4>AI calls</h4><ol class="g-list">${node.models.map((m, i) => `<li><b>#${i + 1} ${esc(m.title)}</b>${m.prompt ? ` <code>${esc(m.prompt)}</code>` : ''}${m.call_id ? ` <span class="meta">${esc(m.call_id)}</span>` : ''} · ${esc(m.result)} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
-  const tools = node.tools.length ? `<h4>Tool calls</h4><ol class="g-list">${node.tools.map(t => `<li><b>${esc(t.tool)}</b>${t.target ? ` <code>${esc(t.target)}</code>` : ''} · ${esc(CALL_LABEL[t.result] || 'No result yet')} · ${esc(secs(t.ms))}</li>`).join('')}</ol>` : '';
+  const shownModels = node.models.filter(m => !filter.failure || m.failure?.class === filter.failure);
+  const shownTools = node.tools.filter(t => (!filter.tool || t.tool === filter.tool) && (!filter.failure || t.failure?.class === filter.failure));
+  const filtering = Boolean(filter.failure || filter.tool);
+  const bar = node.models.length || node.tools.length ? filterBar(node, filter) : '';
+  const count = filtering ? `<p class="meta">Showing ${esc(shownTools.length)} of ${esc(node.tools.length)} tool calls, ${esc(shownModels.length)} of ${esc(node.models.length)} AI calls.</p>` : '';
+  const models = shownModels.length ? `<h4>AI calls</h4><ol class="g-list">${shownModels.map((m) => `<li><b>#${node.models.indexOf(m) + 1} ${esc(m.title)}</b>${m.prompt ? ` <code>${esc(m.prompt)}</code>` : ''}${m.call_id ? ` <span class="meta">${esc(m.call_id)}</span>` : ''} · ${esc(m.result)}${m.failure ? ` · <span class="g-class">${esc(m.failure.class)}/${esc(m.failure.kind)}</span>` : ''} · ${esc(secs(m.ms))} · budget ${esc(num(m.budget))} · ${esc(num(m.tokens_in))} vào / ${esc(num(m.tokens_out))} ra · ${esc(m.model || 'model not recorded')}${m.retry ? `<div class="meta">Attempt ${esc(m.retry.n)} of ${esc(m.retry.of)} · retried after: ${esc(m.retry.reason || 'unknown')}</div>` : ''}${m.error ? `<div class="meta">${esc(m.error)}</div>` : ''}</li>`).join('')}</ol>` : '';
+  const tools = shownTools.length ? `<h4>Tool calls</h4><ol class="g-list">${shownTools.map(toolLine).join('')}</ol>` : (filtering && node.tools.length ? '<p class="meta">No tool call matches this filter.</p>' : '');
   const sandbox = node.sandbox.length ? `<h4>Sandbox runs</h4><ol class="g-list">${node.sandbox.map(r => `<li><code>${esc((r.argv || []).join(' '))}</code> · exit ${esc(r.rc ?? 'none')} · ${esc(secs(r.duration_ms))}${r.error ? ` · ${esc(r.error)}` : ''}</li>`).join('')}</ol>` : '';
   const skills = node.skills.length ? `<h4>Skills</h4><p>${node.skills.map(s => esc(s)).join(', ')}</p>` : '';
   const earlier = node.earlier.length ? `<h4>Earlier attempts</h4><ol class="g-list">${node.earlier.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : '';
   const rawCalls = callsOf(node.step).map((call, i) => ({ n: i + 1, call: describeModelCall(call).title, call_id: call.call_id || null, prompt: call.prompt_name || null, gate: call.gate ?? null, iteration: call.iteration ?? null, result: call.result || null, ms: call.metrics?.wall_ms ?? null, tokens_in: call.metrics?.tokens_in ?? null, tokens_out: call.metrics?.tokens_out ?? null, evidence: call }));
   const raw = `<details class="raw g-raw" data-k="graph-raw:${esc(node.id)}"><summary>Raw record</summary><pre class="mono">${esc(JSON.stringify({ result: node.step.result || null, calls: rawCalls }, null, 2))}</pre></details>`;
-  return `${tokens}${models}${tools}${sandbox}${skills}${earlier}${raw}`;
+  return `${bar}${count}${tokens}${models}${tools}${sandbox}${skills}${earlier}${raw}`;
 }
 
 // Orthogonal edge: straight when aligned, else one bend. Loop-back runs under the row. Starts at the source centre, ends on the target box edge so the arrowhead stays visible.
@@ -523,7 +536,7 @@ export function renderTicketGraph(trace = {}, chosen = null, now = Date.now(), e
       <div class="g-pane">
         <div class="g-caption">Execution log</div>
         ${journalPanel(trace)}
-        ${logPanel(chosenNode)}
+        ${logPanel(chosenNode, extras.filter)}
         ${extras.events || ''}
       </div>
     </div>

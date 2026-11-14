@@ -26,12 +26,12 @@ class HttpSteps:
     def save_ledger(self, snapshot: dict) -> None:
         self._call("ledger", snapshot=snapshot)
 
-    def intent(self, step: int, tool: str, args: dict) -> None:
-        self._call("intent", step=step, tool=tool, args=args, identity=self.identity(step, tool, args))
+    def intent(self, step: int, tool: str, args: dict, call_id: str | None = None) -> None:
+        self._call("intent", step=step, tool=tool, args=args, identity=self.identity(step, tool, args), call_id=call_id)
 
-    def done(self, step: int, tool: str, args: dict, observation: str, kind: str) -> None:
+    def done(self, step: int, tool: str, args: dict, observation: str, kind: str, call_id: str | None = None) -> None:
         self._call("done", step=step, tool=tool, args=args, identity=self.identity(step, tool, args),
-                   observation=observation, kind=kind)
+                   observation=observation, kind=kind, call_id=call_id)
 
     def mark(self, step: int, status: str) -> None:
         self._call("mark", step=step, status=status)

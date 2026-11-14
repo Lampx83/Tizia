@@ -215,6 +215,10 @@
   .g-pane h4 { font-size:13px; color:var(--muted); margin:24px 0 8px; font-weight:600; }
   .g-list { margin:0; padding-left:20px; font-size:13px; }
   .g-list li { margin:6px 0; overflow-wrap:anywhere; }
+  .g-list li.is-failed b { color:var(--bad); }
+  .g-class { color:var(--bad); font-weight:600; }
+  .g-filter { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0 0 10px; font-size:13px; }
+  .g-filter select { margin-left:6px; }
   .g-slot { margin:24px 0 0; }
   .g-slot .g-warn { margin:8px 0 0; color:var(--warn, #8a5a00); }
   .g-raw { margin-top:24px; }
@@ -235,6 +239,6 @@
 <body data-no-auth-header data-no-suggestion-fab data-no-notifications-bell data-no-gamify>
 <nav aria-label="Bài học AI Board"><a class="back" href="/ai-board-lessons.html">Duyệt bài học AI Board</a> <a class="back" href="/admin-shots.html">Ảnh nháp đã lưu</a></nav>
 <main id="app"><p class="meta" role="status">Đang tải yêu cầu…</p></main>
-<script type="module" src="/js/admin-request.js?v=repair-stop1"></script>
+<script type="module" src="/js/admin-request.js?v=admin-step-view1"></script>
 </body>
 </html>

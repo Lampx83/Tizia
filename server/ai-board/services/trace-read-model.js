@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createRootAllowanceService } from './root-allowance.js';
 import { createHsmStore } from '../hsm/store.js';
 import { createSpanService } from './spans.js';
+import { createToolStepView } from './tool-step-view.js';
 
 const GATE_TTL_MS = 30_000;
 // Bounds staleness of time-based fields (lease liveness, gpu wait) that a fingerprint cannot see.
@@ -19,6 +20,7 @@ const FINGERPRINT = [
   ['SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM ai_runs WHERE ticket_id=?', 1],
   ['SELECT COUNT(*) AS n, MAX(created_at) AS m FROM ai_attempt_journal WHERE ticket_id=?', 1],
   ['SELECT COUNT(*) AS n, MAX(created_at) AS m FROM ai_work_reservations WHERE root_ticket_id=?', 1],
+  ["SELECT COUNT(*) AS n, MAX(s.updated_at) AS m FROM tool_step s JOIN tool_run r ON r.proposal_id = s.proposal_id AND r.child = s.child WHERE r.run_scope LIKE 'ticket-' || ? || ':%'", 1],
 ];
 
 /** Trace read model: `read(requestId, ifNoneMatch)` → null (no request), or {notModified, etag, trace}. */
@@ -27,6 +29,7 @@ export function createTraceReadModel(store, deps = {}) {
   const allowance = deps.allowance ?? (db && createRootAllowanceService(store));
   const hsm = deps.hsm ?? (db && createHsmStore(store));
   const spans = deps.spans ?? (db && createSpanService(store));
+  const toolSteps = deps.toolSteps ?? (db && createToolStepView(store));
   const now = deps.now ?? Date.now;
   const gateTtlMs = deps.gateTtlMs ?? GATE_TTL_MS;
   const revalidateMs = deps.revalidateMs ?? REVALIDATE_MS;
@@ -53,6 +56,7 @@ export function createTraceReadModel(store, deps = {}) {
       trace.hsm = await hsm.read(trace.root.id);
       const byRun = await spans.forRuns(trace.runs.map((r) => r.id));
       for (const run of trace.runs) run.spans = byRun.get(Number(run.id)) || [];
+      trace.tool_steps = await toolSteps.forRoot(trace.root.id);
       trace.gate_history = await gateHistory();
     }
     if (trace.resume) {
