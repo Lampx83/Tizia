@@ -117,10 +117,10 @@ def from_trial(trial: dict) -> dict:
     return out
 
 
-def rows(roots: list[dict], tickets: list[dict], events: list[dict], runs: list[dict], spans: list[dict]) -> list[dict]:
-    """DB rows -> one attribution per root ticket. Child-ticket events are ignored; child runs' spans count."""
+def rows(roots: list[dict], tickets: list[dict], events: list[dict], spans: list[dict]) -> list[dict]:
+    """DB rows -> one attribution per root ticket. Run->ticket from events.run_id; spans of unlinked runs drop out."""
     root_of = {t["id"]: (t["id"] if t.get("parent_id") is None else t["parent_id"]) for t in tickets}
-    run_root = {r["id"]: root_of.get(r["ticket_id"]) for r in runs}
+    run_root = {e["run_id"]: root_of.get(e["ticket_id"]) for e in events if e.get("run_id") is not None}
     out = []
     for root in sorted(roots, key=lambda r: r["id"]):
         mine = [e for e in events if e["ticket_id"] == root["id"]]
@@ -201,10 +201,9 @@ def main(argv: list[str]) -> int:
     with harness_db(os.environ["DATABASE_URL"], dict_rows=True) as con:
         get = lambda sql: [dict(r) for r in con.execute(sql).fetchall()]  # noqa: E731
         tickets = get("SELECT id, parent_id, created_at, updated_at FROM ai_tickets")
-        events = get("SELECT id, ticket_id, created_at, transition FROM ai_events WHERE transition IS NOT NULL")
-        runs = get("SELECT id, ticket_id FROM ai_runs")
+        events = get("SELECT id, ticket_id, run_id, created_at, transition FROM ai_events")
         spans = get("SELECT run_id, name, start_ms, end_ms FROM ai_spans")
-    items = rows([t for t in tickets if t["parent_id"] is None], tickets, events, runs, spans)
+    items = rows([t for t in tickets if t["parent_id"] is None], tickets, events, spans)
     sys.stdout.write((table(items, "root") + "\n" + summary(items)) if items else "no root tickets\n")
     return 0
 
