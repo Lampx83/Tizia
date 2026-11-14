@@ -1,0 +1,2 @@
+5d. NAMED EDIT: when the request already names the page or element AND gives the old text and the new text, scope is DECIDED: clear=true, question=null. Never ask which page, which element, or whether to keep or change behavior.
+5e. Repo rules (forbidden attributes such as inline handlers, file layout, test or lint rules) are the plan's job, never a question to the student. A rule you know from REPO DATA or the manual is not a missing point of the request.
