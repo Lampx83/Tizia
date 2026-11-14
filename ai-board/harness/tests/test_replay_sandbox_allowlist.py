@@ -22,7 +22,7 @@ def test_spy_detects_a_vm_for_an_allowed_form():
 
 def test_extract_reads_tool_call_span_and_note_shapes():
     text = json.dumps({"calls": [{"name": "run_in_sandbox", "arguments": {"argv": ["npm", "test"]}}],
-                       "spans": [{"tizia.sandbox.argv": "node scripts/run-tests.mjs"}]}) + "\nrun_in_sandbox node --check a.js rc=0 x"
+                       "spans": [{"tizia.sandbox.argv": "node scripts/run-tests.mjs"}]})
     assert r.extract(text) == [["npm", "test"], ["node", "scripts/run-tests.mjs"]]
     assert r.extract("run_in_sandbox node --check a.js rc=0 x") == [["node", "--check", "a.js"]]
 
