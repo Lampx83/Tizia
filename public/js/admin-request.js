@@ -25,7 +25,8 @@ const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
 const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null,
-  elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '' };
+  elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '',
+  net: { pending: [], approved: [], idx: 0, reason: '', msg: '' } };
 let view = null;
 
 async function api(path, options = {}) {
@@ -466,6 +467,15 @@ const ROLLOUT_ERROR = { review_required: 'cần duyệt bản này trước khi 
   ticket_busy: 'AI Board đang xử lý yêu cầu này', reverify_limit: 'đã kiểm lại tối đa 3 lần', not_reverifiable: 'yêu cầu đã hoàn tác hoặc đóng' };
 const reasonText = (r) => (r.startsWith('sensitive_scope:') ? `đụng vùng nhạy cảm (${r.slice(16)})` : ROLLOUT_REASON[r] || r);
 
+// Gói đã duyệt của yêu cầu (đọc-only) + dependencies nếu candidate có khai báo.
+function dependencyLabels(candidate) {
+  const declared = candidate?.network_requests?.dependencies;
+  const fromCandidate = (Array.isArray(declared) ? declared : []).map((d) => (typeof d === 'string' ? d : d?.name ? `${d.name}${d.version ? `@${d.version}` : ''}` : '')).filter(Boolean);
+  const fromApproved = ui.net.approved.filter((i) => i.kind === 'package' && i.name)
+    .map((i) => `${i.name}@${i.metadata?.version || i.version_range || '*'}`);
+  return [...new Set([...fromCandidate, ...fromApproved])];
+}
+
 function renderRollout(t) {
   const r = t.rollout;
   if (!r?.candidate) return '';
@@ -477,6 +487,7 @@ function renderRollout(t) {
       <div class="line1"><b>Bản ${code(head.slice(0, 10))}</b> trên ${code(r.candidate.base_sha.slice(0, 10))} ${tag(state, label)}
         ${r.release ? `<span>Hiện tại: <b>${esc(AUDIENCE[r.release.status] || 'đang tắt')}</b> (${code(r.release.slug)})</span>` : '<span class="meta">Chưa đăng ký chức năng để phát hành.</span>'}</div>
       <div class="meta">Phạm vi: ${r.candidate.files.map((f) => code(f)).join(' ')}</div>
+      ${dependencyLabels(r.candidate).length ? `<div class="meta">Thêm dependency: ${dependencyLabels(r.candidate).map((d) => code(d)).join(' ')}</div>` : ''}
       ${r.base?.changed ? `<div class="meta" role="alert">Nhánh chính đã đổi từ ${code(r.candidate.base_sha.slice(0, 10))} sang ${code(r.base.observed.slice(0, 10))}. Bằng chứng cũ không dùng để phát hành lên bản mới.</div>` : ''}
       ${r.envelope.reasons.length ? `<div class="meta">Cần duyệt vì: ${esc(r.envelope.reasons.map(reasonText).join('; '))}</div>` : ''}
       <div class="row">
@@ -501,6 +512,56 @@ async function rolloutDo(btn) {
     ui.rolloutMsg = `Đã ${{ approve: 'duyệt', serve: 'phát hành', reject: 'từ chối', withdraw: 'thu hồi', reverify: 'xếp hàng kiểm lại với base mới. Worker sẽ nhận ở lượt tới' }[btn.dataset.do]}.`;
   } catch (e) {
     ui.rolloutMsg = `Chưa thực hiện được: ${errText(e)}`;
+  }
+  await refresh();
+}
+
+const NET_WARNING = 'Quyết định duyệt không thu hồi được: gói đã vào cache nội bộ và run tiếp tục với nó. Thay đổi code vẫn rollback được qua luồng release.';
+const NET_META = { version: 'Phiên bản', license: 'Giấy phép', age: 'Tuổi', weekly_downloads: 'Lượt tải/tuần', install_scripts: 'Script cài đặt',
+  transitive_count: 'Số gói phụ thuộc gián tiếp' };
+const netValue = (v) => (typeof v === 'boolean' ? (v ? 'Có' : 'Không') : Array.isArray(v) ? v.join(', ') : v && typeof v === 'object' ? JSON.stringify(v) : String(v));
+const netTitle = (item) => (item.kind === 'package' ? `${item.name || '?'}${item.version_range ? `@${item.version_range}` : ''}` : item.url || '?');
+const netMetaRows = (item) => Object.entries(NET_META).filter(([k]) => item.metadata?.[k] != null && item.metadata[k] !== '')
+  .map(([k, label]) => `<div><span class="meta">${esc(label)}</span> ${esc(netValue(item.metadata[k]))}</div>`).join('');
+
+function renderNetApproval() {
+  const { pending, idx, reason, msg } = ui.net;
+  if (!pending.length) return '';
+  const item = pending[Math.min(idx, pending.length - 1)];
+  const rows = netMetaRows(item);
+  return `<section class="blk" id="net-approval" aria-label="Cần admin đồng ý">
+    <h2>Cần admin đồng ý <span class="meta">${Math.min(idx, pending.length - 1) + 1}/${pending.length}</span></h2>
+    <div class="line1"><b>${code(netTitle(item))}</b> ${tag('warn', item.kind === 'package' ? 'Gói npm' : 'URL')}</div>
+    ${item.reason ? `<div class="meta">Lý do của model: ${esc(item.reason)}</div>` : ''}
+    ${rows ? `<div class="meta">${rows}</div>` : '<div class="meta">Chưa có metadata cho mục này.</div>'}
+    <div class="net-warn" role="note">${esc(NET_WARNING)}</div>
+    <label class="meta" style="display:block;margin-top:10px">Lý do từ chối (không bắt buộc)
+      <input data-net-reason maxlength="500" autocomplete="off" value="${esc(reason)}" style="width:100%;max-width:72ch;display:block;margin-top:4px"></label>
+    <div class="row">
+      <button class="btn ok" data-action="net-approve" data-id="${esc(item.id)}">Duyệt</button>
+      <button class="btn danger-outline" data-action="net-reject" data-id="${esc(item.id)}">Từ chối</button>
+      <button class="btn" data-action="net-next">Tiếp</button>
+    </div>
+    ${msg ? `<div class="meta" role="status">${esc(msg)}</div>` : ''}
+  </section>`;
+}
+
+async function netDecide(btn, decision) {
+  const item = ui.net.pending[Math.min(ui.net.idx, ui.net.pending.length - 1)];
+  if (!item) return refresh();
+  if (decision === 'approved') {
+    const yes = await askConfirm({ title: 'Duyệt yêu cầu mạng?', message: NET_WARNING, lines: [`Mục: ${netTitle(item)}`], ok: 'Duyệt' });
+    if (!yes) return;
+  }
+  btn.disabled = true;
+  try {
+    const body = decision === 'rejected' && ui.net.reason.trim() ? { reason: ui.net.reason.trim() } : {};
+    const r = await post(`/api/admin/ai-board/network-requests/${encodeURIComponent(item.id)}/${decision === 'approved' ? 'approve' : 'reject'}`, body);
+    ui.net.reason = '';
+    ui.net.msg = `${decision === 'approved' ? 'Đã duyệt' : 'Đã từ chối'}. Còn ${r.pending_left} mục chờ.${r.resumed ? ' Run đã về hàng đợi để chạy tiếp.' : ''}`;
+  } catch (e) {
+    const stale = /already decided|not found/.test(String(e.message));
+    ui.net.msg = stale ? 'Mục này đã được quyết định hoặc đã đổi. Đã tải lại.' : `Chưa thực hiện được: ${errText(e)}`;
   }
   await refresh();
 }
@@ -749,6 +810,7 @@ function render() {
         · <span class="pill">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' · <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''} · tạo ${fmt(r.created_at)}</div>
       ${renderActions(r, trace)}
     </header>
+    ${renderNetApproval()}
     ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có phiếu xử lý AI Board.</section>'}
   `);
   syncOpen();
@@ -772,15 +834,20 @@ document.addEventListener('click', (e) => {
 async function refresh() {
   try {
   const headers = traceEtag ? { 'If-None-Match': traceEtag } : {};
-  const [thread, trace] = await Promise.all([
+  const [thread, trace, netPending, netApproved] = await Promise.all([
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/thread`),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`, { headers }),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/network-requests?status=pending`),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/network-requests?status=approved`),
   ]);
   if (!thread.ok) {
     stopLiveTrace();
     $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
     return false;
   }
+  ui.net.pending = netPending.ok ? (netPending.data.items || []) : [];
+  ui.net.approved = netApproved.ok ? (netApproved.data.items || []) : [];
+  if (ui.net.idx >= ui.net.pending.length) ui.net.idx = 0;
   // 304: tiến trình không đổi, giữ nguyên view.trace (kể cả writes/rollout) và không hỏi lại.
   if (trace.status === 304) {
     view = { ...view, thread: thread.data };
@@ -828,7 +895,7 @@ const poll = createPoll(async () => {
     stopLiveTrace();
     render();
   }
-  if (!ui.confirm && !ui.reconcile) await refresh();
+  if (!ui.confirm && !ui.reconcile && !document.activeElement?.matches?.('[data-net-reason]')) await refresh();
 }, () => {
   const root = view?.trace?.root;
   if (root && !root.live && ENDED.includes(root.status)) return null;
@@ -847,6 +914,8 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', (e) => {
   const input = e.target.closest('[data-elevation-reason]');
   if (input) ui.elevationReason = input.value;
+  const net = e.target.closest?.('[data-net-reason]');
+  if (net) ui.net.reason = net.value;
 });
 document.addEventListener('click', e => {
   const node = e.target.closest('#app [data-node]');  if (node && !e.target.closest('[data-action]') && view?.trace && graphNodes(view.trace)[node.dataset.node]) { ui.node = node.dataset.node; render(); return; }
@@ -875,6 +944,9 @@ document.addEventListener('click', e => {
       .finally(async () => { await refresh(); poll.arm(); });
     return;
   } else if (action === 'rollout') return rolloutDo(btn);
+  else if (action === 'net-approve') return netDecide(btn, 'approved');
+  else if (action === 'net-reject') return netDecide(btn, 'rejected');
+  else if (action === 'net-next') { ui.net.idx = (ui.net.idx + 1) % ui.net.pending.length; ui.net.reason = ''; ui.net.msg = ''; }
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
