@@ -161,6 +161,56 @@
       "max_seconds": 90
     },
     {
+      "name": "request_package",
+      "description": "Ask the admin to approve an npm package you need. The run pauses until a decision; a rejection comes back as `denied: <reason>`. Never edit package.json yourself.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version_range": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version_range",
+          "reason"
+        ]
+      },
+      "effect": "control",
+      "max_arg_bytes": 1000,
+      "max_output_chars": 2000,
+      "max_seconds": 10
+    },
+    {
+      "name": "fetch_url",
+      "description": "Ask to read one external documentation URL. The run pauses until a decision; a rejection comes back as `denied: <reason>`.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "reason"
+        ]
+      },
+      "effect": "control",
+      "max_arg_bytes": 1000,
+      "max_output_chars": 16000,
+      "max_seconds": 10
+    },
+    {
       "name": "finish",
       "description": "Propose finishing; the harness checks, then passes to the next gates.",
       "parameters": {

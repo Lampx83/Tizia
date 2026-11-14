@@ -4,7 +4,7 @@ import { WorkerContractError } from './store-contract.js';
 const HASH = /^[0-9a-f]{64}$/;
 const EFFECTS = ['read', 'draft_write', 'control'];
 const FIELDS = ['name', 'description', 'parameters', 'effect', 'max_arg_bytes', 'max_output_chars', 'max_seconds'];
-export const LOOP_TOOLS = new Set(['tree', 'outline', 'grep', 'read_file', 'edit_file', 'write_test', 'run_check', 'finish']);
+export const LOOP_TOOLS = new Set(['tree', 'outline', 'grep', 'read_file', 'edit_file', 'write_test', 'run_check', 'request_package', 'fetch_url', 'finish']);
 const fail = (code, status = 409) => { throw new WorkerContractError(code, status, code); };
 const sorted = (value) => Array.isArray(value) ? value.map(sorted)
   : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])])) : value;

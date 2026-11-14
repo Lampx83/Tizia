@@ -7,6 +7,8 @@ import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../securit
 import { check as checkPath, normalizePath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
+import { createNetworkRequestRepository } from './network-requests.js';
+import { recordPending as recordPendingNetwork } from '../services/network-requests.js';
 import { ROOT_GROUP_LABEL, hitRootGroup, readRootAllowance } from '../services/root-allowance.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
@@ -1918,6 +1920,12 @@ function resumeSummary(journal) {
       status = 'waiting_admin';
       phase = 'partial';
       note = 'Đã hoàn thành một phần kế hoạch; bấm "Tiếp tục" để làm nốt phần còn lại.';
+    } else if (verdict.failure_class === 'network_request') {
+      // Run cần gói npm / URL ngoài: dừng chờ admin duyệt, checkpoint giữ nguyên, không tính lượt hỏng.
+      status = 'waiting_admin';
+      phase = 'network_request';
+      note = 'Cần quản trị viên duyệt yêu cầu mạng; duyệt xong sẽ chạy tiếp từ checkpoint.';
+      await recordPendingNetwork(createNetworkRequestRepository(db), root.id, root.source_request_id, verdict.network_requests, input.now);
     } else if (verdict.failure_class === 'transient') {
       // Lỗi hạ tầng thoáng qua, backoff gọi model đã hết mà vẫn hỏng (runtime/pipeline.py MODEL_RETRY_BACKOFF_S). Plan vẫn
       // hợp lệ (chỉ hạ tầng hỏng, không phải plan sai) nên dùng lại đúng đường "đã duyệt, chờ worker" của một

@@ -40,6 +40,8 @@ import { requesterProgress } from '../services/requester-progress.js';
 import { createRequesterProgressRepository } from '../repositories/requester-progress.js';
 import { classifierConfigured, environment, getSettings } from '../settings.js';
 import { assessElevationRisk, applyRiskFloor } from '../services/elevation-risk.js';
+import { createNetworkRequestRepository } from '../repositories/network-requests.js';
+import { decisionsForRoot } from '../services/network-requests.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -659,7 +661,8 @@ export function attachAiBoardWorkerRoutes(router, {
   route.post('/api/ai-board/worker/tickets/:id/snapshot', authenticate, handle(async (req, res) => {
     const lease = leaseInput(req.body);
     res.json({ ...await store.getLeasedSnapshot(req.params.id, lease.workerId, lease.leaseToken), lessons_schema_version: 1,
-      hsm_contract:publicContract(), root_allowance_protocol: 1 });
+      hsm_contract:publicContract(), root_allowance_protocol: 1,
+      network_decisions: await decisionsForRoot(createNetworkRequestRepository(store.db), req.params.id) });
   }));
 
   // Model preflight failed: the worker holds no lease, so this only records why queued work waits and when it retries.

@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import re
 
+from runtime import network_request
+
 REPAIR_CODE, REPLAN, STOP_ADMIN, RETRY = "repair_code", "replan", "stop_admin", "retry"
 _SCOPE = re.compile(r"out of scope|ngoài scope|ScopeViolation|allowed_scope|import cấm", re.I)
 _SYNTAX = re.compile(r"SyntaxError|node --check|Unexpected token|Unexpected identifier", re.I)
@@ -31,14 +33,18 @@ def involved_files(text: str, produced: dict[str, dict]) -> list[str]:
 def _plan_missing(text: str, scope: set[str]) -> bool:
     """Missing module that no plan step creates: plan references a path nobody owns."""
     for match in _MISSING.finditer(text):
-        target = next(group for group in match.groups() if group).replace("/app/", "", 1).lstrip("./")
+        raw = next(group for group in match.groups() if group)
+        if network_request.package_name(raw, scope):
+            continue
+        target = raw.replace("/app/", "", 1).lstrip("./")
         if not target.startswith(("node:", "express")) and not any(target.endswith(file) or file.endswith(target) for file in scope):
             return True
     return False
 
 
-def classify(result: dict, produced: dict[str, dict], scope: set[str]) -> dict:
-    """Class + action from gate result evidence; no model. files = involved plan files, [] when unknown."""
+def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=()) -> dict:
+    """Class + action from gate result evidence; no model. files = involved plan files, [] when unknown.
+    Missing npm package -> package_request/stop_admin unless already decided (`settled` names)."""
     failure_class, reason, text = result.get("failure_class") or "ordinary", str(result.get("reason") or ""), _text(result)
     if failure_class == "transient":
         out = ("infra_transient", RETRY)
@@ -52,6 +58,8 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str]) -> dict:
         out = ("timeout", STOP_ADMIN)
     elif _plan_missing(text, scope):
         out = ("plan_inconsistent", REPLAN)
+    elif (package := network_request.missing_package(text, scope)) and package not in settled:
+        out = (network_request.PACKAGE_REQUEST, STOP_ADMIN)
     elif _SYNTAX.search(text):
         out = ("syntax", REPAIR_CODE)
     elif reason.startswith("feature acceptance failed"):
@@ -60,7 +68,8 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str]) -> dict:
         out = ("test_assertion", REPAIR_CODE)
     else:
         out = ("unclassified", REPAIR_CODE)
-    return {"class": out[0], "action": out[1], "files": involved_files(text, produced) if out[1] == REPAIR_CODE else []}
+    found = {"package": package} if out[0] == network_request.PACKAGE_REQUEST else {}
+    return {"class": out[0], "action": out[1], "files": involved_files(text, produced) if out[1] == REPAIR_CODE else [], **found}
 
 
 def metrics(result: dict, diffs: list[dict]) -> dict:

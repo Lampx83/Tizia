@@ -75,6 +75,7 @@ import { shotBackendFromEnv, shotProxy, startShotRetention } from './ai-board/sh
 import { staticCacheControl } from './static-cache.js';
 import { attachAiBoardIntake, clarifyNotifier } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardReleases } from './contexts/ai-board-releases/index.js';
+import { attachAiBoardNetwork } from './contexts/ai-board-network/index.js';
 import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 import { aiQuotaGate, recordAiCall } from './ai-quota.js';
 import { createNotification } from './db.js';
@@ -406,6 +407,7 @@ attachAiBoardWorkerRoutes(r, {
 });
 // Cờ phát hành: có page gate /<slug>.html → phải trước route HTML + static bên dưới.
 attachAiBoardReleases(r, { db: aiBoard.db, releases: aiBoard.releases, requireAuth, requireAdmin, requireStrictCsrf });
+attachAiBoardNetwork(r, { db: aiBoard.db, requireAuth, requireAdmin, requireStrictCsrf });
 attachAiBoardShots(r, { db: aiBoard.db, requireAuth, requireAdmin });
 // Online egress control. Nothing registered (DB) or configured (env) = every operation denied.
 // Split stack: these routes are proxied to aiboard-server, so the web must not mount the board store here.

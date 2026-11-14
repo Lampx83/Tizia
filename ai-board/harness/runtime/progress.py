@@ -41,6 +41,7 @@ ACTIONS: dict[str, tuple[str, ...]] = {
     "timeout": (RETRY, STOP_ADMIN),
     "budget": (REQUEST_ELEVATION, STOP_ADMIN),
     "unknown": (REPAIR_CODE, STOP_ADMIN),
+    "package_request": (STOP_ADMIN,),
 }
 
 

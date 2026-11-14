@@ -11,7 +11,7 @@ import time
 from contextvars import ContextVar
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import limits, meter, repair_session, sandbox_tool, subtask_files, tool_manifest
+from runtime import limits, meter, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
 from runtime.budget import BudgetExhausted, ChildBudget
 from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
@@ -29,7 +29,7 @@ from settings import get_settings
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
-IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "finish"}
+IMPLEMENTED = {"tree", "outline", "grep", "read_file", "edit_file", "write_test", "run_check", "request_package", "fetch_url", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
 REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIFEST.tools)
 WRITE_TOOLS = MANIFEST.names("draft_write")
@@ -152,6 +152,10 @@ class ScopeMiss(Forbidden):
     error_kind = "scope"
 
 
+class NetworkPause(Exception):
+    """Network request chưa có quyết định: dừng loop, chờ admin."""
+
+
 class ToolCrash(Exception):
     """Ngoại lệ ngoài dự kiến của tool, bọc để vòng lặp phân loại rồi dừng sạch."""
 
@@ -165,6 +169,17 @@ def _error_of(error: Exception) -> tuple[str, str]:
     if hasattr(error, "error_class"):
         return error.error_class, error.error_kind
     return (INFRA, "timeout" if isinstance(error, TimeoutError) else "io") if isinstance(error, (OSError, SandboxError)) else (PRODUCT, "exception")
+
+
+def _network(deps, name: str, args: dict) -> str:
+    """Observation of request_package/fetch_url; raise NetworkPause while the admin has not decided."""
+    queue = getattr(deps, "network", None)
+    if queue is None:
+        return network_request.denied(network_request.NO_QUEUE_REASON)
+    text = queue.observe(network_request.tool_request(name, args))
+    if text is None:
+        raise NetworkPause
+    return text
 
 
 def _observed_error(name: str, observation: str) -> tuple[str, str] | None:
@@ -512,6 +527,7 @@ def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
 
 
 FEEDBACK = "gate_feedback"
+NETWORK_PENDING = "network_pending"
 SESSION_PINS = ("session", "repair")
 STALE_DEPENDENCIES = {"file", "base", "subtask", "extras"}  # the rest of the pins identify the runtime and still pause
 KNOWN_STATUSES = ("done", "applied", "void", "intent", "unknown", "compensate")
@@ -552,7 +568,7 @@ def _prior_rows(stores, expected: dict) -> list | None:
 
 
 def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, history=None, messages=None,
-            prior=None, feedback=None, mint=None) -> tuple:
+            prior=None, feedback=None, mint=None, network=None) -> tuple:
     """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None).
 
     `prior` = hàng của các lần trước cùng phiên; `feedback` = lỗi gate nối cuối phiên (ghi 1 lần vào `store`)."""
@@ -605,6 +621,14 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
             owner.reconcile(n, resolution, PLATFORM_ACTOR, "đối chiếu tự động theo dữ liệu đã lưu", evidence)
             status = RESOLUTION_STATUS[resolution]
         observation = row["observation"] or ""
+        if kind == NETWORK_PENDING:
+            if network is None:
+                observation = network_request.denied(network_request.NO_QUEUE_REASON)
+            elif (decided := network.observe(network_request.tool_request(name, args))) is None:
+                return prompt, steps, False, _result("paused", f"waiting for admin: {name}", network_request.FAILURE_CLASS,
+                                                      steps=steps, network=network.report())
+            else:
+                observation = decided
         if kind == "forbidden":
             return prompt, steps, False, _result("blocked", observation, "critical", steps=steps)
         if status == "void":
@@ -806,7 +830,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
     if store:
         prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check, history, messages,
-                                                  prior=prior, feedback=feedback, mint=mint)
+                                                  prior=prior, feedback=feedback, mint=mint, network=getattr(deps, "network", None))
         if stop:
             return stop
     while True:
@@ -867,8 +891,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args, cid)
             try:
-                observation = ws.run(name, args)
-            except (ToolError, Forbidden, server_hsm.AuthorityError, BudgetExhausted, sandbox_tool.RunnerBusy):
+                observation = _network(deps, name, args) if name in network_request.TOOLS else ws.run(name, args)
+            except (ToolError, Forbidden, NetworkPause, server_hsm.AuthorityError, BudgetExhausted, sandbox_tool.RunnerBusy):
                 raise
             except Exception as error:
                 if hasattr(error, "failure_class"):
@@ -877,6 +901,13 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
             failure = _observed_error(name, observation)
             if failure:
                 kind = KIND_INFRA
+        except NetworkPause:
+            text = f"waiting for admin: {name}"
+            if store:
+                store.done(n, name, args, text, NETWORK_PENDING, cid)
+                store.save_ledger(budget.snapshot())
+            _tool_span(deps, name, n, child, NETWORK_PENDING, text, started_ms, cid, model_call)
+            return _result("paused", text, network_request.FAILURE_CLASS, steps=steps, network=deps.network.report())
         except ToolTimeout as error:
             kind, failure = KIND_INFRA, _error_of(error)
             observation = f"{error} (hạ tầng/thời gian, không phải lỗi nội dung; thử lại hoặc đổi cách)"

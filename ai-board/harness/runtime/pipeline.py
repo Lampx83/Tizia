@@ -172,6 +172,7 @@ class Deps:
     model_role: str | None = None
     model_candidate: str | None = None
     stop_on_model_error: bool = False
+    network: Any = None  # runtime.network_request.Queue; None = tools answer denied
 
     @classmethod
     def real(cls) -> "Deps":

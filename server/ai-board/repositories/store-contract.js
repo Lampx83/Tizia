@@ -2,6 +2,7 @@
 // (PostgreSQL) is store-async.js.
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
+import { cleanNetworkReport } from './network-requests.js';
 
 export { PlanGuardrailError } from '../security/policy.js';
 
@@ -59,6 +60,7 @@ const PHASES = {
   // Dừng giữa chừng nhưng đã xong một phần plan (LF/107): checkpoint còn nguyên, người gửi bấm "Tiếp tục"
   // để worker chạy nốt phần còn thiếu — không tính là lượt hỏng, không mở plan mới.
   partial: { label: 'hoàn thành một phần, chờ tiếp tục' },
+  network_request: { label: 'chờ quản trị viên duyệt yêu cầu mạng' },
   budget_ceiling: { label: 'vượt trần ngân sách, chuyển cho người', terminal: true },
   requester_cancelled: { label: 'người gửi đã hủy', terminal: true },
   admin_rejected: { label: 'admin đã từ chối', terminal: true },
@@ -374,6 +376,7 @@ function validatePrePrVerdict(value, selfRequest = false) {
     budget_used: budgetUsed, failure_class: failureClass,
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
+    ...(cleanNetworkReport(value.network_requests) ? { network_requests: cleanNetworkReport(value.network_requests) } : {}),
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),
       detail: String(value.loop_guard.detail ?? '').slice(0, 300) } } : {}),
