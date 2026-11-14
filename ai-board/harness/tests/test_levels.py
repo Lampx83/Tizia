@@ -210,3 +210,40 @@ def test_surface_contexts_follow_flag_and_list(monkeypatch):
 
 def test_surface_tests_empty_when_context_not_opened():
     assert levels.surface_tests(CTX_PLAN) == []
+
+
+def test_surface_files_lists_opened_context_files_only():
+    assert levels.surface_files(CTX_PLAN, _read, frozenset({"content"})) == frozenset({"server/contexts/content/routes.js"})
+    assert levels.surface_files(CTX_PLAN, _read, frozenset()) == frozenset()
+    assert levels.surface_files(CTX_PLAN, None, frozenset({"content"})) == frozenset()
+    core = {"subtasks": [{"file": "server/index.js", "verify": "node --test test/content.test.js"}]}
+    assert levels.surface_files(core, _read, frozenset({"content", "index.js"})) == frozenset()
+
+
+def test_check_files_accepts_opened_context_file_and_refuses_when_closed(monkeypatch):
+    from gates import brainstorm
+    from repositories import repo_at_commit
+    import settings
+
+    class Tree:
+        def exists(self, path):
+            return True
+
+        def read(self, path):
+            return None
+
+    monkeypatch.setattr(repo_at_commit, "at", lambda source, sha: Tree())
+    monkeypatch.setattr(levels, "source_reader", lambda source, sha=None: _read)
+    plan = {"subtasks": [{"title": "t", "file": "server/contexts/content/routes.js",
+                          "verify": "node --test test/content.test.js", "size": "small"}]}
+
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "1")
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST", "content")
+    settings.reset_settings()
+    brainstorm.check_files(plan, "src", "abc123")
+
+    monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "0")
+    settings.reset_settings()
+    with pytest.raises(levels.ElevationRequired):
+        brainstorm.check_files(plan, "src", "abc123")
+    settings.reset_settings()

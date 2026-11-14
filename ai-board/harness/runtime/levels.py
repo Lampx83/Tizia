@@ -216,6 +216,14 @@ def surface_tests(plan: dict, surface=None) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def surface_files(plan: dict, read=None, surface=None) -> frozenset[str]:
+    """File subtask thuộc context đã mở (protected theo catalog nhưng không còn trong requirements)."""
+    needed = {item["path"] for item in requirements(plan, read, surface)}
+    subtasks = (plan or {}).get("subtasks") or []
+    files = (path_policy.normalize(task.get("file")) for task in subtasks)
+    return frozenset(path for path in files if path and level_of(path) == PROTECTED and path not in needed)
+
+
 def requirements(plan: dict, read=None, surface=None) -> list[dict]:
     """[{path, level, why}] cho target trên surface; cùng path giữ mức cao nhất, bỏ mức surface.
     `read(path)` là nội dung file tại base: có thì mức target gộp cả import sẵn có (file_level)."""
