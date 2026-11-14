@@ -38,6 +38,31 @@ test('step ratio: source without steps is ratio 1', async () => {
   assert.equal(essenceStepRatio('plain prose only', 'x').ratio, 1);
 });
 
+test('step ratio: short imperative step dropped lowers ratio, kept verbatim counts', async () => {
+  const { essenceStepRatio } = await import('../server/ai-board/security/essence.js');
+  const src = '1. Run npm test.\n2. Compare request, files and tests.';
+  const dropped = essenceStepRatio(src, '2. Compare request, files and tests.');
+  assert.deepEqual([dropped.total, dropped.kept, dropped.lost], [2, 1, ['Run npm test.']]);
+  assert.equal(essenceStepRatio(src, 'first: run NPM test now\n2. Compare request, files and tests.').kept, 2);
+});
+
+test('step ratio: guardrail bullets and nested lines are not steps; procedure bullets are', async () => {
+  const { essenceStepRatio } = await import('../server/ai-board/security/essence.js');
+  const src = '## Guardrails\n- Never leak secrets.\n## Steps\n- Compare evidence carefully.\n  - nested detail here\n1. Verify claims against evidence.\n   1. nested numbered item';
+  const r = essenceStepRatio(src, 'nothing');
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.lost, ['Compare evidence carefully.', 'Verify claims against evidence.']);
+  assert.equal(essenceStepRatio('## Examples\n- one example here\n', 'x').ratio, 1);
+});
+
+test('audit script exits 2 on NaN --min and missing args', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const run = (...a) => spawnSync(process.execPath, ['scripts/skill-essence-audit.mjs', ...a], { encoding: 'utf8' });
+  assert.equal(run('a.md', 'b.md', '--min', 'abc').status, 2);
+  assert.equal(run().status, 2);
+  assert.equal(run('only-source.md').status, 2);
+});
+
 test('audit script exits 1 below --min and prints ratio', async () => {
   const { spawnSync } = await import('node:child_process');
   const { mkdtempSync, writeFileSync } = await import('node:fs');
