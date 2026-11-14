@@ -8,7 +8,7 @@
 
 // Cùng từ vựng users.role: pupil = học sinh, student = sinh viên.
 import { checkIntake } from '../../ai-board/intake-guard-async.js';
-import { checkLanguage } from '../../ai-board/language-guard.js';
+import { checkLanguage, DIACRITICS_MESSAGE } from '../../ai-board/language-guard.js';
 import { classify, decideClarity, taskMode } from '../../ai-board/classifier.js';
 import { answersClear, repeatedQuestion } from '../../ai-board/clarity-rules.js';
 import { beginChat } from '../../ai-board/chat-activity.js';
@@ -186,7 +186,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
     const generateFor = modelSource === 'cloud' ? cloudGenerate : generate;
     if (hasAnswer) {
       const problem = checkAnswer(req.body.answer);
-      if (problem) return res.status(422).json({ error: 'answer_rejected', message: problem });
+      if (problem) return res.status(422).json({ error: problem === DIACRITICS_MESSAGE ? 'needs_diacritics' : 'answer_rejected', message: problem });
     }
     if (await store.countClarifyTurns(req.user.id, Date.now() - 24 * 3600_000) >= DAILY_TURNS) {
       return res.status(429).json({ error: 'clarify_limit',
@@ -286,7 +286,7 @@ function attachClarify(router, { store, profiles, requireAuth, requireStrictCsrf
   route.post('/api/ai-board/requests/:id/clarify/confirm', requireAuth, requireStrictCsrf, async (req, res) => {
     const spec = String(req.body?.spec ?? '');
     const language = checkLanguage(spec);
-    if (language.block) return res.status(422).json({ error: 'unsupported_language', message: language.message });
+    if (language.block) return res.status(422).json({ error: language.code, message: language.message });
     const intake = checkIntake('', spec);
     if (intake.block) return res.status(422).json({ error: 'request_rejected', message: intake.message });
     try {
