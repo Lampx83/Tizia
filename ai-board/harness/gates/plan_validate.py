@@ -827,7 +827,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
-    needs = levels.requirements(plan, levels.source_reader(state.get('checkout_source'), state.get('base_sha')))
+    reader = levels.source_reader(state.get('checkout_source'), state.get('base_sha'))
+    needs = levels.requirements(plan, reader)
     scope = levels.approved_scope(request, state, plan)
     blocked_paths = [item for item in needs if item["level"] == levels.SELF]
     if blocked_paths:
@@ -1046,7 +1047,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                     'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
                     **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
 
-    signals = complexity_signals(plan, frozenset(item["path"] for item in needs))
+    signals = complexity_signals(plan, frozenset(item["path"] for item in needs) | levels.surface_files(plan, reader))
     if request.get("complexity_by_server"):
         # HTTP worker không có DB: server quyết qua tier (risk high → protected → admin cho phép plan).
         state["complexity_signals"] = signals

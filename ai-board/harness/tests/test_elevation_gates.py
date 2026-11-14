@@ -198,6 +198,15 @@ def test_complexity_signals_unchanged_without_elevation(level):
     assert plan_validate.complexity_signals(plan, {"server/contexts/content/index.js"}) == []
 
 
+def test_opened_context_file_is_not_outside_the_safe_zone():
+    plan = protected_plan()
+    plan["subtasks"][0]["verify"] = "node --test test/content.test.js"
+    read = {"test/content.test.js": "import test from 'node:test';\n// server/contexts/content/index.js\n"}.get
+    assert plan_validate.complexity_signals(plan, levels.surface_files(plan, read, frozenset({"content"}))) == []
+    assert plan_validate.complexity_signals(plan, levels.surface_files(plan, read, frozenset())) == [
+        "file ngoài vùng an toàn: server/contexts/content/index.js"]
+
+
 # ── cổng 2 ──────────────────────────────────────────────────────────────────
 
 CATALOG = {

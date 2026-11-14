@@ -32,6 +32,10 @@ def test_gate4_no_protected_finding_for_public_page():
     assert not [f for f in guard.scan(diff("public/index.html"))["findings"] if f["check"] == "protected_path"]
 
 
+def test_gate4_no_protected_finding_for_opened_context_file():
+    assert not [f for f in guard.scan(diff("server/contexts/content/routes.js"))["findings"] if f["check"] == "protected_path"]
+
+
 @pytest.mark.parametrize("path", ["ai-board/harness/gates/guard.py", "AI-BOARD/inbox.json", "public/../ai-board/x.py"])
 def test_read_tool_path_refused_regardless_of_checks(path):
     with pytest.raises(tool_loop.Forbidden):
