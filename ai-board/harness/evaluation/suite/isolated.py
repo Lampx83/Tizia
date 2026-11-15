@@ -13,13 +13,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from evaluation.suite.process_tree import run_owned
 
 
+STDERR_TAIL = 2000
+
+
 def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dict:
     if timeout_s <= 0:
         raise ValueError("trial timeout must be positive")
     started = time.monotonic()
     task, mode = request["task"], request["mode"]
+    detail = None
     try:
         result = run_owned(command, input=json.dumps(request), timeout=timeout_s)
+        detail = (result.stderr or "")[-STDERR_TAIL:] or None
         if result.returncode:
             raise ValueError(f"trial exited with status {result.returncode}")
         row = json.loads(result.stdout)
@@ -31,8 +36,9 @@ def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dic
         reason = "trial_timeout"
     except KeyboardInterrupt:
         reason = "trial_cancelled"
-    except (OSError, ValueError):
+    except (OSError, ValueError) as error:
         reason = "trial_process_error"
+        detail = detail or str(error)[-STDERR_TAIL:]
     return {
         "id": task["id"], "mode": mode, "resolved": False, "collateral": [], "gate_passed": False,
         "gate4": None, "prod": "skipped", "ended": reason, "shipped": False, "review": None,
@@ -41,6 +47,7 @@ def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dic
         "cleanup_pending": True, "loop_tools": [], "retries": 0, "stuck": False, "truncated": False,
         "wall_s": round(time.monotonic() - started, 3), "providers": [], "served": [],
         "reasoning_chars": 0, "diff": None, "recall": None, "ref_errors": 0, "schema_fallbacks": 0,
+        **({"detail": detail} if detail and reason == "trial_process_error" else {}),
     }
 
 

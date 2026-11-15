@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import time
 
@@ -35,3 +36,38 @@ def test_report_keeps_a_timed_out_e2e_trial_and_unknown_planning(tmp_path):
     assert report["resolved_clean"]["k"] == 0
     assert report["planning"]["unknown"] == 1
     assert report["cost_per_resolved_clean"]["tokens"]["total"] is None
+
+
+def test_process_error_row_carries_stderr_tail():
+    program = "import sys; sys.stderr.write('x' * 5000 + 'BOOM-marker'); sys.exit(1)"
+    row = execute_trial([sys.executable, "-c", program], {"task": {"id": "t1"}, "mode": "e2e"}, timeout_s=10)
+    assert row["error"] == "trial_process_error" and row["detail"].endswith("BOOM-marker") and len(row["detail"]) <= 2000
+
+
+def test_process_error_on_bad_stdout_names_the_cause():
+    row = execute_trial([sys.executable, "-c", "print('not json')"], {"task": {"id": "t1"}, "mode": "e2e"}, timeout_s=10)
+    assert row["error"] == "trial_process_error" and row["detail"]
+
+
+def test_isolated_entry_point_imports_and_reads_request():
+    from pathlib import Path
+    from evaluation.suite import isolated
+    done = subprocess.run([sys.executable, str(Path(isolated.__file__).resolve())], input="{}", capture_output=True, text=True, timeout=120)
+    assert "KeyError: 'task'" in done.stderr and "ImportError" not in done.stderr and "ModuleNotFoundError" not in done.stderr
+
+
+def test_fast_tier_refuses_empty_node_modules(tmp_path, monkeypatch):
+    import pytest
+    from evaluation import eval_fast
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    (repo / "package.json").write_text("{}", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-q", "-m", "x")
+    empty = tmp_path / "node_modules"
+    empty.mkdir()
+    monkeypatch.setattr(eval_fast, "get_settings", lambda: type("S", (), {"eval_node_modules": empty})())
+    with pytest.raises(eval_fast.FastTierError, match="npm install"):
+        eval_fast.build_tree(repo / ".git", tmp_path / "root")
