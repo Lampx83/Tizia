@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from settings import get_settings
 
+SHIPPED = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'resources' / 'qwen3.5-tokenizer.json'
 
 
 class ByteCounter:
@@ -22,7 +23,7 @@ class QwenCounter:
         self._tokenizer = Tokenizer.from_file(path)
 
     def count(self, text):
-        return len(self._tokenizer.encode(text).ids)
+        return len(self._tokenizer.encode(text, add_special_tokens=False).ids)
 
 
 def counter():
@@ -34,6 +35,21 @@ def counter():
         except ImportError:
             pass
     return ByteCounter()
+
+
+@lru_cache(maxsize=4)
+def _load(path):
+    try:
+        return QwenCounter(path)
+    except Exception:  # missing tokenizers package or unreadable file: UTF-8 bytes stay a valid upper bound
+        return ByteCounter()
+
+
+def skill_count(text):
+    """Skill token count, same source as server token-count.js: env tokenizer file, else shipped one, else UTF-8 bytes."""
+    configured = get_settings().qwen_tokenizer
+    path = configured if configured and configured.is_file() else SHIPPED
+    return (_load(str(path)) if path.is_file() else ByteCounter()).count(text)
 
 
 CHARS_PER_TOKEN = 4  # pre-cut for char-budget tools; fit() does the exact cut

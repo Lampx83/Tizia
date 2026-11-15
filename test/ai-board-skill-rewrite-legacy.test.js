@@ -26,7 +26,7 @@ test('legacy rewrite becomes a child version with the next version number; sourc
     assert.equal(child.version, 2);
     assert.equal(child.parent_version_id, up.version.id);
     assert.equal(child.origin, 'rewrite');
-    assert.match(child.original_text, /^version: 2$/m);
+    assert.match(child.original_text, /^  version: "2"$/m);
     assert.equal(read.versions.find(v => v.id === up.version.id).rewritten_text, null);
     assert.equal(read.skill.status, 'draft');
   } finally { await t.close(); }

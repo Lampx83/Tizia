@@ -47,7 +47,7 @@ export function adminSkillBlock(skill) {
 
 const SPEC_KEYS = new Set(['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
 const SPEC_NAME = /^[a-z0-9-]{1,64}$/;
-const USE_WHEN = /^.{3,}\. Use when .{3,}\.$/su;
+export const USE_WHEN =/^.{3,}\. Use when .{3,}\.$/su;
 const bumpVersion = (text, next) => text.replace(/^([ \t]+version:)[^\n]*$/m, `$1 "${next}"`);
 
 /** SKILL.md text (+ folder name) -> Agent Skills spec violations; [] when valid. Mirror of skill_frontmatter.spec_errors. */

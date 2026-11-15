@@ -17,7 +17,7 @@ test('export keeps skill versions with hashes and drops rejected versions and us
   const t = await setup();
   try {
     const first = await seedApproved(t);
-    const bad = (await t.api('/api/admin/ai-board/skills', { name: 'frontend-example', task_types: ['frontend'], original_text: 'Missing frontmatter' })).body;
+    const bad = (await t.api('/api/admin/ai-board/skills', { name: 'frontend-example', task_types: ['frontend'], original_text: text('frontend-example', '1. Draft that gets rejected.') })).body;
     assert.equal((await t.api(`/api/admin/ai-board/skills/${first.skill.id}/versions/${bad.version.id}/reject`, { confirmed: true })).status, 200);
     const bundle = await exportFrom(t);
     assert.equal(validateBundle(bundle).ok, true);

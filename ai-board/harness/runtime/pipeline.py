@@ -132,8 +132,7 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
             raise default_skills.SkillPolicyChanged('selected skills changed; restart under current guidance')
         selection = {**selection, 'pin': pin}
         system += '\n\n' + default_skills.system_text(selected)
-        if role == 'gate4_review':
-            system += default_skills.review_axes_block(selected)
+        system += default_skills.review_axes_block(selected)
         admin = '\n\n'.join(default_skills.admin_text(s) for s in selected if s.source == 'admin' and s.name not in default_skills.VARIANTS)
         if admin:
             _, user = prompt_roles.split(prompt + '\n\n' + admin)

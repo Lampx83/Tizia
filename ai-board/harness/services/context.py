@@ -32,6 +32,9 @@ VARIANT_FILES = {  # skill nối thêm khi AI_BOARD_SKILL_VARIANT bật; không 
     "plan-from-request": SKILLS_DIR / "plan-from-request" / "SKILL.md",
     "implement-one-slice": SKILLS_DIR / "implement-one-slice" / "SKILL.md",
     "review-two-axes": SKILLS_DIR / "proposed" / "review-two-axes" / "SKILL.md",
+    "test-frame": SKILLS_DIR / "proposed" / "test-frame" / "SKILL.md",
+    "review-frame": SKILLS_DIR / "proposed" / "review-frame" / "SKILL.md",
+    "all-frame": SKILLS_DIR / "proposed" / "all-frame" / "SKILL.md",
 }
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
 RESERVE = file_context.WEIGHTS["tool_min_budget"]
