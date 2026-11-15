@@ -94,10 +94,10 @@ def parse_in_sandbox(kind: str, data: bytes, *, client=None) -> str:
 
 
 def parse_document(kind: str, data: bytes) -> str:
-    """Sandbox when AI_BOARD_SANDBOX_URL set, else in-process."""
-    if get_settings().sandbox_url:
-        return parse_in_sandbox(kind, data)
-    return {'pdf': parse_pdf, 'docx': parse_docx}[kind](data)
+    """Parse pdf/docx only in the sandbox. Raise RuntimeError when AI_BOARD_SANDBOX_URL unset (fail closed)."""
+    if not get_settings().sandbox_url:
+        raise RuntimeError('sandbox not configured')
+    return parse_in_sandbox(kind, data)
 
 
 def describe_image(data: bytes, mime: str, *, models, budget, model: str) -> str:
