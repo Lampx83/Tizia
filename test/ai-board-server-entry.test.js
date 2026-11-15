@@ -153,3 +153,20 @@ test('skill rewrite claim on the board entry rejects a missing or wrong worker k
     await app.close();
   }
 });
+
+test('board entry starts shot retention on its own backend and clears the timer on close', async () => {
+  const db = await openBoard();
+  const timer = setInterval(() => {}, 1 << 30);
+  const calls = [];
+  const env = { AI_BOARD_INTERNAL_SECRET: SECRET, AI_BOARD_SHOT_RETENTION_DAYS: '30' };
+  const { close } = await createAiBoardServer({ dbHandle: db, env, classifyRequest: async () => null,
+    logger: { warn() {} }, startRetention: (args) => { calls.push(args); return timer; } });
+  try {
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].db, db.d);
+    assert.equal(calls[0].backend.kind, 'local');
+    assert.equal(Object.is(calls[0]['env'], env), true);
+    assert.equal(timer._destroyed, false);
+  } finally { await close(); db.close(); }
+  assert.equal(timer._destroyed, true, 'close must clear the retention interval');
+});

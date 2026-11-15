@@ -20,10 +20,14 @@ async function serve() {
   const app = express();
   attachRequestUpload(app, { dir, requireAuth, requireEnrolled: pass });
   attachRequestUploadStatic(app, { dir, shotBackend: { kind: 'local' } });
+  app.use(globalErrorHandler);
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   return { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }) };
 }
+
+// Mirrors the board entry's final error handler: any error that escapes a route becomes internal_error.
+const globalErrorHandler = (error, _req, res, _next) => res.status(Number(error?.status) || 500).json({ error: 'internal_error' });
 
 const upload = (base, body, headers = {}) => fetch(`${base}/api/requests/attachments`, {
   method: 'POST', body, headers: { 'x-test-user': '1', ...headers },
@@ -91,6 +95,31 @@ test('unauthenticated uploads never reach the handler', async () => {
     const reply = await fetch(`${app.base}/api/requests/attachments`, { method: 'POST', body: PNG, headers: { 'content-type': 'image/png' } });
     assert.equal(reply.status, 401);
   } finally { await app.close(); }
+});
+
+test('a missing upload is a plain 404 and the next request still succeeds', async () => {
+  const app = await serve();
+  try {
+    const saved = await upload(app.base, PNG, { 'content-type': 'image/png', 'x-filename': 'k.png' });
+    const { url } = await saved.json();
+    const gone = await fetch(`${app.base}/uploads/requests/2000-01-01/missing-file.png`);
+    assert.equal(gone.status, 404);
+    assert.equal(await gone.text(), 'Not found');
+    assert.equal((await fetch(`${app.base}${url}`)).status, 200);
+  } finally { await app.close(); }
+});
+
+test('static mount over a nonexistent uploads dir answers 404 instead of crashing', async () => {
+  const app = express();
+  attachRequestUploadStatic(app, { dir: path.join(dir, 'does-not-exist'), shotBackend: { kind: 'local' } });
+  app.use(globalErrorHandler);
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const reply = await fetch(`http://127.0.0.1:${server.address().port}/uploads/requests/2026-01-01/a.png`);
+    assert.equal(reply.status, 404);
+    assert.equal(await reply.text(), 'Not found');
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
 test.after(() => { rmSync(dir, { recursive: true, force: true }); });
