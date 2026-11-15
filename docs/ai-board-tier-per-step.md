@@ -22,6 +22,11 @@ still what a request shows, but it no longer decides whether a safe step may run
   (`continuePartialRequest` → `queued/authorized` → `resumeAuthorizedPlan`). The same plan revision and
   `plan_hash` are reused, so the tool-step checkpoint skips finished subtasks.
 - A core step is never auto-implemented, even after approval.
+- A data step (`layer: 'data'`) is never released by `authorizePlan`. It becomes `waiting_data` and only
+  `acknowledgeDataStep` (`POST /api/admin/ai-board/tickets/:id/data-steps/:childId/acknowledge`) moves it to
+  `done`, after the admin has applied the payload. Dependents stay held until then. A `campus_layout` payload
+  is checked against `server/contexts/campus/layout-schema.js`; any other data step is a new `_ai-generated`
+  migration.
 - Backend context surface (Python harness, `path_policy.surface_context` + `runtime/levels.py`):
   `server/contexts/<name>/` file is surface only when `AI_BOARD_BACKEND_CONTEXTS_SURFACE=1`, `<name>` is in
   `AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST` (owner-approved), `<name>` is not in `FORBIDDEN_CONTEXTS`
