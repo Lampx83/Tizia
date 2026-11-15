@@ -119,6 +119,12 @@ def select(role, context=None):
     return select_report(role, context)[0]
 
 
+def review_selection():
+    """gate 4 skills: node pick when AI_BOARD_SKILL_SELECT is on, else legacy select."""
+    from services import skill_plan
+    return skill_plan.build('gate4_review', {}).skills if skill_plan.enabled() else select('gate4_review', {})
+
+
 def select_report(role, context=None):
     """(skills, {'selected': [{name, reason}], 'dropped': [{name, reason}]}) qua skill_selection.choose."""
     context = context or {}

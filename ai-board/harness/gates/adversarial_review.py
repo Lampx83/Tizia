@@ -18,9 +18,13 @@ SCHEMA = {'type': 'object', 'required': ['verdict', 'findings'], 'properties': {
         'severity': {'enum': list(SEVERITIES)}, 'issue': {'type': 'string'}}}}}}
 
 
+def _two_axes():
+    return 'review-two-axes' in get_settings().skill_variant
+
+
 def _schema():
     """SCHEMA; with review-two-axes on, each finding may also name its file (optional, not required)."""
-    if 'review-two-axes' not in get_settings().skill_variant:
+    if not _two_axes():
         return SCHEMA
     findings = SCHEMA['properties']['findings']
     item = findings['items']
@@ -45,7 +49,8 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
     diff = re.sub(r'</?DIFF>', '', text[:MAX_DIFF_CHARS])
     if not budget.tick():
         return _blocked('adversarial review: budget exhausted', 'budget')
-    system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(default_skills.select('gate4_review', {})) + default_skills.review_axes_block()
+    selected = default_skills.review_selection()
+    system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(selected) + default_skills.review_axes_block(selected)
     routing = getattr(deps.models, 'routing', None)
     role_extra, role_options = prompt_roles.call_params('gate4_review', routing)
     try:
@@ -66,7 +71,7 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
         if parsed['verdict'] not in ('pass', 'concerns') or not isinstance(findings, list):
             raise ValueError('shape')
         findings = [{'severity': f['severity'], 'issue': str(f['issue'])[:200],
-                     **({'file': f['file'][:200]} if isinstance(f.get('file'), str) else {})}
+                     **({'file': f['file'][:200]} if _two_axes() and isinstance(f.get('file'), str) else {})}
                     for f in findings[:8] if f['severity'] in SEVERITIES]
     except (ValueError, KeyError, TypeError):
         return _blocked('adversarial review returned no valid verdict', 'critical')
