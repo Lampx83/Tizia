@@ -73,6 +73,14 @@ def request_with(tmp_path, *files):
 ON = {'AI_BOARD_MULTIMODAL': '1', 'AI_BOARD_VISION_MODEL': 'qwen35-vl'}
 
 
+@pytest.fixture
+def local_sandbox(monkeypatch):
+    """Sandbox configured; the VM call is replaced by in-process parsing."""
+    monkeypatch.setenv('AI_BOARD_SANDBOX_URL', 'http://sandbox.invalid')
+    monkeypatch.setattr(attachments, 'parse_in_sandbox',
+                        lambda kind, data: {'pdf': attachments.parse_pdf, 'docx': attachments.parse_docx}[kind](data))
+
+
 def test_flag_off_returns_request_untouched(tmp_path):
     request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf(INJECTION)))
     models = FakeModels()
@@ -81,7 +89,7 @@ def test_flag_off_returns_request_untouched(tmp_path):
     assert models.calls == []
 
 
-def test_pdf_text_stays_inside_fence_as_data(tmp_path):
+def test_pdf_text_stays_inside_fence_as_data(tmp_path, local_sandbox):
     request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf(INJECTION)))
     out, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
     body = out['body']
@@ -90,13 +98,21 @@ def test_pdf_text_stays_inside_fence_as_data(tmp_path):
     assert body.index(attachments.FENCE_OPEN) < body.index(INJECTION) < body.index(attachments.FENCE_CLOSE)
 
 
-def test_scanned_pdf_reports_not_readable(tmp_path):
+def test_scanned_pdf_reports_not_readable(tmp_path, local_sandbox):
     request, uploads = request_with(tmp_path, ('scan.pdf', 'application/pdf', make_pdf('')))
     _, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
     assert report['items'][0]['status'] == 'not_readable'
 
 
-def test_docx_paragraphs_and_tables_extracted(tmp_path):
+def test_document_without_sandbox_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.delenv('AI_BOARD_SANDBOX_URL', raising=False)
+    request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf(INJECTION)))
+    out, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
+    assert report['items'] == [{'name': 'a.pdf', 'kind': None, 'status': 'not_readable'}]
+    assert INJECTION not in out['body']
+
+
+def test_docx_paragraphs_and_tables_extracted(tmp_path, local_sandbox):
     data = make_docx(tmp_path / 'spec.docx', 'Đoạn một', 'giá trị bảng')
     request, uploads = request_with(tmp_path, ('spec.docx', attachments.DOCX_MIME, data))
     out, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON, uploads_dir=uploads)
@@ -184,7 +200,7 @@ def test_guest_script_runs_standalone_like_in_the_vm(tmp_path):
     assert done.returncode == attachments.SCANNED_EXIT
 
 
-def test_cut_at_limit_is_shown(tmp_path):
+def test_cut_at_limit_is_shown(tmp_path, local_sandbox):
     request, uploads = request_with(tmp_path, ('a.pdf', 'application/pdf', make_pdf('x' * 200)))
     out, report = attachments.enrich(request, models=FakeModels(), budget=FakeBudget(), env=ON,
                                      uploads_dir=uploads, max_chars=50)
