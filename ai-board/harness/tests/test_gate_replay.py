@@ -6,6 +6,10 @@ import gate_replay
 # Known open false-blocks at tip default, both owned by LF/141: the validator rewrote a quote (650) and the
 # validator called a plan ungrounded for a file the plan never names (646).
 OPEN = {("2.5.grounding", 650), ("2.5.grounding", 646)}
+# Recorded refusals with the flag off: grep -q checks were false blocks, pass once the flag is on (see *-unified rows).
+OPEN |= {("1.verify_runnable", t) for t in (
+    "B0-r1-dev-multifile__mf-08-cache-invalidate", "B0-r1-replace_text-l4-928d6f",
+    "B0-r5-dev-multifile__mf-15-regress-guard", "B0-r5-rui-03-requester-progress", "B0-r6-insert_text-l3-12bdf8")}
 OLD_NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                         r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js"
                         r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
@@ -45,3 +49,9 @@ def test_three_grounding_traces_are_graded():
         if row["gate"] == "2.5.grounding":
             got.setdefault(row["trace"], []).append(row["got"])
     assert got == {623: ["pass"], 646: ["block"], 650: ["block", "pass", "pass"]}
+
+
+def test_verify_rows_flag_on_pass_grep_and_keep_sentences_blocked():
+    rows = [row for row in gate_replay.run() if row["gate"] == "1.verify_runnable" and row["trace"].endswith("-unified")]
+    assert len(rows) == 11 and all(row["verdict"] == "correct" for row in rows)
+    assert sum(row["got"] == "pass" for row in rows) == 5
