@@ -101,6 +101,15 @@ def _no_oracle(data, case):
     return "block"
 
 
+def _compile_prose(data, case):
+    """Compile-prose verify (flag-independent): clean command, planner (not compiled), or dirty (connector leaked)."""
+    from gates import brainstorm
+    cmd = brainstorm.compile_prose_verify(case["text"], {case["text"].split()[0]})
+    if cmd is None:
+        return "planner"
+    return "dirty" if any(connector in cmd for connector in (" và ", " and ", " ngay sau ")) else "clean"
+
+
 def _objection(data, case):
     from gates import plan_validate as pv
     recorded = json.loads((FIXTURES / "lf123_request7_validator.json").read_text(encoding="utf-8"))[case["record"]]
@@ -111,7 +120,8 @@ def _objection(data, case):
 _REPLAY = {"plan_coverage": _coverage, "grounding": _grounding, "text_expectation": _text_expectation,
            "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable,
            "selector_oracle": _selector_oracle,
-           "acceptance_tool": _acceptance_tool, "no_oracle": _no_oracle}
+           "acceptance_tool": _acceptance_tool, "no_oracle": _no_oracle,
+           "compile_prose": _compile_prose}
 
 
 def run(env=None):

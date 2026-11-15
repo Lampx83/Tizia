@@ -719,6 +719,22 @@
    },
    "truth": "block",
    "truth_source": "không có test và smoke đỏ: vẫn block"
+  },
+  {
+   "gate": "2.compile_prose",
+   "fn": "compile_prose",
+   "trace": "insert_text-l1-b3d529",
+   "text": "public/marketplace.html chứa 'Nhớ ôn bài đơn hàm' và 'Đang tải'",
+   "truth": "clean",
+   "truth_source": "B0-prose insert_text-l1-b3d529 (ticket 246): lệnh cũ có 'và' lọt vào sh -c; sau sửa mỗi chuỗi một grep"
+  },
+  {
+   "gate": "2.compile_prose",
+   "fn": "compile_prose",
+   "trace": "insert_text-l2-8292ff",
+   "text": "public/teacher-live.html chứa '<h3>Kiểm pha bài thành ôn.</h3>' ngay sau '<h3>📝 Mở quiz</h3>'",
+   "truth": "planner",
+   "truth_source": "B0-prose insert_text-l2-8292ff (ticket 246): 'ngay sau' không phải từ nối được biên dịch, trả về planner"
   }
  ]
 }
