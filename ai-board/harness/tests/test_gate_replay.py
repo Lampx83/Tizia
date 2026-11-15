@@ -57,3 +57,11 @@ def test_verify_rows_flag_on_pass_grep_and_keep_sentences_blocked():
     rows = [row for row in gate_replay.run() if row["gate"] == "1.verify_runnable" and row["trace"].endswith("-unified")]
     assert len(rows) == 11 and all(row["verdict"] == "correct" for row in rows)
     assert sum(row["got"] == "pass" for row in rows) == 5
+
+
+def test_advquote_on_lets_t650_through_and_leaves_646_blocked():
+    got = {}
+    for row in gate_replay.run({"AI_BOARD_GATE25_FIXES": "quotes,ellipsis,advquote"}):
+        if row["gate"] == "2.5.grounding":
+            got.setdefault(row["trace"], []).append(row["got"])
+    assert got == {623: ["pass"], 646: ["block"], 650: ["pass", "pass", "pass"]}

@@ -77,6 +77,27 @@ test('a request created on the web is claimed by the worker and shown in the adm
   } finally { await env.close(); }
 });
 
+test('thread and vote routes proxied from the web hit the same board request row', async () => {
+  const env = await stacks();
+  try {
+    const created = await json(env.site.base, 'POST', '/api/requests', { user: 1, headers: { 'idempotency-key': 'split-thread-001' },
+      body: { title: 'Thêm trang ôn tập', detail: 'Nội dung từ form web' } });
+    assert.equal(created.status, 200, await created.clone().text());
+    const { request_id: requestId } = await created.json();
+
+    const thread = await json(env.site.base, 'GET', `/api/requests/${requestId}/thread`, { user: 1 });
+    assert.equal(thread.status, 200);
+    assert.equal((await thread.json()).request.id, requestId);
+
+    const voted = await json(env.site.base, 'POST', `/api/requests/${requestId}/vote`, { user: 1 });
+    assert.equal(voted.status, 200);
+    assert.equal((await voted.json()).ok, true);
+
+    const guest = await json(env.site.base, 'GET', `/api/requests/${requestId}/thread`);
+    assert.equal(guest.status, 401);
+  } finally { await env.close(); }
+});
+
 test('a guest cannot create a request through the split web', async () => {
   const env = await stacks();
   try {

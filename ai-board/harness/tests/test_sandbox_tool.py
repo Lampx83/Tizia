@@ -380,3 +380,36 @@ def test_sandbox_observation_capped_by_tokens(offered_tool):
     from services import token_count
     observation = tool_loop._fit("中" * 2000, sandbox_tool.NAME)
     assert token_count.measure(observation) <= tool_loop._cap(sandbox_tool.NAME)
+
+
+TIERS = "AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS"
+
+
+def runner_tier(client, tier):
+    return sandbox_tool.Runner("repo", "abc", client=client, lease_ok=lambda: True, tier=tier)
+
+
+def test_repo_arm_per_tier_on_only_for_listed_tier(monkeypatch):
+    from runtime import limits
+    monkeypatch.delenv(ARM, raising=False)
+    monkeypatch.setenv(TIERS, "multi")
+    assert ("npm", "test") in limits.sandbox_tool(tier="multi")["allowed_argv"]
+    assert ("npm", "test") not in limits.sandbox_tool(tier="single")["allowed_argv"]
+    assert ("npm", "test") not in limits.sandbox_tool()["allowed_argv"]
+
+
+def test_repo_arm_tier_default_off(monkeypatch):
+    from runtime import limits
+    monkeypatch.delenv(ARM, raising=False)
+    monkeypatch.delenv(TIERS, raising=False)
+    assert ("npm", "test") not in limits.sandbox_tool(tier="multi")["allowed_argv"]
+
+
+def test_runner_refuses_repo_script_outside_armed_tier(monkeypatch):
+    monkeypatch.delenv(ARM, raising=False)
+    monkeypatch.setenv(TIERS, "multi")
+    client = FakeClient()
+    with pytest.raises(sandbox_tool.Refused):
+        runner_tier(client, "single")(["npm", "test"], {})
+    assert client.created == []
+    assert json.loads(runner_tier(client, "multi")(["npm", "test"], {}))["rc"] == 0
