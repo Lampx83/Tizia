@@ -80,3 +80,18 @@ def test_oversized_proposal_is_refused(monkeypatch, tmp_path, axes_on):
     monkeypatch.setitem(default_skills.VARIANTS, 'review-two-axes', path)
     with pytest.raises(ValueError):
         default_skills.review_axes_block()
+
+
+def test_axes_on_asks_each_finding_for_its_file_and_keeps_it(axes_on):
+    finding = {'severity': 'low', 'issue': 'standards: comment style differs from docs rule', 'file': 'server/contexts/payment/index.js'}
+    models = ReviewModels({'verdict': 'concerns', 'findings': [finding]})
+    result = adversarial_review.run(state(), main.Deps(models=models, notify=None), Budget())
+    assert result['findings'] == [finding]
+    item = models.calls[0]['format']['properties']['findings']['items']
+    assert item['properties']['file'] == {'type': 'string'} and 'file' not in item['required']
+
+
+def test_axes_off_format_and_findings_are_unchanged(axes_off):
+    models = ReviewModels({'verdict': 'pass', 'findings': []})
+    adversarial_review.run(state(), main.Deps(models=models, notify=None), Budget())
+    assert 'file' not in models.calls[0]['format']['properties']['findings']['items']['properties']
