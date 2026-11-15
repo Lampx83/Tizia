@@ -151,6 +151,8 @@ def apply_gold(base: str, edits: list[dict]) -> str:
 def check(html: str, base: str | None, case: dict) -> bool:
     """Trang model sinh có đúng theo gold của case không (theo check.mode)."""
     mode = case["check"]["mode"]
+    if mode == "feature":  # feature acceptance is scored by evaluation.feature.accepted, not by this oracle
+        return False
     if mode == "page":
         gold, title = case["check"], re.search(r"<title>(.*?)</title>", html, re.S | re.I)
         heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S | re.I)
