@@ -71,3 +71,14 @@ def test_fast_tier_refuses_empty_node_modules(tmp_path, monkeypatch):
     monkeypatch.setattr(eval_fast, "get_settings", lambda: type("S", (), {"eval_node_modules": empty})())
     with pytest.raises(eval_fast.FastTierError, match="npm install"):
         eval_fast.build_tree(repo / ".git", tmp_path / "root")
+
+
+def test_fast_tier_lists_dependency_the_pinned_tree_needs(tmp_path):
+    from evaluation import eval_fast
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "package.json").write_text('{"dependencies": {"express": "^4", "better-sqlite3": "^11"}}', encoding="utf-8")
+    modules = tmp_path / "node_modules"
+    (modules / "express").mkdir(parents=True)
+    (modules / "express" / "package.json").write_text("{}", encoding="utf-8")
+    assert eval_fast.missing_dependencies(tree, modules) == ["better-sqlite3"]
