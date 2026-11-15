@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clean-host bootstrap for the dev stack + AI Board (Linux, or Git Bash on Windows with Docker Desktop).
 # Preflight, create runner token, write KVM_GID and the resource profile to ai-board-host.env (not .env).
-# DEV=1 in .env selects the laptop profile (dev policy, small CPU/RAM limits); DEV=0 or unset selects the server profile (large).
+# DEV=0 in .env selects the server profile (large); any other value or unset selects the small dev profile.
 # --build-guest: build the Gate 5 guest, push to image-registry, optional warm cache, pin digest in the dev policy.
 # Usage (repo root):
 #   scripts/ai-board-bootstrap.sh
@@ -72,13 +72,20 @@ else
   err "openssl not found: needed to create $TOKEN"
 fi
 
+# Only an explicit DEV=0 selects large; unset or any other value falls back to the small dev profile.
+profile_for() {
+  if [ "$1" = 0 ]; then
+    echo "large WORKER_CPUS=8 WORKER_MEM=16g RUNNER_CPUS=10 RUNNER_MEM=6g"
+  else
+    echo "dev WORKER_CPUS=2 WORKER_MEM=4g RUNNER_CPUS=6 RUNNER_MEM=3g"
+  fi
+}
+
 dev_flag=
 [ -f .env ] && dev_flag=$(sed -n 's/^DEV=//p' .env | tail -n 1 | tr -d '\r "'"'")
-if [ "$dev_flag" = 1 ]; then
-  profile=dev; limits='WORKER_CPUS=2 WORKER_MEM=4g RUNNER_CPUS=6 RUNNER_MEM=3g'
-else
-  profile=large; limits='WORKER_CPUS=8 WORKER_MEM=16g RUNNER_CPUS=10 RUNNER_MEM=6g'
-fi
+resolved=$(profile_for "$dev_flag")
+profile=${resolved%% *}
+limits=${resolved#* }
 POLICY=ai-board/sandbox-runner/sandbox-policy.$profile.yaml
 [ -n "$kvm_gid" ] || { [ -f "$HOST_ENV" ] && kvm_gid=$(sed -n 's/^KVM_GID=//p' "$HOST_ENV" | tail -n 1); } || true
 {

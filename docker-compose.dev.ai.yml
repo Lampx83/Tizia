@@ -84,8 +84,8 @@ services:
         WORKER_CHROMIUM: "0"  # gate 5 chạy trong guest của sandbox-runner
     image: tizia-ai-board-worker:dev
     container_name: aiboard-worker
-    cpus: ${WORKER_CPUS:-8}
-    mem_limit: ${WORKER_MEM:-16g}
+    cpus: ${WORKER_CPUS:-2}
+    mem_limit: ${WORKER_MEM:-4g}
     depends_on: !override  # worker gọi entry board và sandbox; base depends_on (tizia) không áp dụng
       aiboard-server: { condition: service_healthy }
       sandbox-runner: { condition: service_healthy }
@@ -141,11 +141,11 @@ services:
     extends: { file: docker-compose.yml, service: sandbox-runner }
     image: tizia-sandbox-runner:dev
     container_name: aiboard-sandbox-runner
-    cpus: ${RUNNER_CPUS:-10}  # mặc định = profile large (server); máy laptop: scripts/ai-board-bootstrap.sh ghi giá trị từ DEV=1 vào ai-board-host.env
-    mem_limit: ${RUNNER_MEM:-6g}
+    cpus: ${RUNNER_CPUS:-6}  # mặc định = profile dev; server đặt RESOURCE_PROFILE=large và RUNNER_CPUS=10 (xem .env.example)
+    mem_limit: ${RUNNER_MEM:-3g}
     environment:
-      RESOURCE_PROFILE: ${RESOURCE_PROFILE:-large}
-      SANDBOX_POLICY_FILE: /etc/sandbox/sandbox-policy.${RESOURCE_PROFILE:-large}.yaml
+      RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}
+      SANDBOX_POLICY_FILE: /etc/sandbox/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml
     networks: !override [boardnet, sandbox-api]
     volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
       - sandbox-runner-state:/home/node/.microsandbox

@@ -40,22 +40,42 @@ def acceptance_commands(state: dict) -> list[str]:
     return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
 
 
-_GREP_LITERAL = re.compile(r"""(\bgrep(?:\s+(?:-[A-Za-z]+|--))*)\s+(?:'([^']*)'|"([^"$`\\!]*)")""")
+_GREP_LITERAL = re.compile(r"""(\b[ef]?grep(?:\s+(?:-[A-Za-z]+|--))*)\s+(?:'([^']*)'|"([^"]*)")""")
+
+
+def _nfd_forms(match: re.Match) -> tuple[str, str] | None:
+    """(NFC, NFD) of a non-ASCII grep literal; None when it is ASCII or the shell would rewrite it."""
+    literal = match.group(2) if match.group(2) is not None else match.group(3)
+    if match.group(2) is None and re.search(r"[$`\\!]", literal):
+        return None
+    if literal.isascii():
+        return None
+    nfc, nfd = unicodedata.normalize("NFC", literal), unicodedata.normalize("NFD", literal)
+    if "'" in nfc or "'" in nfd:
+        return None
+    return nfc, nfd
 
 
 def expand_nfd_literals(item: str) -> str:
     """Rewrite grep '<non-ASCII>' to match its NFC and NFD forms; other commands unchanged."""
-    # ponytail: quoted grep patterns only; mixed-form text and patterns with shell expansion still byte-match.
+    # ponytail: quoted grep/egrep/fgrep patterns only; mixed-form page text still byte-matches.
     def swap(match: re.Match) -> str:
-        literal = match.group(2) if match.group(2) is not None else match.group(3)
-        if literal.isascii():
-            return match.group(0)
-        nfc, nfd = unicodedata.normalize("NFC", literal), unicodedata.normalize("NFD", literal)
-        if "'" in nfc or "'" in nfd:
+        forms = _nfd_forms(match)
+        if forms is None:
             return match.group(0)
         flags = re.sub(r"\s+(?:--|-e)$", "", match.group(1))
-        return f"{flags} -e '{nfc}' -e '{nfd}'"
+        return f"{flags} -e '{forms[0]}' -e '{forms[1]}'"
     return _GREP_LITERAL.sub(swap, item)
+
+
+def unnormalized_literals(item: str) -> list[str]:
+    """Non-ASCII grep literals expand_nfd_literals leaves byte-matched (shell expansion, apostrophe)."""
+    found = []
+    for match in _GREP_LITERAL.finditer(item):
+        literal = match.group(2) if match.group(2) is not None else match.group(3)
+        if not literal.isascii() and _nfd_forms(match) is None:
+            found.append(literal)
+    return found
 
 
 def oracle_defers(state: dict, acceptance: list[str], generated_ok: bool, smoke_ok: bool, result: dict) -> bool:
@@ -633,6 +653,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     command([*compose, "cp", str(_CURL_SHIM), "tizia:/usr/local/bin/curl"])
                     command([*compose, "exec", "-T", "-u", "root", "tizia", "chmod", "755", "/usr/local/bin/curl"])
             for item in acceptance:
+                for literal in unnormalized_literals(item):
+                    logs.append(f"Acceptance literal not NFD-normalised (shell-expanded or apostrophe), byte match only: {literal}")
                 try:
                     with (_check_span(trace, "curl", _acceptance_target(item)) if "curl" in item else nullcontext()):
                         command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)

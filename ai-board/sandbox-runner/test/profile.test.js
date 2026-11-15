@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import YAML from 'yaml';
 
 import { assertProfile, loadPolicy } from '../src/policy.js';
@@ -88,4 +89,26 @@ test('runner container covers the VM vCPU in both profiles', () => {
   for (const [name, runner] of [['large', effective(base, {}, 'sandbox-runner')], ['dev', effective(base, overlay, 'sandbox-runner')]]) {
     assert.ok(runner.cpus > policyOf(runner).vm.cpus, `${name}: runner cpus must exceed vm.cpus`);
   }
+});
+
+test('dev stack compose defaults to the dev profile when no env is set', () => {
+  const text = readFileSync(new URL('../../../docker-compose.dev.ai.yml', import.meta.url), 'utf8');
+  for (const want of [
+    'cpus: ${WORKER_CPUS:-2}', 'mem_limit: ${WORKER_MEM:-4g}',
+    'cpus: ${RUNNER_CPUS:-6}', 'mem_limit: ${RUNNER_MEM:-3g}',
+    'RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}', 'sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml',
+  ]) assert.ok(text.includes(want), `missing default: ${want}`);
+  assert.doesNotMatch(text, /:-(large|8|16g|10|6g)\}/);
+});
+
+test('bootstrap profile: only DEV=0 selects large, unset or other values select dev', () => {
+  const script = readFileSync(new URL('../../../scripts/ai-board-bootstrap.sh', import.meta.url), 'utf8');
+  const fn = script.match(/^profile_for\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(fn, 'profile_for function not found');
+  const run = (dev) => spawnSync('bash', ['-c', `${fn}\nprofile_for "$1"`, 'x', dev], { encoding: 'utf8' }).stdout.trim();
+  const dev = 'dev WORKER_CPUS=2 WORKER_MEM=4g RUNNER_CPUS=6 RUNNER_MEM=3g';
+  assert.equal(run(''), dev);
+  assert.equal(run('1'), dev);
+  assert.equal(run('yes'), dev);
+  assert.equal(run('0'), 'large WORKER_CPUS=8 WORKER_MEM=16g RUNNER_CPUS=10 RUNNER_MEM=6g');
 });

@@ -557,6 +557,28 @@ def test_explicit_dash_e_pattern_matches_nfd_page(tmp_path):
     assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", f"grep -q -e '{VI_TEXT}' page.html") == 0
 
 
+@needs_sh
+def test_egrep_and_fgrep_literals_match_nfd_page(tmp_path):
+    nfd = unicodedata.normalize("NFD", VI_TEXT)
+    nfc = unicodedata.normalize("NFC", VI_TEXT)
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", f"egrep -q '{nfc}' page.html") == 0
+    assert _sh_exit(tmp_path, f"<h1>{nfd}</h1>", f"fgrep -q '{nfc}' page.html") == 0
+
+
+@needs_sh
+def test_nfd_literal_with_metacharacters_in_single_quotes_is_inert(tmp_path):
+    literal = unicodedata.normalize("NFD", "Thuốc $(touch pwned) `touch pwned2`")
+    assert _sh_exit(tmp_path, f"<h1>{VI_TEXT}</h1>", f"grep -q '{literal}' page.html") == 1
+    assert not (tmp_path / "pwned").exists() and not (tmp_path / "pwned2").exists()
+
+
+def test_unnormalized_literals_report_only_what_is_left_byte_matched():
+    assert verify.unnormalized_literals('grep -q "Thuốc $(date)" page.html') == ["Thuốc $(date)"]
+    assert verify.unnormalized_literals('grep -q "Thuốc\'s" page.html') == ["Thuốc's"]
+    assert verify.unnormalized_literals(f"grep -q '{VI_TEXT}' page.html") == []
+    assert verify.unnormalized_literals("grep -q 'Hello' page.html") == []
+
+
 def test_ascii_command_is_byte_identical():
     cmd = "curl -fsS http://127.0.0.1:8041/ | grep -q 'Hello world' && npm test"
     assert verify.expand_nfd_literals(cmd) == cmd

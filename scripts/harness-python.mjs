@@ -1,6 +1,7 @@
 // Resolve the harness Python: AI_BOARD_PYTHON > existing .venv > bootstrap .venv once (cross-process lock).
 import nodeFs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -12,6 +13,19 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
 
 export function venvPython(root = ROOT, platform = process.platform) {
   return path.join(root, 'ai-board/harness/.venv', platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+}
+
+// Written only after pip install succeeds; a venv without a matching marker is an interrupted or stale install.
+export function venvMarker(root = ROOT) {
+  return path.join(root, 'ai-board/harness/.venv', '.requirements.sha256');
+}
+
+function requirementsHash(fs, requirements) {
+  return createHash('sha256').update(fs.readFileSync(requirements)).digest('hex');
+}
+
+function isReady(fs, python, marker, hash) {
+  return fs.existsSync(python) && fs.existsSync(marker) && fs.readFileSync(marker, 'utf8').trim() === hash;
 }
 
 function findBasePython(run, platform) {
@@ -46,15 +60,21 @@ export function resolveHarnessPython({
   if (env.AI_BOARD_PYTHON) return env.AI_BOARD_PYTHON;
   const python = venvPython(root, platform);
   const venv = path.join(root, 'ai-board/harness/.venv');
+  const marker = venvMarker(root);
   const lock = `${venv}.lock`;
-  if (fs.existsSync(python) && !fs.existsSync(lock)) return python;
+  const requirements = path.join(root, 'ai-board/harness/requirements.txt');
+  const hash = requirementsHash(fs, requirements);
+  if (isReady(fs, python, marker, hash) && !fs.existsSync(lock)) return python;
 
   acquire(fs, lock, now, sleep);
   try {
-    if (fs.existsSync(python)) return python;
-    const [cmd, pre] = findBasePython(run, platform);
-    const requirements = path.join(root, 'ai-board/harness/requirements.txt');
-    const steps = [[cmd, [...pre, '-m', 'venv', venv]], [python, ['-m', 'pip', 'install', '-q', '-r', requirements]]];
+    if (isReady(fs, python, marker, hash)) return python;
+    const steps = [];
+    if (!fs.existsSync(python)) {
+      const [cmd, pre] = findBasePython(run, platform);
+      steps.push([cmd, [...pre, '-m', 'venv', venv]]);
+    }
+    steps.push([python, ['-m', 'pip', 'install', '-q', '-r', requirements]]);
     process.stderr.write(`[harness-python] bootstrapping ${venv} (one-time)\n`);
     for (const [c, args] of steps) {
       const r = run(c, args, { stdio: ['ignore', 2, 2] });
@@ -63,6 +83,7 @@ export function resolveHarnessPython({
         throw new Error(`harness venv bootstrap failed: ${c} ${args.join(' ')} (${r.error?.message ?? `exit ${r.status}`})`);
       }
     }
+    fs.writeFileSync(marker, `${hash}\n`);
     return python;
   } finally {
     fs.rmSync(lock, { recursive: true, force: true });
