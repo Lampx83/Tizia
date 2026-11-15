@@ -75,6 +75,20 @@ def _selector_oracle(data, case):
     return "block" if any(functional._is_css_selector(text) for text in shown["present"]) else "pass"
 
 
+def _acceptance_tool(data, case):
+    """Acceptance failure text -> infra (missing tool, no repair turn) or repair. Same path as gate 5 + repair_class."""
+    from gates.gate5_session import failure_class, missing_tool
+    from runtime import repair_class
+    tool = missing_tool(case["output"], case.get("returncode"), case["command"])
+    if not tool:
+        reason = f"feature acceptance failed: {case['command']} | {case['output']}"
+        result = {"gate": 5, "failure_class": failure_class("ordinary", reason), "reason": reason}
+    else:
+        reason = f"thiếu công cụ trong container: {tool} (acceptance: {case['command']})"
+        result = {"gate": 5, "failure_class": failure_class("tooling", reason), "reason": reason}
+    return "infra" if repair_class.classify(result, {}, set())["action"] == repair_class.RETRY else "repair"
+
+
 def _objection(data, case):
     from gates import plan_validate as pv
     recorded = json.loads((FIXTURES / "lf123_request7_validator.json").read_text(encoding="utf-8"))[case["record"]]
@@ -84,7 +98,8 @@ def _objection(data, case):
 
 _REPLAY = {"plan_coverage": _coverage, "grounding": _grounding, "text_expectation": _text_expectation,
            "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable,
-           "selector_oracle": _selector_oracle}
+           "selector_oracle": _selector_oracle,
+           "acceptance_tool": _acceptance_tool}
 
 
 def run(env=None):

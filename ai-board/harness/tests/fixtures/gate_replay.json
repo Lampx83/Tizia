@@ -604,6 +604,56 @@
     "AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR": "1"
    },
    "truth_source": "như trên, cờ AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR=1: selector bỏ khỏi danh sách chữ"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r4-replace_text-l4-928d6f",
+   "command": "curl -s localhost:8041/it-sql-playground.html | grep -q 'Thuốc nhớ liều chuỗi tựu.'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r4-replace_text-l4-928d6f: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r5-remove_element-l3-966634",
+   "command": "curl -s localhost:8041/admin.html | grep -q '💬 Trả lời yêu cầu HS'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r5-remove_element-l3-966634: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-css_color-l2-9ff2fd",
+   "command": "curl -s localhost:8041/grapher.html | grep -q '.types button { color:#16a34a;'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r7-css_color-l2-9ff2fd: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-replace_text-l4-928d6f",
+   "command": "curl -s localhost:8041/it-sql-playground.html | grep -q 'Điểm ghi học lượng thẻ.'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r7-replace_text-l4-928d6f: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-css_color-l2-9ff2fd-red",
+   "command": "curl -s localhost:8041/grapher.html | grep -q '.types button { color:#16a34a;'",
+   "output": "AssertionError: expected #16a34a got #7c3aed",
+   "returncode": 1,
+   "truth": "repair",
+   "truth_source": "lệnh chạy được nhưng đỏ: vẫn repair (ticket 244 nhánh 2)"
   }
  ]
 }
