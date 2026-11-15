@@ -228,3 +228,42 @@ def test_one_queue_routes_packages_to_the_package_broker_and_fetches_to_the_fetc
     assert "UNTRUSTED DATA" in queue.observe(doc) and queue.receipts[0]["decision"] == "auto"
     assert queue.broker_state()["broker_diffs"][0]["name"] == "lodash" and queue.broker_state()["broker_receipts"].endswith("receipts.jsonl")
     assert queue.observe({"kind": "package", "name": "dayjs", "version_range": "^1", "reason": "r", "call_id": "pkg:dayjs"}) is None
+
+
+def test_two_approved_packages_with_overlapping_hunks_attach_cleanly_in_order(checkout, tmp_path):
+    base = {name: (checkout / name).read_text() for name in package_broker.FILES}
+    alone = [make(checkout, tmp_path / f"alone{i}")[0].resolve({**REQUEST, "name": n, "call_id": f"pkg:{n}"})
+             for i, n in enumerate(("lodash", "dayjs"))]
+    naive = checkout.parent / "naive"
+    naive.mkdir()
+    for name, text in base.items():
+        (naive / name).write_text(text)
+    with pytest.raises(package_broker.BrokerError, match="does not apply"):
+        package_broker.attach(naive, [{"name": n, "diff": out["diff"]} for n, out in zip(("lodash", "dayjs"), alone)])
+
+    broker, _ = make(checkout, tmp_path)
+    first = broker.resolve(REQUEST)
+    second = broker.resolve({**REQUEST, "name": "dayjs", "call_id": "pkg:dayjs"})
+    assert first["decision"] == second["decision"] == "approved"
+    items = [{"name": "lodash", "diff": first["diff"]}, {"name": "dayjs", "diff": second["diff"]}]
+    package_broker.attach(checkout, items)
+    locked = json.loads((checkout / "package-lock.json").read_text())["packages"]
+    assert {"node_modules/lodash", "node_modules/dayjs"} <= set(locked)
+    assert second["layer_key"] == package_broker.lock_key((checkout / "package-lock.json").read_text())
+
+    whole = "".join(package_broker.unified(n, base[n], (checkout / n).read_text()) for n in package_broker.FILES)
+    assert package_broker.digest([i["diff"] for i in items]) == package_broker.digest([whole])
+    assert package_broker.digest([items[0]["diff"]]) != package_broker.digest([whole])
+
+
+def test_resolving_an_earlier_call_again_keeps_later_diffs_consistent(checkout, tmp_path):
+    broker, _ = make(checkout, tmp_path)
+    first, second = broker.resolve(REQUEST), broker.resolve({**REQUEST, "name": "dayjs", "call_id": "pkg:dayjs"})
+    again = broker.resolve(REQUEST)
+    assert again["diff"] == first["diff"] and [c for c, _ in broker.applied] == ["pkg:lodash", "pkg:dayjs"]
+    assert broker.applied[1][1] == second["diff"]
+
+
+def test_rejected_resolve_is_not_stacked_under_the_next_package(checkout, tmp_path):
+    broker, _ = make(checkout, tmp_path, registry=FakeRegistry({"postinstall": "x"}))
+    assert broker.resolve(REQUEST)["decision"] == "rejected" and broker.applied == []

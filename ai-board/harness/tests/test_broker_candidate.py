@@ -1,5 +1,6 @@
 """Approved broker diff enters the candidate commit path; Gate 4 / publish exempt exactly that diff, nothing else."""
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,63 @@ def test_publish_check_allows_only_receipted_manifest_changes(built, source):
     git(checkout, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "model edit")
     tampered = {**cand, "head_sha": git(checkout, "rev-parse", "HEAD")}
     assert any("package.json" in reason for reason in Candidates(source, broker_receipts=broker.receipts_file).denied_paths(tampered))
+
+
+PLAN = {"steps": [{"order": 1, "title": "t", "allowed_scope": ["public/a.html"], "tests": ["node --test"], "capability": "public.ui", "risk": "low"}],
+        "capabilities": ["public.ui"], "grounding": {"sha": "x"}}
+
+
+def _reverify(source, cand, monkeypatch, receipts_root):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from gates import static_check
+    from runtime.budget import Budget
+    from services import reverify
+    from worker import execute_pre_pr
+
+    monkeypatch.setattr(static_check, "run", lambda state, check_size=False: {})
+    if receipts_root:
+        monkeypatch.setenv("AI_BOARD_PACKAGE_BROKER_DIR", str(receipts_root))
+    monkeypatch.setenv("PR_BASE_BRANCH", git(source, "branch", "--show-current"))
+    (source / "public" / "b.html").write_text("<p>b</p>\n", encoding="utf-8")
+    git(source, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "dev moved")
+    seen = {}
+
+    def run_gate(gate, _request, deps, budget, state):
+        if gate == 4:
+            seen["state4"] = dict(state)
+            return {"gate": 4, **static_check.run_gate(state, deps, budget)}
+        seen[gate] = dict(state)
+        evidence = {"smoke_passed": True, "http_observed": True, "runner": "docker", "functional": {"passed": True}}
+        return {"gate": gate, "blocked": False, "reason": None, "evidence": evidence if gate == 5 else None, "risk_level": "low", "risk_signals": []}
+
+    result = execute_pre_pr(PLAN, ticket_id=9, checkout_source=source, deps=object(), budget=Budget(), run_gate=run_gate,
+                            cleanup=candidate.cleanup, reverify={"candidate": cand, "tip": reverify.base_tip(source)})
+    return result, seen
+
+
+def test_reverify_of_a_carried_broker_candidate_keeps_the_deps_exemption(built, source, tmp_path, monkeypatch):
+    state, item, broker = built
+    cand = candidate.record(state)
+    result, seen = _reverify(source, cand, monkeypatch, broker.receipts_file.parent.parent)
+    assert result["outcome"] == "ready_for_pr", result["gates"]
+    assert [g["gate"] for g in result["gates"]] == [3, 4, 5, 5.5]
+    assert [i["name"] for i in seen["state4"]["broker_diffs"]] == ["lodash"]
+    assert any(c["title"].startswith(package_broker.DEPS_COMMIT_PREFIX) for c in seen[5]["commits"])
+    kept = result["candidate"]
+    assert kept["base_sha"] != cand["base_sha"]
+    assert Candidates(source, broker_receipts=broker.receipts_file).denied_paths(kept) == []
+    assert any("package.json" in reason for reason in Candidates(source).denied_paths(kept))
+
+
+def test_reverify_without_a_matching_receipt_still_blocks_the_manifest_change(built, source, tmp_path, monkeypatch):
+    state, item, broker = built
+    cand = candidate.record(state)
+    empty = tmp_path / "other-broker"
+    (empty / "cache").mkdir(parents=True)
+    (empty / "cache" / "receipts.jsonl").write_text("")
+    result, seen = _reverify(source, cand, monkeypatch, empty)
+    assert result["outcome"] != "ready_for_pr" and "protected_path" in result["reason"] and "broker_diffs" not in seen["state4"]
 
 
 def test_attach_receipt_is_written_and_diff_that_does_not_apply_blocks_create(built, tmp_path, source):
