@@ -25,6 +25,7 @@ from verification import functional, style
 from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
 from runtime.meter import redact
 from settings import get_settings
+from verification import checks as gate_checks
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -558,6 +559,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     # isolation/secret checks = critical boundary violation; after = the candidate (ordinary).
     stage = "boot"
     screenshot = None
+    checks_result = None
     smoke_ok = False
     http_observed = False
     probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
@@ -705,6 +707,13 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     smoke_ok = False
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
+            checks_on = get_settings().plan_checks
+            check_rows = [{"check": check, "base": None} for check in (guest_input(state, "checks") or [] if checks_on else [])]
+            for row in check_rows:  # candidate phase: container still serves the candidate
+                with _check_span(trace, "curl", row["check"]["path"]) as attrs:
+                    status, body = http_probe(base + row["check"]["path"])
+                    row["candidate"] = gate_checks.passed(row["check"], status, body)
+                    attrs["tizia.gate5.check.passed"] = row["candidate"]
             http_observed = True
             stage = 'plan'
             observed_pages = html or ([primary] if primary else [])
@@ -763,6 +772,31 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
                 if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
                     raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
+            if check_rows:  # base phase after screenshots: _restore_base overwrites the candidate files
+                try:
+                    restored = _restore_base(state, checkout, pages,
+                                             lambda local, target: command([*compose, "cp", str(local), f"tizia:{target}"]))
+                except (OSError, RuntimeError) as exc:
+                    restored = None
+                    logs.append(f"Check không có base để so: {exc}")
+                for row in check_rows:  # chỉ trang đã đổi khôi phục được; route/API không có base → không biết
+                    page = row["check"]["path"].split("?")[0]
+                    if restored is None or page not in pages:
+                        continue
+                    if page in restored:  # file mới: base không có trang, đỏ trên base
+                        row["base"] = False
+                        continue
+                    status, body = http_probe(base + row["check"]["path"])
+                    row["base"] = gate_checks.passed(row["check"], status, body)
+                checks_result = {"verdict": gate_checks.classify(check_rows),
+                                 "rows": [{key: row[key] for key in ("check", "base", "candidate")} for row in check_rows]}
+                logs.append("Check Gate 5: " + json.dumps(checks_result, ensure_ascii=False))
+                if checks_result["verdict"] == gate_checks.CODE_FAULT:
+                    raise RuntimeError("check đỏ trên cả base lẫn candidate: "
+                                       + ", ".join(row["check"]["text"][:60] for row in check_rows if row["base"] is False and not row["candidate"]))
+                if checks_result["verdict"] == gate_checks.NONE:
+                    functional_result = {**functional_result, 'needs_review': True}
+                    logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
         finally:
@@ -782,7 +816,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
                 "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
                 "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
-                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed}
+                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed,
+                **({"checks": checks_result} if checks_result else {})}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": failure_class(stage, reason)}

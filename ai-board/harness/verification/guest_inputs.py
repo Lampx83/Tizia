@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from runtime import levels
+from settings import get_settings
+from verification import checks
 
 REQUIRED_KEY = "_required"
 DEFAULT_ROLE = "student"
@@ -24,6 +26,7 @@ class Input:
 GUEST_INPUTS: dict[str, Input] = {
     "skill_id": Input(), "diffs": Input(), "full_diff": Input(), "request_title": Input(), "request_detail": Input(),
     "base_sha": Input(), "acceptance": Input(),
+    "checks": Input(derive=lambda state, role: checks.collect(state.get("plan")) if get_settings().plan_checks else []),
     # WHY: the plan is private to the worker; the guest gets only the derived list. surface_tests is role-independent today
     # (path_policy.may_edit ignores role), the role parameter is the seam for when that changes.
     "surface_tests": Input(derive=lambda state, role: levels.surface_tests(state.get("plan")),

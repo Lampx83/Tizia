@@ -59,6 +59,7 @@ from repositories import repo_at_commit
 from runtime import coverage, levels, limits, subtask_files
 from services import target_confidence
 from settings import DEFAULT_GATE25_FIXES, get_settings
+from verification import checks
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
@@ -824,6 +825,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 "signals": issues,
                 "public_message": "Kế hoạch chia quá nhiều bước mà bước nào cũng phải kiểm chứng bằng lệnh chạy được; "
                                   "đang chờ quản trị viên xem lại."}
+    if get_settings().plan_checks and (issues := checks.plan_problems(plan)):
+        return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
+                "signals": issues,
+                "public_message": "Kế hoạch khai kiểm chứng không hợp lệ; đang chờ lập lại kế hoạch."}
 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
