@@ -181,6 +181,23 @@ def _bar(total: int):
         return Plain()
 
 
+_SECRET_PARTS = ("KEY", "SECRET", "TOKEN", "PASS", "URL")
+# Cờ suite tự đặt từ tham số CLI: đã có trong tên run qua hậu tố riêng.
+_ARG_ENV = frozenset({"AI_BOARD_BEST_MATCH", "AI_BOARD_GATE25_ANSWERED", "AI_BOARD_GATE25_FIXES", "AI_BOARD_GATE25_SIM_USER",
+                      "AI_BOARD_GATE3_GUARDS", "AI_BOARD_LOOP_MODEL_CALLS", "AI_BOARD_LOOP_TOOL_CALLS", "AI_BOARD_PROMPT_ROLE_SPLIT",
+                      "AI_BOARD_REACT_PLAN", "AI_BOARD_RETRIEVAL", "AI_BOARD_SANDBOX_TOOL", "AI_BOARD_SKILL_PAD_CHARS",
+                      "AI_BOARD_SKILL_VARIANT", "AI_BOARD_TOOL_LOOP"})
+
+
+def run_shape_suffix(args, env) -> str:
+    """Hậu tố tên run theo modes/repeats/cases và hash cờ AI_BOARD_* (không chứa giá trị bí mật) để mỗi arm có thư mục riêng."""
+    flags = sorted((k, v) for k, v in env.items()
+                   if k.startswith("AI_BOARD_") and v and k not in _ARG_ENV and not any(p in k for p in _SECRET_PARTS))
+    arm = hashlib.sha256(json.dumps(flags).encode()).hexdigest()[:8] if flags else ""
+    return (f"-m{args.modes.replace(',', '+')}-r{args.repeats}" + (f"-n{args.cases}" if args.cases else "")
+            + (f"-env{arm}" if arm else ""))
+
+
 def cmd_run(args, deps=None) -> int:
     from runtime.pipeline import ENV_FILE, ROOT
     from runtime.pipeline import Deps
@@ -296,7 +313,7 @@ def cmd_run(args, deps=None) -> int:
             return 2
         tasks += taskpack.load_pack(pack)
     modes = args.modes.split(",")
-    name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "")
+    name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "") + run_shape_suffix(args, os.environ)
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else "")
             + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
             + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")

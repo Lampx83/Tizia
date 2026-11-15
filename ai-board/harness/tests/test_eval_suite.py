@@ -284,7 +284,7 @@ def test_run_end_to_end_parallel_resume_and_report(world, capsys):
     assert "mode e2e" in out and "mode gold" in out and (run_dir / "report.json").exists()
     calls = len(models.calls)
     assert runner.main(argv, deps) == 0 and len(models.calls) == calls  # resume: nothing re-run
-    assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 2  # different config in the same dir is refused
+    assert runner.main([*argv[:-1], "--allow-dirty", "--repeats", "3"], deps) == 0  # different repeats gets its own run dir
 
 
 def test_suite_refuses_resume_until_remote_cleanup_is_reconciled(world, monkeypatch):
@@ -725,3 +725,14 @@ def test_pack_build_derives_entries_and_keeps_only_the_requested_file_count():
     assert [len(e["subtasks"]) for e in everything] == [1, 2]
     assert everything[1]["commit"] == "d" * 40 and everything[1]["base_sha"] == "c" * 40
     assert [e["id"] for e in taskpack.from_git_cases(cases, min_files=2)] == ["pack-g-two"]
+
+
+def test_run_shape_suffix_separates_arms_and_hides_secrets():
+    from types import SimpleNamespace
+    from evaluation.suite.runner import run_shape_suffix
+    args = SimpleNamespace(modes="e2e", repeats=3, cases=None)
+    off = run_shape_suffix(args, {"AI_BOARD_REACT_SCHEMA": "0", "AI_BOARD_SECKEY": "s"})
+    on = run_shape_suffix(args, {"AI_BOARD_REACT_SCHEMA": "1", "AI_BOARD_SECKEY": "s"})
+    assert off != on and off.startswith("-me2e-r3-env") and "s" not in off.split("env")[0][-1:]
+    assert run_shape_suffix(args, {"AI_BOARD_REACT_SCHEMA": "0", "AI_BOARD_SECKEY": "other"}) == off
+    assert run_shape_suffix(SimpleNamespace(modes="e2e", repeats=1, cases=6), {}) == "-me2e-r1-n6"
