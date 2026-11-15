@@ -132,3 +132,11 @@ def test_policy_change_changes_manifest_hash():
     base = tool_manifest.canonical_hash(RAW)
     loosened = mutated(lambda d: d["command_policy"]["allow"].append(["npx"]))
     assert tool_manifest.canonical_hash(loosened) != base
+
+
+def test_check_runtime_pin_matches_current_runtime():
+    import json
+    from pathlib import Path
+    from verification import loop_checks
+    data = json.loads((Path(__file__).resolve().parents[1] / "runtime" / "tool_manifest.json").read_text(encoding="utf-8"))
+    assert data["check_runtime_sha256"] == loop_checks.runtime_hash(), "re-pin check_runtime_sha256 and get the manifest re-approved"

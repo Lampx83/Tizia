@@ -9,12 +9,6 @@ from runtime.budget import Budget
 from verification import loop_checks
 
 
-@pytest.fixture(autouse=True)
-def fixture_manifest(monkeypatch):
-    """Fixture copy of the manifest pins the current check runtime; the approved manifest file stays untouched."""
-    monkeypatch.setitem(tool_loop.MANIFEST.data, 'check_runtime_sha256', loop_checks.runtime_hash())
-
-
 @pytest.fixture
 def repo(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
