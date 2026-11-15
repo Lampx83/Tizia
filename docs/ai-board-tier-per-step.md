@@ -42,3 +42,23 @@ still what a request shows, but it no longer decides whether a safe step may run
 (ordering). Python side: `ai-board/harness/gates/plan_validate.py` reports `complexity_signals` and the
 worker keeps the plan gate. Covered by `test/ai-board-tier-per-step.test.js`, `test/ai-board-plan.test.js`
 and `test/ai-board-partial-resume.test.js`.
+
+## Skill selection call sites (LF/76 inventory)
+
+Two catalogs and one folder picker choose skills. Flag `AI_BOARD_SKILL_SELECT` off = the legacy calls below.
+
+| Call site | Chooses | Budget |
+|---|---|---|
+| `runtime/pipeline._split_call` → `default_skills.select_report` | `default-*` system skills, approved admin skills, frame variants | `stage_budget(role)` |
+| `runtime/tool_loop._active_skills`, skill pin (~L886) | same, for active skills and the run pin | `stage_budget(role)` |
+| `gates/adversarial_review`, `gates/reviewer_fix` → `default_skills.review_selection` | gate 4 review skills | `stage_budget('gate4_review')` |
+| `default_skills.review_axes_block(None)` → `select('gate4_review')` | fallback that bypasses the node | `stage_budget` |
+| `services/skill_rewrite.py:60` → `default_skills.select('gate3_light', purpose skill-authoring)` | bypasses the node even with the flag on | `stage_budget` |
+| `services/context.pick_skill` + `select_block` in `build_context` (callers: `gates/brainstorm.py` gate 1, `gates/implement.py` gate 3, `evaluation/eval_recall.py`, `evaluation/strata.py`) | one folder skill (`edit-css-style`, `add-html-section`, `fix-js-behavior`, …; fallback `default`), plus `VARIANT_FILES` gate sections | global `max_per_prompt`, no token cap |
+
+Overlaps and conflicts:
+- Two catalogs pick independently. Flag off, a gate 3 split prompt can carry a `default-*` system skill and a folder skill for the same task.
+- Variant names live in two tables: `context.VARIANT_FILES` (gate sections) and `default_skills.VARIANTS` (frame skills). Both read `AI_BOARD_SKILL_VARIANT`; each ignores the other's names.
+- Budgets differ: `context` counts only `max_per_prompt`; `default_skills` also enforces `max_tokens_per_prompt`.
+- Flag on: the node (`services/skill_plan.build`) owns defaults, admin, frame variants, the folder pick and context variants. `skill_rewrite` still calls `select()` directly.
+- Known gap: the gate 3 run pin (`tool_loop`, `skill_plan.pin(role, {file, task_type})`) does not include the context folder pick, so a folder-pick change alone does not change that pin. Gate 1 context picks have no run pin.

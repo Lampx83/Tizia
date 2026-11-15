@@ -64,3 +64,36 @@ def test_variant_attaches_to_frontend_picks_only(monkeypatch):
         settings.reset_settings()
     assert NAME in [s['name'] for s in front['selected']]
     assert NAME not in [s['name'] for s in backend['selected'] + backend['dropped']]
+
+
+FRONTEND_VARIANTS = {'frontend-css-style': 'edit-css-style', 'frontend-html-text': 'edit-html-text',
+                     'frontend-html-section': 'add-html-section', 'frontend-new-page': 'new-static-page'}
+
+
+@pytest.mark.parametrize('name, picked', sorted(FRONTEND_VARIANTS.items()))
+def test_frontend_variant_parses_spec_and_budget(name, picked):
+    from services import skill_frontmatter
+    text = context.VARIANT_FILES[name].read_text(encoding='utf-8')
+    assert skill_frontmatter.spec_errors(text, name) == []
+    skill = context.variant_skill(name)
+    assert skill.sections.get(1) and skill.sections.get(3)
+    assert len(skill.sections[1]) <= skill.budget and len(skill.sections[3]) <= skill.budget3
+    assert token_count.skill_count(text) < 1500
+    assert context.VARIANT_SCOPE[name] == (picked,) and name not in context.SKILLS
+
+
+@pytest.mark.parametrize('name, picked', sorted(FRONTEND_VARIANTS.items()))
+def test_frontend_variant_attaches_only_to_its_pick(name, picked, monkeypatch):
+    monkeypatch.delenv('AI_BOARD_SKILL_VARIANT', raising=False)
+    settings.reset_settings()
+    off = context.skill_block(context.SKILLS[picked], 3)
+    assert off == context.skill_text(context.SKILLS[picked], 3)
+    monkeypatch.setenv('AI_BOARD_SKILL_VARIANT', name)
+    settings.reset_settings()
+    try:
+        on = context.skill_block(context.SKILLS[picked], 3)
+        other = next(n for n in context.SKILLS if n not in (picked, 'default') and n not in FRONTEND_VARIANTS.values())
+        assert on == context.skill_text(context.SKILLS[picked], 3) + '\n\n' + context.variant_skill(name).sections[3]
+        assert context.skill_block(context.SKILLS[other], 3) == context.skill_text(context.SKILLS[other], 3)
+    finally:
+        settings.reset_settings()

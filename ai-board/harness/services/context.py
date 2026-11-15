@@ -35,6 +35,10 @@ VARIANT_FILES = {  # skill nối thêm khi AI_BOARD_SKILL_VARIANT bật; không 
     "test-frame": SKILLS_DIR / "proposed" / "test-frame" / "SKILL.md",
     "review-frame": SKILLS_DIR / "proposed" / "review-frame" / "SKILL.md",
     "all-frame": SKILLS_DIR / "proposed" / "all-frame" / "SKILL.md",
+    "frontend-css-style": SKILLS_DIR / "proposed" / "frontend-css-style" / "SKILL.md",
+    "frontend-html-text": SKILLS_DIR / "proposed" / "frontend-html-text" / "SKILL.md",
+    "frontend-html-section": SKILLS_DIR / "proposed" / "frontend-html-section" / "SKILL.md",
+    "frontend-new-page": SKILLS_DIR / "proposed" / "frontend-new-page" / "SKILL.md",
 }
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
 RESERVE = file_context.WEIGHTS["tool_min_budget"]
@@ -142,7 +146,9 @@ def skill_block(skill: Skill, gate: int) -> str:
 
 
 FRONTEND_SKILLS = ("edit-css-style", "edit-html-text", "add-html-section", "new-static-page")
-VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS}  # variant attaches only to these picked skills
+VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS,  # variant attaches only to these picked skills
+                 "frontend-css-style": ("edit-css-style",), "frontend-html-text": ("edit-html-text",),
+                 "frontend-html-section": ("add-html-section",), "frontend-new-page": ("new-static-page",)}
 
 
 def select_block(skill: Skill, gate: int) -> tuple[str, dict]:
@@ -155,6 +161,27 @@ def select_block(skill: Skill, gate: int) -> tuple[str, dict]:
     chosen, report = skill_selection.choose(candidates, limits.contract()["limits"]["skills"]["max_per_prompt"])
     parts = [skill_text(c.payload, gate) if c.payload is skill else c.payload.sections.get(gate, "") for c in chosen]
     return "\n\n".join(part for part in parts if part), report
+
+
+def _node(gate: int, subtask: dict | None, text: str, rtype: str | None, file: str | None, exists: bool) -> dict:
+    """Cờ bật: pick thư mục + biến thể qua skill_plan.build (một lần choose, pin). {skill, block, selection}."""
+    from services import skill_plan
+    role = "gate1" if gate == 1 else "gate3_heavy" if (subtask or {}).get("size") == "large" else "gate3_light"
+    picks = [skill_plan.Block(s.name, "folder", skill_text(s, gate), -100 * hit + s.priority, payload=s)
+             for s in SKILLS.values() if (hit := score(s, text, rtype, file, exists))]
+    if not picks:
+        picks = [skill_plan.Block("default", "folder", skill_text(SKILLS["default"], gate), 10 ** 6, payload=SKILLS["default"])]
+    variants = []
+    for name in get_settings().skill_variant:
+        body = variant_skill(name).sections.get(gate, "")
+        if body:
+            variants.append(skill_plan.Block(name, "variant", body, 0, scope=VARIANT_SCOPE.get(name, ())))
+    node = skill_plan.build(role, {"file": file or "", "task_type": (subtask or {}).get("task_type")}, folder=(picks, variants))
+    blocks = [b for b in node.skills if isinstance(b, skill_plan.Block)]
+    winner = next(b for b in blocks if b.source == "folder")
+    attached = [b.body for b in blocks if b.source == "variant"]
+    block = "\n\n".join(part for part in [winner.body, *attached] if part)
+    return {"skill": winner.payload, "block": block, "selection": {**node.report, "pin": node.pin}}
 
 
 def _file_hit(skill: Skill, file: str | None, exists: bool) -> bool:
@@ -261,7 +288,9 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     commit = _commit(source, sha)
     file = subtask.get("file") if subtask else None
     exists = bool(commit and file and tools._show(source, commit, file) is not None)
-    skill = pick_skill(f"{request_text} {sub_text}", request.get("type"), file, exists)
+    from services import skill_plan  # local: skill_plan → default_skills, không import ngược context
+    node = _node(gate, subtask, f"{request_text} {sub_text}", request.get("type"), file, exists) if skill_plan.enabled() else None
+    skill = node["skill"] if node else pick_skill(f"{request_text} {sub_text}", request.get("type"), file, exists)
 
     parts, used, targets, best = [], [], [], []
     mode = ""  # gate-1 retrieval mode actually resolved for this request ('' = off, 'literal', 'model')
@@ -346,7 +375,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                 remaining -= len(out) + 2
                 used.append(name)
     data = "\n\n".join(parts) or "(không có)"
-    block, selection = select_block(skill, gate)
+    block, selection = (node["block"], node["selection"]) if node else select_block(skill, gate)
     # Folder: L1 đứng đầu (giống byte giữa các lượt cùng folder → prefix KV cache), L3 sát trước REPO DATA.
     brief, decisions, recent = (request.get("folder_brief") or "", request.get("folder_decisions") or "",
                                 request.get("folder_recent") or "")
