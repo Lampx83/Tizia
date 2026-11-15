@@ -404,6 +404,24 @@ def _blocked(reason: str, kind: str = "transient") -> dict:
     return {"gate": 5, "blocked": True, "reason": reason, "evidence": None, "failure_class": kind}
 
 
+def _replay_check_spans(deps, result, anchor_ms: int) -> None:
+    """Pop guest check_spans (kept out of the verdict); re-add gate 5 check spans to deps.trace at anchor + guest offset."""
+    spans = result.pop("check_spans", None) if isinstance(result, dict) else None
+    trace = getattr(deps, "trace", None)
+    if not isinstance(spans, list) or not hasattr(trace, "add_span"):
+        return
+    for span in spans:
+        attrs = span.get("attributes") if isinstance(span, dict) else None
+        offset, duration = (span.get("offset_ms"), span.get("duration_ms")) if isinstance(span, dict) else (None, None)
+        if not (isinstance(attrs, dict) and str(span.get("name", "")).startswith("gate5 check ")
+                and type(offset) is int and type(duration) is int):
+            continue
+        attrs = {k: v for k, v in attrs.items() if str(k).startswith("tizia.gate5.check.")}
+        start = anchor_ms + max(0, offset)
+        trace.add_span(span["name"], attrs, start_ms=start, end_ms=start + max(0, duration),
+                       status="error" if span.get("status") == "error" else "ok")
+
+
 def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = None, checkout_dir: str | Path | None = None,
         lease_ok: Callable[[], bool] | None = None, exec_timeout: float = 1200.0) -> dict:
     """gates.verify.run contract, executed in a fresh microVM."""
@@ -454,6 +472,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
             live()
             client.exec(run_id, ["guest-boot.sh"], timeout=_remaining(deadline, 180), **request_limits)
             live()
+            anchor_ms = int(time.time() * 1000)
             outcome = client.exec(run_id, ["python", "-c", PEAK_PROBE, PEAK_FILE, "sh", "-c", GUEST_ENTRY],
                                   timeout=_remaining(deadline, exec_timeout + 30), **request_limits)
             live()
@@ -461,6 +480,7 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
                 return _blocked("sandbox gate 5 không hoàn tất (exit/timeout/output)")
             probe = _guest_probe(client, run_id, request_limits)
             result = json.loads(client.download(run_id, "result", **request_limits))
+            _replay_check_spans(deps, result, anchor_ms)
             live()
             shots_archive = client.download(run_id, "shots", **request_limits)
             live()  # revoked after the guest finished: the verdict is stale

@@ -10,7 +10,7 @@ TOL_ABS_S = 2.0
 TOL_REL = 0.02
 GATE5 = "5"
 _PRIO = {"gate": 1, "check": 2, "model": 3, "sandbox": 4}
-_CHECK_BUCKET = {"browser": "gate 5 browser", "curl": "gate 5 curl"}
+_CHECK_BUCKET = {"browser": "gate 5 browser", "curl": "gate 5 curl", "route": "gate 5 curl"}
 
 
 def tolerance(wall_s: float) -> float:

@@ -1,4 +1,5 @@
 """Gate 5 checks emit one span each (browser, curl, route); verdicts stay identical with or without a trace."""
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -117,3 +118,47 @@ def test_failed_route_probe_span_is_error(tmp_path, monkeypatch):
 
     assert out["blocked"] is True
     assert trace.kind("route")[0]["status"] == "error"
+
+
+def test_guest_run_writes_check_spans_as_offsets_into_result(tmp_path, monkeypatch):
+    from gates import gate5_guest
+
+    def fake_run(state, deps=None, budget=None, *, checkout_dir=None, **_):
+        start = deps.trace.origin_ms + 10
+        deps.trace.add_span("gate5 check curl", {"tizia.gate5.check.kind": "curl"}, start_ms=start, end_ms=start + 5)
+        return {"gate": 5, "blocked": False, "reason": None, "evidence": {"text": "ok"}}
+
+    monkeypatch.setattr(verify, "run", fake_run)
+    state_path, out = tmp_path / "state.json", tmp_path / "out"
+    state_path.write_text("{}", encoding="utf-8")
+    out.mkdir()
+    result = gate5_guest.run_in_guest(state_path, tmp_path, out)
+
+    assert result["check_spans"] == [{"name": "gate5 check curl", "attributes": {"tizia.gate5.check.kind": "curl"},
+                                      "offset_ms": 10, "duration_ms": 5, "status": "ok"}]
+    assert json.loads((out / "result.json").read_text(encoding="utf-8"))["check_spans"] == result["check_spans"]
+
+
+def test_host_replays_guest_check_spans_and_verdict_is_unchanged(tmp_path):
+    from test_sandbox_verify import FakeClient, state as sandbox_state
+    from verification import sandbox as sandbox_verify
+
+    root = checkout(tmp_path)
+    plain = {"gate": 5, "blocked": True, "reason": "smoke failed", "failure_class": "ordinary", "evidence": {"screenshots": []}}
+    guest = {**plain, "check_spans": [
+        {"name": "gate5 check browser", "attributes": {"tizia.gate5.check.kind": "browser", "tizia.gate5.check.target": "/x.html",
+                                                      "unrelated": "dropped"},
+         "offset_ms": 100, "duration_ms": 40, "status": "error"},
+        {"name": "not a check", "attributes": {}, "offset_ms": 0, "duration_ms": 1, "status": "ok"}]}
+    trace = Trace()
+    with_spans = sandbox_verify.run(sandbox_state(root), SimpleNamespace(trace=trace), client=FakeClient(result=guest))
+    without = sandbox_verify.run(sandbox_state(root), SimpleNamespace(trace=Trace()), client=FakeClient(result=plain))
+
+    assert "check_spans" not in with_spans
+    assert (with_spans["blocked"], with_spans["reason"], with_spans["failure_class"]) == (
+        without["blocked"], without["reason"], without["failure_class"]) == (True, "smoke failed", "ordinary")
+    assert len(trace.spans) == 1
+    span = trace.spans[0]
+    assert span["name"] == "gate5 check browser" and span["status"] == "error"
+    assert span["end_ms"] - span["start_ms"] == 40
+    assert span["attributes"] == {"tizia.gate5.check.kind": "browser", "tizia.gate5.check.target": "/x.html"}

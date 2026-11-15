@@ -32,7 +32,7 @@ def test_gate5_checks_split_into_browser_curl_other():
              _sp("gate5 check curl", 50_000, 52_000), _sp("gate5 check route", 53_000, 54_000)]
     got = wt.attribute(ROOT, EVENTS, spans, 120_000)
     p = got["parts"]
-    assert (p["gate 5 browser"], p["gate 5 curl"], p["gate 5 other"]) == (5.0, 2.0, 23.0)
+    assert (p["gate 5 browser"], p["gate 5 curl"], p["gate 5 other"]) == (5.0, 3.0, 22.0)
     assert "gate 5 checks" not in p
     assert got["wall_s"] == 120.0 and got["ok"] and abs(got["gap_s"]) < 1e-9
 
