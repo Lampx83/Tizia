@@ -72,3 +72,53 @@ def test_pin_changes_with_config_and_with_selected_skill(monkeypatch):
     monkeypatch.setattr(default_skills, "catalog", lambda: [
         dataclasses.replace(s, digest="f" * 64) if s.name == "default-frontend" else s for s in original()])
     assert skill_plan.build("gate1", {"task_type": "frontend"}).pin != before
+
+
+CSS_REQUEST = {"subject": "Đổi màu chữ trên trang school.html thành xanh dương", "body": "", "type": "other", "thread": []}
+JS_REQUEST = {"subject": "Sửa lỗi nút không phản hồi trong public/js/suggestion-fab.js", "body": "", "type": "other", "thread": []}
+CSS_SUBTASK = {"file": "public/school.html", "title": "Đổi color của .big thành #2563eb",
+               "verify": "rule .big có color: #2563eb", "size": "small"}
+
+
+def _context_runs(monkeypatch, flag, variant="", request=CSS_REQUEST):
+    """build_context gate 1 và gate 3 của một request, cờ node và biến thể đặt theo tham số."""
+    from pathlib import Path
+    from services import context
+    monkeypatch.setenv("AI_BOARD_SKILL_SELECT", "1") if flag else monkeypatch.delenv("AI_BOARD_SKILL_SELECT", raising=False)
+    monkeypatch.setenv("AI_BOARD_SKILL_VARIANT", variant) if variant else monkeypatch.delenv("AI_BOARD_SKILL_VARIANT", raising=False)
+    settings.reset_settings()
+    source = Path(__file__).resolve().parents[3]
+    return [context.build_context(gate, dict(request), sub, source, "HEAD") for gate, sub in ((1, None), (3, CSS_SUBTASK))]
+
+
+@pytest.mark.parametrize("variant", ["", "frontend-design-core"])
+def test_context_flag_off_never_calls_node_and_keeps_legacy_block(monkeypatch, variant):
+    from services import context
+
+    def boom(*_a, **_k):
+        raise AssertionError("node unused when flag off")
+    monkeypatch.setattr(skill_plan, "build", boom)
+    for gate, result in zip((1, 3), _context_runs(monkeypatch, False, variant)):
+        skill = context.SKILLS[result["skill"]]
+        block, legacy = context.select_block(skill, gate)
+        assert result["selection"] == legacy and "pin" not in result["selection"]
+        assert f"SKILL: {skill.name}\n{block}\n\n" in result["text"]
+
+
+@pytest.mark.parametrize("variant", ["", "frontend-design-core"])
+def test_context_flag_on_takes_pick_and_block_from_node(monkeypatch, variant):
+    off = _context_runs(monkeypatch, False, variant)
+    on = _context_runs(monkeypatch, True, variant)
+    for before, after in zip(off, on):
+        assert after["skill"] == before["skill"] and after["text"] == before["text"]
+        assert re.fullmatch(r"[0-9a-f]{64}", after["selection"]["pin"])
+        picks = [s["name"] for s in after["selection"]["selected"] if s["reason"].startswith("task-type pick")]
+        assert picks == [after["skill"]]
+    again = _context_runs(monkeypatch, True, variant)
+    assert [r["selection"]["pin"] for r in again] == [r["selection"]["pin"] for r in on]
+
+
+def test_context_flag_on_does_not_attach_variant_outside_its_scope(monkeypatch):
+    result = _context_runs(monkeypatch, True, "frontend-design-core", request=JS_REQUEST)[0]
+    assert result["skill"] == "fix-js-behavior"
+    assert "frontend-design-core" not in [s["name"] for s in result["selection"]["selected"]]
