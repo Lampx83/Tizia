@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     multi_file_subtask: bool = False
     backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
     multi_file_max: int = Field(default=3, ge=2, le=6)
+    budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False
     plan_repair: bool = True
     repair_same_session: bool = True
