@@ -421,13 +421,17 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
       // Bản viết lại là phiên bản mới (con của nguồn), số version trong front matter được chỉnh để khớp trước khi lint.
       const text = bumpVersion(input.rewritten_text, next);
       const lint = lintSkill(text, { name: source.name, version: next });
+      const sourceTypes = parse(source.task_types_json, []);
+      if (lint.ok && JSON.stringify([...lint.task_types].sort()) !== JSON.stringify([...sourceTypes].sort())) {
+        lint.ok = false; lint.errors.push('Declared task types differ from selected types');
+      }
       if (!lint.ok) {
         await finish('failed', `spec_invalid: ${lint.errors.join('; ')}`.slice(0, 200));
         return { status: 'failed', errors: lint.errors };
       }
       const actor = { id: job.confirmed_by };
       const extraction = input.extraction ?? input.evaluation?.extraction;
-      const child = await appendVersion(actor, { id: source.skill_id, name: source.name}, parse(source.task_types_json, []), text, source.id,
+      const child = await appendVersion(actor, { id: source.skill_id, name: source.name}, sourceTypes, text, source.id,
         { evaluation: { ...(input.evaluation || {}), ...(extraction ? { extraction } : {}) }, review });
       await repo.markOrigin(child.version.id, 'rewrite');
       await finish('succeeded', null);

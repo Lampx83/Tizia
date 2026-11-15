@@ -61,7 +61,7 @@ test('good rewrite becomes a new child version; source keeps its text; approval 
     const child = read.versions.find(v => v.id === source.rewrite.result_version_id);
     assert.equal(child.version, 2);
     assert.equal(child.parent_version_id, item.version.id);
-    assert.equal(child.original_text, rewritten().replace(/^version: .*$/m, 'version: 2'));
+    assert.equal(child.original_text, rewritten().replace(/^([ \t]+version:).*$/m, '$1 "2"'));
     assert.equal(child.lint.ok, true);
     assert.deepEqual(child.evaluation.kinds[0].kind, 'frontend');
     assert.equal(read.skill.status, 'draft');
@@ -87,7 +87,7 @@ test('rewrite that drops source essence fails the job with essence_lost and crea
   } finally { await t.close(); }
 });
 
-test('failed lint keeps raw response in a child version that blocks approval; reject is permanent; stale reports fail closed', async () => {
+test('failed lint fails the job with raw response kept and creates no version; stale reports fail closed', async () => {
   const t = await setup();
   try {
     const item = await uploaded(t);
@@ -97,14 +97,13 @@ test('failed lint keeps raw response in a child version that blocks approval; re
     const bad = text('frontend-example', '1. Keep labels clear; name each label by its action.').replace('task_type: "frontend"', 'task_type: "backend"');
     assert.equal((await report(t, job, { rewritten_text: bad, raw_response: 'RAW-KEPT' })).status, 200);
     const row = await t.db.d.get('SELECT * FROM ai_skill_rewrites');
+    assert.equal(row.status, 'failed');
+    assert.match(row.error, /^spec_invalid: .*task types/);
     assert.equal(row.raw_response, 'RAW-KEPT');
     const read = (await t.api(`${base}/${item.skill.id}`)).body;
-    const child = read.versions.find(v => v.id === read.versions[0].id);
-    assert.equal(child.lint.ok, false);
-    assert.equal((await t.api(`${base}/${item.skill.id}/approve`, { version_id: child.id, confirmed: true })).status, 422);
+    assert.equal(read.versions.length, 1);
+    assert.equal(read.versions[0].rewritten_text, null);
     assert.equal((await report(t, job)).status, 409);
-    assert.equal((await t.api(`${base}/${item.skill.id}/versions/${child.id}/reject`, { confirmed: true, reason: 'unsafe' })).status, 200);
-    assert.equal((await t.api(`${base}/${item.skill.id}/approve`, { version_id: child.id, confirmed: true })).status, 409);
   } finally { await t.close(); }
   const u = await setup();
   try {
