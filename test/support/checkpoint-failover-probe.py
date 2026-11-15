@@ -36,10 +36,10 @@ if phase == 'a':
     store = checkpoint('worker-a', 'lease-a').store('abc', 0)
     real = store.intent
 
-    def intent(step, tool, args):
+    def intent(step, tool, args, call_id=None):
         if step == 1:
             raise Crash()
-        real(step, tool, args)
+        real(step, tool, args, call_id)
 
     store.intent = intent
     try:
