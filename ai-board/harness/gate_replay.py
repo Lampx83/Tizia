@@ -89,6 +89,18 @@ def _acceptance_tool(data, case):
     return "infra" if repair_class.classify(result, {}, set())["action"] == repair_class.RETRY else "repair"
 
 
+def _no_oracle(data, case):
+    """No-oracle needs_review decision (gate 5) on recorded gate flags; tests_absent only counts with the review_any flag."""
+    import settings
+    from gates import verify
+    from verification import functional
+    tests_absent_ok = bool(case.get("tests_absent")) and settings.get_settings().no_oracle_review_any
+    result = {"reason": functional.NO_ORACLE, "probe_id": None}
+    if verify.no_oracle_review(case["generated_ok"], case["smoke_ok"], result, tests_absent_ok):
+        return "review"
+    return "block"
+
+
 def _objection(data, case):
     from gates import plan_validate as pv
     recorded = json.loads((FIXTURES / "lf123_request7_validator.json").read_text(encoding="utf-8"))[case["record"]]
@@ -99,7 +111,7 @@ def _objection(data, case):
 _REPLAY = {"plan_coverage": _coverage, "grounding": _grounding, "text_expectation": _text_expectation,
            "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable,
            "selector_oracle": _selector_oracle,
-           "acceptance_tool": _acceptance_tool}
+           "acceptance_tool": _acceptance_tool, "no_oracle": _no_oracle}
 
 
 def run(env=None):

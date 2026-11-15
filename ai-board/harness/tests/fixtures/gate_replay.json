@@ -654,6 +654,71 @@
    "returncode": 1,
    "truth": "repair",
    "truth_source": "lệnh chạy được nhưng đỏ: vẫn repair (ticket 244 nhánh 2)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-tests-green",
+   "generated_ok": true,
+   "smoke_ok": true,
+   "tests_absent": false,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "review",
+   "truth_source": "trial css_color-l1-37625a: needs_review gate 5.5, generated tests + smoke xanh (B0 r6)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests",
+   "generated_ok": false,
+   "smoke_ok": true,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "1"
+   },
+   "truth": "review",
+   "truth_source": "tổng hợp từ css_color-l1-37625a: không có generated test, smoke xanh, cờ review_any bật"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests-flag-off",
+   "generated_ok": false,
+   "smoke_ok": true,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "block",
+   "truth_source": "như trên, cờ tắt: vẫn block (hành vi cũ)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-smoke-red",
+   "generated_ok": true,
+   "smoke_ok": false,
+   "tests_absent": false,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "block",
+   "truth_source": "smoke đỏ không được coi là needs_review"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests-smoke-red",
+   "generated_ok": false,
+   "smoke_ok": false,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "1"
+   },
+   "truth": "block",
+   "truth_source": "không có test và smoke đỏ: vẫn block"
   }
  ]
 }
