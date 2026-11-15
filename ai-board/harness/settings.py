@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     tool_doc_inject: bool = False
     gate_feedback_cap: bool = True
     prompt_role_split: bool = False
+    prompt_tail_restate: bool = False
+    rewoo_gate2_reads: bool = False
     procedure_in_split: bool = False  # tạm thời để đo LF/166; gỡ khi có kết quả
     gate25_answered: bool = False
     plan_validate_clarify_rules: bool = False

@@ -356,3 +356,77 @@ def test_exploration_is_off_when_the_flag_is_explicitly_off(repo, monkeypatch):
 
     assert react_plan.exploration_enabled() is False
     assert out["blocked"] is False and len(deps.prompts) == 1
+
+
+@pytest.fixture
+def rewoo_on(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REACT_PLAN", "1")
+    monkeypatch.setenv("AI_BOARD_REWOO_GATE2_READS", "1")
+
+
+def plan_of(*steps):
+    return {"steps": [{"id": f"#E{i}", "tool": name, "arguments": args} for i, (name, args) in enumerate(steps, 1)]}
+
+
+READ_A = ("read_file", {"file": "public/a.html"})
+
+
+def test_rewoo_off_keeps_the_react_loop(repo, react_on):
+    root, sha = repo
+    deps = Scripted({"tool": "read_file", "arguments": {"file": "public/a.html"}}, finish([[QUOTE]]))
+
+    react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+
+    assert "REACT MODE" in deps.prompts[0] and "REWOO" not in deps.prompts[0]
+
+
+def test_rewoo_runs_planned_reads_then_one_synthesis_call(repo, rewoo_on):
+    root, sha = repo
+    deps = Scripted(plan_of(READ_A), finish([[QUOTE]]))
+
+    out = react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+
+    assert out["quotes"] == [[QUOTE]]
+    assert len(deps.prompts) == 2
+    assert "REWOO MODE" in deps.prompts[0] and deps.prompts[1].startswith("P")
+    assert f"L2|   {QUOTE}" in deps.prompts[1]
+
+
+def test_rewoo_binds_an_earlier_result_into_a_later_argument(repo, rewoo_on):
+    root, sha = repo
+    tree_out = ReadOnlyTools(root, sha).run("tree", {"path": "public"})
+    deps = Scripted(plan_of(("tree", {"path": "public"}), ("grep", {"words": ["#E1"]})), finish([[QUOTE]]))
+
+    react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+
+    assert json.dumps({"words": [tree_out]}, ensure_ascii=False) in deps.prompts[1]
+
+
+@pytest.mark.parametrize("bad", [
+    {"steps": "x"},
+    {"steps": [{"id": "#E1", "tool": "write_file", "arguments": {"file": "public/a.html"}}]},
+    {"steps": [{"id": "#E1", "tool": "read_file", "arguments": {"file": "#E2"}}, {"id": "#E2", "tool": "tree", "arguments": {}}]},
+    {"steps": [{"id": "#E2", "tool": "tree", "arguments": {}}]},
+    {"steps": [{"id": "#E1", "tool": "read_file", "arguments": {"file": "public/a.html", "lines": 3}}]},
+    {"steps": [{"id": "#E1", "tool": "read_file", "arguments": {}}]},
+    {"steps": [{"id": f"#E{i}", "tool": "tree", "arguments": {}} for i in range(1, 14)]},
+])
+def test_invalid_rewoo_plan_falls_back_to_react(repo, rewoo_on, bad):
+    root, sha = repo
+    deps = Scripted(bad, {"tool": "read_file", "arguments": {"file": "public/a.html"}}, finish([[QUOTE]]))
+
+    out = react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+
+    assert out["quotes"] == [[QUOTE]]
+    assert "REACT MODE" in deps.prompts[1]
+
+
+def test_rewoo_synthesis_with_unquoted_plan_falls_back_to_react(repo, rewoo_on):
+    root, sha = repo
+    deps = Scripted(plan_of(READ_A), finish([["<button>Bắt đầu</button>"]]),
+                    {"tool": "read_file", "arguments": {"file": "public/a.html"}}, finish([[QUOTE]]))
+
+    out = react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha)
+
+    assert out["quotes"] == [[QUOTE]]
+    assert "REACT MODE" in deps.prompts[2]

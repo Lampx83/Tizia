@@ -889,6 +889,9 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     if prompt_roles.enabled():
         ws.skills = _active_skills(role or 'gate3_light', dict(skill_context))
         skill_context['expected_pin'] = pins['skills']
+    tail = prompt_roles.tail(subtask) if get_settings().prompt_tail_restate else ""
+    if tail:
+        pins = {**(pins or {}), 'tail': sha_of(tail)}
     last_sig, repeats = None, 0
     trace = getattr(deps, "trace", None)
     seen_ids: set = set()
@@ -966,7 +969,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
                        **({"tool_choice": "required"} if use else {})})
                      if messages is not None else call_extra)
             fmt = None if messages is not None else turn_schema() if use else "json"
-            return deps.call_model(model, call_prompt, gate=3, budget=loop_budget, format=fmt,
+            return deps.call_model(model, call_prompt + tail, gate=3, budget=loop_budget, format=fmt,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="tool_loop.md", child=child,
                                    iteration=len(steps), role=role, skill_context=skill_context,
                                    **({"extra": extra} if extra else {}))
