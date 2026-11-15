@@ -25,7 +25,8 @@ from verification import functional, style
 from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
 from runtime.meter import redact
 from settings import get_settings
-from verification import checks as gate_checks
+from verification import check_registry, checks as gate_checks
+from repositories import server_hsm
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -566,6 +567,13 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
+    registry_on = get_settings().plan_checks and bool(guest_input(state, "checks"))
+    if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
+        try:
+            server_hsm.register_check_registry(check_registry.REGISTRY.data)
+            server_hsm.authorize_action("run_check", check_registry=check_registry.REGISTRY.hash)
+        except server_hsm.AuthorityError as error:
+            return {"gate": 5, "blocked": True, "reason": str(error), "evidence": None, "failure_class": error.failure_class}
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
     pages = _public_paths(guest_input(state, "diffs") or [])
@@ -857,7 +865,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
                 "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
                 "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed,
-                **({"checks": checks_result} if checks_result else {})}
+                **({"checks": checks_result} if checks_result else {}),
+                **({"check_registry": check_registry.REGISTRY.hash} if registry_on else {})}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": failure_class(stage, reason)}

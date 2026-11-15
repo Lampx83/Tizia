@@ -5,7 +5,7 @@ from contextvars import ContextVar
 _SERVER = ContextVar('gate4_hsm_server', default=None)
 
 # Cần admin duyệt manifest/folder rồi chạy lại: không phải vi phạm ranh giới.
-TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown','folder_not_approved')
+TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown','folder_not_approved','check_registry_not_approved','check_registry_unknown')
 
 class AuthorityError(ValueError):
     def __init__(self,reason):
@@ -21,6 +21,11 @@ def register_tool_manifest(manifest):
     backend=_SERVER.get()
     register=getattr(backend,'register_tool_manifest',None)
     return register(manifest) if register else None
+
+def register_check_registry(registry):
+    backend=_SERVER.get()
+    register=getattr(backend,'register_check_registry',None)
+    return register(registry) if register else None
 
 def gate4_sequence(backend, identity, prefix, action):
     begun=backend.client.post(backend.path,{**identity,'event':'BEGIN','expected_version':0,'idempotency_key':prefix+':begin'})
@@ -48,6 +53,13 @@ class RemoteGate4:
             return self.client.post(self.path[:-len('/hsm')]+'/tool-manifest',{**self.identity,'manifest':manifest})
         except HTTPError:
             raise AuthorityError('tool_manifest_unavailable') from None
+
+    def register_check_registry(self,registry):
+        from urllib.error import HTTPError
+        try:
+            return self.client.post(self.path[:-len('/hsm')]+'/check-registry',{**self.identity,'registry':registry})
+        except HTTPError:
+            raise AuthorityError('check_registry_unavailable') from None
 
     def authorize_action(self,action,**extra):
         from urllib.error import HTTPError

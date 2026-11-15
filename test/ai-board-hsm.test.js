@@ -12,6 +12,7 @@ import path from 'node:path';
 import { renderHsm } from '../public/js/ai-board-hsm.js';
 import fs from 'node:fs';
 import { canonicalHash } from '../server/ai-board/repositories/tool-manifests.js';
+import { canonicalHash as registryHash } from '../server/ai-board/repositories/check-registries.js';
 import { VENV_PYTHON } from './support/harness-python.js';
 
 const KEY='hsm-disposable-fixture-worker-key-32';
@@ -414,6 +415,31 @@ test('loop tools run only under an admin-approved manifest and revoke bites on t
     assert.equal((await adminDecide(f,'zz','approve')).status,400);
     const audit=(await f.db.all('SELECT action,actor FROM ai_tool_manifest_audit ORDER BY id')).map(x=>x.action);
     assert.deepEqual(audit,['reported','approved','revoked']);
+  } finally {await f.close();}
+});
+
+const REGISTRY=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/verification/check_registry.json',import.meta.url),'utf8'));
+const REGISTRY_HASH=registryHash(REGISTRY);
+const adminRegistryDecide=(f,hash,action)=>fetch(`${f.base}/api/admin/ai-board/check-registries/${hash}/${action}`,{method:'POST',headers:{'x-test-admin':'yes'}}).then(async r=>({status:r.status,body:await r.json()}));
+
+test('gate 5 check registry runs only under an admin-approved hash; a mismatched worker is refused',async()=>{
+  const f=await fixture();
+  try {
+    await f.db.run('UPDATE ai_plans SET capability_policy_hash=? WHERE root_ticket_id=?',[CAPABILITY_CATALOG.hash,f.id]);
+    const base={run_id:f.run,contract_hash:(await f.post('snapshot',{})).body.hsm_contract.hash};
+    const check=(hash)=>f.post('hsm/authority',{...base,action:'model',check_registry:hash});
+    assert.equal((await check(undefined)).status,200,'no registry named: unaffected');
+    assert.equal((await check(REGISTRY_HASH)).body.error,'check_registry_unknown');
+    const reported=await f.post('check-registry',{registry:REGISTRY});
+    assert.deepEqual(reported.body,{registry_hash:REGISTRY_HASH,status:'pending'});
+    assert.equal((await check(REGISTRY_HASH)).body.error,'check_registry_not_approved');
+    const mismatched={...REGISTRY,version:REGISTRY.version+1};
+    assert.equal((await check(registryHash(mismatched))).body.error,'check_registry_unknown','a worker with another registry version is not known to the server');
+    assert.equal((await adminRegistryDecide(f,REGISTRY_HASH,'approve')).body.status,'approved');
+    assert.equal((await check(REGISTRY_HASH)).status,200);
+    assert.equal((await adminRegistryDecide(f,REGISTRY_HASH,'revoke')).body.status,'revoked');
+    assert.equal((await check(REGISTRY_HASH)).body.error,'check_registry_not_approved');
+    assert.equal((await f.db.all('SELECT 1 FROM ai_check_registries')).length,1);
   } finally {await f.close();}
 });
 

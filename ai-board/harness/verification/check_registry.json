@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "primitives": {
+    "api_json": ["path", "key", "value"],
+    "computed_style": ["path", "selector", "prop", "value"],
+    "http_status": ["path", "status"],
+    "node_test": ["file"],
+    "selector_exists": ["path", "selector"],
+    "text_absent": ["path", "text"],
+    "text_present": ["path", "text"]
+  }
+}
