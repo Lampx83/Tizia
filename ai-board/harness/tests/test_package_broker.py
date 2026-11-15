@@ -220,7 +220,7 @@ def test_queue_attaches_the_approved_diff_and_screens_install_scripts(checkout, 
 def test_one_queue_routes_packages_to_the_package_broker_and_fetches_to_the_fetch_broker(checkout, tmp_path):
     package, _ = make(checkout, tmp_path)
     fetch = network_request.FetchBroker({"allow_hosts": ["docs.example.com"], "max_bytes": 1000, "timeout_s": 1},
-                                        fetcher=lambda url, cap: (200, "text/plain", b"hello"), resolver=lambda host: ["93.184.216.34"],
+                                        fetcher=lambda url, cap, ip: (200, "text/plain", b"hello"), resolver=lambda host: ["93.184.216.34"],
                                         fallback=package)
     queue = network_request.Queue({"pkg:lodash": {"decision": "approved"}}, broker=fetch)
     assert queue.observe(REQUEST) == "approved lodash@4.17.21" and queue.report()["dependencies"][0]["name"] == "lodash"
