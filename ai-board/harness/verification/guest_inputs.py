@@ -26,7 +26,8 @@ class Input:
 GUEST_INPUTS: dict[str, Input] = {
     "skill_id": Input(), "diffs": Input(), "full_diff": Input(), "request_title": Input(), "request_detail": Input(),
     "base_sha": Input(), "acceptance": Input(),
-    "checks": Input(derive=lambda state, role: checks.collect(state.get("plan")) if get_settings().plan_checks else []),
+    # WHY: None (flag off) is omitted from the guest state, so the shipped key set stays unchanged while the flag is off.
+    "checks": Input(derive=lambda state, role: checks.collect(state.get("plan")) if get_settings().plan_checks else None),
     # WHY: the plan is private to the worker; the guest gets only the derived list. surface_tests is role-independent today
     # (path_policy.may_edit ignores role), the role parameter is the seam for when that changes.
     "surface_tests": Input(derive=lambda state, role: levels.surface_tests(state.get("plan")),
@@ -48,7 +49,9 @@ def build(state: dict) -> dict:
     out = {}
     for name, spec in GUEST_INPUTS.items():
         if spec.derive is not None:
-            out[name] = spec.derive(state, role)
+            value = spec.derive(state, role)
+            if value is not None:
+                out[name] = value
         elif name in state:
             out[name] = state[name]
     out[REQUIRED_KEY] = sorted(name for name, spec in GUEST_INPUTS.items() if _is_required(spec))

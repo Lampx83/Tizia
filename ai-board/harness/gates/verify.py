@@ -515,8 +515,37 @@ def probe_http(url: str, *, token: str | None = None) -> tuple[int, bytes]:
         return response.status, response.read()
 
 
+def probe_dom(url: str, selector: str, prop: str | None) -> tuple[bool, str | None]:
+    """(selector có trong DOM, giá trị computed style của prop); trình duyệt thật, chỉ gọi khi có check DOM."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = _launch(p)
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="load", timeout=15000)
+            exists, value = page.evaluate("""([selector, prop]) => {
+                let el = null;
+                try { el = document.querySelector(selector); } catch (e) { return [false, null]; }
+                if (!el) return [false, null];
+                return [true, prop ? getComputedStyle(el).getPropertyValue(prop).trim() : null];
+            }""", [selector, prop])
+            return bool(exists), value
+        finally:
+            browser.close()
+
+
+def _check_passes(check: dict, base: str, http_probe, dom_probe, node_ok) -> bool:
+    """Một check trên bản đang được phục vụ: node_test chạy trong container, còn lại qua HTTP (+ DOM nếu cần)."""
+    if check["primitive"] == "node_test":
+        return node_ok(check["file"])
+    url = base + check["path"]
+    status, body = http_probe(url)
+    dom = dom_probe(url, check["selector"], check.get("prop")) if gate_checks.needs_dom(check) else None
+    return gate_checks.passed(check, status, body, dom)
+
+
 def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
-        runner=None, http_probe=None, functional_probe=None) -> dict:
+        runner=None, http_probe=None, functional_probe=None, dom_probe=None) -> dict:
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
@@ -553,6 +582,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     trace = getattr(deps, "trace", None)
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
+    dom_probe = dom_probe or probe_dom
     logs: list[str] = []
     reason = None
     # Failure class by stage: before containers run = environment (transient, retried once);
@@ -709,10 +739,20 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs.append(f"Changed page HTTP {status}: {page}")
             checks_on = get_settings().plan_checks
             check_rows = [{"check": check, "base": None} for check in (guest_input(state, "checks") or [] if checks_on else [])]
+            def node_ok(file: str) -> bool:
+                if not (Path(checkout) / file).is_file():
+                    return False
+                parent = str(Path("/app", file).parent).replace("\\", "/")
+                command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
+                command([*compose, "cp", str(Path(checkout) / file), f"tizia:/app/{file}"])
+                try:
+                    command([*compose, "exec", "-T", "tizia", "node", "--test", f"/app/{file}"], timeout=60)
+                except (subprocess.TimeoutExpired, RuntimeError):
+                    return False
+                return True
             for row in check_rows:  # candidate phase: container still serves the candidate
-                with _check_span(trace, "curl", row["check"]["path"]) as attrs:
-                    status, body = http_probe(base + row["check"]["path"])
-                    row["candidate"] = gate_checks.passed(row["check"], status, body)
+                with _check_span(trace, "curl", gate_checks.target(row["check"])) as attrs:
+                    row["candidate"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
                     attrs["tizia.gate5.check.passed"] = row["candidate"]
             http_observed = True
             stage = 'plan'
@@ -780,20 +820,20 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     restored = None
                     logs.append(f"Check không có base để so: {exc}")
                 for row in check_rows:  # chỉ trang đã đổi khôi phục được; route/API không có base → không biết
-                    page = row["check"]["path"].split("?")[0]
+                    page = gate_checks.target(row["check"]).split("?")[0]
                     if restored is None or page not in pages:
                         continue
                     if page in restored:  # file mới: base không có trang, đỏ trên base
                         row["base"] = False
                         continue
-                    status, body = http_probe(base + row["check"]["path"])
-                    row["base"] = gate_checks.passed(row["check"], status, body)
+                    row["base"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
                 checks_result = {"verdict": gate_checks.classify(check_rows),
                                  "rows": [{key: row[key] for key in ("check", "base", "candidate")} for row in check_rows]}
                 logs.append("Check Gate 5: " + json.dumps(checks_result, ensure_ascii=False))
                 if checks_result["verdict"] == gate_checks.CODE_FAULT:
-                    raise RuntimeError("check đỏ trên cả base lẫn candidate: "
-                                       + ", ".join(row["check"]["text"][:60] for row in check_rows if row["base"] is False and not row["candidate"]))
+                    raise RuntimeError("check đỏ trên cả base lẫn candidate: " + ", ".join(
+                        f"{row['check']['primitive']} {gate_checks.target(row['check'])}" for row in check_rows
+                        if row["base"] is False and not row["candidate"]))
                 if checks_result["verdict"] == gate_checks.NONE:
                     functional_result = {**functional_result, 'needs_review': True}
                     logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
