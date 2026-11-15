@@ -9,10 +9,12 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import unicodedata
 import uuid
 import secrets
 import urllib.request
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
@@ -397,8 +399,33 @@ def _restore_base(state: dict, checkout: Path, pages: list[str], cp: Callable[[P
     return new
 
 
+@contextmanager
+def _check_span(trace, kind: str, target: str):
+    """Span cho một kiểm gate 5 (kind: browser/curl/route); yield dict thuộc tính, lỗi đi nguyên ra ngoài.
+    Caller ghi `tizia.gate5.check.passed` = False khi kiểm không đạt → span error; mặc định đạt."""
+    attrs = {"tizia.gate5.check.kind": kind, "tizia.gate5.check.target": redact(target)}
+    start = int(time.time() * 1000)
+    try:
+        yield attrs
+    except BaseException:
+        attrs["tizia.gate5.check.passed"] = False
+        raise
+    finally:
+        if trace is not None and hasattr(trace, "add_span"):
+            passed = attrs.get("tizia.gate5.check.passed", True)
+            trace.add_span(f"gate5 check {kind}", attrs, start_ms=start, end_ms=int(time.time() * 1000),
+                           status="ok" if passed else "error")
+
+
+def _acceptance_target(item: str) -> str:
+    """Đường dẫn URL đầu tiên trong lệnh acceptance (không query); không có URL thì 'acceptance'."""
+    url = re.search(r"https?://[^\s'\"]+", item)
+    return (urlsplit(url.group(0)).path or "/") if url else "acceptance"
+
+
 def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore: Callable[[], set[str] | None],
-                 logs: list[str], selectors: list[str] = (), token: str | None = None, texts: dict | None = None) -> list[dict]:
+                 logs: list[str], selectors: list[str] = (), token: str | None = None, texts: dict | None = None,
+                 trace=None) -> list[dict]:
     """AFTER rồi BEFORE, mỗi trang × SHOT_WIDTHS. Ảnh AFTER của trang chính bắt buộc: lỗi → raise lỗi gốc.
     Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
     shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
@@ -421,8 +448,9 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
                 phase_texts = list((texts or {}).get(phase) or [])
                 focus = shot_dir / f"{phase}-{len(shots)}-{width}-focus.png" if (selectors or phase_texts) and width == SHOT_WIDTHS[-1] else None
                 try:
-                    audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token,
-                                               **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
+                    with _check_span(trace, "browser", urlsplit(base + page).path):
+                        audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token,
+                                                   **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
                 except Exception as exc:
                     if phase == "after" and page == primary:
                         shutil.rmtree(shot_dir, ignore_errors=True)
@@ -501,6 +529,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     primary = html[0] if html else _request_page(guest_input(state, "request_detail"))
     shots: list[dict] = []
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
+    trace = getattr(deps, "trace", None)
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
     logs: list[str] = []
@@ -605,7 +634,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     command([*compose, "exec", "-T", "-u", "root", "tizia", "chmod", "755", "/usr/local/bin/curl"])
             for item in acceptance:
                 try:
-                    command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
+                    with (_check_span(trace, "curl", _acceptance_target(item)) if "curl" in item else nullcontext()):
+                        command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
                     tool = missing_tool(getattr(exc, 'output', ''), getattr(exc, 'returncode', None), item)
                     if tool:
@@ -628,13 +658,20 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             for page in pages:
                 try:
-                    status, body = http_probe(base + page)
+                    with _check_span(trace, "curl", urlsplit(base + page).path) as attrs:
+                        status, body = http_probe(base + page)
+                        attrs["tizia.gate5.check.http_status"] = status
+                        attrs["tizia.gate5.check.passed"] = 200 <= status < 300
                 except LoginRequired:
                     if http_probe is not probe_http:
                         raise
                     # Retry protected pages as a synthetic student in this run's
                     # disposable database. Anonymous public pages stay anonymous.
-                    status, body = probe_http(base + page, token=fixture('session')['token'])
+                    token = fixture('session')['token']
+                    with _check_span(trace, "curl", urlsplit(base + page).path) as attrs:
+                        status, body = probe_http(base + page, token=token)
+                        attrs["tizia.gate5.check.http_status"] = status
+                        attrs["tizia.gate5.check.passed"] = 200 <= status < 300
                     logs.append(f"Changed page HTTP authenticated disposable student: {page}")
                 if not 200 <= status < 300:
                     smoke_ok = False
@@ -649,8 +686,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             http_observed = True
             stage = 'plan'
             observed_pages = html or ([primary] if primary else [])
-            functional_result = (functional_probe(base, probe_id) if functional_probe
-                                 else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
+            probe_kind = "route" if probe_id == functional.ROUTE_PROBE else "browser"
+            with _check_span(trace, probe_kind, ",".join(urlsplit(p).path for p in observed_pages)) as probe_span:
+                functional_result = (functional_probe(base, probe_id) if functional_probe
+                                     else functional.run(base, probe_id, fixture, state=state, pages=observed_pages))
+                probe_span["tizia.gate5.check.passed"] = bool(functional_result.get("passed"))
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if server_route and functional_result.get('probe_id') != functional.ROUTE_PROBE:
                 raise RuntimeError(functional_result.get('note') or functional_result.get('reason') or functional.NO_ORACLE)
@@ -689,7 +729,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                          lambda: _restore_base(state, checkout, pages, cp), logs,
                                          visual.changed_selectors(guest_input(state, "full_diff")), shot_token,
                                          {"after": visual.changed_texts(guest_input(state, "full_diff"), "+"),
-                                          "before": visual.changed_texts(guest_input(state, "full_diff"), "-")})
+                                          "before": visual.changed_texts(guest_input(state, "full_diff"), "-")},
+                                         trace=trace)
                 except Exception as exc:  # D0: UI evidence is mandatory; absent browser = environment
                     # Wrong landing page is not fixed by a retry or a repair; admin decides.
                     stage = "plan" if isinstance(exc, ScreenshotTargetError) else "screenshot"
