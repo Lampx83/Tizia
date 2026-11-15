@@ -125,10 +125,11 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
 class Runner:
     """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
 
-    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None):
+    def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
+                 tier: str | None = None):
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
-        self.cfg = limits.sandbox_tool(env)
+        self.cfg = limits.sandbox_tool(env, tier=tier)
         self.receipts: list[dict] = [] if receipts is None else receipts
 
     def __call__(self, argv, drafts: dict[str, str], call_id: str | None = None) -> str:

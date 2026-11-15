@@ -849,7 +849,8 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     if len(paths) > 1 and (checks or _SANDBOX_OFFERED.get()):
         return _result("blocked", "multi-file subtask cannot be combined with verified loop or sandbox", "critical")
     sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
-                                   receipts=sandbox_log, budget=budget)
+                                   receipts=sandbox_log, budget=budget,
+                                   tier="multi" if len(paths) > 1 else "single")
                if _SANDBOX_OFFERED.get() else None)
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,

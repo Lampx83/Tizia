@@ -157,12 +157,15 @@ def sandbox_client() -> dict:
     return {**spec, "backoff_s": tuple(spec["backoff_s"])}
 
 
-def sandbox_tool(env=None) -> dict:
-    """run_in_sandbox limits; enabled only when flag env == "1" (contract default off)."""
+def sandbox_tool(env=None, tier: str | None = None) -> dict:
+    """run_in_sandbox limits; enabled only when flag env == "1" (contract default off).
+    Repo-script argv armed globally (AI_BOARD_SANDBOX_REPO_SCRIPTS) or for `tier` listed in AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS."""
     spec = _parsed()["limits"]["sandbox_tool"]
     settings = get_settings(env)
     gated = {tuple(p) for p in spec.get("repo_script_argv", [])}
-    argv = [tuple(p) for p in spec["allowed_argv"] if settings.sandbox_repo_scripts or tuple(p) not in gated]
+    tiers = {t.strip() for t in settings.sandbox_repo_scripts_tiers.split(",") if t.strip()}
+    armed = settings.sandbox_repo_scripts or (tier is not None and tier in tiers)
+    argv = [tuple(p) for p in spec["allowed_argv"] if armed or tuple(p) not in gated]
     return {**spec, "enabled": settings.sandbox_tool, "allowed_argv": argv}
 
 
