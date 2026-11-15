@@ -21,6 +21,7 @@ class FakeClient:
         self.shots = shots if shots is not None else _tgz({})
         self.exec_outcome = exec_outcome or {"code": 0, "stdout": "", "stderr": "", "timed_out": False, "truncated": False}
         self.archive = None
+        self.argvs = []
 
     def _step(self, name, *args):
         self.calls.append(name)
@@ -39,7 +40,8 @@ class FakeClient:
     def exec(self, run_id, argv, *, timeout):
         self._step("exec")
         self.calls.append(argv[0])
-        return self.exec_outcome
+        self.argvs.append(argv)
+        return {**self.exec_outcome, "code": 1} if argv[:2] == ["docker", "load"] and self.fail == "load" else self.exec_outcome
 
     def download(self, run_id, name):
         self._step("download")
@@ -129,6 +131,57 @@ def test_pass_runs_boot_then_gate_in_a_fresh_vm_and_always_destroys(tmp_path):
     assert sandbox.pop("wall_s") >= 0
     assert sandbox == {"run_id": client.run_id, "policy_hash": "h" * 64, "teardown_confirmed": True, "peak_kib": None, "vm_peak_kib": None, "vm_cpu_peak_cores": None, "vm_ncpu": None, "vm_used_end_kib": None, "outcome": "passed"}
     assert st["evidence"] is result["evidence"]
+
+
+def broker_state(tmp_path, monkeypatch, *, exported=True):
+    from runtime import package_broker
+
+    root = checkout(tmp_path / "co")
+    (root / "package-lock.json").write_text('{"lockfileVersion": 3}\n', encoding="utf-8")
+    key = package_broker.lock_key((root / "package-lock.json").read_text(encoding="utf-8"))[:12]
+    layers = tmp_path / "broker" / "guest-layers"
+    layers.mkdir(parents=True)
+    if exported:
+        (layers / f"{key}.tar").write_bytes(b"layer-bytes")
+    monkeypatch.setenv("AI_BOARD_PACKAGE_BROKER_DIR", str(tmp_path / "broker"))
+    st = state(root)
+    st["commits"] = [{"sha": "a", "title": "ai-board(ticket-1): 1/1 x", "files": []},
+                     {"sha": "b", "title": package_broker.DEPS_COMMIT_PREFIX + "lodash 0123456789abcdef", "files": list(package_broker.FILES)}]
+    return st, key
+
+
+def test_broker_commit_loads_the_exported_layer_in_the_offline_guest_before_the_gate(tmp_path, monkeypatch):
+    st, key = broker_state(tmp_path, monkeypatch)
+    client = FakeClient()
+    assert sandbox_verify.run(st, client=client)["blocked"] is False
+    assert client.calls == ["create", "upload", "exec", "guest-boot.sh", "exec", "docker", "exec", "python", "exec", "sh",
+                            "download", "download", "destroy"]
+    assert client.argvs[1] == ["docker", "load", "-i", f"/workspace/layers/{key}.tar"]
+    assert names(client.archive) >= {f"layers/{key}.tar", "state.json"}
+    with tarfile.open(fileobj=io.BytesIO(client.archive), mode="r:gz") as tar:
+        assert tar.extractfile(f"layers/{key}.tar").read() == b"layer-bytes"
+
+
+def test_no_broker_commit_means_no_layer_and_the_call_sequence_is_unchanged(tmp_path, monkeypatch):
+    st, key = broker_state(tmp_path, monkeypatch)
+    st["commits"] = st["commits"][:1]
+    client = FakeClient()
+    sandbox_verify.run(st, client=client)
+    assert "docker" not in client.calls and not any(n.startswith("layers/") for n in names(client.archive))
+
+
+def test_broker_commit_without_an_exported_layer_blocks_before_any_vm(tmp_path, monkeypatch):
+    st, key = broker_state(tmp_path, monkeypatch, exported=False)
+    client = FakeClient()
+    result = sandbox_verify.run(st, client=client)
+    assert result["blocked"] and key in result["reason"] and client.calls == []
+
+
+def test_failed_layer_load_blocks_the_gate_and_still_destroys(tmp_path, monkeypatch):
+    st, _ = broker_state(tmp_path, monkeypatch)
+    client = FakeClient(fail="load")
+    result = sandbox_verify.run(st, client=client)
+    assert result["blocked"] and "layer" in result["reason"] and "python" not in client.calls and client.calls[-1] == "destroy"
 
 
 def test_guest_peak_rss_and_outcome_are_recorded(tmp_path):

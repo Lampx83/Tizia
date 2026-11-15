@@ -885,6 +885,9 @@ class _Reverification(_Execution):
             "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop,
             "acceptance": list(execution_plan.get("acceptance") or []), **owned,
         }
+        from runtime import package_broker
+        state.update(package_broker.carried(owned["full_checkout"], owned["commits"],
+                                            package_broker.receipts_path(get_settings().package_broker_dir)))
         if self.catalog is not None:
             state["catalog"] = self.catalog
         if self.request_detail:
