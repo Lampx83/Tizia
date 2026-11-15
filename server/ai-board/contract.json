@@ -167,7 +167,7 @@
     },
     "fetch_url": {
       "_why": "fetch_url broker (runtime/network_request.py FetchBroker). allow_hosts: exact host or subdomain, auto-approved; other hosts wait for admin. Private/loopback/link-local resolved IPs and non-http(s) schemes are always refused. max_bytes = raw body cap before HTML strip.",
-      "allow_hosts": [], "max_bytes": 65536, "timeout_s": 10
+      "allow_hosts": ["developer.mozilla.org", "nodejs.org", "expressjs.com", "www.postgresql.org", "docs.npmjs.com", "playwright.dev"], "max_bytes": 65536, "timeout_s": 10
     },
     "global_rate": {
       "_why": "Trần toàn cục mọi phương án xử lý: request tạo mới và tin nhắn chat trong 60 giây, chặn spam trước khi ghi DB/đưa cho Claude. Đếm trên DB nên nhiều tiến trình vẫn đúng.",
