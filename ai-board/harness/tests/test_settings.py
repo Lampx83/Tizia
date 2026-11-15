@@ -23,7 +23,7 @@ def test_defaults(monkeypatch):
     assert all((s.plan_repair, s.repair_same_session, s.gate_feedback_cap, s.stop_report_v2, s.gate1_arbiter,
                 s.no_oracle_review_any, s.gate1_unified_verify))
     assert s.sandbox_url is None and s.project == "tizia"
-    assert s.backend_contexts_surface is False and s.backend_contexts_surface_list == frozenset()
+    assert s.backend_contexts_surface is False and s.backend_contexts_surface_list == settings.APPROVED_SURFACE_CONTEXTS
 
 
 @pytest.mark.parametrize("raw,expected", [("1", True), ("true", True), ("ON", True), ("0", False), ("no", False)])

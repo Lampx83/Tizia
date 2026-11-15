@@ -208,6 +208,18 @@ def test_surface_contexts_follow_flag_and_list(monkeypatch):
     assert levels.requirements(CTX_PLAN, _read) == []
 
 
+def test_approved_surface_contexts_are_real_and_never_forbidden():
+    from pathlib import Path
+    import settings
+    from path_policy import FORBIDDEN_CONTEXTS
+    names = settings.APPROVED_SURFACE_CONTEXTS
+    assert names == {"content", "curriculum", "learning", "engagement", "srs", "live-quiz", "multiplayer", "campus", "seo", "dashboard"}
+    assert not names & FORBIDDEN_CONTEXTS
+    assert not any(n.startswith(("ai-board", "_")) for n in names)
+    repo = Path(__file__).resolve().parents[3]
+    assert all((repo / "server" / "contexts" / n).is_dir() for n in names)
+
+
 def test_surface_tests_empty_when_context_not_opened():
     assert levels.surface_tests(CTX_PLAN) == []
 
