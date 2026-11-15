@@ -195,6 +195,16 @@ const EVENT_LABELS = {
 };
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// PR hoàn tác (rollback ghi evidence.rollback.pull_request vào run); chỉ có khi đã mở nhánh revert.
+export function renderRevertPr(trace) {
+  const run = [...(trace?.runs || [])].reverse().find(r => r.rollback?.outcome === 'revert_ready' && r.rollback.pull_request);
+  const pr = run?.rollback.pull_request;
+  if (!pr) return '';
+  const href = /^https?:\/\//.test(pr.url || '') ? ` href="${esc(pr.url)}" target="_blank" rel="noopener"` : '';
+  const link = href ? `<a${href}>#${esc(pr.number)}</a>` : `#${esc(pr.number)}`;
+  return `<div class="meta" data-revert-pr>PR hoàn tác: ${link}. Người khác phải mở và merge PR này để gỡ thay đổi khỏi web.</div>`;
+}
+
 export function renderRootAllowance(state) {
   if (!state) return '';
   const title = '<b>Ngân sách toàn yêu cầu</b>';

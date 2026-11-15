@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport } from './ai-board-trace.js';
+import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
 import { fmt as clockFmt } from './ai-board-clock.js';
@@ -549,10 +549,11 @@ function renderNetApproval() {
 async function netDecide(btn, decision) {
   const item = ui.net.pending[Math.min(ui.net.idx, ui.net.pending.length - 1)];
   if (!item) return refresh();
-  if (decision === 'approved') {
-    const yes = await askConfirm({ title: 'Duyệt yêu cầu mạng?', message: NET_WARNING, lines: [`Mục: ${netTitle(item)}`], ok: 'Duyệt' });
-    if (!yes) return;
-  }
+  const approve = decision === 'approved';
+  const yes = await askConfirm(approve
+    ? { title: 'Duyệt yêu cầu mạng?', message: NET_WARNING, lines: [`Mục: ${netTitle(item)}`], ok: 'Duyệt' }
+    : { title: 'Từ chối yêu cầu mạng?', message: 'Quyết định từ chối sẽ được ghi lại. Lý do bạn ghi (nếu có) được lưu.', lines: [`Mục: ${netTitle(item)}`], ok: 'Từ chối', danger: true });
+  if (!yes) return;
   btn.disabled = true;
   try {
     const body = decision === 'rejected' && ui.net.reason.trim() ? { reason: ui.net.reason.trim() } : {};
@@ -809,6 +810,7 @@ function render() {
       <div class="meta">${r.type === 'self' ? 'AI Board tự đề xuất' : `${esc(r.domain)} · ${esc(REQUEST_TYPE_LABEL[r.type] || r.type)} · ${esc(r.student)}`}
         · <span class="pill">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' · <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''} · tạo ${fmt(r.created_at)}</div>
       ${renderActions(r, trace)}
+      ${renderRevertPr(trace)}
     </header>
     ${renderNetApproval()}
     ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có phiếu xử lý AI Board.</section>'}

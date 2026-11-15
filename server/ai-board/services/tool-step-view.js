@@ -1,16 +1,20 @@
 // Admin view of native/text tool steps: args and observations capped and redacted, never raw.
+import fs from 'node:fs';
+
 const MAX_ARG_CHARS = 160;
 const MAX_OBSERVATION_CHARS = 300;
 const MAX_ARGS = 8;
 const MAX_ROWS = 500;
 const SECRET_KEY = /token|secret|passw|api[_-]?key|authorization|cookie|credential|private[_-]?key/i;
-const SECRET_TEXT = [/sk-[A-Za-z0-9_-]{12,}/g, /gh[pousr]_[A-Za-z0-9]{20,}/g, /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
-  /((?:password|passwd|secret|token|api[_-]?key)\s*[=:]\s*)\S+/gi];
+const SHARED = JSON.parse(fs.readFileSync(new URL('../redaction-patterns.json', import.meta.url), 'utf8'));
+const SECRET_TEXT = SHARED.patterns.map((p) => new RegExp(p.regex, `${p.flags}g`));
 
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max)}…` : text);
 export function redactText(value, max) {
   let text = String(value ?? '');
-  for (const pattern of SECRET_TEXT) text = text.replace(pattern, (match, head) => (typeof head === 'string' ? `${head}[đã che]` : '[đã che]'));
+  for (const pattern of SECRET_TEXT) {
+    text = text.replace(pattern, (...args) => (typeof args[1] === 'string' ? args[1] : '') + SHARED.replacement);
+  }
   return clip(text, max);
 }
 

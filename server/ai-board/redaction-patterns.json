@@ -1,0 +1,28 @@
+{
+  "_doc": "Mẫu che secret dùng chung: server/ai-board/services/tool-step-view.js (JS) và ai-board/harness/runtime/meter.py (Python). Chỉ dùng cú pháp regex giao nhau của JS và Python: không \\b, không (?i:), không \\w. Group 1 (nếu có) được giữ lại, phần còn lại thay bằng replacement. flags: '' hoặc 'i'. cases: cùng đầu vào phải ra cùng đầu ra ở cả hai ngôn ngữ.",
+  "replacement": "[đã che]",
+  "patterns": [
+    { "name": "pem_private_key", "regex": "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----", "flags": "" },
+    { "name": "aws_access_key", "regex": "(?<![A-Za-z0-9_])AKIA[0-9A-Z]{16}(?![A-Za-z0-9_])", "flags": "" },
+    { "name": "sk_key", "regex": "(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]{12,}", "flags": "" },
+    { "name": "github_token", "regex": "(?<![A-Za-z0-9_])gh[pousr]_[A-Za-z0-9]{20,}", "flags": "" },
+    { "name": "slack_token", "regex": "(?<![A-Za-z0-9_])xox[abprs]-[A-Za-z0-9-]{10,}", "flags": "" },
+    { "name": "bearer", "regex": "Bearer\\s+[A-Za-z0-9._~+/=-]{8,}", "flags": "i" },
+    { "name": "quoted_assignment", "regex": "((?:api[_-]?key|secret|seckey|token|password|passwd)[A-Za-z0-9_]*\\s*[:=]\\s*)(?:\"[^\"\\s]{8,}\"|'[^'\\s]{8,}')", "flags": "i" },
+    { "name": "unquoted_assignment", "regex": "((?:password|passwd|secret|token|api[_-]?key)\\s*[=:]\\s*)(?!\\[đã che\\])\\S+", "flags": "i" }
+  ],
+  "cases": [
+    { "input": "key sk-abcdef1234567890 used", "output": "key [đã che] used" },
+    { "input": "password=hunter2 ok", "output": "password=[đã che] ok" },
+    { "input": "Bearer abcdefghijk", "output": "[đã che]" },
+    { "input": "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "output": "[đã che]" },
+    { "input": "key AKIAIOSFODNN7EXAMPLE end", "output": "key [đã che] end" },
+    { "input": "xoxb-1234567890-abcdef", "output": "[đã che]" },
+    { "input": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n-----END RSA PRIVATE KEY-----", "output": "[đã che]" },
+    { "input": "api_key = \"abcd1234efgh\"", "output": "api_key = [đã che]" },
+    { "input": "token: sk-abcdef1234567890", "output": "token: [đã che]" },
+    { "input": "token: \"short\"", "output": "token: [đã che]" },
+    { "input": "ghp_abc and sk-short stay", "output": "ghp_abc and sk-short stay" },
+    { "input": "plain text, no secret here", "output": "plain text, no secret here" }
+  ]
+}
