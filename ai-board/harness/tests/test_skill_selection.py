@@ -129,3 +129,16 @@ def test_skill_body_is_read_only_on_first_activation(tmp_path):
     assert skill.sections == {1: 'second'}
     path.write_text('---\nname: demo\nmatch: merge\n---\n## gate 1\nthird\n', encoding='utf-8')
     assert skill.sections == {1: 'second'}
+
+
+def test_admin_skill_cannot_displace_platform_baseline_by_topic(monkeypatch):
+    original = default_skills.catalog
+    monkeypatch.setattr(default_skills, 'catalog', lambda: [dataclasses.replace(s, topic='shared-style')
+        if s.name == 'default-all' else s for s in original()])
+    text = approved()['text'].replace('  task_type: "frontend"\n', '  task_type: "frontend"\n  topic: "shared-style"\n')
+    skill = default_skills.parse(text)
+    row = {**approved(), 'text': text, 'hash': skill.digest, 'token_count': token_count.skill_count(default_skills.admin_text(skill))}
+    with root_scope(CatalogClient([row]), 1, {}):
+        selected, report = default_skills.select_report('gate3_light', {'file': 'public/school.html'})
+    assert [s.name for s in selected] == ['default-frontend', 'default-all']
+    assert {'name': 'frontend-example', 'reason': 'overlaps default-all'} in report['dropped']
