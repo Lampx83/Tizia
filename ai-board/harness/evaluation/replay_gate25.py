@@ -16,9 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from settings import get_settings
+
 HERE = Path(__file__).resolve().parent
 CONTROLS = HERE / "datasets" / "gate25_clarify_controls.json"
-SCRATCH = Path(os.getenv("AI_BOARD_SCRATCH") or "H:/01_Main_coding_projects/Tizia/.scratch/ab-driver")
+SCRATCH = get_settings().scratch or Path("H:/01_Main_coding_projects/Tizia/.scratch/ab-driver")
 FLAG = "AI_BOARD_PLAN_VALIDATE_CLARIFY_RULES"
 TICKET = ("B0-r4-replace_text-l2-71c5fa", "A-r1-replace_text-l1-5a0b0b")
 STOPS = ("needs_clarification", "plan_target_uncertain")
