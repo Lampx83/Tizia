@@ -163,8 +163,17 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
-def parse_plan(text: str) -> dict:
-    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema."""
+def form_warnings_on() -> bool:
+    return bool(get_settings().form_errors_as_warnings)
+
+
+def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None) -> dict:
+    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema. lenient: lỗi hình thức vào warnings thay vì raise."""
+    def form(message: str) -> None:
+        if not lenient:
+            raise ValueError(message)
+        warnings.append(message)
+
     try:
         plan = json.loads(text)
     except (TypeError, ValueError) as e:
@@ -183,7 +192,8 @@ def parse_plan(text: str) -> dict:
             if not isinstance(st.get(k), str) or not st[k].strip():
                 raise ValueError(f"subtask[{i}] thiếu {k}")
         if st["size"] not in SIZES:
-            raise ValueError(f"subtask[{i}].size='{st['size']}' không thuộc {SIZES}")
+            form(f"subtask[{i}].size='{st['size']}' không thuộc {SIZES}")
+            st["size"] = "large"
         if 'task_type' in st:
             from services.default_skills import TASK_TYPES
             if not isinstance(st['task_type'], str) or st['task_type'] not in TASK_TYPES:
@@ -213,10 +223,10 @@ def parse_plan(text: str) -> dict:
     if is_feature_plan(plan):
         for i, st in enumerate(subtasks):
             if not is_runnable(st["verify"]):
-                raise ValueError(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
+                form(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
         for item in acceptance or []:
             if not is_runnable(item):
-                raise ValueError(f"acceptance phải là lệnh chạy được: {item[:80]}")
+                form(f"acceptance phải là lệnh chạy được: {item[:80]}")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")
@@ -356,9 +366,11 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         if trace:
             trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
 
+    form_warnings: list[str] = []
     for attempt in range(2):
         if attempt and not budget.tick():
             break
+        lenient = attempt == 1 and form_warnings_on()
         if trace and not attempt:
             trace.note("knows", "request", f"{request.get('subject') or ''} — {str(request.get('body') or '')[:300]}",
                        {"domain": request.get("domain"), "type": request.get("type")})
@@ -395,12 +407,14 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                         extra=plan_extra)
         stage = "plan parse"
         try:
-            plan = parse_plan(body.get("response", ""))
+            plan = parse_plan(body.get("response", ""), lenient=lenient, warnings=form_warnings)
             # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
             # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
             if isinstance(plan, dict) and plan.get("subtasks"):
                 plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
             judge(stage, True, plan.get("summary_vi", ""))
+            if form_warnings:
+                judge(stage, True, "form warnings: " + "; ".join(form_warnings)[:600])
             stage = "files exist"
             scope = levels.approved_scope(request, None, plan)
             check_files(plan, source, commit, scope)
@@ -439,8 +453,14 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 judge(stage, True, f"{best_match.REASON_CODE}: plan adds new files ({', '.join(sorted(added))}); "
                                    f"best-match {ctx.get('best_match') or '(none)'}")
             else:
-                best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                                   f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                try:
+                    best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                       f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                except ValueError as miss:
+                    if not lenient:
+                        raise
+                    form_warnings.append(str(miss))
+                    judge(stage, True, f"form warning: {miss}")
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except levels.ElevationRequired as e:
             judge(stage, False, str(e))
@@ -456,6 +476,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
                 'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match'),
+                'form_warnings': list(form_warnings),
                 **({'react_quotes': react['quotes']} if react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],

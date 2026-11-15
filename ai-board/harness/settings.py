@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     no_oracle_review_any: bool = True  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
     intake_labels_by_role: bool = False  # cần thêm admin_requester_trust: admin chỉ được cảnh báo nhãn money/off_topic
+    form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None
