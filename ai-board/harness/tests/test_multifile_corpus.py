@@ -113,3 +113,14 @@ def test_split_rules_and_seal_hash(tmp_path, repo):
     assert mc.check_split(tmp_path) == []
     mc.seal(tmp_path, ["frontend-0", "frontend-1", "backend-0", "backend-1"])
     assert any("frontend_backend has no held-out" in p for p in mc.check_split(tmp_path))
+
+
+def test_sealed_case_is_neither_read_nor_run_without_heldout_flag(tmp_path, repo, capsys):
+    make_case(tmp_path, repo, "dev-a")
+    make_case(tmp_path, repo, "held-b")
+    mc.seal(tmp_path, ["held-b"])
+    (tmp_path / "cases" / "held-b" / "meta.json").write_text("NOT JSON", encoding="utf-8")
+    assert [c["id"] for c in mc.load_cases(tmp_path, skip={"held-b"})] == ["dev-a"]
+    assert mc.main(["verify", "--root", str(tmp_path), "--repo", str(repo)]) == 0
+    assert mc.main(["verify", "--root", str(tmp_path), "--repo", str(repo), "--ids", "held-b"]) == 2
+    assert "held-b" in capsys.readouterr().err

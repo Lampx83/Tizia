@@ -27,10 +27,12 @@ HELDOUT_TOTAL = 4
 LOW_BASE_TIMEOUT = 180
 
 
-def load_cases(root: Path) -> list[dict]:
-    """meta.json of every case dir, sorted by id; adds `_dir`."""
+def load_cases(root: Path, skip: set[str] = frozenset()) -> list[dict]:
+    """meta.json of every case dir (dir name not in skip, skipped dirs never opened), sorted by id; adds `_dir`."""
     out = []
     for meta_path in sorted((root / "cases").glob("*/meta.json")):
+        if meta_path.parent.name in skip:
+            continue
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         meta["_dir"] = meta_path.parent
         out.append(meta)
@@ -249,14 +251,15 @@ def main(argv: list[str] | None = None) -> int:
     if not a.repo:
         ap.error("verify needs --repo")
     want = {x for x in a.ids.split(",") if x}
-    sealed = {}
+    sealed = set()
     if (a.root / "split.json").exists():
         sealed = {e["id"] for e in json.loads((a.root / "split.json").read_text(encoding="utf-8"))["cases"] if e["split"] == "heldout"}
+    if want & sealed and not a.heldout:
+        print(f"held-out ids need --heldout: {sorted(want & sealed)}", file=sys.stderr)
+        return 2
     results = []
-    for case in load_cases(a.root):
+    for case in load_cases(a.root, skip=set() if a.heldout else sealed):
         if want and case["id"] not in want:
-            continue
-        if case["id"] in sealed and not a.heldout and not want:
             continue
         res = check_case(case, a.repo)
         results.append(res)
