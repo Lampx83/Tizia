@@ -186,7 +186,7 @@ _SECRET_PARTS = ("KEY", "SECRET", "TOKEN", "PASS", "URL")
 _ARG_ENV = frozenset({"AI_BOARD_BEST_MATCH", "AI_BOARD_GATE25_ANSWERED", "AI_BOARD_GATE25_FIXES", "AI_BOARD_GATE25_SIM_USER",
                       "AI_BOARD_GATE3_GUARDS", "AI_BOARD_LOOP_MODEL_CALLS", "AI_BOARD_LOOP_TOOL_CALLS", "AI_BOARD_PROMPT_ROLE_SPLIT",
                       "AI_BOARD_REACT_PLAN", "AI_BOARD_RETRIEVAL", "AI_BOARD_SANDBOX_TOOL", "AI_BOARD_SKILL_PAD_CHARS",
-                      "AI_BOARD_SKILL_VARIANT", "AI_BOARD_TOOL_LOOP"})
+                      "AI_BOARD_SKILL_VARIANT", "AI_BOARD_TOOL_LOOP", "AI_BOARD_PROMPT_TAIL_RESTATE", "AI_BOARD_REWOO_GATE2_READS"})
 
 
 def run_shape_suffix(args, env) -> str:
@@ -254,6 +254,8 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_SKILL_VARIANT"] = ",".join(variant)
     os.environ["AI_BOARD_SKILL_PAD_CHARS"] = str(args.skill_pad_chars or "")
     os.environ["AI_BOARD_PROMPT_ROLE_SPLIT"] = "1" if args.prompt_split else ""
+    os.environ["AI_BOARD_PROMPT_TAIL_RESTATE"] = "1" if args.prompt_tail_restate else ""
+    os.environ["AI_BOARD_REWOO_GATE2_READS"] = "1" if args.rewoo_gate2_reads else ""
     try:
         caps = [int(x) for x in args.loop_caps.split(",")] if args.loop_caps else []
         if caps and (len(caps) != 2 or min(caps) < 1):
@@ -276,6 +278,7 @@ def cmd_run(args, deps=None) -> int:
             **({"winner_rule": args.winner_rule, "winner_rule_sha": hashlib.sha256(args.winner_rule.encode("utf-8")).hexdigest()[:16]} if args.winner_rule else {}),
             **({"gate25_answered": True} if args.gate25_answered else {}), **({"gate25_sim_user": True} if args.gate25_sim_user else {}),
             **({"react_plan": True} if args.react_plan else {}), **({"sandbox_tool": True} if args.sandbox_tool else {}),
+            **({"prompt_tail_restate": True} if args.prompt_tail_restate else {}), **({"rewoo_gate2_reads": True} if args.rewoo_gate2_reads else {}),
             **({"skill_variant": variant, "skill_variant_sha": {v: _sha(VARIANT_FILES[v]) for v in variant}} if variant else {})}
     try:
         dataset_pin = requests_dataset_pin(args.requests_dataset)
@@ -330,6 +333,8 @@ def cmd_run(args, deps=None) -> int:
             + (f"-skill{args.skill_pad_chars}" if args.skill_pad_chars else "")
             + (f"-var-{'+'.join(variant)}" if variant else "")
             + ("-split" if args.prompt_split else "")
+            + ("-tail" if args.prompt_tail_restate else "")
+            + ("-rewoo" if args.rewoo_gate2_reads else "")
             + (f"-cases-{case_meta['sha256'][:12]}" if case_meta else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -573,6 +578,8 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--tool-loop", nargs="?", const="1", choices=("1", "auto"), default="",
                      help="gate 3 tool loop: 1 = loop first, auto = one-shot first and the loop only repairs/falls back; recorded in the manifest, default off")
     run.add_argument("--prompt-split", action="store_true", help="model calls send system (platform rules) + user (restated format); gate 3 thinking off and catalog sampling; default off")
+    run.add_argument("--prompt-tail-restate", action="store_true", help="gate 3 calls end with subtask goal + key constraints + format reminder (AI_BOARD_PROMPT_TAIL_RESTATE); default off")
+    run.add_argument("--rewoo-gate2-reads", action="store_true", help="gate 2 read-only plan executed by the harness, one synthesis call, ReAct on invalid plan (AI_BOARD_REWOO_GATE2_READS); needs --react-plan; default off")
     run.add_argument("--loop-caps", default="", help="MODEL_CALLS,TOOL_CALLS per-subtask loop ceilings (default 10,30); recorded in the manifest")
     run.add_argument("--skill-pad-chars", type=int, default=0, help="pad the picked skill section to N chars with other skills' sections (skill length ablation)")
     run.add_argument("--skill-variant", default="", help=f"append gate 1/3 sections of these skills after the picked one: comma list from {', '.join(VARIANT_FILES)}")
