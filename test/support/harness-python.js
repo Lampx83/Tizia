@@ -1,4 +1,3 @@
-import path from 'node:path';
+import { resolveHarnessPython } from '../../scripts/harness-python.mjs';
 
-// Windows venv puts python under Scripts/, Linux/macOS under bin/.
-export const VENV_PYTHON = path.resolve('ai-board/harness/.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+export const VENV_PYTHON = resolveHarnessPython();
