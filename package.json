@@ -12,6 +12,7 @@
     "test:fast": "node scripts/test-fast.mjs",
     "test:harness": "node scripts/test-fast.mjs --full",
     "check:content": "node scripts/check-content-integrity.mjs",
+    "ai-board:discover-tools": "node scripts/ai-board-discover-tools.mjs",
     "check:skills": "node scripts/check-skills.mjs",
     "check:skills-ref": "node scripts/check-skills-ref.mjs",
     "codegraph:update": "graphify update .",

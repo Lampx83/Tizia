@@ -1,0 +1,32 @@
+{
+  "effects": [
+    "read",
+    "draft_write",
+    "control"
+  ],
+  "fields": [
+    "name",
+    "description",
+    "parameters",
+    "effect",
+    "max_arg_bytes",
+    "max_output_chars",
+    "max_seconds"
+  ],
+  "optional": [
+    "example"
+  ],
+  "tools": [
+    "edit_file",
+    "fetch_url",
+    "finish",
+    "grep",
+    "outline",
+    "read_file",
+    "read_skill_resource",
+    "request_package",
+    "run_check",
+    "tree",
+    "write_test"
+  ]
+}
