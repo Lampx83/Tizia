@@ -2,7 +2,7 @@
 import pytest
 
 import tools
-from runtime import network_request, tool_loop
+from runtime import limits, network_request, tool_loop
 from runtime.budget import Budget
 from runtime.network_request import FetchBroker, Queue, tool_request
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
@@ -35,6 +35,16 @@ def test_allowlisted_host_is_fetched_without_pausing():
     text = queue.observe(fetch("https://docs.example.com/api"))
     assert text is not None and fetcher.calls == ["https://docs.example.com/api"]
     assert queue.pending == []
+
+
+def test_contract_allowlist_fetches_docs_and_queues_other_hosts():
+    config = limits.fetch_url()
+    assert config["allow_hosts"] == ["developer.mozilla.org", "nodejs.org", "expressjs.com", "www.postgresql.org", "docs.npmjs.com", "playwright.dev"]
+    fetcher = Fetcher()
+    queue = queue_with(fetcher, config=config)
+    assert queue.observe(fetch("https://nodejs.org/api/fs.html")) is not None
+    assert queue.observe(fetch("https://other.net/page")) is None
+    assert queue.pending[0]["url"] == "https://other.net/page" and fetcher.calls == ["https://nodejs.org/api/fs.html"]
 
 
 def test_allowlist_matches_subdomains_not_lookalikes():

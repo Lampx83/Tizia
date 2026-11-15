@@ -1,8 +1,8 @@
 """Eval suite CLI: run (parallel, resumable, tqdm) / report / compare / check.
 
-    python eval_suite.py run --seed 20261003 --split all --repeats 3 --modes e2e,gold --workers 2 --fast-tier --root DIR
-    python eval_suite.py report --root DIR --name NAME
-    python eval_suite.py compare RESULTS_A.jsonl RESULTS_B.jsonl
+    python -m evaluation.suite.runner run --seed 20261003 --split all --repeats 3 --modes e2e,gold --workers 2 --fast-tier --root DIR
+    python -m evaluation.suite.runner report --root DIR --name NAME
+    python -m evaluation.suite.runner compare RESULTS_A.jsonl RESULTS_B.jsonl
 Observer only: GPU runs are started by the operator. Held-out per-case rows go to <root>/heldout (VAULT); reports carry aggregates only.
 """
 from __future__ import annotations
