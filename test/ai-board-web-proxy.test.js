@@ -69,7 +69,7 @@ test('worker and unrelated paths are not proxied; a guest is refused before the 
   } finally { await server.close(); await up.close(); }
 });
 
-test('requester paths and attachments go to the board; AI-decision audit stays on the web', async () => {
+test('requester paths and attachments go to the board, including the decision audit', async () => {
   const up = await upstream();
   const app = express();
   app.use((req, _res, next) => { req.user = { id: 5, role: 'pupil', display_name: 'Lan', enrolled_domain: 'primary' }; next(); });
@@ -79,24 +79,20 @@ test('requester paths and attachments go to the board; AI-decision audit stays o
   app.get('/api/requests/:id/progress', (_req, res) => res.json({ local: true }));
   app.post('/api/requests/:id/thread', (_req, res) => res.json({ local: true }));
   app.post('/api/requests/attachments', (_req, res) => res.json({ local: true }));
-  app.get('/api/requests/:id/decisions', (_req, res) => res.json({ local: true }));
   const server = await serve(app);
   try {
     for (const [method, url] of [['POST', '/api/requests'], ['GET', '/api/requests'],
       ['GET', '/api/requests/7/progress'], ['POST', '/api/requests/7/continue'],
       ['POST', '/api/requests/7/cancel'], ['POST', '/api/requests/7/retry'],
       ['GET', '/api/requests/7/thread'], ['POST', '/api/requests/7/messages'], ['POST', '/api/requests/7/vote'],
-      ['POST', '/api/requests/7/edit'], ['POST', '/api/requests/attachments']]) {
+      ['POST', '/api/requests/7/edit'], ['POST', '/api/requests/attachments'],
+      ['GET', '/api/requests/7/decisions'], ['GET', '/api/ai-decisions']]) {
       const reply = await fetch(`${server.base}${url}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{"body":"x"}' });
       assert.equal(reply.status, 200, `${method} ${url}`);
       assert.deepEqual(await reply.json(), { ok: true }, `${method} ${url} must come from the board`);
     }
-    assert.equal(up.seen.length, 11);
+    assert.equal(up.seen.length, 13);
     assert.equal(verifyInternalHeaders(up.seen[0].headers, SECRET).user.id, 5);
-
-    const decisions = await fetch(`${server.base}/api/requests/7/decisions`);
-    assert.deepEqual(await decisions.json(), { local: true }, 'decisions must stay local');
-    assert.equal(up.seen.length, 11);
   } finally { await server.close(); await up.close(); }
 });
 

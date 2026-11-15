@@ -109,3 +109,56 @@ test('an attachment uploaded through the web lands on the board volume and is se
     assert.equal((await unenrolled.json()).error, 'enrollment_required');
   } finally { await env.close(); }
 });
+
+test('human decisions are written on the board, idempotent, and read back as one trail', async () => {
+  const env = await stacks();
+  try {
+    const created = await json(env.site.base, 'POST', '/api/requests', { user: 1, headers: { 'idempotency-key': 'split-dec-001' },
+      body: { title: 'Thêm bộ thẻ thuốc', detail: 'Nội dung từ form web' } });
+    const { request_id: id } = await created.json();
+    const decide = (user, headers = {}) => json(env.site.base, 'POST', `/api/admin/ai-board/requests/${id}/decisions`, { user, headers,
+      body: { action: 'approve', status: 'done', reason: '[admin] admin → done', public_note: 'Đã xong' } });
+
+    const first = await decide(9, { 'idempotency-key': 'reply-1' });
+    assert.equal(first.status, 200);
+    const firstId = (await first.json()).id;
+    const again = await decide(9, { 'idempotency-key': 'reply-1' });
+    assert.deepEqual(await again.json(), { ok: true, id: firstId, duplicate: true });
+    assert.equal(Number((await env.db.d.get('SELECT COUNT(*) AS n FROM ai_decisions WHERE request_id=?', [id])).n), 1);
+    const row = await env.db.d.get('SELECT decided_by, actor_user_id FROM ai_decisions WHERE request_id=?', [id]);
+    assert.deepEqual({ ...row, actor_user_id: Number(row.actor_user_id) }, { decided_by: 'human', actor_user_id: 9 });
+    assert.ok(await env.db.d.get('SELECT 1 AS ok FROM users WHERE id=9'), 'admin mirrored for the audit FK');
+
+    const adminTrail = await (await json(env.site.base, 'GET', `/api/admin/ai-board/requests/${id}/decisions`, { user: 9 })).json();
+    assert.equal(adminTrail.decisions.length, 1);
+    const recent = await (await json(env.site.base, 'GET', '/api/ai-decisions', { user: 9 })).json();
+    assert.equal(Number(recent.decisions[0].request_id), id);
+    const owner = await json(env.site.base, 'GET', `/api/requests/${id}/decisions`, { user: 1 });
+    assert.equal(owner.status, 200);
+    assert.equal((await owner.json()).decisions[0].decided_by, 'human');
+    assert.equal((await json(env.site.base, 'GET', `/api/requests/${id}/decisions`, { user: 2 })).status, 403);
+  } finally { await env.close(); }
+});
+
+test('guests, non-admins and unsigned callers cannot write or read decisions on the board', async () => {
+  const env = await stacks();
+  try {
+    const route = '/api/admin/ai-board/requests/1/decisions';
+    const body = { action: 'approve', status: 'done' };
+    assert.equal((await json(env.site.base, 'POST', route, { body })).status, 401);
+    assert.equal((await json(env.site.base, 'POST', route, { user: 1, body })).status, 403);
+    assert.equal((await json(env.site.base, 'GET', '/api/ai-decisions')).status, 401);
+    assert.equal((await json(env.board.base, 'POST', route, { body, headers: { 'x-ai-user-id': '9', 'x-ai-user-role': 'admin' } })).status, 401);
+    assert.equal((await json(env.board.base, 'GET', '/api/ai-decisions')).status, 401);
+    assert.equal(Number((await env.db.d.get('SELECT COUNT(*) AS n FROM ai_decisions')).n), 0);
+  } finally { await env.close(); }
+});
+
+test('decision for an unknown request or invalid action is rejected', async () => {
+  const env = await stacks();
+  try {
+    const route = (id) => `/api/admin/ai-board/requests/${id}/decisions`;
+    assert.equal((await json(env.site.base, 'POST', route(999), { user: 9, body: { action: 'approve' } })).status, 404);
+    assert.equal((await json(env.site.base, 'POST', route(999), { user: 9, body: { action: 'nuke' } })).status, 400);
+  } finally { await env.close(); }
+});

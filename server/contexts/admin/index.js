@@ -264,10 +264,14 @@ export async function attachAdmin(r) {
     catch { return boardUnavailable(res); }
     if (applied.status !== 200) return res.status(409).json({ error: applied.data?.error || 'status_rejected', message: applied.data?.message });
 
-    await insertHumanDecision.run({
-      request_id: id, action: ACTION_BY_STATUS[status] || 'defer', status,
-      reason: `[admin] ${req.user.username} → ${status}`, public_note: message.slice(0, 500), t: Date.now(),
-    });
+    try {
+      const key = req.get('idempotency-key');
+      const audit = await boardRequest(req.user, 'POST', `/api/admin/ai-board/requests/${id}/decisions`, {
+        action: ACTION_BY_STATUS[status] || 'defer', status, reason: `[admin] ${req.user.username} → ${status}`,
+        public_note: message.slice(0, 500), ...(key ? { idempotency_key: key } : {}),
+      });
+      if (audit.status !== 200) console.warn('[admin/reply] decision audit rejected:', audit.status);
+    } catch (e) { console.warn('[admin/reply] decision audit failed:', e?.message || e); }
     try { await boardRequest(req.user, 'POST', `/api/requests/${id}/messages`, { body: message }); }
     catch (e) { console.warn('[admin/reply] thread append failed:', e?.message || e); }
 
@@ -336,8 +340,14 @@ export async function attachAdmin(r) {
 
   // Audit quyết định AI — xuyên tenant (minh bạch "AI điều hành")
   r.get('/api/admin/ai-decisions', requireAdmin, async (req, res) => {
-    if (!await tableExists('ai_decisions')) return res.json({ decisions: [] });
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    if (BOARD_SPLIT) {
+      try {
+        const out = await boardRequest(req.user, 'GET', `/api/admin/ai-board/decisions?limit=${limit}`);
+        return out.status === 200 ? res.json({ decisions: out.data?.decisions || [] }) : boardUnavailable(res);
+      } catch { return boardUnavailable(res); }
+    }
+    if (!await tableExists('ai_decisions')) return res.json({ decisions: [] });
     res.json({ decisions: await db.prepare(`SELECT id, request_id, decided_by, action, status_applied, confidence, reason, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?`).all(limit) });
   });
 

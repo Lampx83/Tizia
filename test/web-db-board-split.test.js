@@ -29,6 +29,8 @@ const board = http.createServer((req, res) => {
       return send(200, { request: { id: 7, domain: 'pharmacy', title: 'Thêm bộ thẻ thuốc', student: 'Lan', status: 'pending' }, messages: [] });
     }
     if (req.method === 'POST' && req.url === '/api/requests/7/status') return send(200, { ok: true });
+    if (req.method === 'POST' && req.url === '/api/admin/ai-board/requests/7/decisions') return send(200, { ok: true, id: 1, duplicate: false });
+    if (req.method === 'GET' && req.url === '/api/admin/ai-board/decisions?limit=100') return send(200, { decisions: [{ id: 1, request_id: 7, decided_by: 'human' }] });
     if (req.method === 'POST' && req.url === '/api/requests/7/messages') return send(200, { ok: true, message_id: 1 });
     if (req.method === 'GET' && req.url === '/api/admin/ai-board/requests/8/thread') return send(404, { error: 'not_found' });
     send(404, { error: 'no_route' });
@@ -119,14 +121,17 @@ test('admin reply writes through the board API and keeps the web bell', async ()
     assert.deepEqual(calls.map((c) => `${c.method} ${c.url}`), [
       'GET /api/admin/ai-board/requests/7/thread',
       'POST /api/requests/7/status',
+      'POST /api/admin/ai-board/requests/7/decisions',
       'POST /api/requests/7/messages',
     ]);
     assert.equal(calls[1].body.status, 'done');
     assert.equal(calls[1].body.confirm, '7');
-    assert.equal(calls[2].body.body, 'Đã xong nhé.');
-    const decision = await db.prepare('SELECT status_applied, decided_by FROM ai_decisions WHERE request_id=?').get(7);
-    assert.equal(decision.status_applied, 'done');
-    assert.equal(decision.decided_by, 'human');
+    assert.equal(calls[2].body.action, 'approve');
+    assert.equal(calls[2].body.status, 'done');
+    assert.equal(calls[3].body.body, 'Đã xong nhé.');
+    assert.equal((await db.prepare('SELECT COUNT(*) n FROM ai_decisions WHERE request_id=?').get(7)).n, 0, 'no local decision row in split');
+    const trail = await (await api.get('/api/admin/ai-decisions')).json();
+    assert.equal(trail.decisions[0].decided_by, 'human');
     assert.equal(await (await db.prepare("SELECT COUNT(*) n FROM notifications WHERE request_id=?").get(7)).n, 1);
   } finally { await api.close(); }
 });
