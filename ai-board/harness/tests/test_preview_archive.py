@@ -1,4 +1,5 @@
 import io
+import json
 import subprocess
 import sys
 import tarfile
@@ -7,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from preview import commit_archive
+from verification import guest_inputs
 
 
 def test_preview_archives_the_commit_not_mutable_working_tree(tmp_path):
@@ -22,7 +24,7 @@ def test_preview_archives_the_commit_not_mutable_working_tree(tmp_path):
     target.write_text("uncommitted edit must not leak", encoding="utf8")
     with tarfile.open(fileobj=io.BytesIO(commit_archive(tmp_path, sha)), mode="r:gz") as archive:
         assert archive.extractfile("checkout/public/page.html").read() == b"committed candidate"
-        assert archive.extractfile("state.json").read() == b"{}"
+        assert json.load(archive.extractfile("state.json")) == guest_inputs.build({})
 
 
 def test_preview_limit_applies_to_compressed_transport_not_uncompressed_git_tar(tmp_path):

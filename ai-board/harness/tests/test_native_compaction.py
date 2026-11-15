@@ -15,7 +15,7 @@ BIG = "界" * 2000
 class Deps:
     def __init__(self, script):
         self.script, self.calls, self.compactions = list(script), [], []
-        self.models = SimpleNamespace(context_window=lambda *_a, **_k: 14000, routing=None)
+        self.models = SimpleNamespace(context_window=lambda *_a, **_k: 15000, routing=None)
 
     def call_model(self, model, prompt, *, budget, role=None, **kw):
         budget.spend("model_calls")
@@ -55,7 +55,7 @@ def test_native_with_compaction_runs_and_keeps_calls_and_latest_result():
     assert out["status"] == "proposed" and len(deps.compactions) == 1
     messages = deps.calls[3]["extra"]["messages"]
     calls = [m for m in messages if m["role"] == "assistant"]
-    assert [m["tool_calls"][0]["id"] for m in calls] == ["call_0", "call_1", "call_2"]
+    assert [m["tool_calls"][0]["id"] for m in calls] == ["c0", "c1", "c2"]
     results = [m for m in messages if m["role"] == "tool"]
     assert [r["content"] == tool_loop.COMPACTED for r in results] == [True, True, False]
     assert "界界" in results[2]["content"]

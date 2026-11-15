@@ -111,7 +111,7 @@ def test_same_bytes_same_hash_changed_bytes_changed_hash(tmp_path):
 
 
 def test_real_csv_is_not_in_the_repo():
-    assert sorted(p.name for p in DATASETS.iterdir()) == ["README.md", "fixtures"]
+    assert sorted(p.name for p in DATASETS.iterdir()) == ["README.md", "fixtures", "gate25_clarify_controls.json"]
     assert not any(DATASETS.rglob(ds.DATASET_NAME))
     try:
         tracked = subprocess.run(["git", "ls-files", "."], capture_output=True, text=True,
