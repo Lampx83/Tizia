@@ -1,4 +1,5 @@
 """Skill selection node (LF/76): one deterministic pass per role, pinned, flag off keeps today's behaviour."""
+import dataclasses
 import re
 
 import pytest
@@ -60,3 +61,14 @@ def test_flag_off_does_not_touch_the_node(monkeypatch):
     monkeypatch.setattr(skill_plan, "build", boom)
     _prompt, extra, _options = pipeline._split_call("PROMPT", "gate1", None, {}, {}, None)
     assert extra["_skill_evidence"] and extra["_skill_selection"]["selected"]
+
+
+def test_pin_changes_with_config_and_with_selected_skill(monkeypatch):
+    before = skill_plan.build("gate1", {"task_type": "frontend"}).pin
+    monkeypatch.setattr(skill_plan.limits, "config_sha256", lambda: "changed-config")
+    assert skill_plan.build("gate1", {"task_type": "frontend"}).pin != before
+    monkeypatch.undo()
+    original = default_skills.catalog
+    monkeypatch.setattr(default_skills, "catalog", lambda: [
+        dataclasses.replace(s, digest="f" * 64) if s.name == "default-frontend" else s for s in original()])
+    assert skill_plan.build("gate1", {"task_type": "frontend"}).pin != before

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import settings
 from services import context, token_count
 
 NAME = 'frontend-design-core'
@@ -51,3 +52,15 @@ def test_machine_checked_rules_map_to_existing_gates():
     assert 'low_contrast' in (root / 'gates' / 'guard.py').read_text(encoding='utf-8')
     assert 'overflow' in (root / 'gates' / 'visual.py').read_text(encoding='utf-8')
     assert 'focus' in (root / 'gates' / 'verify.py').read_text(encoding='utf-8')
+
+
+def test_variant_attaches_to_frontend_picks_only(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_SKILL_VARIANT', NAME)
+    settings.reset_settings()
+    try:
+        _, front = context.select_block(context.SKILLS['edit-css-style'], 3)
+        _, backend = context.select_block(context.SKILLS['fix-js-behavior'], 3)
+    finally:
+        settings.reset_settings()
+    assert NAME in [s['name'] for s in front['selected']]
+    assert NAME not in [s['name'] for s in backend['selected'] + backend['dropped']]

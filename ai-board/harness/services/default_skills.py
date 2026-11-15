@@ -119,6 +119,12 @@ def select(role, context=None):
     return select_report(role, context)[0]
 
 
+def review_selection():
+    """gate 4 skills: node pick when AI_BOARD_SKILL_SELECT is on, else legacy select."""
+    from services import skill_plan
+    return skill_plan.build('gate4_review', {}).skills if skill_plan.enabled() else select('gate4_review', {})
+
+
 def select_report(role, context=None):
     """(skills, {'selected': [{name, reason}], 'dropped': [{name, reason}]}) qua skill_selection.choose."""
     context = context or {}
@@ -142,6 +148,7 @@ def select_report(role, context=None):
         candidates.append(skill_selection.Candidate(base.name, 2, 'platform baseline', base.token_bound, topic=base.topic, payload=base))
     from runtime.root_allowance import current
     root = current()
+    overlaps = []
     if root is not None and task != 'skill-authoring':
         for row in root.skills('all' if task == 'skill-authoring' else task, role):
             skill = parse(row['text'])
@@ -159,11 +166,16 @@ def select_report(role, context=None):
             if type(count) is not int or not 0 < count <= skill.max_tokens:
                 raise ValueError('approved skill token bound mismatch')
             skill = replace(skill, token_bound=bound)
+            owner = next((c.name for c in candidates if c.topic and c.topic == skill.topic), None)
+            if owner:  # admin priority beats the baseline, so the overlap check must run before choose()
+                overlaps.append({'name': skill.name, 'reason': f'overlaps {owner}'})
+                continue
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
     candidates += variant_candidates(role, task)
     budget = stage_budget(role)
     chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
+    report['dropped'].extend(overlaps)
     selected = [c.payload for c in chosen]
     defaults = [s for s in selected if s.source == 'default']
     if sum(s.token_bound for s in defaults) + 2 * (len(defaults) - 1) > 1000:

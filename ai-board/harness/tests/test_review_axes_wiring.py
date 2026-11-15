@@ -5,7 +5,8 @@ from runtime import pipeline as main
 from gates import adversarial_review, reviewer_fix
 from runtime import pipeline, prompt_roles
 from runtime.budget import Budget
-from services import context, default_skills
+import settings
+from services import context, default_skills, skill_plan
 from test_adversarial_review import Models as ReviewModels, state
 from test_reviewer_fix import FIX, Models as FixModels, fix, repo
 from test_prompt_roles import FakeModels
@@ -80,3 +81,31 @@ def test_oversized_proposal_is_refused(monkeypatch, tmp_path, axes_on):
     monkeypatch.setitem(default_skills.VARIANTS, 'review-two-axes', path)
     with pytest.raises(ValueError):
         default_skills.review_axes_block()
+
+
+def test_axes_on_asks_each_finding_for_its_file_and_keeps_it(axes_on):
+    finding = {'severity': 'low', 'issue': 'standards: comment style differs from docs rule', 'file': 'server/contexts/payment/index.js'}
+    models = ReviewModels({'verdict': 'concerns', 'findings': [finding]})
+    result = adversarial_review.run(state(), main.Deps(models=models, notify=None), Budget())
+    assert result['findings'] == [finding]
+    item = models.calls[0]['format']['properties']['findings']['items']
+    assert item['properties']['file'] == {'type': 'string'} and 'file' not in item['required']
+
+
+def test_axes_off_format_and_findings_are_unchanged(axes_off):
+    models = ReviewModels({'verdict': 'concerns', 'findings': [{'severity': 'low', 'issue': 'x', 'file': 'a.js'}]})
+    result = adversarial_review.run(state(), main.Deps(models=models, notify=None), Budget())
+    assert 'file' not in models.calls[0]['format']['properties']['findings']['items']['properties']
+    assert result['findings'] == [{'severity': 'low', 'issue': 'x'}]
+
+
+def test_flag_on_gate4_system_comes_only_from_the_node(monkeypatch, axes_on):
+    monkeypatch.setenv('AI_BOARD_SKILL_SELECT', '1')
+    settings.reset_settings()
+    fake = skill_plan.Selection(role='gate4_review', skills=[], report={'selected': [], 'dropped': []}, pin='P' * 64)
+    monkeypatch.setattr(skill_plan, 'build', lambda role, context=None: fake)
+    models = ReviewModels({'verdict': 'pass', 'findings': []})
+    adversarial_review.run(state(), main.Deps(models=models, notify=None), Budget())
+    system = review_system(models)
+    assert 'DEFAULT SKILL default-review' not in system and BLOCK not in system
+    settings.reset_settings()
