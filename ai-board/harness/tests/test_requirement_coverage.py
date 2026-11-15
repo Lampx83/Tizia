@@ -18,6 +18,13 @@ def test_conditions_are_split_from_expected_results_section():
     ]
 
 
+def test_assumptions_never_become_acceptance_conditions():
+    closing = ("Trang / chức năng: trang chủ\nThay đổi mong muốn: nút to hơn\n"
+               "Kết quả mong đợi (cách kiểm): nút cao 48px\nNgoài phạm vi: không\nGiả định: giữ nguyên bố cục")
+    assert coverage.conditions(closing) == ["nút cao 48px"]
+    assert coverage.conditions("Kết quả mong đợi:\n- Nút hiển thị\nGiả định: giữ bố cục\n- dòng lạc") == ["Nút hiển thị"]
+
+
 def test_spec_without_section_has_no_conditions():
     assert coverage.conditions("chỉ có mô tả") == []
 
