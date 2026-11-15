@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary, renderRootAllowance, renderStopReport } from '../public/js/ai-board-trace.js';
+import { projectPipeline, describeModelCall, describeEvent, loopActions, renderVerificationClaims, budgetSummary, renderRootAllowance, renderStopReport, renderRevertPr } from '../public/js/ai-board-trace.js';
 import { visitedNodes } from '../public/js/ai-board-hsm.js';
 const gate = (id, number, status, at = id) => ({ id, gate: number, status, created_at: at });
 const call = (id, gate, name, child = null) => ({ id, gate, created_at: id, evidence: { gate, prompt_name: name, child, call_id: `call-${id}` } });
@@ -167,4 +167,17 @@ test('stop report shows the repeated error kind, feedback count and last evidenc
   assert.match(html, /Lỗi lặp: <code>syntax<\/code> ở cổng 4, agent đã được phản hồi 3 lần/);
   assert.match(html, /&lt;i&gt;SyntaxError/);
   assert.doesNotMatch(html, /<i>Syntax/);
+});
+
+test('revert PR link shows number and URL only for a revert_ready rollback with a pull request', () => {
+  const rollback = (outcome, pull_request) => ({ runs: [{ trigger: 'rollback', rollback: { outcome, pull_request } }] });
+  assert.equal(renderRevertPr({ runs: [] }), '');
+  assert.equal(renderRevertPr(rollback('discarded', null)), '');
+  assert.equal(renderRevertPr(rollback('revert_ready', null)), '');
+  const html = renderRevertPr(rollback('revert_ready', { number: 42, url: 'https://github.com/o/r/pull/42' }));
+  assert.match(html, /href="https:\/\/github\.com\/o\/r\/pull\/42"/);
+  assert.match(html, />#42</);
+  const unsafe = renderRevertPr(rollback('revert_ready', { number: 7, url: 'javascript:alert(1)' }));
+  assert.doesNotMatch(unsafe, /href=/);
+  assert.match(unsafe, /#7/);
 });

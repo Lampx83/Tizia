@@ -30,21 +30,23 @@ def involved_files(text: str, produced: dict[str, dict]) -> list[str]:
     return hits
 
 
-def _plan_missing(text: str, scope: set[str]) -> bool:
+def _plan_missing(text: str, scope: set[str], project: network_request.Project) -> bool:
     """Missing module that no plan step creates: plan references a path nobody owns."""
     for match in _MISSING.finditer(text):
         raw = next(group for group in match.groups() if group)
-        if network_request.package_name(raw, scope):
-            continue
-        target = raw.replace("/app/", "", 1).lstrip("./")
-        if not target.startswith(("node:", "express")) and not any(target.endswith(file) or file.endswith(target) for file in scope):
+        if raw.startswith(("./", "/")):
+            if network_request.module_kind(raw.removeprefix("/app/").removeprefix("./"), scope, project) != "owned":
+                return True
+        elif network_request.module_kind(raw, scope, project) == "plan":
             return True
     return False
 
 
-def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=()) -> dict:
+def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=(),
+             project: network_request.Project = network_request.Project()) -> dict:
     """Class + action from gate result evidence; no model. files = involved plan files, [] when unknown.
-    Missing npm package -> package_request/stop_admin unless already decided (`settled` names)."""
+    Missing npm package -> package_request/stop_admin unless already decided (`settled` names).
+    `project` (deps + repo roots at the base sha) decides installed/builtin modules vs. packages."""
     failure_class, reason, text = result.get("failure_class") or "ordinary", str(result.get("reason") or ""), _text(result)
     if failure_class == "transient":
         out = ("infra_transient", RETRY)
@@ -56,9 +58,9 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=(
         out = ("scope", STOP_ADMIN)
     elif "timed out" in reason:
         out = ("timeout", STOP_ADMIN)
-    elif _plan_missing(text, scope):
+    elif _plan_missing(text, scope, project):
         out = ("plan_inconsistent", REPLAN)
-    elif (package := network_request.missing_package(text, scope)) and package not in settled:
+    elif (package := network_request.missing_package(text, scope, project)) and package not in settled:
         out = (network_request.PACKAGE_REQUEST, STOP_ADMIN)
     elif _SYNTAX.search(text):
         out = ("syntax", REPAIR_CODE)

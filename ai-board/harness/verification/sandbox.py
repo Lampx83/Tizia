@@ -212,8 +212,8 @@ def _lf_patterns(checkout: Path) -> list[str]:
     return [parts[0] for parts in (line.split() for line in lines if not line.lstrip().startswith("#")) if len(parts) > 1 and "eol=lf" in parts[1:]]
 
 
-def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
-    """tar.gz of filtered checkout + state + base pages. Credential env files, .git, caches never leave the worker."""
+def package(checkout: Path, state: dict, base_pages: dict[str, bytes], layer: Path | None = None) -> bytes:
+    """tar.gz of filtered checkout + state + base pages (+ layers/<name> when `layer`). Credential env files, .git, caches never leave the worker."""
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         def add_bytes(name: str, data: bytes) -> None:
@@ -251,7 +251,27 @@ def package(checkout: Path, state: dict, base_pages: dict[str, bytes]) -> bytes:
         add_bytes(GUEST_STATE, json.dumps(guest_state, ensure_ascii=False, default=lambda _value: None).encode("utf-8"))
         for page, blob in base_pages.items():
             add_bytes("base/" + page.lstrip("/"), blob)
+        if layer is not None:
+            info = tarfile.TarInfo("layers")
+            info.type, info.mode, info.mtime = tarfile.DIRTYPE, 0o755, 0
+            archive.addfile(info)
+            archive.add(layer, arcname=f"layers/{layer.name}", recursive=False, filter=_normalise(layer))
     return buffer.getvalue()
+
+
+def _layer(state: dict, checkout: Path) -> Path | None:
+    """Exported dependency layer for a candidate carrying a broker deps commit; None when it has none. SandboxError when missing."""
+    from runtime import package_broker
+
+    if not package_broker.has_deps_commit(state.get("commits")):
+        return None
+    try:
+        path = package_broker.layer_path(checkout, get_settings().package_broker_dir)
+    except OSError:
+        raise SandboxError("no_lockfile", "layer") from None
+    if path is None or not path.is_file():
+        raise SandboxError(f"not_exported:{path.name if path else 'no_broker_dir'}", "layer")
+    return path
 
 
 def _base_pages(state: dict, checkout: Path) -> dict[str, bytes]:
@@ -441,7 +461,8 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
     request_limits = {} if deadline is None else {"deadline": deadline}
     try:
         _remaining(deadline, 1)
-        archive = package(checkout, state, _base_pages(state, checkout))
+        layer = _layer(state, checkout)
+        archive = package(checkout, state, _base_pages(state, checkout), layer)
         _remaining(deadline, 1)
     except SandboxError as error:
         return _blocked(f"sandbox {error.phase}: {error.code}")
@@ -472,6 +493,12 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
             live()
             client.exec(run_id, ["guest-boot.sh"], timeout=_remaining(deadline, 180), **request_limits)
             live()
+            if layer is not None:
+                loaded = client.exec(run_id, ["docker", "load", "-i", f"/workspace/layers/{layer.name}"],
+                                     timeout=_remaining(deadline, 300), **request_limits)
+                live()
+                if loaded.get("code") != 0 or loaded.get("timed_out"):
+                    return _blocked("sandbox dependency layer load failed")
             anchor_ms = int(time.time() * 1000)
             outcome = client.exec(run_id, ["python", "-c", PEAK_PROBE, PEAK_FILE, "sh", "-c", GUEST_ENTRY],
                                   timeout=_remaining(deadline, exec_timeout + 30), **request_limits)

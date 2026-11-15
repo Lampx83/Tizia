@@ -530,7 +530,7 @@ class _Execution:
         if feedback_cap.enabled():
             from runtime import repair_class
             scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
-            entry["kind"] = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)["class"]
+            entry["kind"] = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages, self._project())["class"]
             count = feedback_cap.prior(self.repairs, last["gate"], entry["kind"])
             if count >= feedback_cap.CAP:
                 self.feedback_stop = feedback_cap.stop_fields(last["gate"], entry["kind"], count, last.get("evidence"))
@@ -549,11 +549,16 @@ class _Execution:
         self.repair_evidence = repair_session.compact(last.get("evidence"))
         return "repair"
 
+    def _project(self):
+        """Deps and repo roots at the base sha, read from the checkout (not the host)."""
+        from runtime import network_request
+        return network_request.project_at(str(self.checkout_source), self.base_sha or self.grounded)
+
     def _package_request(self, last: dict) -> bool:
         """Missing npm package in the gate evidence: queue an admin request and stop. False = not pending (decided, denied, eval)."""
         from runtime import network_request, repair_class
         scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
-        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)
+        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages, self._project())
         if cls["class"] != network_request.PACKAGE_REQUEST:
             return False
         queue = getattr(self.deps, "network", None)
@@ -571,7 +576,7 @@ class _Execution:
         from runtime import repair_class
         scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}
         scope |= {entry.get("test_file") for entry in self.produced.values()} - {None}
-        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages)
+        cls = repair_class.classify(self.last_result, self.produced, scope, self.settled_packages, self._project())
         choice = None
         if progress.enabled():
             window = self._progress_window()
@@ -885,6 +890,9 @@ class _Reverification(_Execution):
             "skill_id": f"ticket-{self.ticket_id}", "diffs": reverify.diffs_of(owned["commits"]), "should_stop": self.should_stop,
             "acceptance": list(execution_plan.get("acceptance") or []), **owned,
         }
+        from runtime import package_broker
+        state.update(package_broker.carried(owned["full_checkout"], owned["commits"],
+                                            package_broker.receipts_path(get_settings().package_broker_dir)))
         if self.catalog is not None:
             state["catalog"] = self.catalog
         if self.request_detail:

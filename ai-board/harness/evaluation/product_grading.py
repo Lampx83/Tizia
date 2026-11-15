@@ -21,7 +21,7 @@ from evaluation.suite.candidate_grade import PROTOCOL  # noqa: E402
 SHIP = {"needs_review", "ready_for_pr"}
 CANDIDATE_GATE = 3
 CELLS = ("correct_ship", "wrong_ship", "false_block", "correct_block")
-NOT_GRADABLE = ("no_case", "no_candidate", "no_artifact", "no_base")
+NOT_GRADABLE = ("no_case", "no_candidate", "no_artifact", "no_base", "base_mismatch")
 
 
 def _allowed(path: str, target: str) -> bool:
@@ -34,14 +34,16 @@ def _skip(trial: dict, reason: str) -> dict:
             "evaluator": PROTOCOL}
 
 
-def grade_trial(trial: dict, case: dict | None, base: str | None, files: dict | None) -> dict:
-    """Fields to record on the trial. No candidate or no base = not_gradable, never an oracle fail."""
+def grade_trial(trial: dict, case: dict | None, base: str | None, files: dict | None, base_note: str | None = None) -> dict:
+    """Fields to record on the trial. No candidate or no usable base = not_gradable, never an oracle fail."""
     if case is None or case.get("split") != "dev":
         return _skip(trial, "no_case")
     ship = trial.get("outcome") in SHIP
     text = (files or {}).get(case["file"])
     if text is None:
         return _skip(trial, "no_artifact" if ship or (trial.get("gate_reached") or 0) >= CANDIDATE_GATE else "no_candidate")
+    if base_note:
+        return _skip(trial, base_note)
     if base is None and case["check"]["mode"] != "page":
         return _skip(trial, "no_base")
     touched = sorted(trial.get("candidate_files") or files)
@@ -53,15 +55,31 @@ def grade_trial(trial: dict, case: dict | None, base: str | None, files: dict | 
             "mf_outcome": {"correct_ship": "resolved", "wrong_ship": "wrong_ship"}.get(cell, "not_resolved" if cell == "correct_block" else cell)}
 
 
+def trial_base(trial: dict, case: dict | None, base_of) -> tuple[str | None, str | None]:
+    """(base text, not_gradable reason). Trial base = candidate_base_sha from driver_capture."""
+    if case is None or case["check"]["mode"] == "page":
+        return None, None
+    sha = str(trial.get("candidate_base_sha") or "").strip().lower()
+    if not sha:
+        return None, "no_base"
+    pin = base_of(case)
+    if sha == case["base_sha"].lower():
+        return (pin, None) if pin is not None else (None, "no_base")
+    at_trial = base_of(case, sha)
+    if at_trial is None or at_trial != pin:
+        return None, "base_mismatch"
+    return pin, None
+
+
 def load_cases(path: Path) -> dict[str, dict]:
     """Dev cases by id from a corpus cases.json; held-out entries are dropped unread."""
     return {c["id"]: c for c in json.loads(Path(path).read_text(encoding="utf-8")) if c.get("split") == "dev"}
 
 
 def git_base(source: Path):
-    """Case -> target file text at the case base commit, None if absent."""
-    def base_of(case: dict) -> str | None:
-        done = subprocess.run(["git", "--git-dir", str(source), "show", f"{case['base_sha']}:{case['file']}"], capture_output=True,
+    """(case, sha=None) -> target file text at sha (default case pin), None if absent."""
+    def base_of(case: dict, sha: str | None = None) -> str | None:
+        done = subprocess.run(["git", "--git-dir", str(source), "show", f"{sha or case['base_sha']}:{case['file']}"], capture_output=True,
                               stdin=subprocess.DEVNULL)
         return done.stdout.decode("utf-8") if done.returncode == 0 else None
     return base_of
@@ -77,7 +95,8 @@ def regrade_dir(trial_dir: Path, cases: dict[str, dict], base_of, write: bool = 
         case = cases.get(trial.get("case"))
         art = next((p for p in Path(trial_dir).glob(f"{path.stem}.candidate.*") if p.suffix != ".diff"), None)
         files = {case["file"]: art.read_text(encoding="utf-8")} if case and art else None
-        graded = grade_trial(trial, case, base_of(case) if case else None, files)
+        base, note = trial_base(trial, case, base_of)
+        graded = grade_trial(trial, case, base, files, base_note=note)
         if write:
             path.write_text(json.dumps({**trial, **graded}, ensure_ascii=False, indent=1), encoding="utf-8")
         rows.append({"trial": path.stem, "arm": trial.get("arm"), "case": trial.get("case"), "outcome": trial.get("outcome"), **graded})
@@ -111,11 +130,12 @@ def require_matrix(rep: dict, arms: list[str]) -> None:
 
 
 def render(rep: dict) -> str:
-    head = ["arm", "n", "oracle_resolved", "correct_ship", "wrong_ship", "false_block", "correct_block", "not_gradable", "no_candidate", "no_artifact"]
+    head = ["arm", "n", "oracle_resolved", "correct_ship", "wrong_ship", "false_block", "correct_block", "not_gradable", "no_candidate", "no_artifact", "no_base", "base_mismatch"]
     lines = [" | ".join(head)]
     for arm, s in rep.items():
         lines.append(" | ".join(str(x) for x in [arm, s["n"], s["oracle_resolved"], s["correct_ship"], s["wrong_ship"], s["false_block"],
-                                                 s["correct_block"], s["not_gradable"], s["not_gradable_no_candidate"], s["not_gradable_no_artifact"]]))
+                                                 s["correct_block"], s["not_gradable"], s["not_gradable_no_candidate"], s["not_gradable_no_artifact"],
+                                                 s["not_gradable_no_base"], s["not_gradable_base_mismatch"]]))
     return "\n".join(lines)
 
 

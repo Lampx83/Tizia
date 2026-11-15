@@ -1,8 +1,13 @@
-"""fetch_url broker: allowlist auto-approve, admin queue for other hosts, scheme/private-IP refusal, size cap, receipts."""
+"""fetch_url broker: allowlist auto-approve, admin queue for other hosts, scheme/private-IP refusal, size cap, receipts,
+DNS pinning (connect to the checked IP, Host/SNI/cert check on the original name, no redirects)."""
+import socket
+import ssl
+import threading
+
 import pytest
 
 import tools
-from runtime import network_request, tool_loop
+from runtime import limits, network_request, tool_loop
 from runtime.budget import Budget
 from runtime.network_request import FetchBroker, Queue, tool_request
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
@@ -14,11 +19,30 @@ HTML = b"<html><head><style>p{}</style><script>alert(1)</script></head><body><p>
 
 class Fetcher:
     def __init__(self, body=HTML, status=200, content_type="text/html; charset=utf-8"):
-        self.body, self.status, self.content_type, self.calls = body, status, content_type, []
+        self.body, self.status, self.content_type, self.calls, self.ips = body, status, content_type, [], []
 
-    def __call__(self, url, max_bytes):
+    def __call__(self, url, max_bytes, ip):
         self.calls.append(url)
+        self.ips.append(ip)
         return self.status, self.content_type, self.body[:max_bytes + 1]
+
+
+def serve(monkeypatch, response: bytes):
+    """Replace the pinned dial with an in-process socketpair that answers `response`; returns (dial log, request bytes)."""
+    dialed, seen = [], []
+
+    def create_connection(address, timeout=None, **_):
+        dialed.append(address)
+        client, server = socket.socketpair()
+
+        def answer():
+            seen.append(server.recv(65536))
+            server.sendall(response)
+            server.close()
+        threading.Thread(target=answer, daemon=True).start()
+        return client
+    monkeypatch.setattr(network_request.socket, "create_connection", create_connection)
+    return dialed, seen
 
 
 def fetch(url, reason="read docs", **extra):
@@ -35,6 +59,16 @@ def test_allowlisted_host_is_fetched_without_pausing():
     text = queue.observe(fetch("https://docs.example.com/api"))
     assert text is not None and fetcher.calls == ["https://docs.example.com/api"]
     assert queue.pending == []
+
+
+def test_contract_allowlist_fetches_docs_and_queues_other_hosts():
+    config = limits.fetch_url()
+    assert config["allow_hosts"] == ["developer.mozilla.org", "nodejs.org", "expressjs.com", "www.postgresql.org", "docs.npmjs.com", "playwright.dev"]
+    fetcher = Fetcher()
+    queue = queue_with(fetcher, config=config)
+    assert queue.observe(fetch("https://nodejs.org/api/fs.html")) is not None
+    assert queue.observe(fetch("https://other.net/page")) is None
+    assert queue.pending[0]["url"] == "https://other.net/page" and fetcher.calls == ["https://nodejs.org/api/fs.html"]
 
 
 def test_allowlist_matches_subdomains_not_lookalikes():
@@ -128,7 +162,7 @@ def test_each_fetch_leaves_a_receipt():
 
 
 def test_fetch_error_is_a_failed_receipt_not_a_crash():
-    def boom(url, max_bytes):
+    def boom(url, max_bytes, ip):
         raise TimeoutError("slow")
     queue = queue_with(fetcher=boom)
     assert queue.observe(fetch("https://docs.example.com/a")).startswith("fetch failed")
@@ -153,3 +187,70 @@ def test_tool_loop_sees_fetched_text_as_untrusted_data_without_pausing(base_file
                                 check=lambda out: None)
     assert out["status"] == "proposed"
     assert "UNTRUSTED DATA" in deps.prompts[1] and "Hello docs" in deps.prompts[1]
+
+
+def test_fetch_dials_the_first_checked_ip_when_dns_flips_to_private():
+    answers = [["93.184.216.34"], ["10.0.0.5"]]
+    fetcher = Fetcher()
+    queue = queue_with(fetcher, resolver=lambda host: answers.pop(0))
+    assert queue.observe(fetch("https://docs.example.com/a")) is not None
+    assert fetcher.ips == ["93.184.216.34"] and answers == [["10.0.0.5"]]
+
+
+def test_pending_request_resolves_dns_once_and_fetches_the_first_checked_ip():
+    answers = [["93.184.216.34"], ["10.0.0.5"], ["10.0.0.5"]]
+    fetcher = Fetcher()
+    queue = queue_with(fetcher, resolver=lambda host: answers.pop(0))
+    request = fetch("https://other.net/page")
+    assert queue.observe(request) is None and queue.observe(request) is None
+    assert len(answers) == 2
+    queue.decisions[request["call_id"]] = {"decision": network_request.APPROVED}
+    assert queue.observe(request) is not None and fetcher.ips == ["93.184.216.34"]
+
+
+def test_default_fetch_connects_to_the_pinned_ip_and_sends_the_original_host(monkeypatch):
+    dialed, seen = serve(monkeypatch, b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nhi")
+    status, content_type, raw = network_request._http_get("http://docs.example.com/a?x=1", 1000, 5, "93.184.216.34")
+    assert (status, raw) == (200, b"hi") and dialed == [("93.184.216.34", 80)]
+    assert b"GET /a?x=1 HTTP/1.1" in seen[0] and b"Host: docs.example.com" in seen[0]
+
+
+def test_redirect_is_not_followed(monkeypatch):
+    dialed, _ = serve(monkeypatch, b"HTTP/1.1 302 Found\r\nLocation: http://10.0.0.5/\r\nConnection: close\r\n\r\n")
+    queue = Queue(broker=FetchBroker(CONFIG, fetcher=None, resolver=PUBLIC))
+    assert queue.observe(fetch("http://docs.example.com/a")).startswith("fetch failed")
+    assert dialed == [("93.184.216.34", 80)] and queue.receipts[0]["decision"] == "failed"
+
+
+def test_https_wraps_the_pinned_socket_with_the_original_name_for_sni_and_cert_check(monkeypatch):
+    dialed, wrapped = [], []
+
+    class Context:
+        check_hostname, verify_mode = True, ssl.CERT_REQUIRED
+
+        def wrap_socket(self, sock, server_hostname):
+            wrapped.append(server_hostname)
+            return sock
+
+    monkeypatch.setattr(network_request.socket, "create_connection",
+                        lambda address, timeout=None, **_: dialed.append(address) or socket.socket())
+    conn = network_request._PinnedHTTPS("docs.example.com", 443, "93.184.216.34", 5, Context())
+    conn.connect()
+    conn.close()
+    assert dialed == [("93.184.216.34", 443)] and wrapped == ["docs.example.com"]
+
+
+def test_https_default_context_verifies_certificate_and_hostname(monkeypatch):
+    made = []
+    real = ssl.create_default_context
+
+    def spy(*args, **kwargs):
+        made.append(real(*args, **kwargs))
+        return made[-1]
+    monkeypatch.setattr(network_request.ssl, "create_default_context", spy)
+    serve(monkeypatch, b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n")
+    try:
+        network_request._http_get("https://docs.example.com/a", 1000, 5, "93.184.216.34")
+    except (OSError, ssl.SSLError):
+        pass
+    assert made and made[0].check_hostname and made[0].verify_mode == ssl.CERT_REQUIRED

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { argSummary, redactText, projectToolStep, createToolStepView } from '../server/ai-board/services/tool-step-view.js';
 import { createTraceReadModel } from '../server/ai-board/services/trace-read-model.js';
 import { toolRows, attemptsOf, modelFailure } from '../public/js/ai-board-trace.js';
@@ -21,6 +22,11 @@ test('free text loses token-shaped values and is capped', () => {
   assert.equal(redactText('password=hunter2 ok', 300), 'password=[đã che] ok');
   assert.equal(redactText('Bearer abcdefghijk', 300), '[đã che]');
   assert.ok(redactText(LONG, 300).length <= 301);
+});
+
+test('shared redaction cases match the Python redactor fixture', () => {
+  const { cases } = JSON.parse(fs.readFileSync(new URL('../server/ai-board/redaction-patterns.json', import.meta.url), 'utf8'));
+  for (const { input, output } of cases) assert.equal(redactText(input, 100000), output, input);
 });
 
 test('projected step keeps only capped args and observation', () => {

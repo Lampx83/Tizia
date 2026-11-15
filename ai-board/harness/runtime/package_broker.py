@@ -39,15 +39,37 @@ def unified(path: str, old: str, new: str) -> str:
     return f"diff --git a/{path} b/{path}\n{body}" if body else ""
 
 
+def _lines(text: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for chunk in re.split(r"^(?=diff --git )", text, flags=re.M):
+        if chunk.startswith("diff --git ") and (path := chunk.splitlines()[0].split(" b/", 1)[-1].strip()) in FILES:
+            out.setdefault(path, []).extend(line for line in chunk.splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---")))
+    return out
+
+
 def digest(diffs) -> str:
-    """sha256 over the +/- lines per manifest path, merged across diffs; independent of hunk headers and context."""
+    """sha256 over the net +/- lines per manifest path across diffs applied in order (a later `-x` cancels an earlier `+x`);
+    independent of hunk headers and context."""
     merged: dict[str, list[str]] = {}
     for text in diffs:
-        for chunk in re.split(r"^(?=diff --git )", text, flags=re.M):
-            if chunk.startswith("diff --git ") and (path := chunk.splitlines()[0].split(" b/", 1)[-1].strip()) in FILES:
-                merged.setdefault(path, []).extend(line for line in chunk.splitlines()
-                                                   if line[:1] in "+-" and not line.startswith(("+++", "---")))
+        for path, lines in _lines(text).items():
+            acc = merged.setdefault(path, [])
+            earlier = list(acc)
+            for line in lines:
+                opposite = ("-" if line[0] == "+" else "+") + line[1:]
+                if opposite in earlier:
+                    earlier.remove(opposite)
+                    acc.remove(opposite)
+                else:
+                    acc.append(line)
     return hashlib.sha256(json.dumps({path: sorted(lines) for path, lines in sorted(merged.items())}).encode()).hexdigest()
+
+
+def apply_diff(directory, diff: str, label: str = "") -> None:
+    """Apply a manifest diff in `directory`; BrokerError when it does not apply."""
+    done = subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=directory, input=diff.encode(), capture_output=True)
+    if done.returncode:
+        raise BrokerError(f"broker diff for {label} does not apply: {done.stderr.decode(errors='replace')[:200]}")
 
 
 def check_scope(old: dict[str, str], new: dict[str, str], name: str, version: str) -> list[str]:
@@ -104,6 +126,7 @@ class Broker:
         self.checkout, self.registry, self.npm, self.cache, self.clock = Path(checkout), registry, npm, cache, clock
         self.receipts_file = Path(receipts_file) if receipts_file else cache.dir / "receipts.jsonl"
         self.receipts: list[dict] = []
+        self.applied: list[tuple[str, str]] = []
 
     def _receipt(self, action: str, request: dict, result: dict, **extra) -> dict:
         row = {"action": action, "call_id": request.get("call_id"), "name": request.get("name"),
@@ -141,11 +164,16 @@ class Broker:
         except OSError:
             return self._receipt("resolve", request, {"decision": ERROR, "metadata": metadata,
                                                       "reason": f"checkout lacks {MANIFEST} or {LOCKFILE}"})
+        ids = [call_id for call_id, _ in self.applied]
+        at = ids.index(request.get("call_id")) if request.get("call_id") in ids else len(ids)
         with tempfile.TemporaryDirectory(prefix="pkg-broker-") as tmp:
             work = Path(tmp)
             for file, text in old.items():
                 (work / file).write_text(text, encoding="utf-8")
             try:
+                for call_id, earlier in self.applied[:at]:
+                    apply_diff(work, earlier, call_id)
+                old = {file: (work / file).read_text(encoding="utf-8") for file in FILES}
                 self.npm.lock_only(work, f"{name}@{version}")
                 new = {file: (work / file).read_text(encoding="utf-8") for file in FILES}
                 added = check_scope(old, new, name, version)
@@ -161,6 +189,7 @@ class Broker:
             except (BrokerError, OSError, ValueError, subprocess.SubprocessError) as error:
                 return self._receipt("resolve", request, {"decision": ERROR, "metadata": metadata, "reason": str(error)[:500]})
         diff = "".join(unified(file, old[file], new[file]) for file in FILES)
+        self.applied[at:at + 1] = [(request.get("call_id"), diff)]
         return self._receipt("resolve", request, {"decision": APPROVED, "diff": diff, "layer_key": key, "metadata": metadata,
                                                   "reason": f"approved {name}@{version}",
                                                   "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
@@ -174,9 +203,7 @@ def attach(checkout, approved: list[dict], receipts_file=None) -> str:
         paths = {line.split(" b/", 1)[1] for line in item["diff"].splitlines() if line.startswith("diff --git ")}
         if not paths or paths - set(FILES):
             raise BrokerError(f"broker diff touches {sorted(paths - set(FILES)) or 'nothing'}")
-        done = subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=checkout, input=item["diff"].encode(), capture_output=True)
-        if done.returncode:
-            raise BrokerError(f"broker diff for {item.get('name')} does not apply: {done.stderr.decode(errors='replace')[:200]}")
+        apply_diff(checkout, item["diff"], item.get("name"))
     change = digest(item["diff"] for item in approved)
     if receipts_file:
         row = {"action": "attach", "names": [item["name"] for item in approved], "change_sha256": change,
@@ -195,6 +222,32 @@ def attached(receipts_file, change: str) -> bool:
     approved = {row.get("diff_sha256") for row in rows if row.get("action") == "resolve" and row.get("decision") == APPROVED}
     return any(row.get("action") == "attach" and row.get("change_sha256") == change and all(d in approved for d in row["diff_sha256"])
                for row in rows)
+
+
+def has_deps_commit(commits) -> bool:
+    return any(str(commit.get("title", "")).startswith(DEPS_COMMIT_PREFIX) for commit in commits or [])
+
+
+def layer_path(checkout, directory) -> Path | None:
+    """Exported guest layer for the checkout's lockfile: <directory>/guest-layers/<key12>.tar (may not exist); None when directory unset.
+    Raise OSError when the checkout has no lockfile."""
+    if not directory:
+        return None
+    key = lock_key((Path(checkout) / LOCKFILE).read_text(encoding="utf-8"))
+    return Path(directory) / "guest-layers" / f"{key[:12]}.tar"
+
+
+def carried(checkout, commits, receipts_file) -> dict:
+    """{broker_diffs, broker_receipts} for a kept candidate's deps commit when its manifest diff has an `attach` receipt; {} otherwise."""
+    deps = [commit for commit in commits or [] if str(commit.get("title", "")).startswith(DEPS_COMMIT_PREFIX)]
+    if not deps or not receipts_file:
+        return {}
+    diff = "".join(subprocess.run(["git", "show", "--no-renames", "--format=", commit["sha"], "--", *FILES], cwd=checkout,
+                                  capture_output=True, text=True, encoding="utf-8").stdout for commit in deps)
+    if not attached(receipts_file, digest([diff])):
+        return {}
+    names = ", ".join(commit["title"][len(DEPS_COMMIT_PREFIX):].rsplit(" ", 1)[0] for commit in deps)
+    return {"broker_diffs": [{"name": names, "diff": diff}], "broker_receipts": str(receipts_file)}
 
 
 def receipts_path(directory) -> Path | None:

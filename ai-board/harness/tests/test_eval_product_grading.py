@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 import pytest
 
@@ -11,7 +12,7 @@ CASE = {"id": "c1", "split": "dev", "file": "public/a.html", "base_sha": "b" * 4
 
 
 def trial(outcome="needs_review", gate=5.5, **extra):
-    return {"case": "c1", "arm": "B0", "outcome": outcome, "gate_reached": gate, **extra}
+    return {"case": "c1", "arm": "B0", "outcome": outcome, "gate_reached": gate, "candidate_base_sha": CASE["base_sha"], **extra}
 
 
 def grade(t, files, case=CASE, base=BASE):
@@ -88,7 +89,7 @@ def folder(tmp_path):
 
 
 def rows_of(folder):
-    return pg.regrade_dir(folder, {"c1": CASE}, lambda case: BASE)
+    return pg.regrade_dir(folder, {"c1": CASE}, lambda case, sha=None: BASE)
 
 
 def test_regrade_dir_runs_offline_over_saved_trials_and_skips_multifile(folder):
@@ -117,10 +118,10 @@ def test_ab_conclusion_requires_a_matrix_with_graded_trials_in_every_arm(folder)
 
 
 def test_write_back_adds_fields_to_trial_and_is_idempotent(folder):
-    pg.regrade_dir(folder, {"c1": CASE}, lambda case: BASE, write=True)
+    pg.regrade_dir(folder, {"c1": CASE}, lambda case, sha=None: BASE, write=True)
     saved = json.loads((folder / "B0-r2-c1.json").read_text(encoding="utf-8"))
     assert saved["mf_outcome"] == "wrong_ship" and saved["resolved"] is False and saved["outcome"] == "needs_review"
-    again = pg.regrade_dir(folder, {"c1": CASE}, lambda case: BASE, write=True)
+    again = pg.regrade_dir(folder, {"c1": CASE}, lambda case, sha=None: BASE, write=True)
     assert len(again) == 4
 
 
@@ -128,3 +129,106 @@ def test_load_cases_keeps_dev_only(tmp_path):
     path = tmp_path / "cases.json"
     path.write_text(json.dumps([CASE, {**CASE, "id": "h1", "split": "heldout"}]), encoding="utf-8")
     assert set(pg.load_cases(path)) == {"c1"}
+
+
+OTHER = "c" * 40
+DRIFT = "<html><body><p>drift</p></body></html>"
+
+
+class FakeGit:
+    """base_of(case, sha) over {(sha, path): text}; unknown sha/path -> None, like git show failing."""
+    def __init__(self, files):
+        self.files, self.calls = files, []
+
+    def __call__(self, case, sha=None):
+        self.calls.append(sha)
+        return self.files.get((sha or case["base_sha"], case["file"]))
+
+
+def base_trial(sha, outcome="needs_review", **extra):
+    t = trial(outcome, **extra)
+    if sha is None:
+        t.pop("candidate_base_sha")
+    else:
+        t["candidate_base_sha"] = sha
+    return t
+
+
+def graded(t, base_of, text=GOOD):
+    base, note = pg.trial_base(t, CASE, base_of)
+    return pg.grade_trial(t, CASE, base, {"public/a.html": text}, base_note=note)
+
+
+def test_trial_at_case_pin_grades_as_before():
+    g = graded(base_trial(CASE["base_sha"]), FakeGit({(CASE["base_sha"], "public/a.html"): BASE}))
+    assert (g["matrix_cell"], g["resolved"]) == ("correct_ship", True)
+
+
+def test_other_base_with_identical_target_content_grades_normally():
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE, (OTHER, "public/a.html"): BASE})
+    g = graded(base_trial(OTHER), fake)
+    assert (g["matrix_cell"], g["resolved"], g["oracle_rc"]) == ("correct_ship", True, 0)
+
+
+def test_other_base_with_different_target_content_is_base_mismatch_not_fail():
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE, (OTHER, "public/a.html"): DRIFT})
+    g = graded(base_trial(OTHER, outcome="needs_review"), fake)
+    assert g["independent_verdict"] == "not_gradable:base_mismatch"
+    assert g["matrix_cell"] == "not_gradable" and g["resolved"] is None and g["oracle_rc"] is None
+    assert g["mf_outcome"] == "not_gradable:base_mismatch"
+
+
+def test_trial_base_absent_from_source_is_base_mismatch():
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE})
+    assert graded(base_trial(OTHER), fake)["independent_verdict"] == "not_gradable:base_mismatch"
+
+
+def test_trial_without_recorded_base_is_no_base():
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE})
+    g = graded(base_trial(None), fake)
+    assert g["independent_verdict"] == "not_gradable:no_base" and g["resolved"] is None
+    assert fake.calls == []
+
+
+def test_no_base_check_is_skipped_for_page_cases():
+    page = {**CASE, "check": {"mode": "page", "title": "T", "body": "B", "href": "/x.html"}, "gold": {"code": ""}}
+    html = '<html><head><title>T</title></head><body><h1>T</h1><p>B</p><a href="/x.html">x</a></body></html>'
+    base, note = pg.trial_base(base_trial(None), page, FakeGit({}))
+    assert (base, note) == (None, None)
+    assert pg.grade_trial(base_trial(None), page, base, {"public/a.html": html}, base_note=note)["matrix_cell"] == "correct_ship"
+
+
+def test_mismatch_for_missing_candidate_stays_no_candidate():
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE, (OTHER, "public/a.html"): DRIFT})
+    t = base_trial(OTHER, outcome="blocked", gate_reached=1.0)
+    base, note = pg.trial_base(t, CASE, fake)
+    g = pg.grade_trial(t, CASE, base, None, base_note=note)
+    assert g["independent_verdict"] == "not_gradable:no_candidate"
+
+
+def test_regrade_dir_resolves_base_per_trial_and_counts_per_arm(tmp_path):
+    fake = FakeGit({(CASE["base_sha"], "public/a.html"): BASE, (OTHER, "public/a.html"): DRIFT})
+    write(tmp_path, "B0-r1-c1", base_trial(CASE["base_sha"]), GOOD)
+    write(tmp_path, "B0-r2-c1", base_trial(OTHER, outcome="blocked", gate_reached=5), GOOD)
+    write(tmp_path, "B0-r3-c1", base_trial(None), GOOD)
+    write(tmp_path, "B1-r1-c1", {**base_trial(OTHER), "arm": "B1"}, GOOD)
+    rep = pg.report(pg.regrade_dir(tmp_path, {"c1": CASE}, fake))
+    b0 = rep["B0"]
+    assert (b0["n"], b0["correct_ship"], b0["not_gradable_base_mismatch"], b0["not_gradable_no_base"]) == (3, 1, 1, 1)
+    assert b0["wrong_ship"] == 0 and b0["oracle_resolved"] == 1
+    assert rep["B1"]["not_gradable_base_mismatch"] == 1 and rep["B1"]["gradable"] == 0
+
+
+def test_git_base_passes_sha_to_git_show(monkeypatch, tmp_path):
+    seen = []
+
+    def fake_run(argv, **kw):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout=GOOD.encode("utf-8"), stderr=b"")
+
+    monkeypatch.setattr(pg.subprocess, "run", fake_run)
+    base_of = pg.git_base(tmp_path)
+    assert base_of(CASE) == GOOD
+    assert base_of(CASE, OTHER) == GOOD
+    assert seen[0][-1] == f"{CASE['base_sha']}:public/a.html"
+    assert seen[1][-1] == f"{OTHER}:public/a.html"

@@ -14,6 +14,9 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 DEFAULT_GATE25_FIXES = frozenset({"quotes", "ellipsis"})
 DEFAULT_PR_BASE = "dev"  # AI Board PRs only ever target dev
 DEFAULT_TTL_DAYS = 30.0
+# Owner-approved 2026-11-15 (LF/189); cờ backend_contexts_surface vẫn tắt mặc định.
+APPROVED_SURFACE_CONTEXTS = frozenset({"content", "curriculum", "learning", "engagement", "srs", "live-quiz",
+                                       "multiplayer", "campus", "seo", "dashboard"})
 
 
 def _csv(value):
@@ -100,7 +103,7 @@ class Settings(BaseSettings):
     gate25_fixes: Annotated[frozenset[str], NoDecode] = DEFAULT_GATE25_FIXES
     gate3_guards: Annotated[frozenset[str], NoDecode] = frozenset()
     skill_variant: Annotated[tuple[str, ...], NoDecode] = ()
-    backend_contexts_surface_list: Annotated[frozenset[str], NoDecode] = frozenset()
+    backend_contexts_surface_list: Annotated[frozenset[str], NoDecode] = APPROVED_SURFACE_CONTEXTS
 
     # model, URL, đường dẫn
     classifier_model: str = ""
@@ -118,6 +121,7 @@ class Settings(BaseSettings):
     workspace: Path | None = None
     uploads_dir: Path | None = None
     eval_dir: Path | None = None
+    scratch: Path | None = None
     eval_node_modules: Path | None = None
     package_broker_dir: Path | None = None
     package_layer_cap: int = 5

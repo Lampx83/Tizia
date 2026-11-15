@@ -32,7 +32,7 @@ migrations/postgres/data-export.sql
 __pycache__/
 *.py[cod]
 .pytest_cache/
-ai-board/harness/.venv/
+ai-board/harness/.venv*
 
 # Nhật ký vòng triển khai của Claude Code — local-only, KHÔNG push
 # (repo này clone thẳng ra production, xem CLAUDE.md)

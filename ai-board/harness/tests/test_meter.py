@@ -1,6 +1,7 @@
 """Metering + trace: đo ollama/api, units theo nhà cung cấp, Deps.call_model tính phí và ghi trace."""
 import dataclasses
 import json
+from pathlib import Path
 
 from runtime import meter
 from runtime.budget import Budget
@@ -172,3 +173,9 @@ def test_a_section_can_still_be_attached_to_the_call_that_filled_the_batch():
     tracer.attach_last("evaluation", {"check": "apply", "ok": True, "detail": ""})
     tracer.flush()
     assert batches[-1][-1]["evaluation"][0]["check"] == "apply"
+
+
+def test_shared_redaction_cases_match_the_js_fixture():
+    path = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "redaction-patterns.json"
+    for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+        assert meter.redact(case["input"]) == case["output"], case["input"]

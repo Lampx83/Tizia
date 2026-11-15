@@ -307,3 +307,28 @@ def test_advquote_still_blocks_quote_copied_from_another_file(tmp_path, monkeypa
                   'grounding': [new('public/so-tay-git.html'), wrong_file, new('test/so-tay-git.test.js')]}
     out = plan_validate.run(request, deps_with(FakeModels(state['plan'], validation=validation)), Budget(), state)
     assert out['blocked'] and out['reason'] == 'plan_ungrounded'
+
+
+def test_advquote_unverified_quote_is_listed_in_trace_evidence(tmp_path, monkeypatch):
+    import dataclasses
+    from runtime import meter
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'quotes,ellipsis,advquote')
+    _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];'})
+    request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,
+               'type': 'feature'}
+    plan = _so_tay_plan()
+    new = lambda f: {'target': f, 'file': f, 'quote': '', 'before': 'chưa có file', 'after': 'x', 'verify': 'y'}
+    bad = {'target': 'public/js/domains/it/modules.js', 'file': 'public/js/domains/it/modules.js', 'quote': 'KHÔNG CÓ CHỮ NÀY TRONG FILE',
+           'before': 'a', 'after': 'b', 'verify': 'c'}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok',
+                  'grounding': [new('public/so-tay-git.html'), bad, new('test/so-tay-git.test.js')]}
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(1, batches.append)
+    deps = dataclasses.replace(deps_with(FakeModels(plan, validation=validation)), trace=tracer)
+    out = plan_validate.run(request, deps, Budget(), {'plan': plan, 'checkout_source': str(tmp_path)})
+    tracer.flush()
+    assert not out['blocked']
+    unverified = [e for e in batches[0][0]['evaluation'] if e['check'] == 'unverified grounding']
+    assert [e['ok'] for e in unverified] == [False]
+    assert unverified[0]['evidence'] == {'unverified_quotes': [
+        {'file': 'public/js/domains/it/modules.js', 'subtask': 1, 'reason': 'quote_mismatch'}]}
