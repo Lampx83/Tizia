@@ -9,7 +9,8 @@ import sys
 TOL_ABS_S = 2.0
 TOL_REL = 0.02
 GATE5 = "5"
-_PRIO = {"gate": 1, "model": 3, "sandbox": 4}
+_PRIO = {"gate": 1, "check": 2, "model": 3, "sandbox": 4}
+_CHECK_BUCKET = {"browser": "gate 5 browser", "curl": "gate 5 curl", "route": "gate 5 curl"}
 
 
 def tolerance(wall_s: float) -> float:
@@ -50,9 +51,11 @@ def _span_items(spans: list[dict]) -> list[tuple[int, int, str, int]]:
             bucket, kind = "sandbox", "sandbox"
         elif name.startswith("chat"):
             bucket, kind = "model", "model"
+        elif name.startswith("gate5 check "):
+            bucket, kind = _CHECK_BUCKET.get(name.rsplit(" ", 1)[1], "gate 5 other"), "check"
         elif name.startswith("invoke_agent gate "):
             number = name.rsplit(" ", 1)[1]
-            bucket, kind = (f"gate {number} checks" if number == GATE5 else f"gate {number}"), "gate"
+            bucket, kind = ("gate 5 other" if number == GATE5 else f"gate {number}"), "gate"
         else:
             continue
         items.append((s["start_ms"], s["end_ms"], bucket, _PRIO[kind]))

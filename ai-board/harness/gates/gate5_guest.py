@@ -7,18 +7,34 @@ import os
 import shutil
 import sys
 import tarfile
+import time
 from pathlib import Path
+
+
+class _CheckSpans:
+    """Trace stand-in: keeps check spans as offsets from guest start; the host re-anchors them."""
+
+    def __init__(self, origin_ms: int):
+        self.origin_ms, self.spans = origin_ms, []
+
+    def add_span(self, name, attributes, *, start_ms, end_ms, status="ok", kind="internal"):
+        self.spans.append({"name": name, "attributes": dict(attributes), "offset_ms": start_ms - self.origin_ms,
+                           "duration_ms": end_ms - start_ms, "status": status})
 
 
 def run_in_guest(state_path: Path, checkout: Path, out: Path) -> dict:
     """Run Gate 5; write out/result.json + out/shots.tgz; return result with screenshot paths made relative."""
+    from types import SimpleNamespace
+
     from gates import verify
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     base_pages = state_path.parent / "base"
     if base_pages.is_dir():
         state["base_pages_dir"] = str(base_pages)
-    result = verify.run(state, checkout_dir=checkout)
+    spans = _CheckSpans(int(time.time() * 1000))
+    result = verify.run(state, checkout_dir=checkout, deps=SimpleNamespace(trace=spans))
+    result["check_spans"] = spans.spans
 
     shots_dir = out / "shots"
     shots_dir.mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,18 @@ def test_parts_sum_to_wall_and_split_by_span():
     p = got["parts"]
     assert (p["queue"], p["clarify_wait"]) == (10.0, 20.0)
     assert (p["model"], p["sandbox"], p["gate 2"]) == (8.0, 10.0, 12.0)
-    assert p["gate 5 checks"] == 20.0 + 40.0
+    assert p["gate 5 other"] == 20.0 + 40.0
+    assert got["wall_s"] == 120.0 and got["ok"] and abs(got["gap_s"]) < 1e-9
+
+
+def test_gate5_checks_split_into_browser_curl_other():
+    spans = [_sp("invoke_agent gate 2", 10_000, 30_000), _sp("invoke_agent gate 5", 30_000, 60_000),
+             _sp("invoke_agent gate 3", 80_000, 120_000), _sp("gate5 check browser", 35_000, 40_000),
+             _sp("gate5 check curl", 50_000, 52_000), _sp("gate5 check route", 53_000, 54_000)]
+    got = wt.attribute(ROOT, EVENTS, spans, 120_000)
+    p = got["parts"]
+    assert (p["gate 5 browser"], p["gate 5 curl"], p["gate 5 other"]) == (5.0, 3.0, 22.0)
+    assert "gate 5 checks" not in p
     assert got["wall_s"] == 120.0 and got["ok"] and abs(got["gap_s"]) < 1e-9
 
 
