@@ -141,9 +141,14 @@ def skill_block(skill: Skill, gate: int) -> str:
     return select_block(skill, gate)[0]
 
 
+FRONTEND_SKILLS = ("edit-css-style", "edit-html-text", "add-html-section", "new-static-page")
+VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS}  # variant attaches only to these picked skills
+
+
 def select_block(skill: Skill, gate: int) -> tuple[str, dict]:
     """(block, báo cáo) qua skill_selection: skill đã chọn bắt buộc, biến thể thử nghiệm không tính cap."""
-    variants = [variant_skill(n) for n in get_settings().skill_variant if n != skill.name]
+    variants = [variant_skill(n) for n in get_settings().skill_variant
+                if n != skill.name and skill.name in VARIANT_SCOPE.get(n, (skill.name,))]
     candidates = [skill_selection.Candidate(skill.name, 0, "picked by context score", required=True, topic=skill.topic, payload=skill)]
     candidates += [skill_selection.Candidate(v.name, 1 + i, "experiment variant (AI_BOARD_SKILL_VARIANT)", counted=False,
                                              topic=v.topic, payload=v) for i, v in enumerate(variants)]
