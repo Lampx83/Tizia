@@ -13,23 +13,27 @@ from pathlib import Path
 
 BASE_ENV = "AI_BOARD_FEATURE_BASE_SHA"
 WALL_S = 600
-_BLOCK = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.M)
+_BLOCK = re.compile(r"^--- a/(\S+)\n\+\+\+ b/(\S+)$", re.M)  # gates.implement._unified (difflib), not git headers
 
 
 def diff_files(diff: str) -> dict[str, str]:
-    """Unified diff -> {path: new-side text}; deleted files dropped, modified files keep hunk lines only."""
+    """difflib unified diff (run_case row diff) -> {path: new-side text}; modified files keep hunk lines only."""
     out: dict[str, str] = {}
     starts = [m.start() for m in _BLOCK.finditer(diff)] + [len(diff)]
     for begin, end in zip(starts, starts[1:]):
         block = diff[begin:end]
         path = _BLOCK.match(block).group(2)
-        if re.search(r"^deleted file mode", block, re.M):
-            continue
-        body = block.split("\n@@", 1)
-        lines = ("@@" + body[1]).splitlines() if len(body) > 1 else []
-        text = [ln[1:] for ln in lines if ln[:1] in ("+", " ")]
+        text = [ln[1:] for ln in block.splitlines()[2:] if ln[:1] in ("+", " ")]
         out[path] = "\n".join(text) + ("\n" if text else "")
     return out
+
+
+def tier_of(path: str, kind: str | None = None) -> str:
+    """Step tier from the path, never model-declared: data critical, db/backend high, rest low."""
+    if kind == "data":
+        return "critical"
+    from gates import brainstorm
+    return "high" if brainstorm.infer_layer(path) in ("db", "backend") else "low"
 
 
 def record_of(row: dict) -> dict:
@@ -37,19 +41,23 @@ def record_of(row: dict) -> dict:
     capture = row.get("capture") or {}
     plan = capture.get("final_plan")
     if not isinstance(plan, dict):
-        record_plan = None
+        record_plan, handed = None, []
     else:
-        steps = [{"path": t["file"], "tier": t.get("tier"), **({"kind": t["kind"]} if t.get("kind") else {})}
-                 for t in plan.get("subtasks") or [] if isinstance(t, dict) and "file" in t]
+        subtasks = [t for t in plan.get("subtasks") or [] if isinstance(t, dict)]
+        steps = [{"path": t["file"], "tier": tier_of(t["file"], t.get("kind")), **({"kind": t["kind"]} if t.get("kind") else {})}
+                 for t in subtasks if "file" in t]
         record_plan = {"steps": steps, **({"clarify": True} if plan.get("clarify") else {})}
+        handed = sorted({t["kind"] for t in subtasks if t.get("kind")})
     return {"plan": record_plan, "files": diff_files(capture.get("full_diff") or row.get("diff") or ""),
-            "handed": [], "resumes": int(row.get("retries") or 0)}
+            "handed": handed, "resumes": int(row.get("resumes") or 0)}
 
 
 def task_of(case: dict, base_sha: str) -> dict:
-    """Feature case -> suite task dict (dev split, e2e)."""
+    """Feature case -> suite task dict (dev split, e2e). Globs must be concrete paths: grading and planning match them as paths."""
+    files = [s["glob"] for s in case["steps"] if s.get("kind") != "data"]
     return {"id": case["id"], "title": case["id"], "detail": case["request"], "base_sha": base_sha, "split": "dev",
-            "kind": "feature", "files": [s["glob"] for s in case["steps"] if s.get("kind") != "data"]}
+            "kind": "feature", "files": files, "file": files[0] if files else "", "verify": "", "gold": {},
+            "check": {"mode": "feature"}}
 
 
 def _real_trial(task: dict) -> dict:
