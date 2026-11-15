@@ -65,9 +65,9 @@ def build_tree(checkout: Path, root: Path) -> Path:
             raise FastTierError(f"git archive {checkout} thất bại (mã {git.returncode})")
         (tree / ".ready").write_text("", encoding="utf-8")
     link, source = tree / "node_modules", get_settings().eval_node_modules or ROOT / "node_modules"
+    if not source.is_dir() or not (source / "express").is_dir():  # node_modules rỗng: app thoát ngay, lỗi chỉ hiện ở log app
+        raise FastTierError(f"thiếu {source} hoặc rỗng (không có express): chạy npm install ở gốc repo (app native dùng chung node_modules)")
     if not link.exists():
-        if not source.is_dir():
-            raise FastTierError(f"thiếu {source}: chạy npm install ở gốc repo (app native dùng chung node_modules)")
         if os.name == "nt":  # junction không cần quyền admin như symlink
             subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(source)], check=True, capture_output=True)
         else:
