@@ -125,6 +125,14 @@ def test_repair_window_flag_adds_one_repair_before_stagnation(monkeypatch):
     assert execution.halt["reason"] == loop_guard.REASON_STAGNATION
 
 
+def test_repair_window_contract_entry_matches_flag_and_default():
+    from runtime import limits
+    spec = limits.loop_guard()["repair_window_flag"]
+    assert spec["flag"] == loop_guard.REPAIR_WINDOW_FLAG and spec["default_enabled"] is False
+    assert loop_guard.repair_window(limits.loop_guard()["similarity_window"], env={}) == 2
+    assert loop_guard.repair_window(2, env={loop_guard.REPAIR_WINDOW_FLAG: str(spec["window_when_on"])}) == spec["window_when_on"]
+
+
 def test_repair_window_flag_off_keeps_default_window(monkeypatch):
     monkeypatch.delenv(loop_guard.REPAIR_WINDOW_FLAG, raising=False)
     execution = _execution()
