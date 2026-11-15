@@ -842,9 +842,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     prompt = build_prompt(request, plan, repo_context)
     trace = getattr(deps, "trace", None)
 
-    def judge(check, ok, detail=""):
+    def judge(check, ok, detail="", evidence=None):
         if trace:
-            trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
+            trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail, "evidence": evidence})
 
     if trace:
         trace.note("knows", "plan under review", "; ".join(f"{t['file']} — {t['title']}" for t in plan["subtasks"]),
@@ -1017,10 +1017,12 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                         return stop
                     validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
             judge("source grounding", True, f"{len(state['grounding']['evidence'])} quotes matched verbatim in {', '.join(files)}")
-            unverified = [r['file'] for r in validation['grounding'] if r.get('unverified')]
+            unverified = [r for r in validation['grounding'] if r.get('unverified')]
             if unverified:
-                state['validator_note'] = 'validator không đưa trích dẫn khớp cho: ' + ', '.join(unverified) + ' (cổng 2.5 không chặn)'
-                judge('unverified grounding', False, state['validator_note'])
+                state['validator_note'] = 'validator không đưa trích dẫn khớp cho: ' + ', '.join(r['file'] for r in unverified) + ' (cổng 2.5 không chặn)'
+                judge('unverified grounding', False, state['validator_note'], {'unverified_quotes': [
+                    {'file': r['file'], 'subtask': next((i for i, t in enumerate(plan['subtasks']) if t['file'] == r['file']), None),
+                     'reason': 'quote_mismatch' if r.get('quote') else 'no_quote'} for r in unverified]})
         except ValueError as error:
             judge("source grounding", False, str(error))
             # Trích dẫn không khớp: phân biệt "sai file" với "sai trích dẫn" bằng tín hiệu tất định trước khi chặn.

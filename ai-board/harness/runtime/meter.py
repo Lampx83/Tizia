@@ -316,8 +316,11 @@ class Tracer:
             last["edits"] = {"parsed": _clip(value.get("parsed", ""), EDIT_CAP), "diff": _clip(value.get("diff", ""), EDIT_CAP),
                              "applied": value.get("applied") is True}
         elif section == "evaluation":
-            last["evaluation"].append({"check": _clip(value.get("check", ""), 60), "ok": value.get("ok") is True,
-                                       "detail": _clip(value.get("detail", ""), EVAL_CAP)})
+            entry = {"check": _clip(value.get("check", ""), 60), "ok": value.get("ok") is True,
+                     "detail": _clip(value.get("detail", ""), EVAL_CAP)}
+            if value.get("evidence") is not None:
+                entry["evidence"] = value["evidence"]
+            last["evaluation"].append(entry)
         else:
             raise ValueError(f"section lạ: {section}")
         self._write({"call_id": last["call_id"], section: last[section]})
