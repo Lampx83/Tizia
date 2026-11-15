@@ -21,7 +21,7 @@ def test_off_block_equals_skill_text_for_every_skill_and_gate():
 
 @pytest.mark.parametrize("variant", sorted(context.VARIANT_FILES))
 def test_on_appends_only_that_variants_gate_section_after_picked_skill(monkeypatch, variant):
-    picked = context.SKILLS["edit-css-style"]
+    picked = context.SKILLS[context.VARIANT_SCOPE.get(variant, ("edit-css-style",))[0]]
     monkeypatch.setenv("AI_BOARD_SKILL_VARIANT", variant)
     for gate in (1, 3):
         extra = context.variant_skill(variant).sections.get(gate, "")

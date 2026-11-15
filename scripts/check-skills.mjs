@@ -17,11 +17,13 @@ const LOCK = 'skills.lock.json';
 
 // Skill có trong thư mục nhưng không khoá: harness nạp qua VARIANT_FILES (context.py),
 // candidate.relock chỉ quét */SKILL.md nên khoá sẽ bị xoá.
-const UNLOCKED = new Set(['proposed/review-two-axes', 'proposed/test-frame', 'proposed/review-frame', 'proposed/all-frame']);
+const UNLOCKED = new Set(['proposed/review-two-axes', 'proposed/test-frame', 'proposed/review-frame', 'proposed/all-frame',
+  'proposed/frontend-css-style', 'proposed/frontend-html-text', 'proposed/frontend-html-section', 'proposed/frontend-new-page']);
 
 // Format harness (context.py parse_skill), server không lint được. Vẫn kiểm LF, khóa, image.
 const HARNESS_FORMAT = new Set(['add-html-section', 'default', 'edit-css-style', 'edit-html-text',
-  'fix-js-behavior', 'frontend-design-core', 'implement-one-slice', 'new-feature', 'new-static-page', 'plan-from-request']);
+  'fix-js-behavior', 'frontend-css-style', 'frontend-design-core', 'frontend-html-section', 'frontend-html-text',
+  'frontend-new-page', 'implement-one-slice', 'new-feature', 'new-static-page', 'plan-from-request']);
 
 // Dockerfile COPY source → dockerignore dùng khi build image đó.
 const IMAGES = [

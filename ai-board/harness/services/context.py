@@ -35,6 +35,10 @@ VARIANT_FILES = {  # skill nối thêm khi AI_BOARD_SKILL_VARIANT bật; không 
     "test-frame": SKILLS_DIR / "proposed" / "test-frame" / "SKILL.md",
     "review-frame": SKILLS_DIR / "proposed" / "review-frame" / "SKILL.md",
     "all-frame": SKILLS_DIR / "proposed" / "all-frame" / "SKILL.md",
+    "frontend-css-style": SKILLS_DIR / "proposed" / "frontend-css-style" / "SKILL.md",
+    "frontend-html-text": SKILLS_DIR / "proposed" / "frontend-html-text" / "SKILL.md",
+    "frontend-html-section": SKILLS_DIR / "proposed" / "frontend-html-section" / "SKILL.md",
+    "frontend-new-page": SKILLS_DIR / "proposed" / "frontend-new-page" / "SKILL.md",
 }
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
 RESERVE = file_context.WEIGHTS["tool_min_budget"]
@@ -142,7 +146,9 @@ def skill_block(skill: Skill, gate: int) -> str:
 
 
 FRONTEND_SKILLS = ("edit-css-style", "edit-html-text", "add-html-section", "new-static-page")
-VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS}  # variant attaches only to these picked skills
+VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS,  # variant attaches only to these picked skills
+                 "frontend-css-style": ("edit-css-style",), "frontend-html-text": ("edit-html-text",),
+                 "frontend-html-section": ("add-html-section",), "frontend-new-page": ("new-static-page",)}
 
 
 def select_block(skill: Skill, gate: int) -> tuple[str, dict]:
