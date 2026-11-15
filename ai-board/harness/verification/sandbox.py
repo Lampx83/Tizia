@@ -75,6 +75,9 @@ ARTIFACT_TIMEOUT_S = float(_CLIENT["artifact_timeout_s"])
 _sleep = time.sleep
 
 
+DEADLINE_SLACK_S = 0.05
+
+
 def _remaining(deadline: float | None, cap: float) -> float:
     if deadline is None:
         return cap
@@ -152,7 +155,11 @@ class RunnerClient:
             finally:
                 error.close()
             raise SandboxError(str(detail.get("error") or "runner_error"), str(detail.get("phase") or phase), error.code) from None
-        except (urllib.error.URLError, TimeoutError, OSError):
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            # Socket timeouts can fire a fraction of a millisecond before time.monotonic() reaches the deadline.
+            if deadline is not None and isinstance(getattr(error, "reason", error), TimeoutError) \
+                    and deadline - time.monotonic() < DEADLINE_SLACK_S:
+                raise SandboxError("wall_clock_s", "budget") from None
             raise SandboxError("runner_unreachable", phase) from None
 
     def _json(self, method: str, path: str, phase: str, payload: dict | None = None, **kwargs) -> dict:

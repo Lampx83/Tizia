@@ -1,6 +1,7 @@
 """Run the actual pinned DefaultAgent with scripted model and runner boundaries."""
 import dataclasses
 import json
+from importlib.machinery import PathFinder
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,14 @@ from verification.loop_checks import CheckSession
 from test_verified_loop import repo
 
 RUNTIME = Path(__file__).resolve().parents[3] / '.scratch' / 'implement-mini-swe' / 'mini-runtime'
+RUNTIME_DEPS = ('litellm', 'platformdirs', 'jinja2', 'yaml', 'pydantic', 'rich', 'dotenv')
+
+
+def _runtime_gap():
+    if not (RUNTIME / 'minisweagent').exists():
+        return 'eval-only mini-swe runtime not installed (.scratch/implement-mini-swe/mini-runtime)'
+    absent = [name for name in RUNTIME_DEPS if PathFinder.find_spec(name, [str(RUNTIME)]) is None]
+    return f'mini-swe runtime lacks {", ".join(absent)}; full adapter run needs the eval runtime environment' if absent else None
 
 
 @dataclasses.dataclass
@@ -66,8 +75,9 @@ def reply(command=None):
 
 
 def run(repo, client, budget=None):
-    if not (RUNTIME / 'minisweagent').exists():
-        pytest.skip('Install the pinned eval-only mini-swe runtime before adapter integration tests')
+    gap = _runtime_gap()
+    if gap:
+        pytest.skip(gap)
     source, sha = repo
     runner = Runner()
     result = mini_swe.generate({'source': str(source), 'base_sha': sha, 'title': 'Change a to 2',
