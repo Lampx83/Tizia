@@ -52,9 +52,9 @@ test('invalid draft cannot activate, new revisions preserve active guidance, and
     const first = (await t.api('/api/admin/ai-board/skills', { name:'frontend-example', task_types:['frontend'], original_text:text() })).body;
     const approve = (id, version) => t.api(`/api/admin/ai-board/skills/${id}/approve`, { version_id:version, confirmed:true });
     assert.equal((await approve(first.skill.id, first.version.id)).status, 200);
-    const draft = (await t.api('/api/admin/ai-board/skills', { name:'frontend-example', task_types:['frontend'], original_text:'Missing frontmatter' })).body;
-    assert.equal(draft.version.lint.ok, false);
-    assert.equal((await approve(first.skill.id, draft.version.id)).status, 422);
+    const refused = await t.api('/api/admin/ai-board/skills', { name:'frontend-example', task_types:['frontend'], original_text:'Missing frontmatter' });
+    assert.equal(refused.status, 422);
+    assert.equal((await t.api(`/api/admin/ai-board/skills/${first.skill.id}`)).body.versions.length, 1);
     assert.equal((await t.active()).body.skills[0].version_id, first.version.id);
     const other = (await t.api('/api/admin/ai-board/skills', { name:'another-guide', task_types:['frontend'], original_text:text('another-guide') })).body;
     assert.equal((await approve(other.skill.id, first.version.id)).status, 400);

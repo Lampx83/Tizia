@@ -252,7 +252,7 @@ test('POST /api/requests bounces unaccented Vietnamese with needs_diacritics, cr
     for (const table of ['requests', 'ai_tickets', 'ai_alerts']) {
       assert.equal((await db.prepare(`SELECT COUNT(*) n FROM ${table}`).get()).n, 0, table);
     }
-    assert.equal((await post('lang-diacritics-002', { title: 'Đổi màu nút', detail: 'Doi mau nut Quay lại sang xanh' })).status, 200);
+    assert.equal((await post('lang-diacritics-002', { title: 'Đổi màu nút', detail: 'Đổi màu nút Quay lại sang xanh' })).status, 200);
   } finally {
     await close();
     db.close();
