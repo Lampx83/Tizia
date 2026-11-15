@@ -300,6 +300,59 @@ def test_admin_trust_is_part_of_cache_key(monkeypatch):
     assert intake_guard.run(*args, llm(["privileged_area"]), Budget(), requester_role="student")["verdict"] == "human_review"
 
 
+def _labels_by_role(monkeypatch, trust, flag):
+    from settings import get_settings
+    cfg = get_settings().model_copy(update={"admin_requester_trust": trust, "intake_labels_by_role": flag})
+    monkeypatch.setattr("settings.get_settings", lambda *a, **k: cfg)
+
+
+def test_intake_labels_by_role_defaults_off():
+    from settings import Settings
+    assert Settings().intake_labels_by_role is False
+
+
+def test_labels_by_role_flag_off_keeps_money_blocking_for_admin(monkeypatch):
+    _labels_by_role(monkeypatch, True, False)
+    intake_guard._CACHE.clear()
+    out = intake_guard.run("Đổi tên export", "Đổi tên cột tiền trong file CSV", llm(["money"]), Budget(), requester_role="admin")
+    assert out["verdict"] == "human_review" and "warned_labels" not in out
+
+
+def test_labels_by_role_admin_money_and_off_topic_only_warn(monkeypatch):
+    _labels_by_role(monkeypatch, True, True)
+    for label, verdict in [("money", "human_review"), ("off_topic", "needs_info")]:
+        intake_guard._CACHE.clear()
+        out = intake_guard.run("Đổi định dạng số", "Hiển thị số có dấu phẩy", llm([label]), Budget(), requester_role="admin")
+        assert out["verdict"] == "allow" and out["public_message"] is None, label
+        assert out["warned_labels"] == [label] and label not in out["labels"]
+
+
+def test_labels_by_role_admin_keeps_other_labels_blocking(monkeypatch):
+    _labels_by_role(monkeypatch, True, True)
+    intake_guard._CACHE.clear()
+    out = intake_guard.run("Đổi tên export", "Đổi tên cột tiền", llm(["money", "violence_weapons"]), Budget(), requester_role="admin")
+    assert out["verdict"] == "human_review" and out["warned_labels"] == ["money"]
+    assert "violence_weapons" in out["labels"]
+    out = intake_guard.run("Đổi tên export", "Đổi tên cột", llm(["off_topic", "personal_data"]), Budget(), requester_role="admin")
+    assert out["verdict"] == "needs_info" and out["warned_labels"] == ["off_topic"]
+
+
+def test_labels_by_role_student_still_blocked(monkeypatch):
+    _labels_by_role(monkeypatch, True, True)
+    intake_guard._CACHE.clear()
+    out = intake_guard.run("Đổi tên export", "Đổi tên cột tiền", llm(["money"]), Budget(), requester_role="student")
+    assert out["verdict"] == "human_review" and "warned_labels" not in out
+    out = intake_guard.run("Đổi tên export", "Hiển thị số", llm(["off_topic"]), Budget(), requester_role="student")
+    assert out["verdict"] == "needs_info" and "warned_labels" not in out
+
+
+def test_labels_by_role_needs_admin_trust_too(monkeypatch):
+    _labels_by_role(monkeypatch, False, True)
+    intake_guard._CACHE.clear()
+    out = intake_guard.run("Đổi tên export", "Đổi tên cột tiền", llm(["money"]), Budget(), requester_role="admin")
+    assert out["verdict"] == "human_review" and "warned_labels" not in out
+
+
 NARROWED = [
     ("Đổi tên hàm trong shop/pricing.py và billing/total.py, cập nhật invoice.py", "money",
      "Đổi giá trong pricing của gói và thêm invoice cho học viên"),

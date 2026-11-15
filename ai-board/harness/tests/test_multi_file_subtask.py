@@ -69,6 +69,50 @@ def test_budget_factor(on, monkeypatch):
     assert subtask_files.budget_factor(task(files=["public/b.js"])) == 1
 
 
+# ── budget by file count (LF/254): flag off keeps the current factor; flag on doubles plans of 3+ files ──
+
+@pytest.fixture
+def budget_on(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_BUDGET_BY_FILE_COUNT", "1")
+
+
+def test_budget_by_file_count_defaults_off():
+    from settings import Settings
+    assert Settings().budget_by_file_count is False
+
+
+def test_budget_flag_off_keeps_current_factor(on):
+    three = task(files=["public/b.js", "public/c.js"])
+    assert subtask_files.budget_factor(three) == 3
+    assert subtask_files.wall_clock_factor(three) == 1
+
+
+def test_budget_flag_on_one_and_two_files_unchanged(budget_on):
+    assert subtask_files.budget_factor(task()) == 1
+    assert subtask_files.budget_factor(task(files=["public/b.js"])) == 2
+    assert subtask_files.wall_clock_factor(task()) == 1
+    assert subtask_files.wall_clock_factor(task(files=["public/b.js"])) == 1
+
+
+def test_budget_flag_on_three_files_doubled(budget_on):
+    three = task(files=["public/b.js", "public/c.js"])
+    assert subtask_files.budget_factor(three) == 6
+    assert subtask_files.wall_clock_factor(three) == 2
+
+
+def test_child_caps_wall_clock_only_for_three_plus(budget_on):
+    from runtime import limits, tool_loop
+    base = limits.budget()["child_wall_clock_s"]
+    assert tool_loop.child_caps(task(files=["public/b.js", "public/c.js"]))["max_wall_clock_s"] == 2 * base
+    assert "max_wall_clock_s" not in tool_loop.child_caps(task(files=["public/b.js"]))
+
+
+def test_budget_record_reports_files_and_steps_used(on):
+    from runtime import tool_loop
+    record = tool_loop.budget_record(task(files=["public/b.js"]), {"status": "proposed", "steps": ["read_file", "edit_file", "finish"]})
+    assert record == {"files": 2, "steps": 3, "budget_factor": 2}
+
+
 # ── plan side: parse, file policy, gate 2 ──────────────────────────────────
 
 import json

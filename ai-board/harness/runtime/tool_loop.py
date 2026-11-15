@@ -167,7 +167,17 @@ def child_caps(subtask: dict | None = None) -> dict:
     """Per-subtask loop ceilings from contract limits.loop; AI_BOARD_LOOP_* override them for a measured run. Scaled by file count when multi-file."""
     loop = limits.loop()
     factor = subtask_files.budget_factor(subtask) if subtask else 1
-    return {"max_model_calls": loop["model_calls"] * factor, "max_tool_calls": loop["tool_calls"] * factor}
+    caps = {"max_model_calls": loop["model_calls"] * factor, "max_tool_calls": loop["tool_calls"] * factor}
+    wall = subtask_files.wall_clock_factor(subtask) if subtask else 1
+    if wall > 1:
+        caps["max_wall_clock_s"] = limits.budget()["child_wall_clock_s"] * wall
+    return caps
+
+
+def budget_record(subtask: dict, result: dict) -> dict:
+    """Số file, bước thực dùng và hệ số ngân sách của một lượt subtask, ghi vào kết quả để đo."""
+    return {"files": len(subtask_files.files_of(subtask)), "steps": len(result.get("steps") or []),
+            "budget_factor": subtask_files.budget_factor(subtask)}
 
 
 def sha_of(text: str) -> str:
@@ -825,7 +835,13 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     return {**result, 'sandbox_receipts': sandbox_log} if sandbox_log else result
 
 
-def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
+def _run_subtask(subtask: dict, current: str | None, **kw) -> dict:
+    """_loop_subtask + budget_record (số file, bước thực dùng) trong kết quả."""
+    result = _loop_subtask(subtask, current, **kw)
+    return {**result, "budget": budget_record(subtask, result)}
+
+
+def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: str, source, sha: str, check,
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,

@@ -15,6 +15,7 @@ from worker_client import CONTRACT, LeaseLostError, REPO_ROOT
 from runtime import feedback_cap, loop_guard, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
+import path_policy  # noqa: E402
 
 
 def _load_harness():
@@ -819,7 +820,8 @@ class _Execution:
         smoke = next((gate for gate in gates if gate["gate"] == 5), {})
         oracle = smoke.get("functional") or {}
         oracle_review = passed and bool(oracle.get("needs_review"))
-        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical"))
+        manifests = path_policy.manifest_changes(st.get("file") for st in (self.plan or {}).get("subtasks") or [])
+        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical") or bool(manifests))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
@@ -828,7 +830,8 @@ class _Execution:
                       if not oracle.get("probe_id")
                       else "oracle functional fail trong khi acceptance, generated tests và smoke xanh: ") + str(oracle.get("reason"))[:300]
         elif needs_review:
-            reason = "risk triage requires human review"
+            reason = (f"package manifest changed, human review required: {', '.join(manifests)}" if manifests
+                      else "risk triage requires human review")
         else:
             reason = last["reason"]
         if self.halt.get("reason") and not passed:

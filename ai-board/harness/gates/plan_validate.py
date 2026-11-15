@@ -819,16 +819,20 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     # Plan 4-6 bước: bước nào cũng phải kiểm chứng được bằng lệnh chạy thật, và depends_on phải có.
     # Lỗi này sửa được (một lượt lập lại plan), nên trả outcome plan_unfit chứ không phải câu hỏi cho người gửi.
+    from gates.brainstorm import form_warnings_on
+    lenient = form_warnings_on() and bool(request.get("plan_repair"))
     if issues := unfit_issues(plan):
-        return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
-                "signals": issues,
-                "public_message": "Kế hoạch chia quá nhiều bước mà bước nào cũng phải kiểm chứng bằng lệnh chạy được; "
-                                  "đang chờ quản trị viên xem lại."}
+        if not lenient:
+            return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
+                    "signals": issues,
+                    "public_message": "Kế hoạch chia quá nhiều bước mà bước nào cũng phải kiểm chứng bằng lệnh chạy được; "
+                                      "đang chờ quản trị viên xem lại."}
+        state.setdefault("form_warnings", []).extend(issues)
 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
     reader = levels.source_reader(state.get('checkout_source'), state.get('base_sha'))
-    needs = levels.requirements(plan, reader)
+    needs = levels.requirements(plan, reader, role=request.get("requester_role") or "student")
     scope = levels.approved_scope(request, state, plan)
     blocked_paths = [item for item in needs if item["level"] == levels.SELF]
     if blocked_paths:
@@ -846,6 +850,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         if trace:
             trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail, "evidence": evidence})
 
+    if state.get("form_warnings"):
+        judge("form warnings", True, "; ".join(state["form_warnings"])[:600])
     if trace:
         trace.note("knows", "plan under review", "; ".join(f"{t['file']} — {t['title']}" for t in plan["subtasks"]),
                    [{"file": t["file"], "verify": t.get("verify")} for t in plan["subtasks"]])
@@ -992,9 +998,15 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 judge('best_match', True, f"{best_match.REASON_CODE}: plan adds new files; recommended "
                                           f"{state.get('best_match') or '(none)'}")
             else:
-                best_match.enforce(state.get('best_match'), targets,
-                                   f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
-                                   contradicted=contradicted)
+                try:
+                    best_match.enforce(state.get('best_match'), targets,
+                                       f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
+                                       contradicted=contradicted)
+                except ValueError as miss:
+                    if not lenient:
+                        raise
+                    state.setdefault("form_warnings", []).append(str(miss))
+                    judge("form warning", True, str(miss))
             # Only the validator's own grounding verdict is retried: every harness rule above blocks on its own evidence.
             attempts = 0
             while True:

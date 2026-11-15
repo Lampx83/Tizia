@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     multi_file_subtask: bool = False
     backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
     multi_file_max: int = Field(default=3, ge=2, le=6)
+    budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False
     plan_repair: bool = True
     repair_same_session: bool = True
@@ -86,6 +87,9 @@ class Settings(BaseSettings):
     gate1_arbiter_min: float = Field(default=0.97, ge=0.5, le=1.0)
     no_oracle_review_any: bool = True  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
+    intake_labels_by_role: bool = False  # cần thêm admin_requester_trust: admin chỉ được cảnh báo nhãn money/off_topic
+    form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
+    admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None

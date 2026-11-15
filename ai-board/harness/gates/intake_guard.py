@@ -72,6 +72,7 @@ def readonly_verification_text(text: str) -> str:
 
 
 _ARBITRABLE = {"privileged_area", "prompt_injection"}
+_ROLE_WARN_LABELS = frozenset({"money", "off_topic"})
 
 
 def _arbiter_clears(llm_labels, scored) -> bool:
@@ -87,6 +88,11 @@ def _trusts_requester(requester_role: str | None) -> bool:
     """Admin đã xác thực ở server + cờ bật → nới privileged_area. Role lấy từ server, không từ chữ trong đề."""
     from settings import get_settings
     return bool(get_settings().admin_requester_trust and requester_role == "admin")
+
+
+def _warns_by_role() -> bool:
+    from settings import get_settings
+    return bool(get_settings().intake_labels_by_role)
 
 
 def parse_labels(text: str, allowed=LABELS) -> list[str]:
@@ -195,6 +201,13 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
             verdict, arbitrated = "allow", [x for x in llm if x != "ok"]
             hits = {k: v for k, v in hits.items() if k not in arbitrated}
             reasons.append(f"arbiter: classifier p(safe)={scored['probs'].get('safe', 0):.3f} xoá {', '.join(arbitrated)}")
+    warned = []
+    if trusted and _warns_by_role():
+        warned = sorted(label for label in hits if label in _ROLE_WARN_LABELS)
+        if warned:
+            hits = {k: v for k, v in hits.items() if k not in warned}
+            verdict = _worst(hits.values())
+            reasons.append(f"admin: chỉ cảnh báo {', '.join(warned)}")
     messages = guard.LEXICON["public_messages"]
     if verdict == "allow":
         public = None
@@ -211,6 +224,8 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
         out["internal_reason"] = (out["internal_reason"] + "; admin tin cậy: bỏ privileged_area")[:1000]
     if arbitrated:
         out["arbitrated"] = arbitrated
+    if warned:
+        out["warned_labels"] = warned
     if scored:
         out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard
     if readonly_verification_text(f"{title}\n{detail}") != f"{title}\n{detail}":

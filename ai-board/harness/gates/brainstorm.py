@@ -84,15 +84,20 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
     )
 
 
-def infer_layer(file: str) -> str:
+def infer_layer(file: str, role: str = "student") -> str:
     """Suy ra lớp từ đường dẫn khi model không khai layer."""
     if DB_MIGRATION.match(file):
         return "db"
-    if path_policy.may_edit(file):
+    if path_policy.may_edit(file, role) and not file.startswith("public/") and posixpath.basename(file) not in path_policy.MANIFESTS:
         return "backend"
     if file.startswith("public/"):
         return "frontend"
     return "wiring"
+
+
+def manifest_changes(plan: dict) -> list[str]:
+    """Package manifest mà plan sửa (tên file); trial đổi manifest dừng ở needs_review."""
+    return path_policy.manifest_changes(st["file"] for st in plan.get("subtasks") or [])
 
 
 def check_dag(subtasks: list[dict]) -> None:
@@ -163,8 +168,17 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
-def parse_plan(text: str) -> dict:
-    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema."""
+def form_warnings_on() -> bool:
+    return bool(get_settings().form_errors_as_warnings)
+
+
+def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None) -> dict:
+    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema. lenient: lỗi hình thức vào warnings thay vì raise."""
+    def form(message: str) -> None:
+        if not lenient:
+            raise ValueError(message)
+        warnings.append(message)
+
     try:
         plan = json.loads(text)
     except (TypeError, ValueError) as e:
@@ -183,7 +197,8 @@ def parse_plan(text: str) -> dict:
             if not isinstance(st.get(k), str) or not st[k].strip():
                 raise ValueError(f"subtask[{i}] thiếu {k}")
         if st["size"] not in SIZES:
-            raise ValueError(f"subtask[{i}].size='{st['size']}' không thuộc {SIZES}")
+            form(f"subtask[{i}].size='{st['size']}' không thuộc {SIZES}")
+            st["size"] = "large"
         if 'task_type' in st:
             from services.default_skills import TASK_TYPES
             if not isinstance(st['task_type'], str) or st['task_type'] not in TASK_TYPES:
@@ -213,10 +228,10 @@ def parse_plan(text: str) -> dict:
     if is_feature_plan(plan):
         for i, st in enumerate(subtasks):
             if not is_runnable(st["verify"]):
-                raise ValueError(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
+                form(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
         for item in acceptance or []:
             if not is_runnable(item):
-                raise ValueError(f"acceptance phải là lệnh chạy được: {item[:80]}")
+                form(f"acceptance phải là lệnh chạy được: {item[:80]}")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")
@@ -224,21 +239,20 @@ def parse_plan(text: str) -> dict:
     return plan
 
 
-def _check_extra_file(file: str, scope, plan_hash: str) -> None:
+def _check_extra_file(file: str, scope, plan_hash: str, role: str = "student") -> None:
     """Extra file of a multi-file subtask: plain surface only, no elevation, no db/backend layer. Raise ValueError."""
-    import path_policy
-    decision = levels.write_check(file, scope, plan_hash)
+    decision = levels.write_check(file, scope, plan_hash, role)
     if not decision["allow"] or decision["level"] != levels.SURFACE:
         reason = path_policy.check(file, "write")["reason"] if not decision["allow"] else "cần elevation"
         raise ValueError(f"file '{file}' của subtask nhiều file phải nằm trong vùng surface thường: {reason}")
-    layer = infer_layer(file)
+    layer = infer_layer(file, role)
     if layer == "db":
         raise ValueError(f"file '{file}': migrations không đi kèm trong subtask nhiều file — tách subtask db riêng")
-    if layer == "backend" and not path_policy.may_edit(file):
+    if layer == "backend" and not path_policy.may_edit(file, role):
         raise ValueError(f"file '{file}': backend chỉ được trong {GEN_CONTEXT}")
 
 
-def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
+def check_files(plan: dict, source, sha: str | None, approved=None, role: str = "student") -> None:
     """Mỗi subtask.file phải có ở `sha` hoặc là đường mới được phép; không 2 subtask cùng file.
     Ghi lại file đã chuẩn hoá (posix, bỏ ./) và layer (suy ra nếu thiếu). Raise ValueError nêu file sai.
     sha None → chỉ kiểm trùng/đường dẫn, không kiểm tồn tại.
@@ -257,9 +271,9 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
         if file in seen:
             raise ValueError(f"2 subtask cùng sửa {file} — gộp thành 1")
         seen.append(file)
-        st["layer"] = st.get("layer") or infer_layer(file)
+        st["layer"] = st.get("layer") or infer_layer(file, role)
         denied = path_policy.check(file, "write")
-        decision = levels.write_check(file, scope, plan_hash)
+        decision = levels.write_check(file, scope, plan_hash, role)
         if not decision["allow"]:
             if decision["level"] in (levels.SELF, levels.SURFACE):
                 raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
@@ -272,15 +286,15 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
                 raise ValueError("subtask db phải là migration mới: {file} (mẫu server/contexts/_ai-generated/<name>/migrations/<file>.sql)")
             if DB_MIGRATION.match(file):
                 db_files.append(file)
-        elif st["layer"] == "backend" and not path_policy.may_edit(file) and file not in granted and file not in pending:
+        elif st["layer"] == "backend" and not path_policy.may_edit(file, role) and file not in granted and file not in pending:
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
     for st in plan["subtasks"]:
         for extra in st.get("files") or []:
-            _check_extra_file(extra, scope, plan_hash)
+            _check_extra_file(extra, scope, plan_hash, role)
             seen.append(extra)
     must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
     if sha is None:
-        if pending and (needs := levels.requirements(plan, read)):
+        if pending and (needs := levels.requirements(plan, read, role=role)):
             raise levels.ElevationRequired(needs, plan)
         return
     try:
@@ -294,7 +308,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None) -> None:
         raise ValueError(f"file '{missing[0]}' không có trong repo — chọn file có trong REPO DATA")
     if existing_migrations:
         raise ValueError(f"migration '{sorted(existing_migrations)[0]}' đã tồn tại — migration phải additive (file mới)")
-    if pending and (needs := levels.requirements(plan, read)):
+    if pending and (needs := levels.requirements(plan, read, role=role)):
         raise levels.ElevationRequired(needs, plan)
 
 
@@ -356,9 +370,12 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         if trace:
             trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
 
+    form_warnings: list[str] = []
+    role = request.get("requester_role") or "student"
     for attempt in range(2):
         if attempt and not budget.tick():
             break
+        lenient = attempt == 1 and form_warnings_on()
         if trace and not attempt:
             trace.note("knows", "request", f"{request.get('subject') or ''} — {str(request.get('body') or '')[:300]}",
                        {"domain": request.get("domain"), "type": request.get("type")})
@@ -395,17 +412,19 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                         extra=plan_extra)
         stage = "plan parse"
         try:
-            plan = parse_plan(body.get("response", ""))
+            plan = parse_plan(body.get("response", ""), lenient=lenient, warnings=form_warnings)
             # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
             # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
             if isinstance(plan, dict) and plan.get("subtasks"):
                 plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
             judge(stage, True, plan.get("summary_vi", ""))
+            if form_warnings:
+                judge(stage, True, "form warnings: " + "; ".join(form_warnings)[:600])
             stage = "files exist"
             scope = levels.approved_scope(request, None, plan)
-            check_files(plan, source, commit, scope)
+            check_files(plan, source, commit, scope, role=role)
             # Script/verify target cũng tính: chạy script trong vùng protected/core cần đúng mức đó.
-            needs = levels.requirements(plan, levels.source_reader(source, commit))
+            needs = levels.requirements(plan, levels.source_reader(source, commit), role=role)
             boarded = [item for item in needs if item["level"] == levels.SELF]
             if boarded:
                 raise ValueError(f"file '{boarded[0]['path']}' nằm ngoài vùng được phép: vùng AI Board luôn bị chặn")
@@ -439,8 +458,14 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 judge(stage, True, f"{best_match.REASON_CODE}: plan adds new files ({', '.join(sorted(added))}); "
                                    f"best-match {ctx.get('best_match') or '(none)'}")
             else:
-                best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                                   f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                try:
+                    best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                       f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                except ValueError as miss:
+                    if not lenient:
+                        raise
+                    form_warnings.append(str(miss))
+                    judge(stage, True, f"form warning: {miss}")
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except levels.ElevationRequired as e:
             judge(stage, False, str(e))
@@ -456,6 +481,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
                 'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match'),
+                'form_warnings': list(form_warnings),
+                **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
                 **({'react_quotes': react['quotes']} if react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],

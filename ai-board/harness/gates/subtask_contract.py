@@ -103,6 +103,14 @@ def _line(step: dict) -> str:
     return f"- bước {step['n']} [{step['layer']}] {step['file']}{tail}"
 
 
+def warnings_block(warnings) -> str:
+    """Cảnh báo hình thức của plan thành ghi chú cho bước code; '' khi không có."""
+    if not warnings:
+        return ""
+    return ("\n\nPLAN NOTES (form warnings from planning, not blocking; check them before relying on the plan):\n"
+            + "\n".join(f"- {str(w)[:200]}" for w in list(warnings)[:5]))
+
+
 def block(plan: dict) -> str:
     """`hợp đồng giữa các bước` block, capped at MAX_BLOCK_CHARS; '' for a single-subtask plan (prompt byte-identical)."""
     steps = derive(plan)

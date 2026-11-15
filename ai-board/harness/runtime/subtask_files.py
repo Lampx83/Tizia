@@ -37,8 +37,17 @@ def is_multi(task: dict) -> bool:
     return len(files_of(task)) > 1
 
 
+def _doubled(task: dict) -> bool:
+    return len(files_of(task)) >= 3 and get_settings().budget_by_file_count
+
+
 def budget_factor(task: dict) -> int:
-    return len(files_of(task))
+    """Số file; plan từ 3 file nhân đôi khi budget_by_file_count bật."""
+    return 2 * len(files_of(task)) if _doubled(task) else len(files_of(task))
+
+
+def wall_clock_factor(task: dict) -> int:
+    return 2 if _doubled(task) else 1
 
 
 def _check_shape(index: int, raw) -> None:

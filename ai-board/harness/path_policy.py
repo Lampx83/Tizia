@@ -49,9 +49,44 @@ def denied(path, op: str = "read") -> bool:
     return not check(path, op)["allow"]
 
 
+ADMIN_ROLE = "admin"
+MANIFESTS = ("package.json", "package-lock.json")
+_ZONE_FORBIDDEN = ("billing", "payment", "economy", "security", "identity", "auth", "session")
+# Vùng cấm mọi vai khi cờ admin_backend_zone bật: tiền, đăng nhập, bộ máy AI Board, hạ tầng.
+_REFUSED = tuple(re.compile(p, re.I) for p in (
+    r"^server/index\.js$", r"^server/db(\.js|/)", r"^server/ai-board/", r"^ai-board/",
+    rf"^server/contexts/({'|'.join(_ZONE_FORBIDDEN)})/",
+    r"^Dockerfile", r"^docker-compose[^/]*$", r"^\.dockerignore$", r"^\.env", r"^\.github/",
+))
+_ZONE_ALLOWED = tuple(re.compile(p) for p in (r"^server/contexts/[^/]+/.+", r"^public/.+", r"^package(-lock)?\.json$"))
+
+
+def zone_on() -> bool:
+    from settings import get_settings
+    return bool(get_settings().admin_backend_zone)
+
+
+def refused(path) -> bool:
+    """Vùng cấm mọi vai (cờ admin_backend_zone bật): không bao giờ elevation."""
+    normalized = normalize(path)
+    return zone_on() and normalized is not None and any(p.search(normalized) for p in _REFUSED)
+
+
 def may_edit(path, role: str = "student") -> bool:
-    """Backend code ghi được ở path này với vai role? Hiện chỉ GENERATED_ROOT, mọi vai."""
-    return str(path).startswith(GENERATED_ROOT)
+    """Điểm quyết định duy nhất: backend ghi được ở path với vai role? Mọi vai: _ai-generated.
+    Admin khi bật cờ: server/contexts và public/ và package manifest, trừ vùng cấm."""
+    if str(path).startswith(GENERATED_ROOT):
+        return True
+    if role != ADMIN_ROLE or not zone_on():
+        return False
+    normalized = normalize(path)
+    return normalized is not None and not refused(normalized) and any(p.search(normalized) for p in _ZONE_ALLOWED)
+
+
+def manifest_changes(paths) -> list[str]:
+    """Tên package manifest (package.json, package-lock.json) trong danh sách path, đã chuẩn hoá, sắp xếp."""
+    found = {normalize(p) for p in paths}
+    return sorted(p for p in found if p in MANIFESTS)
 
 
 def names_scope(test_text: str, scope) -> bool:
