@@ -126,7 +126,7 @@ def test_resume_blocks_changed_skill_policy_and_keeps_spend(monkeypatch, private
 def test_hash_or_system_budget_violation_stops_before_model(monkeypatch, private_catalog, relock):
     monkeypatch.setenv('AI_BOARD_PROMPT_ROLE_SPLIT', '1')
     target = private_catalog / 'default-frontend/SKILL.md'
-    target.write_bytes(target.read_bytes() + b'\n' + b'Keep the existing interface stable. ' * 15)
+    target.write_bytes(target.read_bytes() + b'\n' + b'Keep the existing interface stable. ' * 160)
     if relock:
         lock = private_catalog / 'skills.lock.json'
         data = json.loads(lock.read_text(encoding='utf-8'))

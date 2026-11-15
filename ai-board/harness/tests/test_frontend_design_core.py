@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from services import context
+from services import context, token_count
 
 NAME = 'frontend-design-core'
 SKILL = Path(context.SKILLS_DIR) / NAME / 'SKILL.md'
@@ -15,7 +15,7 @@ SAMPLES = ['Đổi màu chữ trên trang school.html thành xanh dương', 'Th�
 def test_parses_with_both_gate_sections_and_budget():
     skill = context.SKILLS[NAME]
     assert skill.sections.get(1) and skill.sections.get(3)
-    assert len(SKILL.read_bytes()) < 1500
+    assert token_count.skill_count(SKILL.read_text(encoding='utf-8')) < 1500
     assert skill.budget <= 1200 and skill.budget3 <= 1600
 
 

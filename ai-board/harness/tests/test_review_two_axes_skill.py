@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from runtime.root_allowance import root_scope
-from services import context, default_skills
+from services import context, default_skills, token_count
 from test_admin_skills import CatalogClient
 
 PROPOSAL = Path(__file__).resolve().parents[1] / 'skills' / 'proposed' / 'review-two-axes' / 'SKILL.md'
@@ -50,7 +50,7 @@ def review_row(name):
     text = f'---\nname: {name}\ndescription: Review rule\ntask_type: review\nsource: admin\nversion: 1\nmax_tokens: 1500\n---\n1. Check access rules.\n'
     skill = default_skills.parse(text)
     return {'id': 1, 'version_id': 99, 'name': name, 'source': 'admin', 'version': 1, 'hash': skill.digest,
-            'token_count': len(default_skills.admin_text(skill).encode('utf-8')), 'text': text}
+            'token_count': token_count.skill_count(default_skills.admin_text(skill)), 'text': text}
 
 
 def test_variant_enters_node_only_when_enabled(monkeypatch):

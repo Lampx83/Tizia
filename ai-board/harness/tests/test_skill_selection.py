@@ -7,7 +7,7 @@ import pytest
 from runtime import pipeline, meter, tool_loop
 from runtime.budget import Budget
 from runtime.root_allowance import root_scope
-from services import context, default_skills, skill_selection as node
+from services import context, default_skills, skill_selection as node, token_count
 from test_admin_skills import CatalogClient, approved
 from test_prompt_roles import FakeModels, EDIT, TEST, FINISH, PAGE, SUBTASK
 
@@ -75,7 +75,7 @@ def test_admin_topic_overlap_with_default_is_dropped(monkeypatch):
         if s.name == 'default-frontend' else s for s in original()])
     text = approved()['text'].replace('  task_type: "frontend"\n', '  task_type: "frontend"\n  topic: "frontend-style"\n')
     skill = default_skills.parse(text)
-    row = {**approved(), 'text': text, 'hash': skill.digest, 'token_count': len(default_skills.admin_text(skill).encode())}
+    row = {**approved(), 'text': text, 'hash': skill.digest, 'token_count': token_count.skill_count(default_skills.admin_text(skill))}
     with root_scope(CatalogClient([row]), 1, {}):
         selected, report = default_skills.select_report('gate3_light', {'file': 'public/school.html'})
     assert [s.name for s in selected] == ['default-frontend', 'default-all']

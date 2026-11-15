@@ -30,3 +30,15 @@ def test_qwen_known_answer_when_tokenizer_present(monkeypatch):
     counter = token_count.counter()
     assert counter.exact is True
     assert counter.count('skill') == 1
+
+
+def test_skill_count_matches_server_counter():
+    import json
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[3]
+    samples = ['Xin chào', 'skill', 'Trigger: a step writes tests.\n1. Run `python -m pytest` and record the exit status.']
+    script = ("import {tokenCounter} from './server/ai-board/services/token-count.js';"
+              "const c=tokenCounter();process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).map(t=>c.count(t))))")
+    out = subprocess.run(['node', '--input-type=module', '-e', script, json.dumps(samples)], capture_output=True, check=True, cwd=root)
+    assert json.loads(out.stdout) == [token_count.skill_count(t) for t in samples]

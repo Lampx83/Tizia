@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from services import context
+from services import context, token_count
 
 NAMES = ('plan-from-request', 'implement-one-slice')
 SKILLS_DIR = Path(__file__).resolve().parent.parent / 'skills'
@@ -22,7 +22,7 @@ def test_skill_parses_and_fits_budget(name, gate):
     skill = context.parse_skill(SKILLS_DIR / name / 'SKILL.md')
     assert set(skill.sections) == {gate}
     for body in skill.sections.values():
-        assert len(body.encode('utf-8')) < 1500
+        assert token_count.skill_count(body) < 1500
         assert body.count('\n') + 1 <= 7
         assert '—' not in body
 

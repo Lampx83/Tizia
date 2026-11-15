@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from runtime import limits
-from services import skill_frontmatter, skill_selection
+from services import skill_frontmatter, skill_selection, token_count
 from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
@@ -81,8 +81,7 @@ def parse(text):
         raise ValueError('skill version and token cap must be integers')
     version, cap = int(meta['version']), int(meta['max_tokens'])
     body = parts[2].strip()
-    # UTF-8 bytes conservatively bound byte-level tokenizer tokens, without a model call.
-    bound = len(_render(meta['name'], version, body).encode('utf-8'))
+    bound = token_count.skill_count(_render(meta['name'], version, body))
     if version < 1 or not 1 <= cap <= 1500 or not body or bound > cap:
         raise ValueError('skill exceeds token budget or is empty')
     if FORBIDDEN.search(body):
@@ -155,9 +154,7 @@ def select_report(role, context=None):
                        or task not in skill.task_type and 'all' not in skill.task_type)):
                 raise ValueError('approved skill role mismatch')
             skill = replace(skill, version=row['version'], version_id=row['version_id'])
-            # The server counts with the Qwen tokenizer; the harness cannot reproduce that count, so it keeps a
-            # UTF-8 byte upper bound for budgeting and checks the stored count against the skill's own cap.
-            bound = len(admin_text(skill).encode('utf-8'))
+            bound = token_count.skill_count(admin_text(skill))
             count = row.get('token_count')
             if type(count) is not int or not 0 < count <= skill.max_tokens:
                 raise ValueError('approved skill token bound mismatch')
