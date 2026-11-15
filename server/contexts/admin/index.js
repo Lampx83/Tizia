@@ -9,7 +9,7 @@
 // Đây là foundation; UI ở public/admin.html.
 // ============================================================
 
-import { scryptSync, randomBytes } from 'node:crypto';
+import { scryptSync, randomBytes, randomUUID } from 'node:crypto';
 import { db, createNotification, addRequestMessage, setUserPlan, createUser, getUserById, getUserByUsername, updateUserEditable } from '../../db.js';
 import { VALID_USER_PLANS, expiresAtFor } from '../billing/user-plans.js';
 import { listAiPrompts, listAiPromptsForUser } from '../../ai-quota.js';
@@ -20,7 +20,8 @@ import { getPageviewStats } from '../analytics/index.js';
 import { aiBoardServices } from '../../ai-board/runtime.js';
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 import { BOARD_SPLIT } from '../../board-split.js';
-import { boardRequest } from '../../board-client.js';
+import { boardRequest, boardActor } from '../../board-client.js';
+import { createDecisionOutbox } from './board-decision-outbox.js';
 
 // Scrypt hash — đồng bộ format với contexts/identity/auth.js (scrypt$salt$hash)
 function hashPassword(password) {
@@ -77,17 +78,31 @@ export async function attachAdmin(r) {
   const BOARD_ZEROS = { requests: 0, requests_pending: 0 };
   const boardCounts = async () => BOARD_SPLIT ? { ...BOARD_ZEROS } : await board().requests.requestCounts();
   const boardUnavailable = (res) => res.status(502).json({ error: 'board_unavailable', message: 'Ban điều hành AI tạm không phản hồi, thử lại sau.' });
+  // Split: the decision count lives on the board; null (card hidden) when unreadable, never a false 0.
+  const decisionCount = async (user, local) => {
+    if (!BOARD_SPLIT) return await tableExists('ai_decisions') ? local() : null;
+    try {
+      const out = await boardRequest(user, 'GET', '/api/admin/ai-board/decisions?limit=1');
+      return out.status === 200 && Number.isFinite(out.data?.total) ? out.data.total : null;
+    } catch { return null; }
+  };
+  const decisionOutbox = BOARD_SPLIT ? createDecisionOutbox({
+    db,
+    send: (actor, requestId, body) => boardRequest(actor, 'POST', `/api/admin/ai-board/requests/${requestId}/decisions`, body),
+  }) : null;
+  decisionOutbox?.start();
   const route = asyncRoutes(r);
   const applyAdminStatus = async (id, status, note, actorId) => {
     const { store } = board();
     return (status === 'rejected' ? store.rejectRequest : store.noteRequest)(id, note, actorId);
   };
 
-  route.get('/api/admin/overview', requireAdmin, async (_req, res) => {
+  route.get('/api/admin/overview', requireAdmin, async (req, res) => {
     const base = { ...await Q.overview.get(), ...(await boardCounts()) };
     // số liệu từ context có-thể-chưa-tạo-bảng (analytics/billing/ai_decisions)
     const extra = {};
-    if (await tableExists('ai_decisions')) extra.ai_decisions = (await db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get()).c;
+    const decisions = await decisionCount(req.user, async () => (await db.prepare(`SELECT COUNT(*) c FROM ai_decisions`).get()).c);
+    if (decisions != null) extra.ai_decisions = decisions;
     if (await tableExists('analytics_events')) extra.events = (await db.prepare(`SELECT COUNT(*) c FROM analytics_events`).get()).c;
     if (await tableExists('subscriptions')) extra.paid_users = (await db.prepare(`SELECT COUNT(*) c FROM subscriptions WHERE plan<>'free' AND status='active'`).get()).c;
     if (await tableExists('ai_lesson_content')) extra.ai_content = (await db.prepare(`SELECT COUNT(*) c FROM ai_lesson_content`).get()).c;
@@ -264,14 +279,21 @@ export async function attachAdmin(r) {
     catch { return boardUnavailable(res); }
     if (applied.status !== 200) return res.status(409).json({ error: applied.data?.error || 'status_rejected', message: applied.data?.message });
 
+    // Same key on every attempt: a retry after a lost reply never double-writes on the board.
+    const key = String(req.get('idempotency-key') || '').trim().slice(0, 120) || `reply-${id}-${randomUUID()}`;
+    const decision = { action: ACTION_BY_STATUS[status] || 'defer', status, reason: `[admin] ${req.user.username} → ${status}`, public_note: message.slice(0, 500) };
+    decisionOutbox.drain().catch(() => {});
+    let failure = null;
     try {
-      const key = req.get('idempotency-key');
-      const audit = await boardRequest(req.user, 'POST', `/api/admin/ai-board/requests/${id}/decisions`, {
-        action: ACTION_BY_STATUS[status] || 'defer', status, reason: `[admin] ${req.user.username} → ${status}`,
-        public_note: message.slice(0, 500), ...(key ? { idempotency_key: key } : {}),
-      });
-      if (audit.status !== 200) console.warn('[admin/reply] decision audit rejected:', audit.status);
-    } catch (e) { console.warn('[admin/reply] decision audit failed:', e?.message || e); }
+      const audit = await boardRequest(req.user, 'POST', `/api/admin/ai-board/requests/${id}/decisions`, { ...decision, idempotency_key: key });
+      if (audit.status !== 200) failure = `board status ${audit.status}`;
+    } catch (e) { failure = e?.message || String(e); }
+    if (failure) {
+      console.warn('[admin/reply] decision audit failed, queued for retry:', failure);
+      const { id: uid, role, username, displayName, display_name, domain, enrolled_domain } = boardActor(req.user);
+      try { await decisionOutbox.enqueue({ key, requestId: id, actor: { id: uid, role, username, displayName: displayName || display_name, domain: domain || enrolled_domain }, payload: decision, error: failure }); }
+      catch (e) { console.error('[admin/reply] decision audit LOST (outbox write failed):', e?.message || e); }
+    }
     try { await boardRequest(req.user, 'POST', `/api/requests/${id}/messages`, { body: message }); }
     catch (e) { console.warn('[admin/reply] thread append failed:', e?.message || e); }
 
@@ -497,7 +519,7 @@ export async function attachAdmin(r) {
   });
 
   // GET /api/admin/overview2 — extend overview với delta 24h (không break /overview cũ)
-  route.get('/api/admin/overview2', requireAdmin, async (_req, res) => {
+  route.get('/api/admin/overview2', requireAdmin, async (req, res) => {
     const base = { ...await Q.overview.get(), ...(await boardCounts()) };
     const now = Date.now();
     const t24 = now - 86400_000;
@@ -512,7 +534,8 @@ export async function attachAdmin(r) {
       requests_prev_24h: BOARD_SPLIT ? 0 : await board().requests.requestsCreatedBetween(t48, t24),
     };
     const extra = {};
-    if (await tableExists('ai_decisions')) extra.ai_decisions = await count(`SELECT COUNT(*) c FROM ai_decisions`);
+    const decisions = await decisionCount(req.user, () => count(`SELECT COUNT(*) c FROM ai_decisions`));
+    if (decisions != null) extra.ai_decisions = decisions;
     if (await tableExists('analytics_events')) {
       extra.events = await count(`SELECT COUNT(*) c FROM analytics_events`);
       extra.pageviews_24h = await count(`SELECT COUNT(*) c FROM analytics_events WHERE name='page_view' AND ts >= ?`, t24);
