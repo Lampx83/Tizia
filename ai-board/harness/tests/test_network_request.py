@@ -82,21 +82,61 @@ def test_invalid_request_arguments_are_a_tool_error_not_a_request():
 
 
 MISSING = "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'lodash' imported from /app/public/js/a.js"
+PROJECT = network_request.Project(installed=frozenset({"express", "@scope/lib", "zod"}), roots=frozenset({"public", "server"}))
 
 
 @pytest.mark.parametrize("text, name", [
-    ("Error: Cannot find module 'lodash'", "lodash"),
+    ("Error: Cannot find module 'left-pad'", "left-pad"),
     (MISSING, "lodash"),
+    ("Cannot find module 'lodash/fp'", "lodash"),
+    ("Cannot find module 'chart.js/auto'", "chart.js"),
     ("Cannot find module '@scope/pkg/sub'", "@scope/pkg"),
+    ("Cannot find module '@scope/pkg'", "@scope/pkg"),
     ("Cannot find module '/app/server/x.js'", None),
     ("Cannot find module './util'", None),
     ("Cannot find module 'node:fs'", None),
-    ("Cannot find module 'express'", None),
+    ("Cannot find module 'node:test'", None),
     ("Cannot find module 'fs'", None),
+    ("Cannot find module 'fs/promises'", None),
+    ("Cannot find module 'express'", None),
+    ("Cannot find module 'express/lib/router'", None),
+    ("Cannot find module '@scope/lib/deep'", None),
     ("Cannot find module 'public/js/x'", None),
 ])
 def test_detector_names_only_real_packages(text, name):
-    assert network_request.missing_package(text, {"public/js/a.js"}) == name
+    assert network_request.missing_package(text, {"public/js/a.js"}, PROJECT) == name
+
+
+def test_installed_dependency_is_never_a_package_request_even_when_missing_on_disk():
+    assert network_request.missing_package("Cannot find module 'zod'", set(), PROJECT) is None
+    assert network_request.package_name("zod/fp", set(), PROJECT) is None
+
+
+def test_without_project_facts_express_is_not_special_cased():
+    assert network_request.missing_package("Cannot find module 'express'") == "express"
+
+
+def test_module_kind_separates_builtin_owned_plan_and_package():
+    kinds = {target: network_request.module_kind(target, {"public/js/a.js"}, PROJECT) for target in (
+        "fs", "node:sqlite", "express", "public/js/a.js", "src/a.js", "./util", "/app/server/n.js",
+        "public/js/new.js", "zod/fp", "@scope/pkg/x", "left-pad")}
+    assert kinds == {"fs": "builtin", "node:sqlite": "builtin", "express": "builtin", "public/js/a.js": "owned",
+                     "src/a.js": "plan", "./util": "plan", "/app/server/n.js": "plan", "public/js/new.js": "plan",
+                     "zod/fp": "builtin", "@scope/pkg/x": "package", "left-pad": "package"}
+
+
+def test_project_facts_come_from_the_repo_at_the_sha(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "package.json").write_text('{"dependencies": {"lodash": "^4"}, "devDependencies": {"@scope/lib": "1"}}')
+    (tmp_path / "public").mkdir()
+    (tmp_path / "public" / "a.js").write_text("x")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"], check=True)
+    sha = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    project = network_request.project_at(str(tmp_path), sha)
+    assert project.installed == {"lodash", "@scope/lib"} and project.roots == {"package.json", "public"}
+    assert network_request.project_at(str(tmp_path), "0" * 40) == network_request.Project()
 
 
 def test_missing_package_is_stop_admin_package_request_not_replan():
@@ -110,6 +150,27 @@ def test_missing_plan_path_still_replans_and_decided_package_goes_back_to_repair
     assert repair_class.classify(path, {}, set())["action"] == "replan"
     pkg = {"reason": "x", "evidence": {"text": MISSING}}
     assert repair_class.classify(pkg, {}, set(), settled={"lodash"})["action"] == "repair_code"
+
+
+@pytest.mark.parametrize("text, name", [
+    ("Cannot find module 'lodash/fp'", "lodash"),
+    ("Cannot find module '@scope/pkg/sub'", "@scope/pkg"),
+])
+def test_subpath_and_scoped_missing_packages_are_package_requests(text, name):
+    result = {"gate": 4, "reason": "x", "failure_class": "ordinary", "evidence": {"text": text}}
+    out = repair_class.classify(result, {}, set())
+    assert (out["class"], out["package"]) == ("package_request", name)
+
+
+def test_installed_dependency_missing_on_disk_is_neither_a_request_nor_a_replan():
+    result = {"gate": 4, "reason": "x", "failure_class": "ordinary", "evidence": {"text": "Cannot find module 'zod/fp'"}}
+    out = repair_class.classify(result, {}, {"public/js/a.js"}, project=PROJECT)
+    assert out["class"] != network_request.PACKAGE_REQUEST and out["action"] == "repair_code"
+
+
+def test_relative_missing_module_replans_with_project_facts():
+    result = {"gate": 4, "reason": "x", "failure_class": "ordinary", "evidence": {"text": "Cannot find module './util'"}}
+    assert repair_class.classify(result, {}, {"public/js/a.js"}, project=PROJECT)["action"] == "replan"
 
 
 def _execution(queue):
