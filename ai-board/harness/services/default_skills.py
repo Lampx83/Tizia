@@ -12,7 +12,7 @@ from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
-VARIANTS = {'review-two-axes': REVIEW_AXES}
+VARIANTS = {'review-two-axes': REVIEW_AXES, **{f'{n}-frame': ROOT / 'proposed' / f'{n}-frame' / 'SKILL.md' for n in ('test', 'review', 'all')}}
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
 # Rubric tham chiếu (soát elevation) có hash trong lock nhưng không thuộc catalog chọn theo task_type.
@@ -161,7 +161,7 @@ def select_report(role, context=None):
             skill = replace(skill, token_bound=bound)
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
-    candidates += variant_candidates(role)
+    candidates += variant_candidates(role, task)
     budget = stage_budget(role)
     chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
     selected = [c.payload for c in chosen]
@@ -175,18 +175,20 @@ def system_text(skills):
     return '\n\n'.join(_render(s.name, s.version, s.body) for s in skills if s.source == 'default')
 
 
-def variant_candidates(role):
+def variant_candidates(role, task=None):
     """Biến thể thử nghiệm (AI_BOARD_SKILL_VARIANT) qua node chọn; không tính cap, không đè skill khác."""
-    if role != 'gate4_review':
+    if task == 'skill-authoring':
         return []
+    review = role == 'gate4_review'
     names = list(get_settings().skill_variant)
-    skills = [parse(VARIANTS[n].read_bytes().decode('utf-8')) for n in names if n in VARIANTS]
+    skills = [s for s in (parse(VARIANTS[n].read_bytes().decode('utf-8')) for n in names if n in VARIANTS)
+              if review == ('review' in s.task_type) and (review or task in s.task_type or 'all' in s.task_type)]
     return [skill_selection.Candidate(s.name, 3, 'experiment variant (AI_BOARD_SKILL_VARIANT)', s.token_bound,
                                       counted=False, payload=s) for s in skills]
 
 
 def review_axes_block(selected=None):
-    """Biến thể review trong node đã chọn thành block advisory; '' khi không bật."""
+    """Biến thể trong node đã chọn thành block advisory; '' khi không bật."""
     if selected is None:
         selected = select('gate4_review', {})
     return ''.join('\n\n' + admin_text(s) for s in selected if s.name in VARIANTS)
