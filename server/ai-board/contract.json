@@ -107,7 +107,8 @@
       "similarity": 0.98,
       "similarity_window": 2,
       "similarity_max_chars": 20000,
-      "topology_window": 6
+      "topology_window": 6,
+      "repair_window_flag": { "flag": "AI_BOARD_REPAIR_STAGNATION_WINDOW", "default_enabled": false, "window_when_on": 3, "_why": "Window of consecutive near-identical repairs when the flag is set to a positive int; default stays similarity_window until owner approves the A/B table." }
     },
     "repair_sampling": {
       "_why": "Second and later repair attempts of gate 3 sample warmer so a repair is not a byte-identical retry. Flag AI_BOARD_REPAIR_SAMPLING_DIVERSITY, default off; the first repair keeps temperature 0.",
