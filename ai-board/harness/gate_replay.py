@@ -62,6 +62,54 @@ def _new_file(data, case):
     return "pass"
 
 
+def _verify_runnable(data, case):
+    """Gate 1 verify rule (brainstorm.is_runnable) on one recorded subtask verify string."""
+    from gates import brainstorm
+    return "pass" if brainstorm.is_runnable(case["verify"]) else "block"
+
+
+def _selector_oracle(data, case):
+    """Text oracle on a request quoting a CSS selector: block when the selector is demanded as visible text."""
+    from verification import functional
+    shown = functional.text_expectation(dict(case["request"]))
+    return "block" if any(functional._is_css_selector(text) for text in shown["present"]) else "pass"
+
+
+def _acceptance_tool(data, case):
+    """Acceptance failure text -> infra (missing tool, no repair turn) or repair. Same path as gate 5 + repair_class."""
+    from gates.gate5_session import failure_class, missing_tool
+    from runtime import repair_class
+    tool = missing_tool(case["output"], case.get("returncode"), case["command"])
+    if not tool:
+        reason = f"feature acceptance failed: {case['command']} | {case['output']}"
+        result = {"gate": 5, "failure_class": failure_class("ordinary", reason), "reason": reason}
+    else:
+        reason = f"thiếu công cụ trong container: {tool} (acceptance: {case['command']})"
+        result = {"gate": 5, "failure_class": failure_class("tooling", reason), "reason": reason}
+    return "infra" if repair_class.classify(result, {}, set())["action"] == repair_class.RETRY else "repair"
+
+
+def _no_oracle(data, case):
+    """No-oracle needs_review decision (gate 5) on recorded gate flags; tests_absent only counts with the review_any flag."""
+    import settings
+    from gates import verify
+    from verification import functional
+    tests_absent_ok = bool(case.get("tests_absent")) and settings.get_settings().no_oracle_review_any
+    result = {"reason": functional.NO_ORACLE, "probe_id": None}
+    if verify.no_oracle_review(case["generated_ok"], case["smoke_ok"], result, tests_absent_ok):
+        return "review"
+    return "block"
+
+
+def _compile_prose(data, case):
+    """Compile-prose verify (flag-independent): clean command, planner (not compiled), or dirty (connector leaked)."""
+    from gates import brainstorm
+    cmd = brainstorm.compile_prose_verify(case["text"], {case["text"].split()[0]})
+    if cmd is None:
+        return "planner"
+    return "dirty" if any(connector in cmd for connector in (" và ", " and ", " ngay sau ")) else "clean"
+
+
 def _objection(data, case):
     from gates import plan_validate as pv
     recorded = json.loads((FIXTURES / "lf123_request7_validator.json").read_text(encoding="utf-8"))[case["record"]]
@@ -70,7 +118,10 @@ def _objection(data, case):
 
 
 _REPLAY = {"plan_coverage": _coverage, "grounding": _grounding, "text_expectation": _text_expectation,
-           "pii": _pii, "objection": _objection, "new_file": _new_file}
+           "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable,
+           "selector_oracle": _selector_oracle,
+           "acceptance_tool": _acceptance_tool, "no_oracle": _no_oracle,
+           "compile_prose": _compile_prose}
 
 
 def run(env=None):

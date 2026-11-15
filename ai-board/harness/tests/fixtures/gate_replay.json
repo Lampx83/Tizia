@@ -334,6 +334,407 @@
    "truth": "pass",
    "validation": "646",
    "truth_source": "LF/141 muc 2: validator tra grounded=false kem ly do ve file khong nam trong plan (run 16); harness khong kiem chung duoc nen khong duoc chan plan"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-css_color-l5-137071",
+   "verify": "public/sap-xep-hub.html chứa '.yes { color: #16a34a; }' hoặc 'color: #16a34a'",
+   "truth": "block",
+   "truth_source": "trial A-r1-css_color-l5-137071 gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-remove_element-l3-82d4ca",
+   "verify": "public/sac-ky-2d.html không còn thẻ <a> có href='./' ở cuối hộp kết thúc",
+   "truth": "block",
+   "truth_source": "trial A-r1-remove_element-l3-82d4ca gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-size_hide-l2-af3012",
+   "verify": "public/dashboard-metaverse-hidden.html chứa '.label-metaverse { display: none; }'",
+   "truth": "block",
+   "truth_source": "trial A-r1-size_hide-l2-af3012 gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-prose-r1-dev-multifile__mf-04-validation-msg",
+   "verify": "public/js/shared/validate.js chứa export function check_username",
+   "truth": "block",
+   "truth_source": "trial B0-prose-r1-dev-multifile__mf-04-validation-msg gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r12-css_color-l1-37625a",
+   "verify": "public/ghep-chu-cai.html L24 chứa 'color: #16a34a' và không còn 'color: #7c3aed'",
+   "truth": "block",
+   "truth_source": "trial B0-r12-css_color-l1-37625a gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-insert_text-l5-ce8c87",
+   "verify": "public/js/scenarios/bao-che-labs.js chứa chuỗi 'Đơn pha chế sao luyện'",
+   "truth": "block",
+   "truth_source": "trial B0-r5-insert_text-l5-ce8c87 gate 1: verify là câu mô tả, không phải lệnh chạy được; chặn đúng",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r1-dev-multifile__mf-08-cache-invalidate",
+   "verify": "grep -q 'version' public/js/engine/cache-helper.js",
+   "truth": "pass",
+   "truth_source": "trial B0-r1-dev-multifile__mf-08-cache-invalidate gate 1: grep -q đọc file là kiểm tra hợp lệ; cờ tắt chặn oan (false_block), cờ AI_BOARD_GATE1_UNIFIED_VERIFY bật thì pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r1-replace_text-l4-928d6f",
+   "verify": "grep -q 'Điểm ghi học lượng thẻ.' public/it-sql-playground.html",
+   "truth": "pass",
+   "truth_source": "trial B0-r1-replace_text-l4-928d6f gate 1: grep -q đọc file là kiểm tra hợp lệ; cờ tắt chặn oan (false_block), cờ AI_BOARD_GATE1_UNIFIED_VERIFY bật thì pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-dev-multifile__mf-15-regress-guard",
+   "verify": "grep -q 'word' public/js/engine/core/text.js",
+   "truth": "pass",
+   "truth_source": "trial B0-r5-dev-multifile__mf-15-regress-guard gate 1: grep -q đọc file là kiểm tra hợp lệ; cờ tắt chặn oan (false_block), cờ AI_BOARD_GATE1_UNIFIED_VERIFY bật thì pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-rui-03-requester-progress",
+   "verify": "grep -q 'export async requesterProgress' server/ai-board/services/requester-prog",
+   "truth": "pass",
+   "truth_source": "trial B0-r5-rui-03-requester-progress gate 1: grep -q đọc file là kiểm tra hợp lệ; cờ tắt chặn oan (false_block), cờ AI_BOARD_GATE1_UNIFIED_VERIFY bật thì pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r6-insert_text-l3-12bdf8",
+   "verify": "grep -q 'Ghi đơn học thẻ tập' public/js/features/quan-ly-truong/trach-hoc.js",
+   "truth": "pass",
+   "truth_source": "trial B0-r6-insert_text-l3-12bdf8 gate 1: grep -q đọc file là kiểm tra hợp lệ; cờ tắt chặn oan (false_block), cờ AI_BOARD_GATE1_UNIFIED_VERIFY bật thì pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "0"
+   }
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r1-dev-multifile__mf-08-cache-invalidate-unified",
+   "verify": "grep -q 'version' public/js/engine/cache-helper.js",
+   "truth": "pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r1-dev-multifile__mf-08-cache-invalidate, cờ AI_BOARD_GATE1_UNIFIED_VERIFY=1 (explicit)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r1-replace_text-l4-928d6f-unified",
+   "verify": "grep -q 'Điểm ghi học lượng thẻ.' public/it-sql-playground.html",
+   "truth": "pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r1-replace_text-l4-928d6f, cờ AI_BOARD_GATE1_UNIFIED_VERIFY=1 (explicit)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-dev-multifile__mf-15-regress-guard-unified",
+   "verify": "grep -q 'word' public/js/engine/core/text.js",
+   "truth": "pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r5-dev-multifile__mf-15-regress-guard, cờ AI_BOARD_GATE1_UNIFIED_VERIFY=1 (explicit)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-rui-03-requester-progress-unified",
+   "verify": "grep -q 'export async requesterProgress' server/ai-board/services/requester-prog",
+   "truth": "pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r5-rui-03-requester-progress, cờ AI_BOARD_GATE1_UNIFIED_VERIFY=1 (explicit)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r6-insert_text-l3-12bdf8-unified",
+   "verify": "grep -q 'Ghi đơn học thẻ tập' public/js/features/quan-ly-truong/trach-hoc.js",
+   "truth": "pass",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r6-insert_text-l3-12bdf8, cờ AI_BOARD_GATE1_UNIFIED_VERIFY=1 (explicit)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-css_color-l5-137071-unified",
+   "verify": "public/sap-xep-hub.html chứa '.yes { color: #16a34a; }' hoặc 'color: #16a34a'",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như A-r1-css_color-l5-137071, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-remove_element-l3-82d4ca-unified",
+   "verify": "public/sac-ky-2d.html không còn thẻ <a> có href='./' ở cuối hộp kết thúc",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như A-r1-remove_element-l3-82d4ca, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "A-r1-size_hide-l2-af3012-unified",
+   "verify": "public/dashboard-metaverse-hidden.html chứa '.label-metaverse { display: none; }'",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như A-r1-size_hide-l2-af3012, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-prose-r1-dev-multifile__mf-04-validation-msg-unified",
+   "verify": "public/js/shared/validate.js chứa export function check_username",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-prose-r1-dev-multifile__mf-04-validation-msg, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r12-css_color-l1-37625a-unified",
+   "verify": "public/ghep-chu-cai.html L24 chứa 'color: #16a34a' và không còn 'color: #7c3aed'",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r12-css_color-l1-37625a, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "1.verify_runnable",
+   "fn": "verify_runnable",
+   "trace": "B0-r5-insert_text-l5-ce8c87-unified",
+   "verify": "public/js/scenarios/bao-che-labs.js chứa chuỗi 'Đơn pha chế sao luyện'",
+   "truth": "block",
+   "env": {
+    "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
+   },
+   "truth_source": "như B0-r5-insert_text-l5-ce8c87, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "5.oracle_selector",
+   "fn": "selector_oracle",
+   "request": {
+    "request_title": "Đổi màu chữ của '.types button' sang xanh lá #16a34a",
+    "request_detail": "Trang vẽ đồ thị có nhiều quy tắc màu. Em chỉ muốn chữ trên các nút chọn loại, selector '.types button', đổi màu thành xanh lá #16a34a."
+   },
+   "truth": "pass",
+   "trace": "css_color-l2-9ff2fd-flag-off",
+   "env": {
+    "AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR": "0"
+   },
+   "truth_source": "trial B0-r7-css_color-l2-9ff2fd: oracle đòi '.types button' hiển thị là lỗi; selector không phải chữ hiển thị"
+  },
+  {
+   "gate": "5.oracle_selector",
+   "fn": "selector_oracle",
+   "request": {
+    "request_title": "Đổi màu chữ của '.types button' sang xanh lá #16a34a",
+    "request_detail": "Trang vẽ đồ thị có nhiều quy tắc màu. Em chỉ muốn chữ trên các nút chọn loại, selector '.types button', đổi màu thành xanh lá #16a34a."
+   },
+   "truth": "pass",
+   "trace": "css_color-l2-9ff2fd-flag-on",
+   "env": {
+    "AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR": "1"
+   },
+   "truth_source": "như trên, cờ AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR=1: selector bỏ khỏi danh sách chữ"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r4-replace_text-l4-928d6f",
+   "command": "curl -s localhost:8041/it-sql-playground.html | grep -q 'Thuốc nhớ liều chuỗi tựu.'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r4-replace_text-l4-928d6f: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r5-remove_element-l3-966634",
+   "command": "curl -s localhost:8041/admin.html | grep -q '💬 Trả lời yêu cầu HS'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r5-remove_element-l3-966634: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-css_color-l2-9ff2fd",
+   "command": "curl -s localhost:8041/grapher.html | grep -q '.types button { color:#16a34a;'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r7-css_color-l2-9ff2fd: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-replace_text-l4-928d6f",
+   "command": "curl -s localhost:8041/it-sql-playground.html | grep -q 'Điểm ghi học lượng thẻ.'",
+   "output": "sh: curl: not found",
+   "returncode": 127,
+   "truth": "infra",
+   "truth_source": "trial B0-r7-replace_text-l4-928d6f: acceptance output 'sh: curl: not found' (ticket 244); verdict cũ ordinary/stagnation"
+  },
+  {
+   "gate": "5.acceptance_tool",
+   "fn": "acceptance_tool",
+   "trace": "B0-r7-css_color-l2-9ff2fd-red",
+   "command": "curl -s localhost:8041/grapher.html | grep -q '.types button { color:#16a34a;'",
+   "output": "AssertionError: expected #16a34a got #7c3aed",
+   "returncode": 1,
+   "truth": "repair",
+   "truth_source": "lệnh chạy được nhưng đỏ: vẫn repair (ticket 244 nhánh 2)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-tests-green",
+   "generated_ok": true,
+   "smoke_ok": true,
+   "tests_absent": false,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "review",
+   "truth_source": "trial css_color-l1-37625a: needs_review gate 5.5, generated tests + smoke xanh (B0 r6)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests",
+   "generated_ok": false,
+   "smoke_ok": true,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "1"
+   },
+   "truth": "review",
+   "truth_source": "tổng hợp từ css_color-l1-37625a: không có generated test, smoke xanh, cờ review_any bật"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests-flag-off",
+   "generated_ok": false,
+   "smoke_ok": true,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "block",
+   "truth_source": "như trên, cờ tắt: vẫn block (hành vi cũ)"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-smoke-red",
+   "generated_ok": true,
+   "smoke_ok": false,
+   "tests_absent": false,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "0"
+   },
+   "truth": "block",
+   "truth_source": "smoke đỏ không được coi là needs_review"
+  },
+  {
+   "gate": "5.no_oracle",
+   "fn": "no_oracle",
+   "trace": "css_color-l1-37625a-no-tests-smoke-red",
+   "generated_ok": false,
+   "smoke_ok": false,
+   "tests_absent": true,
+   "env": {
+    "AI_BOARD_NO_ORACLE_REVIEW_ANY": "1"
+   },
+   "truth": "block",
+   "truth_source": "không có test và smoke đỏ: vẫn block"
+  },
+  {
+   "gate": "2.compile_prose",
+   "fn": "compile_prose",
+   "trace": "insert_text-l1-b3d529",
+   "text": "public/marketplace.html chứa 'Nhớ ôn bài đơn hàm' và 'Đang tải'",
+   "truth": "clean",
+   "truth_source": "B0-prose insert_text-l1-b3d529 (ticket 246): lệnh cũ có 'và' lọt vào sh -c; sau sửa mỗi chuỗi một grep"
+  },
+  {
+   "gate": "2.compile_prose",
+   "fn": "compile_prose",
+   "trace": "insert_text-l2-8292ff",
+   "text": "public/teacher-live.html chứa '<h3>Kiểm pha bài thành ôn.</h3>' ngay sau '<h3>📝 Mở quiz</h3>'",
+   "truth": "planner",
+   "truth_source": "B0-prose insert_text-l2-8292ff (ticket 246): 'ngay sau' không phải từ nối được biên dịch, trả về planner"
   }
  ]
 }

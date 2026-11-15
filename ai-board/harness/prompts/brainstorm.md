@@ -10,7 +10,7 @@ RULES
    - behaviour → the file on the page's "js liên kết" line (or the page's inline module script).
 4. "title": short Vietnamese imperative naming the element (selector or id) and the exact old → new value.
 5. "verify": one fact a node:test file can check by reading that file (it contains a string; a CSS rule has a declaration).
-   For a multi-subtask or layered plan "verify" must instead be a RUNNABLE command at the existing gates: node --test <file>, node <file>, curl <url>, pytest, python <file>, bash <script>. A sentence is rejected.
+   For a multi-subtask or layered plan "verify" must instead be a RUNNABLE command at the existing gates: node --test <file>, node <file>, curl <url>, pytest, python <file>, bash <script>, grep -q '<text>' <file>. A sentence is rejected.
 6. "size": "small" = one file following an existing pattern; "large" = new logic. No other values.
 6a. A request that needs real server/DB data (a table, a migration, a query, anything needing server/db.js) and asks for NO UI is NOT a surface feature: do not create a _ai-generated migration or plugin. Plan ONE subtask on ONE existing protected/core file (rule 10b); the harness then asks the admin for elevation before the plan runs.
 6b. Feature spanning UI + server + DB (a UI is requested): still one file per subtask, but add "layer" to every subtask: "db" | "backend" | "frontend" | "wiring".
