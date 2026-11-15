@@ -196,3 +196,40 @@ def test_chat_span_carries_role_thinking_and_prompt_mode(split):
     attrs = pipeline._request_attrs({"temperature": 0.7, "num_predict": 4000}, extra, {"_reasoning_chars": 0}, "gate3_light")
     assert attrs == {"temperature": 0.7, "max_tokens": 4000, "thinking": False, "reasoning_chars": 0,
                      "role": "gate3_light", "prompt_roles": "split" if split else "single"}
+
+
+@pytest.fixture
+def tail_on(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_PROMPT_TAIL_RESTATE", "1")
+
+
+def test_tail_off_prompt_ends_with_the_last_observation(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_PROMPT_TAIL_RESTATE", raising=False)
+    models = FakeModels([EDIT, TEST, FINISH])
+    assert run(models)["status"] == "proposed"
+    assert models.calls[1]["prompt"].endswith("Return the next tool call.")
+    assert "Key constraints" not in "".join(c["prompt"] for c in models.calls)
+
+
+def test_tail_on_puts_goal_and_format_last_and_keeps_prefix_stable(tail_on):
+    models = FakeModels([EDIT, TEST, FINISH])
+    assert run(models)["status"] == "proposed"
+    tail = prompt_roles.tail(SUBTASK)
+    first, second = models.calls[0]["prompt"], models.calls[1]["prompt"]
+    base = first[: -len(tail)]
+    assert first.endswith(tail)
+    assert second.startswith(base) and second.endswith(tail)
+    assert "TOOL RESULT edit_file" in second[len(base):]
+    assert "Thêm dòng" in tail and "public/a.html" in tail and "thấy B" in tail
+
+
+def test_split_tail_replaces_the_restate_without_doubling(split_on, tail_on):
+    models = FakeModels([EDIT, TEST, FINISH])
+    assert run(models)["status"] == "proposed"
+    user = models.calls[1]["prompt"]
+    assert user.endswith(prompt_roles.tail(SUBTASK)) and user.count(prompt_roles.RESTATE) == 1
+
+
+def test_split_does_not_add_a_second_restate_after_a_tail():
+    user = "task" + prompt_roles.tail(SUBTASK)
+    assert prompt_roles.split(user) == (prompt_roles.SYSTEM, user)

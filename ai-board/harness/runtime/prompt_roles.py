@@ -19,9 +19,17 @@ def enabled() -> bool:
     return get_settings().prompt_role_split
 
 
+TAIL = "\n\nSubtask goal: {title}. Target file: {file}. Done when: {verify}.\nKey constraints: edit only the target file and tests under test/; finish only after edit_file and write_test."
+
+
+def tail(subtask: dict) -> str:
+    """Mục tiêu + ràng buộc then chốt + nhắc định dạng, nối cuối mỗi lượt gọi; kết bằng RESTATE."""
+    return TAIL.format(title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + RESTATE
+
+
 def split(user: str) -> tuple[str, str]:
-    """(system, user) với định dạng được nhắc lại ở cuối user."""
-    return SYSTEM, user + RESTATE
+    """(system, user) với định dạng được nhắc lại ở cuối user (không nhắc lần nữa nếu đã có)."""
+    return SYSTEM, user if user.endswith(RESTATE) else user + RESTATE
 
 
 def call_params(role: str, routing, *, structured: bool = False) -> tuple[dict, dict]:
