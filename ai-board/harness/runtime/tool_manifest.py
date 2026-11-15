@@ -109,3 +109,17 @@ def _policy(raw) -> CommandPolicy:
 
 def load(path: Path = PATH, *, known: set[str]) -> Manifest:
     return parse(json.loads(path.read_text(encoding="utf-8")), known=known)
+
+
+def dump() -> dict:
+    """Validator facts for the server: shape rules, manifest tool names, harness IMPLEMENTED set."""
+    from runtime import tool_loop
+    return {"effects": list(EFFECTS), "fields": list(FIELDS), "optional": list(OPTIONAL),
+            "implemented": sorted(tool_loop.IMPLEMENTED), "tools": sorted(tool_loop.MANIFEST.tools)}
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] != ["--dump"]:
+        sys.exit("usage: python -m runtime.tool_manifest --dump")
+    print(json.dumps(dump(), indent=2))
