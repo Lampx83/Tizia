@@ -32,12 +32,9 @@ ROTATE_KEEP = _MEMORY["traces_keep"]  # file hiện tại + (KEEP-1) bản cũ
 # không phạt ticket đang chạy. Phải lớn hơn 1 lượt lớn nhất để task lớn không bị bỏ đói.
 HOURLY_GPU_S = limits.contract()["limits"]["gpu_s_per_worker_hour"]["value"]
 
-# Cùng họ mẫu với gates/guard.py _SECRET — che trước khi ghi/gửi trace.
-_SECRET = re.compile(
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
-    r"|\bAKIA[0-9A-Z]{16}\b|\bsk-[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{30,}|\bxox[abprs]-[A-Za-z0-9-]{10,}"
-    r"|(?i:(?:api[_-]?key|secret|seckey|token|password|passwd)\w*\s*[:=]\s*['\"][^'\"\s]{8,}['\"])"
-)
+# Mẫu che dùng chung với server/ai-board/services/tool-step-view.js.
+_SHARED = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "redaction-patterns.json").read_text(encoding="utf-8"))
+_SECRET = [re.compile(p["regex"], re.IGNORECASE if "i" in p["flags"] else 0) for p in _SHARED["patterns"]]
 
 
 def _ms(ns) -> int | None:
@@ -128,8 +125,17 @@ def units(provider: str, metrics: dict) -> int:
     return max(1, math.ceil(((metrics.get("tokens_in") or 0) + (metrics.get("tokens_out") or 0)) / 1000))
 
 
+def _sub(pattern: re.Pattern, text: str) -> str:
+    def repl(m: re.Match) -> str:
+        return (m.group(1) or "") + _SHARED["replacement"] if pattern.groups else _SHARED["replacement"]
+    return pattern.sub(repl, text)
+
+
 def redact(text: str) -> str:
-    return _SECRET.sub("[đã che]", text or "")
+    text = text or ""
+    for pattern in _SECRET:
+        text = _sub(pattern, text)
+    return text
 
 
 def output_text(body: dict) -> str:
