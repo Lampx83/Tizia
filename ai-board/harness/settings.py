@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
     intake_labels_by_role: bool = False  # cần thêm admin_requester_trust: admin chỉ được cảnh báo nhãn money/off_topic
     form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
+    admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None

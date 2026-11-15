@@ -224,7 +224,7 @@ def surface_files(plan: dict, read=None, surface=None) -> frozenset[str]:
     return frozenset(path for path in files if path and level_of(path) == PROTECTED and path not in needed)
 
 
-def requirements(plan: dict, read=None, surface=None) -> list[dict]:
+def requirements(plan: dict, read=None, surface=None, role="student") -> list[dict]:
     """[{path, level, why}] cho target trên surface; cùng path giữ mức cao nhất, bỏ mức surface.
     `read(path)` là nội dung file tại base: có thì mức target gộp cả import sẵn có (file_level)."""
     found: dict[str, dict] = {}
@@ -236,6 +236,10 @@ def requirements(plan: dict, read=None, surface=None) -> list[dict]:
         if normalized is None:
             return
         level = file_level(normalized, read)
+        if path_policy.refused(normalized):
+            level = SELF
+        elif level == level_of(normalized) and level in (PROTECTED, CORE) and path_policy.may_edit(normalized, role):
+            level = SURFACE
         if level == SURFACE:
             return
         if level == PROTECTED and path_policy.surface_context(normalized, tests, read, allowed):
@@ -394,15 +398,20 @@ def uncovered(required, scope, plan_hash=None) -> list[dict]:
     return [item for item in required if not covered(item["path"], item["level"], scope, plan_hash)]
 
 
-def write_check(path, scope=(), plan_hash=None) -> dict:
+def write_check(path, scope=(), plan_hash=None, role="student") -> dict:
     """{allow, level, reason}: self luôn chặn; trên surface giữ path_policy; trên protected/core
-    chỉ mở khi elevation đã duyệt phủ đúng path/mức."""
+    chỉ mở khi elevation đã duyệt phủ đúng path/mức, trừ vùng admin được sửa (path_policy.may_edit)."""
     normalized = path_policy.normalize(path)
     if normalized is None:
         return {"allow": False, "level": CORE, "reason": "path không hợp lệ"}
+    if path_policy.refused(normalized):
+        return {"allow": False, "level": SELF, "reason": f"{normalized} thuộc vùng cấm mọi vai — luôn chặn"}
     level = level_of(normalized)
     if level == SELF:
         return {"allow": False, "level": level, "reason": f"{normalized} thuộc vùng AI Board — luôn chặn"}
+    if level in (PROTECTED, CORE) and path_policy.may_edit(normalized, role):
+        denied = path_policy.check(normalized, "write")
+        return {"allow": denied["allow"], "level": SURFACE, "reason": denied["reason"]}
     if level == SURFACE:
         denied = path_policy.check(normalized, "write")
         return {"allow": denied["allow"], "level": level, "reason": denied["reason"]}

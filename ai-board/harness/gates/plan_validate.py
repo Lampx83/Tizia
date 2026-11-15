@@ -832,7 +832,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
     reader = levels.source_reader(state.get('checkout_source'), state.get('base_sha'))
-    needs = levels.requirements(plan, reader)
+    needs = levels.requirements(plan, reader, role=request.get("requester_role") or "student")
     scope = levels.approved_scope(request, state, plan)
     blocked_paths = [item for item in needs if item["level"] == levels.SELF]
     if blocked_paths:
