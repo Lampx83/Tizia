@@ -27,7 +27,8 @@ export function attachHumanDecisions(router, { db, requireAuth, requireAdmin }) 
 
   router.get(['/api/admin/ai-board/decisions', '/api/ai-decisions'], requireAuth, requireAdmin, async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-    res.json({ decisions: await db.all(`SELECT ${COLUMNS} FROM ai_decisions ORDER BY created_at DESC, id DESC LIMIT ?`, [limit]) });
+    const decisions = await db.all(`SELECT ${COLUMNS} FROM ai_decisions ORDER BY created_at DESC, id DESC LIMIT ?`, [limit]);
+    res.json({ decisions, total: Number((await db.get('SELECT COUNT(*) AS n FROM ai_decisions')).n) });
   });
 
   router.get('/api/requests/:id/decisions', requireAuth, async (req, res) => {
