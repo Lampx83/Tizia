@@ -68,6 +68,13 @@ def _verify_runnable(data, case):
     return "pass" if brainstorm.is_runnable(case["verify"]) else "block"
 
 
+def _selector_oracle(data, case):
+    """Text oracle on a request quoting a CSS selector: block when the selector is demanded as visible text."""
+    from verification import functional
+    shown = functional.text_expectation(dict(case["request"]))
+    return "block" if any(functional._is_css_selector(text) for text in shown["present"]) else "pass"
+
+
 def _objection(data, case):
     from gates import plan_validate as pv
     recorded = json.loads((FIXTURES / "lf123_request7_validator.json").read_text(encoding="utf-8"))[case["record"]]
@@ -76,7 +83,8 @@ def _objection(data, case):
 
 
 _REPLAY = {"plan_coverage": _coverage, "grounding": _grounding, "text_expectation": _text_expectation,
-           "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable}
+           "pii": _pii, "objection": _objection, "new_file": _new_file, "verify_runnable": _verify_runnable,
+           "selector_oracle": _selector_oracle}
 
 
 def run(env=None):

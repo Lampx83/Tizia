@@ -10,6 +10,8 @@ OPEN = {("2.5.grounding", 650), ("2.5.grounding", 646)}
 OPEN |= {("1.verify_runnable", t) for t in (
     "B0-r1-dev-multifile__mf-08-cache-invalidate", "B0-r1-replace_text-l4-928d6f",
     "B0-r5-dev-multifile__mf-15-regress-guard", "B0-r5-rui-03-requester-progress", "B0-r6-insert_text-l3-12bdf8")}
+# Same for the selector quote in trial css_color-l2 while AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR is off (default).
+OPEN.add(("5.oracle_selector", "css_color-l2-9ff2fd-flag-off"))
 OLD_NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                         r"|server/contexts/_ai-generated/[\w-]+/[\w-]+/index\.js"
                         r"|server/contexts/_ai-generated/[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")

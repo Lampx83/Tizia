@@ -576,6 +576,34 @@
     "AI_BOARD_GATE1_UNIFIED_VERIFY": "1"
    },
    "truth_source": "như B0-r5-insert_text-l5-ce8c87, cờ bật: câu mô tả vẫn bị chặn (không wrong_pass)"
+  },
+  {
+   "gate": "5.oracle_selector",
+   "fn": "selector_oracle",
+   "request": {
+    "request_title": "Đổi màu chữ của '.types button' sang xanh lá #16a34a",
+    "request_detail": "Trang vẽ đồ thị có nhiều quy tắc màu. Em chỉ muốn chữ trên các nút chọn loại, selector '.types button', đổi màu thành xanh lá #16a34a."
+   },
+   "truth": "pass",
+   "trace": "css_color-l2-9ff2fd-flag-off",
+   "env": {
+    "AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR": "0"
+   },
+   "truth_source": "trial B0-r7-css_color-l2-9ff2fd: oracle đòi '.types button' hiển thị là lỗi; selector không phải chữ hiển thị"
+  },
+  {
+   "gate": "5.oracle_selector",
+   "fn": "selector_oracle",
+   "request": {
+    "request_title": "Đổi màu chữ của '.types button' sang xanh lá #16a34a",
+    "request_detail": "Trang vẽ đồ thị có nhiều quy tắc màu. Em chỉ muốn chữ trên các nút chọn loại, selector '.types button', đổi màu thành xanh lá #16a34a."
+   },
+   "truth": "pass",
+   "trace": "css_color-l2-9ff2fd-flag-on",
+   "env": {
+    "AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR": "1"
+   },
+   "truth_source": "như trên, cờ AI_BOARD_TEXT_ORACLE_SKIP_SELECTOR=1: selector bỏ khỏi danh sách chữ"
   }
  ]
 }
