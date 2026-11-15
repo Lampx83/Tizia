@@ -30,6 +30,7 @@ from gates import brainstorm, implement, intake_guard, plan_validate, risk_triag
 from providers.client import OllamaClient    # noqa: E402
 from providers import thinking as thinking_policy  # noqa: E402
 from services import prescreen                   # noqa: E402
+from verification import checks                  # noqa: E402
 from evaluation import self_eval                   # noqa: E402
 from settings import get_settings
 
@@ -447,6 +448,8 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     # Worker clone at origin/<base> when set; else the repo holding the harness.
     out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
+    if get_settings().plan_checks:
+        state["checks_pin"] = checks.pin(state["plan"])
     # Lệnh acceptance cấp feature: cổng 5 chạy trước verdict (cùng khoá worker gửi sang sandbox).
     state["acceptance"] = list((out.get("plan") or {}).get("acceptance") or [])
     state['planning_context'] = out.get('repo_context')

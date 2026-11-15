@@ -1,6 +1,7 @@
 """Check do plan khai: primitive đóng, soát tham số, phân loại đỏ→xanh giữa base và candidate."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -77,6 +78,11 @@ def collect(plan: dict | None) -> list[dict]:
     """Mọi check của plan theo thứ tự bước; gọi sau plan_problems."""
     return [item for task in (plan or {}).get("subtasks") or [] if isinstance(task, dict)
             for item in task.get("checks") or []]
+
+
+def pin(plan: dict | None) -> str:
+    """Băm checks của plan lúc lập; lượt repair không được đổi, gate 5 so lại với băm này."""
+    return hashlib.sha256(json.dumps(collect(plan), sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def target(check: dict) -> str:

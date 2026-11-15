@@ -567,6 +567,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
+    if get_settings().plan_checks and state.get("checks_pin") not in (None, gate_checks.pin(state.get("plan"))):
+        return {"gate": 5, "blocked": True, "reason": "check của plan đã đổi sau khi lập plan: cần lập lại plan",
+                "evidence": None, "failure_class": STAGE_CLASS["plan"]}
     registry_on = get_settings().plan_checks and bool(guest_input(state, "checks"))
     if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
         try:
