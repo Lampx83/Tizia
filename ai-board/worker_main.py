@@ -573,6 +573,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     from runtime import meter
     from repositories.memory import DEFAULT_PATH
+    from runtime import prompt_labels
+    if drift := prompt_labels.check_all(lock=meter.prompt_lock(), labels=prompt_labels.load()):
+        parser.error(f"prompt label lệch prompts.lock.json, worker không chạy: {drift}")
     tracer = meter.Tracer(Path(DEFAULT_PATH).with_name("traces.jsonl"))
     worker = HttpWorker(
         WorkerClient(base_url, key),
