@@ -50,6 +50,17 @@ def _git(checkout: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "--git-dir", str(checkout), *args], capture_output=True, stdin=subprocess.DEVNULL)
 
 
+def missing_dependencies(tree: Path, source: Path) -> list[str]:
+    """Gói trong dependencies của package.json cây app mà node_modules nguồn không có."""
+    if not source.is_dir() or not any(source.iterdir()):
+        return ["(node_modules rỗng)"]
+    try:
+        deps = json.loads((tree / "package.json").read_text(encoding="utf-8")).get("dependencies") or {}
+    except (OSError, ValueError):
+        deps = {"express": "*"}
+    return sorted(name for name in deps if not (source / name / "package.json").is_file())
+
+
 def build_tree(checkout: Path, root: Path) -> Path:
     """Cây app ở <root>/apptree/<sha12> từ git archive của checkout (HEAD ghim), dựng 1 lần; node_modules nối từ repo gốc."""
     sha = _git(checkout, "rev-parse", "HEAD").stdout.decode().strip()[:12]
@@ -65,8 +76,9 @@ def build_tree(checkout: Path, root: Path) -> Path:
             raise FastTierError(f"git archive {checkout} thất bại (mã {git.returncode})")
         (tree / ".ready").write_text("", encoding="utf-8")
     link, source = tree / "node_modules", get_settings().eval_node_modules or ROOT / "node_modules"
-    if not source.is_dir() or not (source / "express").is_dir():  # node_modules rỗng: app thoát ngay, lỗi chỉ hiện ở log app
-        raise FastTierError(f"thiếu {source} hoặc rỗng (không có express): chạy npm install ở gốc repo (app native dùng chung node_modules)")
+    missing = missing_dependencies(tree, source)
+    if missing:  # commit ghim cũ có thể cần gói lockfile hiện tại đã bỏ (vd better-sqlite3); app thoát ngay, lỗi chỉ hiện ở log app
+        raise FastTierError(f"{source} thiếu gói của {sha}: {', '.join(missing)}; cài vào node_modules dùng chung (npm install --no-save <gói>)")
     if not link.exists():
         if os.name == "nt":  # junction không cần quyền admin như symlink
             subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(source)], check=True, capture_output=True)
