@@ -1,5 +1,6 @@
 // aiboard-server: AI Board authority/state on its own PostgreSQL (ADR 0019). No web db, cookies or sessions.
 import express from 'express';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { applyMigrations, createPgDb, ensureBoardBaseSchema } from './ai-board/db/index.js';
@@ -7,6 +8,8 @@ import { createAiBoardServices } from './ai-board/services/composition.js';
 import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachRequesterThread } from './ai-board/api/requester-thread.js';
+import { attachRequestUpload, attachRequestUploadStatic } from './ai-board/api/attachments.js';
+import { shotBackendFromEnv } from './ai-board/shot-storage.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 import { attachAiBoardDriverApi } from './contexts/ai-board-driver/index.js';
@@ -36,15 +39,17 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   await applyMigrations(handle.d);
   const services = createAiBoardServices({ d: handle.d });
 
+  const uploadsDir = env.AI_BOARD_UPLOADS_DIR || path.join(env.DATA_DIR || '/data', 'uploads', 'requests');
+  const shotBackend = shotBackendFromEnv(env, uploadsDir);
+
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '2mb' }));
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'aiboard-server' }));
 
   // Web signs user/role/domain/time; board trusts only that signature (or the worker key on worker routes).
   const verify = requireInternalUser(secret);
-  // LF/122: the board keeps its own PostgreSQL, so the signed user is mirrored as a minimal row (no password)
-  // before any write that references users(id): request owners, admin decisions, lessons, grants.
+  // The board keeps its own PostgreSQL: the signed user is mirrored as a minimal row (no password)
+  // before any write that references users(id).
   const requireAuth = (req, res, next) => verify(req, res, (error) => {
     if (error) return next(error);
     mirrorUser(handle.d, req.user).then(() => next()).catch(next);
@@ -52,14 +57,21 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   const requireAdmin = (req, res, next) => (req.user?.role === 'admin'
     ? next() : res.status(403).json({ error: 'forbidden' }));
   const pass = (_req, _res, next) => next();
+  // Same rule as the web requireEnrolled: admins pass, others need a signed enrolled domain.
+  const requireEnrolled = (req, res, next) => (req.user?.role === 'admin' || req.user?.enrolled_domain
+    ? next() : res.status(403).json({ error: 'enrollment_required', needEnroll: true }));
+
+  // Before the JSON parser: attachments are raw bodies with their own size limit.
+  attachRequestUpload(app, { dir: uploadsDir, requireAuth, requireEnrolled });
+  app.use(express.json({ limit: '2mb' }));
 
   attachAiBoardIntake(app, { db: handle.d, store: services.store, requireAuth, requireStrictCsrf: pass,
     quotaGate: pass, generate });
   attachAiBoardRequestRoutes(app, { store: services.store, aux: services.aux, db: handle.d,
     requireAuth, requireEnrolled: pass, requireAdmin, requireStrictCsrf: pass, classifyRequest });
-  // Thread and votes of one request: the web proxies these to the board (LF/122) so both sides read one store.
   attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
-  attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env });
+  attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env, uploadsDir, shotBackend });
+  attachRequestUploadStatic(app, { dir: uploadsDir, shotBackend });
   attachAiBoardShots(app, { db: handle.d, requireAuth, requireAdmin });
   attachAiBoardDriverApi(app, { db: handle.d, requireAuth, requireAdmin });
 

@@ -5,7 +5,7 @@ import http from 'node:http';
 import express from 'express';
 
 import { attachAiBoardProxy } from '../server/ai-board/web-proxy.js';
-import { verifyInternalHeaders } from '../server/ai-board/internal-auth.js';
+import { HEADERS, verifyInternalHeaders } from '../server/ai-board/internal-auth.js';
 
 const SECRET = 'web-proxy-secret-32chars-0000000';
 
@@ -69,7 +69,7 @@ test('worker and unrelated paths are not proxied; a guest is refused before the 
   } finally { await server.close(); await up.close(); }
 });
 
-test('requester paths go to the board; attachments and AI-decision audit stay on the web', async () => {
+test('requester paths and attachments go to the board; AI-decision audit stays on the web', async () => {
   const up = await upstream();
   const app = express();
   app.use((req, _res, next) => { req.user = { id: 5, role: 'pupil', display_name: 'Lan', enrolled_domain: 'primary' }; next(); });
@@ -85,19 +85,32 @@ test('requester paths go to the board; attachments and AI-decision audit stay on
     for (const [method, url] of [['POST', '/api/requests'], ['GET', '/api/requests'],
       ['GET', '/api/requests/7/progress'], ['POST', '/api/requests/7/continue'],
       ['POST', '/api/requests/7/cancel'], ['POST', '/api/requests/7/retry'],
-      ['POST', '/api/requests/7/thread'], ['POST', '/api/requests/7/messages'], ['POST', '/api/requests/7/vote'],
-      ['POST', '/api/requests/7/edit']]) {
+      ['GET', '/api/requests/7/thread'], ['POST', '/api/requests/7/messages'], ['POST', '/api/requests/7/vote'],
+      ['POST', '/api/requests/7/edit'], ['POST', '/api/requests/attachments']]) {
       const reply = await fetch(`${server.base}${url}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{"body":"x"}' });
       assert.equal(reply.status, 200, `${method} ${url}`);
       assert.deepEqual(await reply.json(), { ok: true }, `${method} ${url} must come from the board`);
     }
-    assert.equal(up.seen.length, 10);
+    assert.equal(up.seen.length, 11);
     assert.equal(verifyInternalHeaders(up.seen[0].headers, SECRET).user.id, 5);
 
-    for (const [method, url] of [['POST', '/api/requests/attachments'], ['GET', '/api/requests/7/decisions']]) {
-      const reply = await fetch(`${server.base}${url}`, { method, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
-      assert.deepEqual(await reply.json(), { local: true }, `${method} ${url} must stay local`);
-    }
-    assert.equal(up.seen.length, 10);
+    const decisions = await fetch(`${server.base}/api/requests/7/decisions`);
+    assert.deepEqual(await decisions.json(), { local: true }, 'decisions must stay local');
+    assert.equal(up.seen.length, 11);
+  } finally { await server.close(); await up.close(); }
+});
+
+test('uploaded files are read through the proxy without a session, unsigned', async () => {
+  const up = await upstream();
+  const app = express();
+  attachAiBoardProxy(app, { target: up.base, secret: SECRET });
+  app.get('/uploads/requests/*', (_req, res) => res.json({ local: true }));
+  const server = await serve(app);
+  try {
+    const reply = await fetch(`${server.base}/uploads/requests/2026-11-14/1-abc.png`);
+    assert.deepEqual(await reply.json(), { ok: true });
+    assert.equal(up.seen.length, 1);
+    assert.equal(up.seen[0].url, '/uploads/requests/2026-11-14/1-abc.png');
+    assert.equal(up.seen[0].headers[HEADERS.signature], undefined);
   } finally { await server.close(); await up.close(); }
 });
