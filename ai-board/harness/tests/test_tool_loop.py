@@ -487,3 +487,33 @@ def test_read_skill_resource_refuses_unknown_escaping_or_non_reference_paths(tmp
 def test_read_skill_resource_refuses_reference_the_body_does_not_mention(tmp_path):
     with pytest.raises(tool_loop.ToolError, match='không nhắc'):
         _read_skill(_skill_fixture(tmp_path, 'Không nhắc tài liệu nào.'), 'demo/references/api.md')
+
+
+MULTI = {"title": "Hai file", "file": "public/a.html", "files": ["public/b.html"], "verify": "thấy B"}
+MULTI_REFUSAL = "multi-file subtask cannot be combined with verified loop or sandbox"
+
+
+@pytest.fixture
+def sandbox_offered(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    monkeypatch.setattr(tool_loop.sandbox_tool, "offered", lambda *a, **k: True)
+
+
+def run_multi():
+    return tool_loop.run_subtask(MULTI, PAGE, deps=Deps([FINISH]), budget=Budget(), model="m", source=".", sha="abc",
+                                 check=lambda _out: None)
+
+
+def test_multi_file_with_sandbox_refused_when_multi_tier_not_armed(monkeypatch, sandbox_offered):
+    monkeypatch.delenv("AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS", raising=False)
+    assert run_multi()["reason"] == MULTI_REFUSAL
+
+
+def test_multi_file_with_sandbox_allowed_when_multi_tier_armed(monkeypatch, sandbox_offered):
+    monkeypatch.setenv("AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS", "multi")
+    assert run_multi()["reason"] != MULTI_REFUSAL
+
+
+def test_single_tier_arm_does_not_unlock_multi_file_with_sandbox(monkeypatch, sandbox_offered):
+    monkeypatch.setenv("AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS", "single")
+    assert run_multi()["reason"] == MULTI_REFUSAL

@@ -15,6 +15,7 @@ from repositories import code_index
 import path_policy
 from repositories import server_hsm
 from runtime import limits, meter, tool_manifest
+from settings import get_settings
 from verification.sandbox import SandboxError, SandboxSession
 
 NAME = "run_in_sandbox"
@@ -48,6 +49,11 @@ def offered(task_type, gate: int = 3, env=None) -> bool:
     """Tool offered in gate `gate` loop for this task type; flag must be on, unknown type is not offered."""
     cfg = limits.sandbox_tool(env)
     return cfg["enabled"] and gate in cfg["task_types"].get(task_type, [])
+
+
+def tier_armed(tier: str, env=None) -> bool:
+    """True when `tier` is listed in AI_BOARD_SANDBOX_REPO_SCRIPTS_TIERS."""
+    return tier in {t.strip() for t in get_settings(env).sandbox_repo_scripts_tiers.split(",") if t.strip()}
 
 
 def _spec(cfg: dict) -> tool_manifest.ToolSpec:

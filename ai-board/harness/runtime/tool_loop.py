@@ -846,7 +846,7 @@ def _run_subtask(subtask: dict, current: str | None, *, deps, budget, model: str
     for path in paths:
         if reason := MANIFEST.policy.write_reason(path):
             return _result("blocked", reason, "critical")
-    if len(paths) > 1 and (checks or _SANDBOX_OFFERED.get()):
+    if len(paths) > 1 and (checks or (_SANDBOX_OFFERED.get() and not sandbox_tool.tier_armed("multi"))):
         return _result("blocked", "multi-file subtask cannot be combined with verified loop or sandbox", "critical")
     sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
                                    receipts=sandbox_log, budget=budget,
