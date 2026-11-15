@@ -38,7 +38,12 @@ def test_skill_count_matches_server_counter():
     from pathlib import Path
     root = Path(__file__).resolve().parents[3]
     samples = ['Xin chào', 'skill', 'Trigger: a step writes tests.\n1. Run `python -m pytest` and record the exit status.']
+    assert not isinstance(token_count._load(str(token_count.SHIPPED)), token_count.ByteCounter), \
+        'tokenizers package missing: pip install -r requirements.txt'
     script = ("import {tokenCounter} from './server/ai-board/services/token-count.js';"
-              "const c=tokenCounter();process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).map(t=>c.count(t))))")
-    out = subprocess.run(['node', '--input-type=module', '-e', script, json.dumps(samples)], capture_output=True, check=True, cwd=root)
+              "const c=tokenCounter();let s='';process.stdin.setEncoding('utf8');"
+              "for await (const ch of process.stdin) s+=ch;"
+              "process.stdout.write(JSON.stringify(JSON.parse(s).map(t=>c.count(t))))")
+    out = subprocess.run(['node', '--input-type=module', '-e', script], input=json.dumps(samples, ensure_ascii=False).encode('utf-8'),
+                         capture_output=True, check=True, cwd=root)
     assert json.loads(out.stdout) == [token_count.skill_count(t) for t in samples]
