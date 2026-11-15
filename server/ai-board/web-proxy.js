@@ -2,22 +2,19 @@
 import http from 'node:http';
 import { signInternalHeaders } from './internal-auth.js';
 
-const PATHS = ['/api/ai-board', '/api/admin/ai-board', '/api/requests', '/uploads/requests'];
+const PATHS = ['/api/ai-board', '/api/admin/ai-board', '/api/requests', '/api/ai-decisions', '/uploads/requests'];
 // Worker endpoints keep the worker key and must talk to aiboard-server directly, never through a user session.
 const PUBLIC_OR_WORKER = [/^\/api\/ai-board\/worker\//];
 // Requester paths the board owns: the request row, its workflow actions, thread/votes and attachments.
 const BOARD_REQUESTER = [
   /^\/api\/requests\/?(\?.*)?$/,
   /^\/api\/requests\/attachments(\?.*)?$/,
-  /^\/api\/requests\/\d+\/(progress|continue|cancel|retry|status|edit|thread|messages|vote)(\?.*)?$/,
+  /^\/api\/requests\/\d+\/(progress|continue|cancel|retry|status|edit|thread|messages|vote|decisions)(\?.*)?$/,
 ];
-// The AI-decision audit is still written on the web (admin reply, acknowledgements): it stays there.
-const WEB_ONLY_REQUESTER = /^\/api\/requests\/\d+\/decisions(\?.*)?$/;
 const UPLOADS = /^\/uploads\/requests\//;
 
 function requesterProxied(url) {
   if (!url.startsWith('/api/requests')) return true; // /api/ai-board and /api/admin/ai-board
-  if (WEB_ONLY_REQUESTER.test(url)) return false;
   return BOARD_REQUESTER.some((pattern) => pattern.test(url));
 }
 

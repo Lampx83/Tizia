@@ -8,6 +8,7 @@ import { createAiBoardServices } from './ai-board/services/composition.js';
 import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachRequesterThread } from './ai-board/api/requester-thread.js';
+import { attachHumanDecisions } from './ai-board/api/human-decisions.js';
 import { attachRequestUpload, attachRequestUploadStatic } from './ai-board/api/attachments.js';
 import { shotBackendFromEnv } from './ai-board/shot-storage.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
@@ -67,6 +68,8 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
 
   attachAiBoardIntake(app, { db: handle.d, store: services.store, requireAuth, requireStrictCsrf: pass,
     quotaGate: pass, generate });
+  // Before the request routes: the real decision trail shadows their empty placeholder.
+  attachHumanDecisions(app, { db: handle.d, requireAuth, requireAdmin });
   attachAiBoardRequestRoutes(app, { store: services.store, aux: services.aux, db: handle.d,
     requireAuth, requireEnrolled: pass, requireAdmin, requireStrictCsrf: pass, classifyRequest });
   attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
