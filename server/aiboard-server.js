@@ -9,7 +9,7 @@ import { HEADERS, requireInternalUser } from './ai-board/internal-auth.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from './ai-board/routes.js';
 import { attachRequesterThread } from './ai-board/api/requester-thread.js';
 import { attachRequestUpload, attachRequestUploadStatic } from './ai-board/api/attachments.js';
-import { shotBackendFromEnv } from './ai-board/shot-storage.js';
+import { shotBackendFromEnv, startShotRetention } from './ai-board/shot-storage.js';
 import { attachAiBoardIntake } from './contexts/ai-board-intake/index.js';
 import { attachAiBoardShots } from './contexts/ai-board-shots/index.js';
 import { attachAiBoardDriverApi } from './contexts/ai-board-driver/index.js';
@@ -30,7 +30,8 @@ async function mirrorUser(d, user) {
 }
 
 /** Build the board-only app. `dbHandle` lets tests pass an isolated PostgreSQL; production uses AI_BOARD_DATABASE_URL. */
-export async function createAiBoardServer({ env = process['env'], dbHandle = null, classifyRequest, generate, logger = console } = {}) {
+export async function createAiBoardServer({ env = process['env'], dbHandle = null, classifyRequest, generate, logger = console,
+  startRetention = startShotRetention } = {}) {
   const secret = String(env.AI_BOARD_INTERNAL_SECRET || '');
   if (!secret) throw new Error('AI_BOARD_INTERNAL_SECRET is required');
   const handle = dbHandle ?? createPgDb({ url: String(env.AI_BOARD_DATABASE_URL || '') });
@@ -41,6 +42,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
 
   const uploadsDir = env.AI_BOARD_UPLOADS_DIR || path.join(env.DATA_DIR || '/data', 'uploads', 'requests');
   const shotBackend = shotBackendFromEnv(env, uploadsDir);
+  const retentionTimer = startRetention({ db: handle.d, backend: shotBackend, env, log: logger });
 
   const app = express();
   app.disable('x-powered-by');
@@ -80,7 +82,7 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
     if (res.headersSent) return res.end();
     res.status(Number(error?.status) || 500).json({ error: 'internal_error' });
   });
-  return { app, services, handle, close: async () => { await handle.close?.(); } };
+  return { app, services, handle, close: async () => { clearInterval(retentionTimer); await handle.close?.(); } };
 }
 
 /** Start standalone: node server/aiboard-server.js (AI_BOARD_DATABASE_URL + AI_BOARD_INTERNAL_SECRET). */

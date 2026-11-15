@@ -161,4 +161,6 @@ export function attachRequestUploadStatic(router, { dir, shotBackend }) {
     index: false,
     setHeaders: setRequestUploadHeaders,
   }));
+  router.use('/uploads/requests', (error, _req, res, next) => (Number(error?.status) === 404
+    ? res.status(404).type('text/plain').send('Not found') : next(error)));
 }
