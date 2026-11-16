@@ -5,6 +5,7 @@ import { tiziaFetch } from '@/lib/tizia';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Lock } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata: Metadata = pageMeta({
   title: 'Khám phá hành trình học — Tính năng mở khoá dần',
@@ -38,18 +39,20 @@ export default async function KhamPha() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">🧭 Khám phá hành trình</h1>
-        <p className="text-muted-foreground">Tính năng mở khoá dần theo tiến độ học. Bạn đang ở mức {user_tier}.</p>
+      <PageHeader
+        icon="🧭"
+        title="Khám phá hành trình"
+        description={<>Tính năng mở khoá dần theo tiến độ học. Bạn đang ở mức {user_tier}.</>}
+      >
         {progress && (
-          <div className="mt-3 flex flex-wrap gap-2 text-sm">
+          <div className="flex flex-wrap gap-2 text-sm">
             <Badge variant="secondary">🔥 Streak {progress.streak}</Badge>
             <Badge variant="secondary">✅ Đúng {progress.quiz_correct}</Badge>
             <Badge variant="secondary">🎯 Kỹ năng {progress.skills_earned}</Badge>
             <Badge variant="secondary">📅 Ngày học {progress.active_days}</Badge>
           </div>
         )}
-      </div>
+      </PageHeader>
 
       {tiers.map((t) => (
         <section key={t} className="space-y-3">
@@ -143,13 +146,11 @@ const JOURNEY: Array<{ tier: string; title: string; desc: string; links: Array<[
 function GuestOverview() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">🧭 Khám phá hành trình học ở Tizia</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Tizia mở tính năng dần theo tiến độ, để người học không bị ngợp ngay từ đầu. Dưới đây là
-          toàn bộ chặng đường — bạn có thể xem thử từng phần trước khi tạo tài khoản.
-        </p>
-      </div>
+      <PageHeader
+        icon="🧭"
+        title="Khám phá hành trình học ở Tizia"
+        description="Tizia mở tính năng dần theo tiến độ, để người học không bị ngợp ngay từ đầu. Dưới đây là toàn bộ chặng đường — bạn có thể xem thử từng phần trước khi tạo tài khoản."
+      />
 
       <div className="space-y-6">
         {JOURNEY.map((step) => (

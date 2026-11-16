@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
 
 // Shape trả về từ /api/agents (portal-agents/index.js decorateAgent).
 type Agent = {
@@ -48,6 +49,8 @@ export default function AgentChat() {
   const [fName, setFName] = useState('');
   const [regStatus, setRegStatus] = useState<{ kind: '' | 'ok' | 'err'; text: string }>({ kind: '', text: '' });
   const [registering, setRegistering] = useState(false);
+  // Đăng ký agent chỉ admin làm được (server chặn 403 — tránh SSRF); người khác không thấy form.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const msgsRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -64,7 +67,13 @@ export default function AgentChat() {
   const loadAgents = useCallback(async () => {
     setListState('loading');
     try {
-      const r = await fetch('/api/agents', { credentials: 'same-origin' });
+      const [r, me] = await Promise.all([
+        fetch('/api/agents', { credentials: 'same-origin' }),
+        fetch('/api/auth/me', { credentials: 'same-origin' })
+          .then((x) => (x.ok ? x.json() : null))
+          .catch(() => null),
+      ]);
+      setIsAdmin(me?.user?.role === 'admin');
       if (r.status === 401) {
         setListState('need-login');
         return;
@@ -212,11 +221,11 @@ export default function AgentChat() {
 
   return (
     <div className="w-full space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">
-          Trợ lý AI <span className="text-sm font-semibold text-muted-foreground">· Agent kiểu AI Portal</span>
-        </h1>
-      </div>
+      <PageHeader
+        icon={<Bot className="h-6 w-6" />}
+        title="Trợ lý AI"
+        description="Hỏi đáp với các trợ lý AI đã cài trên Tizia, trả lời theo thời gian thực."
+      />
 
       <div className="grid gap-4 md:grid-cols-[300px_1fr]">
         {/* SIDEBAR: agents + cài mới */}
@@ -241,7 +250,9 @@ export default function AgentChat() {
             )}
             {listState === 'ready' && agents.length === 0 && (
               <div className="px-0.5 py-1.5 text-sm text-muted-foreground">
-                Chưa có agent nào. Mở “Cài agent mới” bên dưới để thêm.
+                {isAdmin
+                  ? 'Chưa có agent nào. Mở “Cài agent mới” bên dưới để thêm.'
+                  : 'Chưa có trợ lý nào được mở. Quản trị viên sẽ thêm trợ lý khi sẵn sàng.'}
               </div>
             )}
             {listState === 'ready' &&
@@ -277,6 +288,7 @@ export default function AgentChat() {
               })}
           </div>
 
+          {isAdmin && (
           <details
             className="mt-2.5"
             open={addOpen}
@@ -328,6 +340,7 @@ export default function AgentChat() {
               </p>
             </div>
           </details>
+          )}
         </div>
 
         {/* CHAT */}

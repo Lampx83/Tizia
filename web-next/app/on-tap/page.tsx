@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import JsonLd from '@/components/JsonLd';
 import { pageMeta, breadcrumbLd, absoluteUrl } from '@/lib/seo';
 import { GRADES } from '@/lib/curriculum';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata: Metadata = pageMeta({
   title: 'Thư viện ôn tập — Câu hỏi và lời giải từ Lớp 1 đến Lớp 12',
@@ -42,14 +43,11 @@ export default function OnTapHub() {
         ]}
       />
 
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">📚 Thư viện ôn tập Tizia</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Toàn bộ câu hỏi ôn tập của Tizia, sắp theo khối lớp và môn học, bám Chương trình giáo dục
-          phổ thông 2018. Mỗi bài có câu hỏi trắc nghiệm kèm lời giải thích ngắn gọn — đọc được ngay,
-          không cần tài khoản.
-        </p>
-      </header>
+      <PageHeader
+        icon="📚"
+        title="Thư viện ôn tập Tizia"
+        description="Toàn bộ câu hỏi ôn tập của Tizia, sắp theo khối lớp và môn học, bám Chương trình giáo dục phổ thông 2018. Mỗi bài có câu hỏi trắc nghiệm kèm lời giải thích ngắn gọn — đọc được ngay, không cần tài khoản."
+      />
 
       {LEVELS.map((lv) => {
         const grades = GRADES.filter((g) => g.level.includes(lv.name) || g.levelShort === lv.name);

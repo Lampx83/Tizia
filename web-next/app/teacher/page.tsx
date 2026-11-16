@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { privateMeta } from '@/lib/seo';
 import { tiziaFetch } from '@/lib/tizia';
 import TeacherClient, { type ClassSummary } from './teacher-client';
+import { PageHeader } from '@/components/ui/page-header';
+import { buttonVariants } from '@/components/ui/button';
 
 // noindex — trang quản lý lớp riêng của giảng viên.
 export const metadata: Metadata = privateMeta(
@@ -31,26 +33,24 @@ export default async function TeacherPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">👨‍🏫 Quản lý lớp</h1>
-        <span className="text-sm text-muted-foreground">
-          Tạo lớp · phát mã mời cho SV · theo dõi tiến độ
-        </span>
-        <span className="ml-auto flex flex-wrap gap-2 text-xs">
-          <Link href="/teacher-live" className="rounded-md bg-card px-3 py-1.5 text-foreground hover:bg-card/80">
-            🔴 Live Quiz
-          </Link>
-          <Link href="/lesson-builder" className="rounded-md bg-card px-3 py-1.5 text-foreground hover:bg-card/80">
-            🧩 Soạn bài
-          </Link>
-          <Link href="/dashboard" className="rounded-md bg-card px-3 py-1.5 text-foreground hover:bg-card/80">
-            📊 Dashboard tổng
-          </Link>
-          <Link href="/" className="rounded-md bg-card px-3 py-1.5 text-foreground hover:bg-card/80">
-            ← Trang chính
-          </Link>
-        </span>
-      </header>
+      <PageHeader
+        icon="👨‍🏫"
+        title="Quản lý lớp"
+        description="Tạo lớp · phát mã mời cho sinh viên · theo dõi tiến độ"
+        actions={
+          <>
+            {[
+              ['/teacher-live', '🔴 Live Quiz'],
+              ['/lesson-builder', '🧩 Soạn bài'],
+              ['/dashboard', '📊 Dashboard tổng'],
+            ].map(([href, label]) => (
+              <Link key={href} href={href} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                {label}
+              </Link>
+            ))}
+          </>
+        }
+      />
 
       <TeacherClient initialClasses={initialClasses} />
     </div>
