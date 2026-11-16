@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import re
 
+from settings import get_settings
+
 _TEST = re.compile(r"(?:^|/)(?:tests?|__tests__)/|(?:\.|_)(?:test|spec)\.[^/]+$")
 _ROUTE = re.compile(r"\b(?:app|router|route)\s*\.\s*(?:get|post|put|patch|delete|all|use)\s*\(")
 _MIGRATION = re.compile(r"(?:^|/)migrations?/|(?:^|/)[^/]*migration[^/]*\.sql$")
 _AUTH = re.compile(r"(?:^|/)(?:auth|identity|session|login|password|oauth|csrf)(?:[-_.][^/]*)?(?:/|$)", re.I)
 _PAYMENT = re.compile(r"(?:^|/)(?:payments?|billing)(?:[-_.][^/]*)?(?:/|$)", re.I)
 _SCHEMA_FILE = re.compile(r"(?:^|/)(?:contract|openapi|swagger|schema)[^/]*\.(?:json|ya?ml)$", re.I)
+_DDL = re.compile(r"(?<!\w)(?:create\s+(?:unique\s+)?(?:table|index)\s+(?:if\s+not\s+exists\s+)?[\w.\"]+\s*(?:\(|on\b)"
+                  r"|alter\s+table\s+(?:if\s+exists\s+)?[\w.\"]+\s+(?:add|drop|alter|rename)\b"
+                  r"|drop\s+(?:table|index)\s+(?:if\s+exists\s+)?[\w.\"]+)", re.I)
 _SERVER = ("server/", "api/")
 
 
@@ -34,14 +39,14 @@ def _files(diffs: list[dict]):
 
 def classify(diffs: list[dict]) -> dict:
     """{'class': 'one_way'|'two_way', 'reasons': [{'kind','path'}]}; test files never classify."""
-    reasons = []
+    reasons, ddl = [], get_settings().change_class_ddl
     for path, deleted, added in _files(diffs):
         path = path.replace("\\", "/")
         if _TEST.search(path):
             continue
         if deleted:
             reasons.append({"kind": "file_deletion", "path": path})
-        if _MIGRATION.search(path):
+        if _MIGRATION.search(path) or ddl and any(_DDL.search(line) for line in added):
             reasons.append({"kind": "migration", "path": path})
         if _AUTH.search(path):
             reasons.append({"kind": "auth", "path": path})

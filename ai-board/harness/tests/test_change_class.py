@@ -50,3 +50,19 @@ def test_risk_triage_adds_high_signal_and_class_for_one_way():
 def test_lookalike_names_and_route_helper():
     assert kinds(diff('public/js/authors.js')) == [] and kinds(diff('public/checkout.html')) == []
     assert kinds(diff('server/ai-board/api/x.js', ["route.post('/api/x', h);"])) == ['api_schema']
+
+
+DDL = ['await db.exec("ALTER TABLE users ADD COLUMN age INT");']
+
+
+def test_ddl_in_non_migration_file_is_two_way_while_flag_off():
+    assert kinds(diff('server/contexts/x/index.js', DDL)) == []
+
+
+def test_ddl_in_added_lines_is_a_migration_with_flag_on(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_CHANGE_CLASS_DDL', '1')
+    for sql in ('ALTER TABLE t ADD c INT', 'create table if not exists t (id int)', 'DROP TABLE t', 'CREATE UNIQUE INDEX i ON t(a)'):
+        assert kinds(diff('server/db.js', [sql])) == ['migration']
+    assert kinds(diff('server/contexts/x/index.js', ['const note = "we alter the table later";'])) == []
+    assert kinds(diff('test/db.test.js', DDL)) == []
+    assert kinds(diff('public/x.html', ['<p>Create table of contents</p>'])) == []
