@@ -82,3 +82,19 @@ def test_fast_tier_lists_dependency_the_pinned_tree_needs(tmp_path):
     (modules / "express").mkdir(parents=True)
     (modules / "express" / "package.json").write_text("{}", encoding="utf-8")
     assert eval_fast.missing_dependencies(tree, modules) == ["better-sqlite3"]
+
+
+def test_crashed_local_trial_leaves_no_pending_cleanup():
+    result = execute_trial([sys.executable, "-c", "import sys; sys.exit(3)"], {"task": {"id": "t1"}, "mode": "e2e"}, timeout_s=10)
+    assert result["reason"] == "trial_process_error" and result["infra_error"]
+    assert result["cleanup_pending"] is False
+
+
+def test_unconfirmed_sandbox_cleanup_stays_pending(monkeypatch):
+    from evaluation.suite import isolated
+
+    def fail(*args, **kwargs):
+        raise OSError("owned sandbox cleanup unconfirmed; journal: x")
+    monkeypatch.setattr(isolated, "run_owned", fail)
+    result = isolated.execute_trial(["x"], {"task": {"id": "t1"}, "mode": "e2e"}, timeout_s=10)
+    assert result["cleanup_pending"] is True

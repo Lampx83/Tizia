@@ -22,6 +22,7 @@ def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dic
     started = time.monotonic()
     task, mode = request["task"], request["mode"]
     detail = None
+    pending = True
     try:
         result = run_owned(command, input=json.dumps(request), timeout=timeout_s)
         detail = (result.stderr or "")[-STDERR_TAIL:] or None
@@ -39,12 +40,14 @@ def execute_trial(command: list[str], request: dict, *, timeout_s: float) -> dic
     except (OSError, ValueError) as error:
         reason = "trial_process_error"
         detail = detail or str(error)[-STDERR_TAIL:]
+        # run_owned already destroyed owned sandbox runs unless it reports otherwise; a crashed local app leaves nothing remote.
+        pending = "cleanup unconfirmed" in " ".join([str(error), *getattr(error, "__notes__", [])])
     return {
         "id": task["id"], "mode": mode, "resolved": False, "collateral": [], "gate_passed": False,
         "gate4": None, "prod": "skipped", "ended": reason, "shipped": False, "review": None,
         "reason": reason, "infra_error": True, "error": reason, "plan": None, "capture": None,
         "model_calls": None, "tokens_in": None, "tokens_out": None, "cost_status": "unknown",
-        "cleanup_pending": True, "loop_tools": [], "retries": 0, "stuck": False, "truncated": False,
+        "cleanup_pending": pending, "loop_tools": [], "retries": 0, "stuck": False, "truncated": False,
         "wall_s": round(time.monotonic() - started, 3), "providers": [], "served": [],
         "reasoning_chars": 0, "diff": None, "recall": None, "ref_errors": 0, "schema_fallbacks": 0,
         **({"detail": detail} if detail and reason == "trial_process_error" else {}),
