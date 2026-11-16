@@ -30,6 +30,7 @@ import { createEvalTaskRepository } from '../repositories/eval-tasks.js';
 import { createGateProofService } from '../services/gate-proofs.js';
 import { createGateProofRepository } from '../repositories/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
+import { createCheckRegistryStore } from '../repositories/check-registries.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createFeatureLifecycleRepository } from '../repositories/feature-lifecycle.js';
@@ -449,6 +450,15 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await toolManifests.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
   });
 
+  // ── Phiên bản registry primitive check của gate 5: admin duyệt hoặc thu hồi theo băm (như tool manifest) ──
+  const checkRegistries = createCheckRegistryStore(store.db);
+  route.get('/api/admin/ai-board/check-registries', requireAuth, requireAdmin, async (_req, res) => {
+    res.json({ registries: await checkRegistries.list() });
+  });
+  route.post('/api/admin/ai-board/check-registries/:hash/:action', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try { res.json(await checkRegistries.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
+  });
+
   // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
   route.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, async (_req, res) => {
     res.json({ ...(await aux.transientRetryState(createTransientRetryRepository(store.db))), blocked: await aux.listTransientBlocked(createTransientRetryRepository(store.db)) });
@@ -624,6 +634,9 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   route.post('/api/ai-board/worker/tickets/:id/tool-manifest', authenticate, handle(async (req,res) => {
     res.json(await hsm.reportToolManifest(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/check-registry', authenticate, handle(async (req,res) => {
+    res.json(await hsm.reportCheckRegistry(req.params.id,req.body || {}));
   }));
   const gateProofs = createGateProofService(store, createGateProofRepository(store.db));
   route.post('/api/ai-board/worker/tickets/:id/gate-proof/:op', authenticate, handle(async (req,res) => {

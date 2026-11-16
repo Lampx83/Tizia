@@ -25,6 +25,8 @@ from verification import functional, style
 from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
 from runtime.meter import redact
 from settings import get_settings
+from verification import check_registry, checks as gate_checks
+from repositories import server_hsm
 
 _SECRET_NAME = re.compile(r"(?:SECRET|TOKEN|PASSWORD|API_KEY|SECKEY|PRIVATE_KEY)", re.I)
 _REQUIRED_ABSENT = {"SCOREUP_API_KEY", "CODELAB_API_KEY", "GA_API_SECRET",
@@ -514,8 +516,37 @@ def probe_http(url: str, *, token: str | None = None) -> tuple[int, bytes]:
         return response.status, response.read()
 
 
+def probe_dom(url: str, selector: str, prop: str | None) -> tuple[bool, str | None]:
+    """(selector có trong DOM, giá trị computed style của prop); trình duyệt thật, chỉ gọi khi có check DOM."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = _launch(p)
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="load", timeout=15000)
+            exists, value = page.evaluate("""([selector, prop]) => {
+                let el = null;
+                try { el = document.querySelector(selector); } catch (e) { return [false, null]; }
+                if (!el) return [false, null];
+                return [true, prop ? getComputedStyle(el).getPropertyValue(prop).trim() : null];
+            }""", [selector, prop])
+            return bool(exists), value
+        finally:
+            browser.close()
+
+
+def _check_passes(check: dict, base: str, http_probe, dom_probe, node_ok) -> bool:
+    """Một check trên bản đang được phục vụ: node_test chạy trong container, còn lại qua HTTP (+ DOM nếu cần)."""
+    if check["primitive"] == "node_test":
+        return node_ok(check["file"])
+    url = base + check["path"]
+    status, body = http_probe(url)
+    dom = dom_probe(url, check["selector"], check.get("prop")) if gate_checks.needs_dom(check) else None
+    return gate_checks.passed(check, status, body, dom)
+
+
 def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
-        runner=None, http_probe=None, functional_probe=None) -> dict:
+        runner=None, http_probe=None, functional_probe=None, dom_probe=None) -> dict:
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
     if not checkout:
@@ -536,6 +567,16 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
+    if get_settings().plan_checks and state.get("checks_pin") not in (None, gate_checks.pin(state.get("plan"))):
+        return {"gate": 5, "blocked": True, "reason": "check của plan đã đổi sau khi lập plan: cần lập lại plan",
+                "evidence": None, "failure_class": STAGE_CLASS["plan"]}
+    registry_on = get_settings().plan_checks and bool(guest_input(state, "checks"))
+    if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
+        try:
+            server_hsm.register_check_registry(check_registry.REGISTRY.data)
+            server_hsm.authorize_action("run_check", check_registry=check_registry.REGISTRY.hash)
+        except server_hsm.AuthorityError as error:
+            return {"gate": 5, "blocked": True, "reason": str(error), "evidence": None, "failure_class": error.failure_class}
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
     pages = _public_paths(guest_input(state, "diffs") or [])
@@ -552,12 +593,14 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     trace = getattr(deps, "trace", None)
     runner = runner or subprocess.run
     http_probe = http_probe or probe_http
+    dom_probe = dom_probe or probe_dom
     logs: list[str] = []
     reason = None
     # Failure class by stage: before containers run = environment (transient, retried once);
     # isolation/secret checks = critical boundary violation; after = the candidate (ordinary).
     stage = "boot"
     screenshot = None
+    checks_result = None
     smoke_ok = False
     http_observed = False
     probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
@@ -705,6 +748,23 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     smoke_ok = False
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
+            checks_on = get_settings().plan_checks
+            check_rows = [{"check": check, "base": None} for check in (guest_input(state, "checks") or [] if checks_on else [])]
+            def node_ok(file: str) -> bool:
+                if not (Path(checkout) / file).is_file():
+                    return False
+                parent = str(Path("/app", file).parent).replace("\\", "/")
+                command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
+                command([*compose, "cp", str(Path(checkout) / file), f"tizia:/app/{file}"])
+                try:
+                    command([*compose, "exec", "-T", "tizia", "node", "--test", f"/app/{file}"], timeout=60)
+                except (subprocess.TimeoutExpired, RuntimeError):
+                    return False
+                return True
+            for row in check_rows:  # candidate phase: container still serves the candidate
+                with _check_span(trace, "curl", gate_checks.target(row["check"])) as attrs:
+                    row["candidate"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
+                    attrs["tizia.gate5.check.passed"] = row["candidate"]
             http_observed = True
             stage = 'plan'
             observed_pages = html or ([primary] if primary else [])
@@ -763,6 +823,31 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
                 if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
                     raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
+            if check_rows:  # base phase after screenshots: _restore_base overwrites the candidate files
+                try:
+                    restored = _restore_base(state, checkout, pages,
+                                             lambda local, target: command([*compose, "cp", str(local), f"tizia:{target}"]))
+                except (OSError, RuntimeError) as exc:
+                    restored = None
+                    logs.append(f"Check không có base để so: {exc}")
+                for row in check_rows:  # chỉ trang đã đổi khôi phục được; route/API không có base → không biết
+                    page = gate_checks.target(row["check"]).split("?")[0]
+                    if restored is None or page not in pages:
+                        continue
+                    if page in restored:  # file mới: base không có trang, đỏ trên base
+                        row["base"] = False
+                        continue
+                    row["base"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
+                checks_result = {"verdict": gate_checks.classify(check_rows),
+                                 "rows": [{key: row[key] for key in ("check", "base", "candidate")} for row in check_rows]}
+                logs.append("Check Gate 5: " + json.dumps(checks_result, ensure_ascii=False))
+                if checks_result["verdict"] == gate_checks.CODE_FAULT:
+                    raise RuntimeError("check đỏ trên cả base lẫn candidate: " + ", ".join(
+                        f"{row['check']['primitive']} {gate_checks.target(row['check'])}" for row in check_rows
+                        if row["base"] is False and not row["candidate"]))
+                if checks_result["verdict"] == gate_checks.NONE:
+                    functional_result = {**functional_result, 'needs_review': True}
+                    logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
         finally:
@@ -782,7 +867,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
                 "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
                 "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
-                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed}
+                "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed,
+                **({"checks": checks_result} if checks_result else {}),
+                **({"check_registry": check_registry.REGISTRY.hash} if registry_on else {})}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
             "failure_class": failure_class(stage, reason)}

@@ -23,6 +23,7 @@ from services import file_context  # noqa: E402
 import tools  # noqa: E402
 from repositories import code_index
 import path_policy
+from gates import change_class
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 from services import token_count
@@ -333,7 +334,7 @@ class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
     def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None,
-                 extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None):
+                 extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None, plan_checks: bool = False):
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.skills = dict(skills or {})
         self.extra_base = dict(extras or {})
@@ -344,6 +345,7 @@ class Workspace:
         self.stale_reset = None
         self.scope_warned = False
         self.checks, self.budget, self.proofs = checks, budget, {}
+        self.plan_checks = plan_checks
         self.trace = trace
         self.sandbox = sandbox
         self.call_id = None
@@ -524,14 +526,21 @@ class Workspace:
         shown = [f"L{n}| {line[:200]}" for score, n, line in scored if score]
         return "\nDòng thật có từ trong search (chép nguyên văn hoặc dùng after_line):\n" + "\n".join(shown) if shown else ""
 
+    def test_required(self) -> bool:
+        """Subtask không có checks: luôn cần test. Có checks: chỉ thay đổi logic (hoặc không xếp được) cần test."""
+        if not self.plan_checks:
+            return True
+        return not change_class.display_only([(self.file, self.base, self.content)]
+                                             + [(path, self.extra_base[path], text) for path, text in self.extra_content.items()])
+
     def complete(self) -> bool:
-        """Đã có thay đổi ở file đích và đã có test: finish bị loại lúc này là lỗi nội dung."""
-        return bool(self.test_file) and not (self.content == self.base or (self.base is None and not self.content))
+        """Đã có thay đổi ở file đích và đã có test (nếu cần): finish bị loại lúc này là lỗi nội dung."""
+        return (bool(self.test_file) or not self.test_required()) and not (self.content == self.base or (self.base is None and not self.content))
 
     def proposal(self) -> dict:
         if self.content == self.base or (self.base is None and not self.content):
             raise ValueError("chưa có thay đổi nào ở file đích")
-        if not self.test_file:
+        if not self.test_file and self.test_required():
             raise ValueError("thiếu test (write_test)")
         if self.checks:
             self.verified()
@@ -870,7 +879,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                if _SANDBOX_OFFERED.get() else None)
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
-                   extras=extras)
+                   extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")))
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if extras:
         prompt += MULTI.format(files=", ".join(paths))

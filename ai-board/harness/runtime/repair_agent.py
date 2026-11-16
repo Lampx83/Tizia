@@ -14,6 +14,7 @@ from pathlib import Path
 
 import path_policy
 from runtime import levels, progress
+from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "repair_agent.md").read_text(encoding="utf-8")
 PROPOSAL_CHARS = 800
@@ -130,6 +131,8 @@ def parse(raw) -> dict:
         raise ProposalError(f"không phải JSON: {error}") from None
     if not isinstance(body, dict):
         raise ProposalError("kết quả phải là object")
+    if "checks" in body and get_settings().plan_checks:
+        raise ProposalError("checks bất biến trong lượt repair; đổi check phải lập plan lại")
     diagnosis = str(body.get("diagnosis") or "").strip()
     if not diagnosis:
         raise ProposalError("thiếu diagnosis")

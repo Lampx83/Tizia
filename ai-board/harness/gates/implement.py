@@ -485,7 +485,8 @@ def _write_and_diff(repo_dir: Path, file_rel: str, code: str, test_file_rel: str
                     extras: dict[str, str] | None = None) -> str:
     """Ghi code + test (+ file phụ của subtask nhiều file) vào repo scratch, trả diff thật (git diff --cached), rồi
     commit để lần ghi kế tiếp (subtask sau) diff đúng phần MỚI thêm."""
-    for rel, content in ((file_rel, code), (test_file_rel, test_code), *(extras or {}).items()):
+    pairs = [(file_rel, code), *([(test_file_rel, test_code)] if test_file_rel else []), *(extras or {}).items()]
+    for rel, content in pairs:
         path = _safe_join(repo_dir, rel)
         server_hsm.authorize_action('write_candidate')
         path.parent.mkdir(parents=True, exist_ok=True)
