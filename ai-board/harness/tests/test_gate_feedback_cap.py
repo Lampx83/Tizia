@@ -40,6 +40,13 @@ def _fail(execution, gate=4, reason="node --check public/a.html", text="SyntaxEr
     return execution.repair_check()
 
 
+@pytest.fixture(autouse=True)
+def repair_replan_on(monkeypatch):
+    # Feedback cap only matters once repair_replan allows more than one repair round.
+    import worker_execution
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {**worker_execution.REPAIR_REPLAN, "enabled": True})
+
+
 @pytest.fixture
 def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_GATE_FEEDBACK_CAP", "1")

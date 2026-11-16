@@ -12,6 +12,13 @@ FETCH = {"tool": "fetch_url", "arguments": {"url": "https://docs.example.com/api
 
 
 @pytest.fixture(autouse=True)
+def repair_replan_on(monkeypatch):
+    # Package outcomes return to a second repair round, which needs repair_replan on.
+    import worker_execution
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {**worker_execution.REPAIR_REPLAN, "enabled": True})
+
+
+@pytest.fixture(autouse=True)
 def base_file(monkeypatch):
     monkeypatch.setattr(tools, "_show", lambda *a: PAGE)
 

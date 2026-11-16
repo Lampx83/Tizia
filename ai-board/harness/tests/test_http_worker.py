@@ -694,7 +694,9 @@ def test_second_transient_failure_blocks_without_repair():
     assert verdict['repairs'] == []
 
 
-def test_ordinary_failure_gets_one_repair_pass_with_the_failure_reason():
+def test_ordinary_failure_gets_one_repair_pass_with_the_failure_reason(monkeypatch):
+    import worker_execution
+    monkeypatch.setattr(worker_execution, 'REPAIR_REPLAN', {**worker_execution.REPAIR_REPLAN, 'enabled': True})
     failed = {'blocked': True, 'reason': 'generated tests failed', 'failure_class': 'ordinary'}
     cleanups = []
     verdict, calls = run({5: [failed, {}]}, cleanups=cleanups)
@@ -1858,7 +1860,9 @@ class MemCursorCheckpoint:
         self.cursor = dict(cursor)
 
 
-def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first_attempt():
+def test_a_worker_that_dies_in_a_repair_resumes_that_repair_not_the_failed_first_attempt(monkeypatch):
+    import worker_execution
+    monkeypatch.setattr(worker_execution, 'REPAIR_REPLAN', {**worker_execution.REPAIR_REPLAN, 'enabled': True})
     class Crash(BaseException):
         pass
 
