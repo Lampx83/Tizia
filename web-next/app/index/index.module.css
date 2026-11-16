@@ -1,0 +1,307 @@
+/* Scoped styles cho homepage Tizia — HERO (mặt trời + quỹ đạo) + dashboard HUD +
+   school selector + marquee. Màu thương hiệu (vàng/cam sao trời) giữ hardcode
+   như trang gốc public/index.html để không lệch nhận diện. */
+
+/* Màu chữ/nền trung tính bám THEME (sáng/tối). Thẻ dashboard HUD giữ nền tối
+   riêng nên chữ trắng trong đó vẫn để nguyên; phần còn lại dùng token. */
+.page { color: hsl(var(--foreground)); }
+
+/* ============ HERO (full-width, không card) ============ */
+.hero { position: relative; margin: 0 0 24px; padding: 0; text-align: left; }
+.heroInner {
+  position: relative; z-index: 2;
+  max-width: 1340px; margin: 0 auto; padding: 40px 28px 34px;
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 28px; align-items: center;
+}
+.heroLeft { text-align: left; }
+.heroRight { display: flex; align-items: center; justify-content: center; }
+
+.aurora { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.45; z-index: 0; pointer-events: none; will-change: transform; }
+.a1 { width: 380px; height: 380px; background: rgba(139,92,246,0.55); top: -170px; right: 18%; animation: drift1 17s ease-in-out infinite; }
+.a2 { width: 320px; height: 320px; background: rgba(14,165,233,0.45); top: -120px; right: 4%; animation: drift2 21s ease-in-out infinite; }
+.a3 { width: 300px; height: 300px; background: rgba(236,72,153,0.35); bottom: -190px; left: 8%; animation: drift1 24s ease-in-out infinite reverse; }
+@keyframes drift1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(28px,18px) scale(1.12); } }
+@keyframes drift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-24px,16px) scale(1.1); } }
+.shoot { position: absolute; width: 140px; height: 2px; background: linear-gradient(90deg, transparent, #fff); top: 14%; left: -160px; border-radius: 2px; opacity: 0; transform: rotate(16deg); z-index: 1; animation: shoot 9s linear infinite; }
+@keyframes shoot { 0%{left:-160px;opacity:0} 5%{opacity:.9} 13%{left:120%;opacity:0} 100%{left:120%;opacity:0} }
+
+@keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes floatSoft { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.greet {
+  font-size: 38px; margin: 0 0 10px; font-weight: 800; line-height: 1.12; letter-spacing: -0.6px;
+  animation: riseIn 0.7s cubic-bezier(.2,.7,.2,1) both, greetFloat 5s ease-in-out 0.8s infinite;
+}
+@keyframes greetFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.wave { display: inline-block; animation: wave 2.2s ease-in-out infinite; transform-origin: 70% 70%; }
+@keyframes wave { 0%,55%,100% { transform: rotate(0); } 10% { transform: rotate(18deg); } 22% { transform: rotate(-10deg); } 34% { transform: rotate(14deg); } 46% { transform: rotate(-6deg); } }
+.greet b {
+  /* Điểm đầu/cuối dùng màu chữ theo theme (trắng ở nền tối, đậm ở nền sáng) để
+     tên hiển thị không bị "mất chữ" trên nền trắng; giữa vẫn vàng/cam thương hiệu. */
+  background: linear-gradient(110deg, hsl(var(--foreground)) 0%, #fbbf24 28%, #f97316 48%, #ffd166 64%, hsl(var(--foreground)) 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+@keyframes shimmer { to { background-position: -220% center; } }
+.tagline {
+  font-size: 16px; opacity: 0.82; max-width: 520px; margin: 0 0 22px; line-height: 1.55;
+  animation: riseIn 0.7s cubic-bezier(.2,.7,.2,1) 0.12s both, floatSoft 6.5s ease-in-out 0.9s infinite;
+}
+.ctaRow {
+  display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-start;
+  animation: riseIn 0.7s cubic-bezier(.2,.7,.2,1) 0.24s both;
+}
+.cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px; font-size: 15px; font-weight: 700;
+  text-decoration: none; cursor: pointer; border: 1px solid transparent;
+  font-family: inherit; transition: transform 0.12s, box-shadow 0.15s, background 0.15s;
+}
+.ctaPrimary { background: linear-gradient(135deg, #fbbf24, #f97316); color: #3e2723; }
+.ctaPrimary:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(251,191,36,0.35); }
+.ctaGhost { background: hsl(var(--foreground) / 0.07); border-color: hsl(var(--foreground) / 0.15); color: hsl(var(--foreground)); }
+.ctaGhost:hover { background: hsl(var(--foreground) / 0.13); transform: translateY(-2px); }
+
+/* ===== Hệ mặt trời ===== */
+.stage { position: relative; width: 490px; height: 420px; max-width: 100%; margin: 0 auto; overflow: hidden; }
+.solar { position: absolute; inset: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.core {
+  position: absolute; inset: 0; margin: auto; width: 64px; height: 64px; border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #fff7da 0%, #ffd166 38%, #fbbf24 60%, #f97316 88%);
+  box-shadow: 0 0 30px 8px rgba(251,191,36,0.6), 0 0 72px 20px rgba(249,115,22,0.34);
+  z-index: 3; animation: corePulse 7.5s ease-in-out infinite;
+}
+@keyframes corePulse {
+  0%,100% { transform: scale(1);     filter: brightness(0.94); box-shadow: 0 0 26px 7px rgba(251,191,36,0.5),  0 0 64px 18px rgba(249,115,22,0.26); }
+  50%     { transform: scale(1.035); filter: brightness(1.12); box-shadow: 0 0 44px 13px rgba(251,191,36,0.78), 0 0 104px 30px rgba(249,115,22,0.44); }
+}
+.osys { position: absolute; inset: 0; margin: auto; width: var(--w); height: var(--w);
+        transform: rotate(var(--tilt, 0deg)) scaleY(var(--k, 1)); }
+.ring { position: absolute; inset: 0; border: 1px dashed hsl(var(--foreground) / var(--ring-a, 0.15)); border-radius: 50%; }
+.pf { display: inline-block; transform: scaleY(calc(1 / var(--k, 1))) rotate(calc(-1 * var(--tilt, 0deg))); }
+.rot { position: absolute; inset: 0; animation: spin var(--dur) linear infinite; animation-delay: var(--delay, 0s); }
+.osys[data-dir="rev"] .rot { animation-direction: reverse; }
+.planet {
+  position: absolute; left: 50%; margin-left: -16px; width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 23px;
+  background: transparent; border: none; box-shadow: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+  animation: spin var(--dur) linear infinite reverse; animation-delay: var(--delay, 0s);
+  transition: opacity 0.7s ease, filter 0.7s ease;
+}
+.osys[data-dir="rev"] .planet { animation-direction: normal; }
+.top { top: -16px; }
+.planet.swap { opacity: 0; filter: blur(2px); }
+.mars { width: 20px; height: 20px; margin-left: -10px; background: transparent; box-shadow: none; filter: none; }
+.mars.top { top: -10px; }
+.mars .pf {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffcaa6 0%, #e2683c 46%, #b23a1e 80%, #7c2410 100%);
+  box-shadow: 0 0 10px 2px rgba(226,104,60,0.4);
+}
+.binode { width: 72px; height: 72px; margin-left: -36px; background: transparent; border: none; box-shadow: none; }
+.binode.top { top: -36px; }
+.bfix { position: absolute; inset: 0; transform: scaleY(calc(1 / var(--k, 1))) rotate(calc(-1 * var(--tilt, 0deg))); }
+.bring { position: absolute; inset: 8px; border: 1px dashed hsl(var(--foreground) / 0.28); border-radius: 50%; }
+.earth { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 27px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55)); z-index: 2; }
+.bspin { position: absolute; inset: 0; animation: spin 4.5s linear infinite; }
+.moon { position: absolute; top: 50%; right: 1px; margin-top: -8px;
+  font-size: 15px; animation: spin 4.5s linear infinite reverse;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+
+/* ============ SECTIONS ============ */
+.section { max-width: 1340px; margin: 0 auto 36px; }
+.sectionTitle { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.sectionTitle h2 { margin: 0; font-size: 22px; font-weight: 700; }
+.sectionTitle .hint { opacity: 0.6; font-size: 13px; }
+
+/* ============ HERO DASHBOARD CARD ============ */
+.heroCard {
+  position: relative; border-radius: 22px; padding: 22px 24px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(139,92,246,0.35), transparent 55%),
+    radial-gradient(120% 140% at 100% 100%, rgba(34,211,238,0.28), transparent 55%),
+    linear-gradient(135deg, rgba(30,27,75,0.85), rgba(15,23,42,0.85));
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 18px 40px rgba(2,6,23,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.heroCard::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, var(--rank-color, #fbbf24), transparent 30%);
+  opacity: 0.35; mix-blend-mode: screen; pointer-events: none;
+}
+.heroTop { position: relative; z-index: 1; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; }
+.heroAvatarWrap {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.18), rgba(255,255,255,0.02) 70%),
+              linear-gradient(135deg, rgba(139,92,246,0.4), rgba(34,211,238,0.3));
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 3px var(--rank-color, #fbbf24), 0 12px 28px rgba(0,0,0,0.4), inset 0 0 14px rgba(255,255,255,0.08);
+  font-size: 46px; flex: none; position: relative;
+}
+.heroAvatarWrap::after {
+  content: attr(data-rank); position: absolute; bottom: -6px; right: -6px;
+  background: var(--rank-color, #fbbf24); color: #1f1147;
+  font-size: 18px; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5); border: 2px solid rgba(15,23,42,0.95);
+}
+.heroIdentity { min-width: 0; }
+.heroRankRow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: rgba(255,255,255,0.7); margin-bottom: 4px;
+}
+.heroRankBadge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--rank-color, #fbbf24);
+  color: var(--rank-color, #fbbf24); font-weight: 800;
+}
+.heroCardTitle { font-size: 20px; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 2px; }
+.heroSubtitle { font-size: 12.5px; color: rgba(255,255,255,0.6); }
+.heroStreakBadge {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(249,115,22,0.25), rgba(239,68,68,0.18));
+  border: 1px solid rgba(249,115,22,0.45);
+  font-size: 13px; font-weight: 800; color: #fed7aa; white-space: nowrap;
+}
+.heroStreakBadge .hsNum { font-size: 22px; color: #fff; line-height: 1; }
+.heroStreakBadge.risk {
+  background: linear-gradient(135deg, rgba(239,68,68,0.3), rgba(220,38,38,0.2));
+  border-color: rgba(239,68,68,0.6); color: #fecaca;
+  animation: heroPulse 1.8s infinite;
+}
+@keyframes heroPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
+.heroXpBlock { position: relative; z-index: 1; margin-top: 16px; }
+.heroXpHead { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; color: rgba(255,255,255,0.75); margin-bottom: 6px; }
+.heroXpHead b { color: #fff; font-size: 14px; }
+.hxNext { color: var(--rank-color, #fbbf24); font-weight: 700; }
+.heroXpBar { height: 14px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); overflow: hidden; position: relative; }
+.heroXpBar > i {
+  display: block; height: 100%; border-radius: 9px;
+  background: linear-gradient(90deg, #8b5cf6, #22d3ee, #4ade80); background-size: 200% 100%;
+  box-shadow: 0 0 12px rgba(34,211,238,0.5); animation: heroShine 4s linear infinite;
+}
+@keyframes heroShine { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+.heroStats { position: relative; z-index: 1; margin-top: 16px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.heroStat {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); transition: transform .15s, background .15s;
+}
+.heroStat:hover { transform: translateY(-2px); background: rgba(255,255,255,0.08); }
+.hsIcon { width: 38px; height: 38px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 20px; background: var(--stat-bg, rgba(255,255,255,0.08)); }
+.hsText { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.hsVal { font-size: 18px; font-weight: 800; color: #fff; }
+.hsLabel { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 2px; }
+.coins { --stat-bg: rgba(251,191,36,0.2); }
+.coins .hsIcon { color: #fde68a; }
+.skills { --stat-bg: rgba(34,211,238,0.2); }
+.skills .hsIcon { color: #a5f3fc; }
+.badges { --stat-bg: rgba(139,92,246,0.22); }
+.badges .hsIcon { color: #ddd6fe; }
+.league { --stat-bg: rgba(167,139,250,0.22); }
+.league .hsIcon { color: #c4b5fd; }
+
+.dashGrid { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 16px; }
+@media (min-width: 720px) { .dashGrid { grid-template-columns: 1fr 1fr; } }
+
+.continueCard { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: linear-gradient(135deg, rgba(251,191,36,.18), rgba(251,191,36,.05)); border: 1px solid rgba(251,191,36,.4); border-radius: 16px; text-decoration: none; color: inherit; transition: transform .15s; }
+.questsCard { background: rgba(21,28,58,0.9); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 16px; }
+.questRow { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid rgba(255,255,255,.05); text-decoration: none; color: inherit; border-radius: 10px; transition: background .12s; }
+.questRow:hover { background: rgba(255,255,255,.05); }
+
+/* ============ SCHOOL SELECTOR ============ */
+.schoolCluster { margin-bottom: 22px; }
+.clusterHead { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 12px; padding-bottom: 8px; border-bottom: 1px solid hsl(var(--border)); }
+.chIcon { font-size: 22px; }
+.chLabel { font-size: 18px; font-weight: 800; }
+.chDesc { font-size: 12px; opacity: 0.6; }
+.chCount { margin-left: auto; font-size: 11px; opacity: 0.7; background: hsl(var(--foreground) / 0.08); padding: 2px 9px; border-radius: 10px; }
+.schoolGrid { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 640px) { .schoolGrid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1024px) { .schoolGrid { grid-template-columns: repeat(4, 1fr); } }
+.schoolCard {
+  position: relative; overflow: hidden;
+  background: hsl(var(--foreground) / 0.04); border: 2px solid hsl(var(--border));
+  border-radius: 16px; padding: 18px 20px; cursor: pointer;
+  transition: all 0.18s; color: hsl(var(--foreground)); text-decoration: none;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.schoolCard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--sc-color, #fbbf24); }
+.schoolCard:hover { transform: translateY(-3px); background: hsl(var(--foreground) / 0.09); border-color: var(--sc-color, #fbbf24); box-shadow: 0 8px 22px rgba(0,0,0,0.25); }
+.scHead { display: flex; align-items: center; gap: 12px; }
+.scIcon { font-size: 38px; line-height: 1; }
+.scName { font-size: 18px; font-weight: 800; }
+.scShort { font-size: 11px; opacity: 0.7; font-weight: 700; letter-spacing: 0.4px; }
+.scTagline { font-size: 13px; opacity: 0.82; line-height: 1.5; }
+.scMeta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; margin-top: 4px; }
+.scPill { padding: 3px 9px; border-radius: 9px; background: hsl(var(--foreground) / 0.08); }
+.scPill.ready { background: rgba(16,185,129,0.22); }
+.scPill.preview { background: rgba(251,191,36,0.22); }
+.scPill.locked { background: rgba(148,163,184,0.22); }
+.scMetaSub { opacity: 0.6; font-weight: 600; }
+.scCta { margin-top: 8px; padding: 9px 14px; border-radius: 10px; background: var(--sc-color, #fbbf24); color: #1f1147; font-weight: 700; font-size: 13.5px; text-align: center; }
+
+.schoolCard.locked { cursor: not-allowed; opacity: 0.55; filter: grayscale(0.45); }
+.schoolCard.locked::after { content: '🔒'; position: absolute; top: 12px; right: 14px; font-size: 18px; opacity: 0.7; }
+.schoolCard.locked:hover { transform: none; background: hsl(var(--foreground) / 0.04); border-color: hsl(var(--border)); box-shadow: none; }
+.schoolCard.locked .scCta { background: hsl(var(--foreground) / 0.12); color: hsl(var(--muted-foreground)); }
+.schoolCard.guestLocked { cursor: pointer; opacity: 0.8; filter: none; }
+.schoolCard.guestLocked::after { content: '🔐'; opacity: 0.85; }
+.schoolCard.guestLocked:hover { transform: translateY(-3px); background: hsl(var(--foreground) / 0.09); border-color: var(--sc-color, #fbbf24); box-shadow: 0 8px 22px rgba(0,0,0,0.25); }
+.schoolCard.guestLocked .scCta { background: rgba(251,191,36,0.85); color: #3e2723; }
+.schoolCard.planLocked { cursor: pointer; opacity: 0.85; filter: none; }
+.schoolCard.planLocked::after { content: '✨'; opacity: 0.95; }
+.schoolCard.planLocked:hover { transform: translateY(-3px); background: rgba(168,85,247,.08); border-color: #a855f7; box-shadow: 0 8px 22px rgba(168,85,247,.25); }
+.schoolCard.planLocked .scCta { background: linear-gradient(135deg,#a855f7,#ec4899); color: #fff; }
+
+/* ============ GUEST BANNER ============ */
+.guestBanner { max-width: 1340px; margin: 0 auto 20px; }
+.gbInner {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(251,191,36,0.18), rgba(244,114,182,0.18));
+  border: 1px solid rgba(251,191,36,0.4); border-radius: 14px; padding: 12px 16px;
+}
+.gbIcon { font-size: 28px; line-height: 1; }
+.gbText { flex: 1; min-width: 220px; font-size: 13.5px; line-height: 1.5; }
+.gbCta { padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #fbbf24, #f97316); color: #3e2723; text-decoration: none; transition: transform 0.12s, box-shadow 0.15s; }
+.gbCta:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(251,191,36,0.4); }
+.gbAlt { font-size: 12.5px; opacity: 0.85; color: hsl(var(--foreground) / 0.8); text-decoration: none; border-bottom: 1px dashed hsl(var(--foreground) / 0.4); }
+.gbAlt:hover { opacity: 1; }
+
+/* ============ FEATURE MARQUEE ============ */
+.featureStrip {
+  margin: 0; padding: 0 0 4px; overflow: hidden; position: relative; z-index: 2;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.featureTrack { display: inline-flex; gap: 10px; white-space: nowrap; will-change: transform; animation: marquee 46s linear infinite; }
+.featureStrip:hover .featureTrack { animation-play-state: paused; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  background: hsl(var(--foreground) / 0.06); border: 1px solid hsl(var(--border));
+  padding: 8px 14px; border-radius: 20px; font-size: 12.5px; color: inherit; text-decoration: none;
+  transition: transform 0.12s, background 0.15s, border-color 0.15s;
+}
+.pill:hover { transform: translateY(-2px); background: hsl(var(--foreground) / 0.12); border-color: rgba(251,191,36,0.5); }
+
+@media (max-width: 720px) {
+  .heroInner { grid-template-columns: 1fr; padding: 22px 16px 26px; gap: 8px; text-align: center; }
+  .heroLeft { text-align: center; order: 2; }
+  .heroRight { order: 1; }
+  .tagline { margin-left: auto; margin-right: auto; }
+  .ctaRow { justify-content: center; }
+  .stage { transform: scale(0.82); width: 300px; height: 260px; }
+  .greet { font-size: 26px; }
+  .tagline { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rot, .planet, .bspin, .moon, .aurora, .shoot, .core, .greet, .greet b, .tagline, .ctaRow, .wave,
+  .featureTrack, .heroXpBar > i, .heroStreakBadge.risk { animation: none !important; }
+}

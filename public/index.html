@@ -131,7 +131,7 @@
   /* Nội dung canh giữa trong khung rộng tối đa; bố cục 2 cột: chữ trái · vũ trụ phải */
   .hero-inner {
     position: relative; z-index: 2;
-    max-width: 1340px; margin: 0 auto; padding: 40px 28px 34px;
+    max-width:none; margin: 0 auto; padding: 40px 28px 34px;
     display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 28px; align-items: center;
   }
   .hero-left { text-align: left; }
@@ -322,7 +322,7 @@
   .pill.featured { background: linear-gradient(135deg, #fbbf24, #f97316); border-color: transparent; color: #3e2723; font-weight: 700; }
 
   /* ============ TOP BAR ============ */
-  .top-bar { max-width: 1340px; margin: 0 auto 28px; display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .top-bar { max-width:none; margin: 0 auto 28px; display: grid; grid-template-columns: 1fr; gap: 14px; }
   @media (min-width: 720px) { .top-bar { grid-template-columns: 2fr 1fr; } }
   .top-bar > div {
     background: var(--card); border: 1px solid var(--border);
@@ -348,7 +348,7 @@
   /* ============ SECTION TITLES ============ */
   /* content-visibility: auto cho phép browser skip render section nằm ngoài viewport
      → giảm paint cost khi cuộn, mỗi section trở thành đơn vị containment độc lập. */
-  .section { max-width: 1340px; margin: 0 auto 36px; content-visibility: auto; contain-intrinsic-size: 1px 600px; }
+  .section { max-width:none; margin: 0 auto 36px; content-visibility: auto; contain-intrinsic-size: 1px 600px; }
   .section-title {
     display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px;
   }
@@ -679,7 +679,6 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
       <p class="tagline">Vũ trụ giáo dục <b>do AI điều hành</b> — học liệu, môi trường thực hành và <b>tự cải tiến mỗi ngày</b>.</p>
       <div class="cta-row">
         <a class="cta primary" id="hero-enter" href="#schools">Vào trường của bạn</a>
-        <button class="cta ghost" id="hero-tutor-cta" type="button">Hỏi AI Tutor</button>
         <a class="cta ghost" href="/kham-pha.html">🌌 Toàn cảnh Tizia</a>
       </div>
     </div>
@@ -1173,6 +1172,8 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
       if (isComingSoon) classes.push('locked');
       else if (needLogin) classes.push('locked', 'guest-locked');
       else if (needUpgrade || guestLocked) classes.push('locked', 'plan-locked');
+      // Mỗi người 1 thời điểm học 1 trường → highlight trường đang học.
+      if (me && !isGuest && me.enrolled_domain === d.id) classes.push('active');
       return `
         <${t} class="${classes.join(' ')}" ${attrs} style="--sc-color: ${d.accent}">
           <div class="sc-head">
@@ -1266,8 +1267,6 @@ if (!window.isSecureContext && location.hostname !== 'localhost' && location.hos
 </div>
 
 <footer>
-  <b>Tizia</b> — The Intelligent Zone for Interactive Academy
-  <span style="margin: 0 8px; opacity: 0.4;">·</span>
   <a href="#" data-pwa-install
      onclick="event.preventDefault(); window.tiziaInstallPWA && window.tiziaInstallPWA();"
      style="color: #fbbf24; text-decoration: none; border-bottom: 1px dotted rgba(251,191,36,0.5); cursor: pointer;"
@@ -1338,9 +1337,14 @@ if (me?.role === 'teacher') {
   if (t) t.style.display = '';
 }
 
-// "Vào trường" dùng anchor #schools native (cuộn mượt qua CSS scroll-behavior).
-// "AI Tutor" mở trợ lý nổi.
-document.getElementById('hero-tutor-cta')?.addEventListener('click', () => window.EduTutor?.open());
+// Nút "Vào trường của bạn":
+//  · Đã chọn trường (enrolled_domain) → vào thẳng trường đó (school.html?domain=…).
+//  · Chưa chọn trường → giữ anchor #schools, cuộn xuống danh sách để chọn.
+const heroEnter = document.getElementById('hero-enter');
+if (heroEnter && me?.enrolled_domain) {
+  heroEnter.setAttribute('href', `school.html?domain=${encodeURIComponent(me.enrolled_domain)}`);
+  heroEnter.textContent = '→ Vào trường của bạn';
+}
 
 // Auto-join from URL ?class=XXXX
 const urlClass = new URLSearchParams(location.search).get('class');

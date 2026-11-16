@@ -3,7 +3,7 @@
 // ============================================================
 // Dùng cho event canonical mà chỉ server biết chính xác:
 //   • quiz_submit  (server tính điểm + lưu DB)
-//   • ai_chat      (server gọi Ollama — biết model, tokens, status)
+//   • ai_chat      (server gọi LLM — biết model, tokens, status)
 //   • badge_unlock (server quyết định khi nào unlock)
 //   • payment_success / subscribe (chỉ webhook server biết)
 //

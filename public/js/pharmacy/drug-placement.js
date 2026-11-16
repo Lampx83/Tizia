@@ -278,6 +278,7 @@ export const DRUG_PLACEMENT = {
   "otck-096": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#6d28d9"},
   "otck-097": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#16a34a"},
   "otck-098": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#059669"},
+  "otck-201": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#0ea5e9"},
   "otck-099": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#0d9488"},
   "otck-100": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#0891b2"},
   "otck-101": {"cabinetId":"otc_2","shelfIdx":4,"groupLabel":"Thuốc tiêu hóa OTC","brandColor":"#0284c7"},

@@ -1,0 +1,1290 @@
+'use client';
+
+import { useEffect } from 'react';
+
+// Client mount cho trang Next /nha-thuoc-3d — Three.js nhà thuốc GPP 3D (1143 dòng
+// gốc, 165 thuốc). Chiến lược WRAP-MOUNT: KHÔNG viết lại engine. Ở đây chỉ:
+//  1) Chèn NGUYÊN VĂN <style> gốc vào <head> (engine + simulation.js append canvas,
+//     modal POS, nhãn HDSD, đơn thuốc… thẳng vào document.body → CSS phải ở phạm vi
+//     document, KHÔNG scope container).
+//  2) Dựng lại đúng khung DOM tĩnh trong <body> gốc (.app > .scene-wrap + aside.side),
+//     GIỮ NGUYÊN mọi id/class để simulation.js querySelector trúng.
+//  3) Inject <script type="importmap"> (map bare specifier three CDN) TRƯỚC khi nạp
+//     module — bắt buộc, importmap phải có mặt trước khi module resolve import.
+//  4) Nạp public/legacy/nha-thuoc-3d.js dạng <script type="module"> (giữ đúng loại
+//     vì script gốc dùng import ...). Effect chạy sau paint → skeleton đã render →
+//     engine querySelector/append an toàn.
+// Catalog 165 thuốc do simulation.js fetch /api/content/drug-catalog (proxy Next).
+
+const LEGACY_CSS = `
+  :root {
+    --bg: #0f172a; --bg-2: #1e293b;
+    --card: #111827; --card-h: #1e293b;
+    --border: #334155; --border-h: #475569;
+    --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #38bdf8; --accent-2: #0d9488;
+    --green: #22c55e; --amber: #fbbf24; --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+  .app {
+    display: grid; grid-template-columns: 1fr 340px; gap: 12px;
+    height: calc(100vh - 78px); padding: 12px;
+    transition: grid-template-columns 0.25s ease;
+  }
+  .app.sidebar-collapsed { grid-template-columns: 1fr 0px; gap: 0; }
+  /* Khi thu gọn: KHÔNG display:none cả .side — vì nút MỞ LẠI là CON của .side,
+     ẩn cả .side sẽ ẩn luôn nút (con của display:none không render dù position:fixed).
+     Thay vào đó: ẩn mọi nội dung TRỪ nút toggle + bỏ nền/viền/padding cho .side
+     "vô hình"; nút toggle thoát ra position:fixed (rule bên dưới) ở rìa phải. */
+  .app.sidebar-collapsed .side {
+    overflow: visible; padding: 0; background: none; border: none;
+  }
+  .app.sidebar-collapsed .side > *:not(.side-toggle) { display: none; }
+  @media (max-width: 980px) { .app { grid-template-columns: 1fr; grid-template-rows: 60vh 1fr; overflow-y: auto; height: auto; } }
+
+  /* Nút ⇆ thu/mở panel — nằm TRONG panel (góc trên), khi collapsed thì FIXED
+     ở rìa phải màn hình để vẫn bấm mở lại được. */
+  .side-toggle {
+    align-self: flex-end;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: rgba(15,23,42,0.85); border: 1px solid rgba(56,189,248,0.35);
+    color: #e2e8f0; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 2px;
+  }
+  .side-toggle:hover { background: rgba(15,23,42,1); border-color: rgba(56,189,248,0.6); }
+  /* Khi thu gọn: nút nổi DƯỚI thanh chỉnh sáng (light-bar ở top:12px góc phải)
+     để không đè lên nhau. */
+  .app.sidebar-collapsed .side-toggle {
+    position: fixed; top: 132px; right: 12px; z-index: 10;
+    width: auto; padding: 0 12px; gap: 4px; white-space: nowrap; font-size: 13px;
+    background: rgba(15,23,42,0.92); backdrop-filter: blur(8px);
+  }
+
+  /* Ẩn 2 FAB gốc (sgf-fab + tts) — thay bằng "proxy buttons" trong header.
+     Khi click proxy → click vào FAB gốc → modal hiện. */
+  #sgf-fab, .tz-tts-toggle { display: none !important; }
+  /* Proxy buttons trong header — slot riêng, layout inline gọn gàng */
+  .ev-pharm-fabs { display: inline-flex; gap: 6px; align-items: center; margin-right: 6px; }
+  .ev-pharm-fabs button {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; padding: 0; transition: transform .12s, filter .12s;
+  }
+  .ev-pharm-fabs button:hover { transform: scale(1.08); filter: brightness(1.1); }
+  .ev-pharm-fabs .pf-sgf { background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff; }
+  .ev-pharm-fabs .pf-tts { background: rgba(15,23,42,0.78); color: #fde68a; }
+  .ev-pharm-fabs .pf-tts.on { background: rgba(245,158,11,0.85); color: #1f2937; }
+
+  /* Notepad modal — sổ ghi chép tư vấn (click vào giấy/bút trên bàn tư vấn) */
+  .notepad-overlay, .salestray-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    z-index: 150; display: flex; align-items: center; justify-content: center;
+  }
+  .notepad-modal, .salestray-modal {
+    width: min(640px, 96vw); max-height: 86vh; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    display: flex; flex-direction: column;
+  }
+  .notepad-head, .salestray-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; background: linear-gradient(90deg, #0f766e, #0d9488);
+    color: #ecfdf5; font-weight: 700;
+  }
+  .notepad-close, .salestray-close {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  .notepad-area {
+    flex: 1; min-height: 320px; padding: 16px 20px;
+    background: #fffbeb; color: #0f172a; border: 0; outline: none; resize: none;
+    font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.7;
+    background-image: linear-gradient(transparent 23px, rgba(13,148,136,0.18) 24px);
+    background-size: 100% 24px;
+  }
+  .notepad-foot {
+    display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+    border-top: 1px solid var(--border); background: var(--bg-2);
+  }
+  .notepad-saved { font-size: 12px; color: var(--muted); margin-right: auto; }
+  .notepad-clear, .notepad-done, .salestray-done {
+    padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;
+  }
+  .notepad-clear { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; }
+  .notepad-done, .salestray-done { background: var(--green); border: 0; color: #022c22; }
+  .salestray-body { padding: 18px 22px; min-height: 160px; max-height: 50vh; overflow: auto; }
+  .salestray-empty { color: var(--muted); text-align: center; padding: 30px 10px; line-height: 1.6; }
+  .salestray-list { margin: 0; padding-left: 22px; }
+  .salestray-list li { padding: 6px 0; color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .salestray-foot { padding: 10px 18px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .rb-hint { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .rb-hint b { color: #c4b5fd; }
+  .rb-del { background: rgba(239,68,68,0.85); color: #fff; border: none; border-radius: 6px; width: 24px; height: 24px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+
+  .scene-wrap {
+    position: relative; background: #e8eef5; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  #scene-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  /* Overlay TẢI — che vùng canvas từ khung hình ĐẦU TIÊN tới khi scene 3D dựng xong.
+     Trước đây .scene-wrap nền #e8eef5 → trên điện thoại người dùng nhìn MẢNG TRẮNG
+     vài giây (tải three.js từ CDN + catalog 165 thuốc + dựng scene) mà không biết
+     có gì đang chạy. GIỮ ĐỒNG BỘ với public/nha-thuoc-3d.html. */
+  .scene-loading {
+    position: absolute; inset: 0; z-index: 120;
+    background: linear-gradient(180deg, #0f172a, #1e293b);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 20px; text-align: center;
+    transition: opacity 0.35s ease;
+  }
+  .scene-loading.is-hidden { opacity: 0; pointer-events: none; }
+  .scene-loading-spin {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 3px solid rgba(56,189,248,0.25); border-top-color: #38bdf8;
+    animation: scene-spin 0.9s linear infinite;
+  }
+  @keyframes scene-spin { to { transform: rotate(360deg); } }
+  .scene-loading-title { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+  .scene-loading-step { font-size: 12.5px; color: #94a3b8; min-height: 16px; }
+  .scene-loading-slow { font-size: 12px; color: #fbbf24; max-width: 300px; line-height: 1.55; }
+  @media (prefers-reduced-motion: reduce) { .scene-loading-spin { animation-duration: 3s; } }
+  .scene-overlay {
+    position: absolute; top: 10px; left: 10px; right: 10px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    pointer-events: none;
+  }
+  .scene-overlay > * { pointer-events: auto; }
+  .scene-overlay .back {
+    background: rgba(15,23,42,0.85); color: white; padding: 6px 12px;
+    border-radius: 999px; text-decoration: none; font-size: 12px; border: 1px solid var(--border);
+  }
+  .scene-overlay h1 {
+    margin: 0; font-size: 14px; color: #0f172a; background: rgba(255,255,255,0.9);
+    padding: 6px 12px; border-radius: 999px; font-weight: 700;
+  }
+  .scene-overlay .hint {
+    font-size: 11px; color: #334155; background: rgba(255,255,255,0.85);
+    padding: 5px 10px; border-radius: 999px;
+  }
+  .pending-label {
+    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    background: var(--amber); color: #3e2723;
+    padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    display: flex; align-items: center; gap: 10px;
+  }
+  /* \`display:flex\` ở trên ghi đè thuộc tính [hidden] (UA chỉ display:none) → banner
+     luôn hiện dù hidden=true. Rule này cho [hidden] thắng → chỉ hiện khi đang chờ dán. */
+  .pending-label[hidden] { display: none; }
+  #pending-label-cancel {
+    background: rgba(127,29,29,0.9); color: #fff; border: none; border-radius: 7px;
+    padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+    white-space: nowrap;
+  }
+  #pending-label-cancel:hover { background: #991b1b; }
+  /* Tooltip hover hộp thuốc — float cạnh chuột */
+  .drug-tooltip {
+    position: absolute; z-index: 90; pointer-events: none;
+    min-width: 180px; max-width: 260px;
+    background: rgba(15,23,42,0.95); border: 1px solid rgba(56,189,248,0.45);
+    color: #f1f5f9; border-radius: 10px; padding: 10px 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    font-size: 12px; line-height: 1.45;
+  }
+  .drug-tooltip .tt-brand { font-weight: 700; font-size: 14px; color: #fde68a; }
+  .drug-tooltip .tt-generic { color: #cbd5e1; font-style: italic; }
+  .drug-tooltip .tt-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+  .drug-tooltip .tt-row span:last-child { color: #a7f3d0; font-weight: 600; }
+  .drug-tooltip .tt-warn { color: #fca5a5; }
+  /* Search box — top-left của scene canvas */
+  .drug-search {
+    position: absolute; top: 14px; left: 14px; z-index: 90;
+    width: 280px;
+    background: rgba(15,23,42,0.92); border: 1px solid rgba(56,189,248,0.4);
+    border-radius: 10px; padding: 8px;
+  }
+  .drug-search input {
+    width: 100%; padding: 8px 10px;
+    background: rgba(255,255,255,0.05); color: #f1f5f9;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+    font-size: 13px; outline: none;
+  }
+  .drug-search input:focus { border-color: rgba(56,189,248,0.6); }
+  .drug-search-results {
+    max-height: 260px; overflow-y: auto; margin-top: 8px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .drug-search-results:empty { margin-top: 0; }
+  .ds-row {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: 6px;
+    font-size: 12px; cursor: pointer;
+  }
+  .ds-row:hover { background: rgba(56,189,248,0.18); }
+  .ds-row .ds-brand { color: #fde68a; font-weight: 600; }
+  .ds-row .ds-sku { color: #cbd5e1; font-family: 'Courier New', monospace; font-size: 11px; }
+  .cam-bar {
+    position: absolute; left: 12px; bottom: 12px;
+    display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+    max-width: calc(100% - 24px);
+    background: rgba(15,23,42,0.78); border: 1px solid rgba(56,189,248,0.35);
+    border-radius: 10px; padding: 5px 10px;
+    backdrop-filter: blur(8px);
+  }
+  .cam-bar-label { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+  .cam-select {
+    font-size: 11px; font-weight: 600; font-family: inherit;
+    padding: 5px 8px; border-radius: 6px; cursor: pointer;
+    border: 1px solid rgba(148,163,184,0.4);
+    background: rgba(30,41,59,0.92); color: #e2e8f0; max-width: 160px;
+  }
+  .cam-select:hover { background: rgba(56,189,248,0.2); }
+  /* Yêu cầu thầy #11: danh sách option khi MỞ ra bị trắng-trên-trắng (option
+     thừa hưởng màu chữ sáng nhưng nền do OS vẽ trắng) → ép nền tối + chữ sáng
+     cho MỌI select trên trang (góc nhìn, chọn thuốc trong soạn nhãn HDSD…). */
+  select option, .cam-select option { background: #1e293b; color: #f1f5f9; }
+  .cam-btn {
+    padding: 5px 10px; font-size: 11px; font-weight: 600;
+    border-radius: 6px; border: 1px solid rgba(148,163,184,0.4);
+    background: rgba(30,41,59,0.85); color: #e2e8f0; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+    transition: background 0.12s;
+  }
+  .cam-btn:hover:not(.active) { background: rgba(56,189,248,0.2); }
+  .cam-btn.active { background: var(--accent); color: #0f172a; border-color: var(--accent); cursor: default; }
+  .walk-btn { background: rgba(16,185,129,0.9); color: #042f2e; border-color: #10b981; }
+  .walk-btn:hover:not(.active) { background: rgba(16,185,129,0.7); }
+  .walk-btn.active { background: #f59e0b; border-color: #f59e0b; color: #1c1300; }
+  .walk-prompt {
+    position: absolute; left: 50%; top: 64px; transform: translateX(-50%);
+    background: rgba(15,23,42,0.92); color: #fde68a; border: 1px solid #f59e0b;
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    z-index: 20; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .walk-hint {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: rgba(15,23,42,0.85); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.3);
+    padding: 6px 14px; border-radius: 8px; font-size: 12px; z-index: 20; pointer-events: none;
+  }
+  .walk-hint b { color: #5eead4; }
+  .avatar-btn { background: rgba(139,92,246,0.9); color: #faf5ff; border-color: #8b5cf6; }
+  .avatar-btn:hover:not(.active) { background: rgba(139,92,246,0.7); }
+  .rpm-overlay {
+    position: fixed; inset: 0; background: rgba(2,6,23,0.78); z-index: 9999;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  /* Chuông thông báo bản NỔI (#nbell-root fixed z-9998 góc phải, khi không mount
+     được vào header) đè lên nút ✕ ở góc trên-phải của mọi modal nhà thuốc (z 100–300)
+     → nhìn như "cửa sổ không có nút đóng". Hạ nó xuống DƯỚI mọi overlay của trang này.
+     KHÔNG đụng chuông khi đã vào header (.nbell-root--in-header, dùng z tương đối). */
+  #nbell-root:not(.nbell-root--in-header) { z-index: 90 !important; }
+  .rpm-modal {
+    width: min(960px, 96vw); height: min(86vh, 760px); background: #0f172a;
+    border: 1px solid rgba(148,163,184,0.35); border-radius: 14px; overflow: hidden;
+    display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .rpm-head {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    background: rgba(30,41,59,0.9); border-bottom: 1px solid rgba(148,163,184,0.2);
+    color: #e2e8f0; font-size: 13px;
+  }
+  .rpm-head span { color: #94a3b8; flex: 1; }
+  .rpm-head b { color: #c4b5fd; }
+  .rpm-close {
+    background: rgba(239,68,68,0.85); color: #fff; border: none; border-radius: 6px;
+    width: 30px; height: 30px; font-size: 15px; cursor: pointer; flex-shrink: 0;
+  }
+  .rpm-modal iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+  .rpm-modal-sm { width: min(460px, 94vw); height: auto; max-height: 90vh; }
+  .rpm-body { padding: 16px 18px 20px; overflow: auto; }
+  .rpm-section { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 8px; }
+  .rpm-section + .rpm-section, .rpm-help + .rpm-section { margin-top: 18px; }
+  .rpm-presets { display: flex; gap: 10px; }
+  .rpm-preset {
+    flex: 1; padding: 14px 8px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+    background: rgba(56,189,248,0.12); color: #e2e8f0; border: 1px solid rgba(56,189,248,0.35);
+    font-family: inherit; transition: background .12s, transform .1s;
+  }
+  .rpm-preset:hover { background: rgba(56,189,248,0.25); transform: translateY(-1px); }
+  .rpm-preset.on { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .rpm-slider { display: flex; align-items: center; gap: 10px; }
+  .rpm-slider span { font-size: 11px; color: #94a3b8; }
+  .rpm-slider input[type=range] { flex: 1; accent-color: var(--accent); }
+  .rpm-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rpm-sw {
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer; padding: 0;
+    border: 2px solid rgba(148,163,184,0.4); transition: transform .1s;
+  }
+  .rpm-sw:hover { transform: scale(1.12); }
+  .rpm-sw.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .rpm-wrap { flex-wrap: wrap; }
+  .rpm-chip {
+    padding: 7px 11px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+    background: rgba(56,189,248,0.12); color: #e2e8f0; border: 1px solid rgba(56,189,248,0.35);
+    font-family: inherit; transition: background .12s;
+  }
+  .rpm-chip:hover:not(.on) { background: rgba(56,189,248,0.25); }
+  .rpm-chip.on { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .rpm-help { font-size: 12.5px; color: #cbd5e1; line-height: 1.55; margin: 0 0 10px; }
+  .rpm-help b { color: #c4b5fd; }
+  .rpm-open {
+    display: inline-block; margin-bottom: 10px; padding: 8px 14px; border-radius: 8px;
+    background: rgba(139,92,246,0.9); color: #faf5ff; text-decoration: none; font-size: 13px; font-weight: 600;
+  }
+  .rpm-open:hover { background: rgba(139,92,246,0.7); }
+  .rpm-form { display: flex; gap: 8px; }
+  .rpm-form input {
+    flex: 1; padding: 9px 11px; border-radius: 8px; font-size: 13px; font-family: inherit;
+    background: rgba(255,255,255,0.06); color: #f1f5f9; border: 1px solid rgba(148,163,184,0.4);
+  }
+  .rpm-form button {
+    padding: 9px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px;
+    background: var(--green); color: #022c22; border: 0;
+  }
+  .rpm-msg { font-size: 12.5px; color: #fcd34d; margin-top: 10px; min-height: 16px; }
+
+  .light-bar {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(15,23,42,0.78); border: 1px solid rgba(56,189,248,0.35);
+    border-radius: 999px; padding: 5px 12px;
+    backdrop-filter: blur(8px); z-index: 3;
+  }
+  .light-bar-label { font-size: 11px; color: #cbd5e1; min-width: 14px; text-align: center; }
+  .light-bar input[type="range"] { width: 110px; accent-color: #38bdf8; cursor: pointer; margin: 0; }
+
+
+  .side {
+    display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px;
+  }
+  .side h2 { margin: 0 0 4px; font-size: 16px; }
+  .side h3 { margin: 6px 0 4px; font-size: 14px; color: var(--accent); }
+  .side .sub { font-size: 12px; color: var(--muted); }
+  .scenario-box { padding: 10px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; }
+  .scenario-box .role { color: var(--accent); font-weight: 700; font-size: 12px; }
+  .scenario-box .title { font-weight: 700; font-size: 14px; margin: 2px 0; }
+  .scenario-box .setting { font-size: 12px; opacity: 0.85; line-height: 1.5; }
+
+  .chat {
+    /* 22/07: nới khung hội thoại — chat là thao tác chính của bài thực hành */
+    flex: 1; min-height: 400px; max-height: 64vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 6px;
+    background: rgba(15,23,42,0.6); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px;
+  }
+  .bubble {
+    max-width: 86%; padding: 8px 12px; border-radius: 12px;
+    font-size: 13px; line-height: 1.4; word-wrap: break-word;
+  }
+  .bubble.user { background: var(--accent); color: #0f172a; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .bubble.npc { background: var(--card-h); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+  /* Bộ chọn mô hình AI (Qwen/GPT) + nhãn model dưới mỗi câu trả lời của AI. */
+  .model-select-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .model-select-row select {
+    background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+  }
+  .bubble-model-tag { font-size: 10px; color: var(--muted); align-self: flex-start; margin: -4px 0 2px 4px; }
+
+  .chat-input { display: flex; gap: 6px; }
+  .chat-input textarea {
+    flex: 1; padding: 8px 10px; border-radius: 8px;
+    background: rgba(255,255,255,0.05); color: var(--text);
+    border: 1px solid var(--border); font-family: inherit; font-size: 13px;
+    resize: none; min-height: 38px;
+  }
+  .chat-input textarea:focus { outline: 2px solid var(--accent); }
+  .btn {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card-h); color: var(--text); cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    transition: background 0.12s, transform 0.1s;
+  }
+  .btn:hover:not(:disabled) { background: var(--border-h); transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .btn.primary:hover { background: #7dd3fc; }
+  .btn.success { background: var(--green); color: white; border-color: var(--green); }
+  .btn.success:hover { background: #4ade80; }
+
+  .quick-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rx-line { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .rx-line input { width: 16px; height: 16px; }
+
+  /* 22/07: hàng dụng cụ gọn 1 dòng */
+  .quick-tools.tools-onerow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .quick-tools.tools-onerow .btn { padding: 6px 9px; font-size: 12px; }
+  .quick-tools.tools-onerow .rx-line { font-size: 11.5px; margin: 0; }
+  .hints { padding-left: 18px; margin: 4px 0; font-size: 12px; color: var(--muted); }
+  .hints li { margin: 3px 0; }
+  .hints b { color: var(--text); }
+
+  /* Score panel */
+  #score-panel { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 10px; padding: 12px; }
+  #score-panel .total { font-size: 18px; }
+  #score-panel .total.fail { color: var(--red); }
+  #score-panel .fail-tag { background: var(--red); color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; margin-left: 8px; }
+  #score-panel .breakdown { font-size: 12px; color: var(--muted); margin: 4px 0 10px; }
+  #score-panel .fatals .fatal { background: rgba(239,68,68,0.15); border-left: 3px solid var(--red); padding: 6px 10px; margin: 4px 0; font-size: 12px; }
+  #score-panel .stages { display: grid; gap: 4px; margin-top: 8px; }
+  #score-panel .st { font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  #score-panel .sc { padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  #score-panel .sc0 { background: rgba(239,68,68,0.2); color: #fca5a5; }
+  #score-panel .sc1 { background: rgba(251,191,36,0.2); color: #fcd34d; }
+  #score-panel .sc2 { background: rgba(34,197,94,0.2); color: #86efac; }
+  #score-panel pre { white-space: pre-wrap; font-size: 11px; color: var(--muted); margin: 6px 0 0; }
+
+  /* POS modal */
+  .pos-overlay, .label-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+    z-index: 100; display: flex; align-items: center; justify-content: center;
+  }
+  .pos-modal {
+    width: min(960px, 96vw); max-height: 92vh; overflow: hidden;
+    background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+    color: var(--text); display: flex; flex-direction: column;
+  }
+  .pos-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .pos-title { font-weight: 700; }
+  .pos-close { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .pos-body { display: grid; grid-template-columns: 280px 1fr; gap: 12px; padding: 12px; overflow: auto; }
+  .pos-left { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; }
+  .pos-search { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text); font-size: 13px; }
+  .pos-catalog { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .cat-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 8px; background: var(--card-h); border-radius: 6px; font-size: 12px; }
+  .cat-name { color: var(--text); }
+  .cat-name small { color: var(--muted); }
+  .cat-price { color: var(--text); font-weight: 600; }
+  .cat-add { padding: 4px 8px; background: var(--accent); border: none; color: #0f172a; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .cat-add:disabled { background: var(--border-h); cursor: not-allowed; color: var(--muted); }
+  .pos-right { display: flex; flex-direction: column; gap: 10px; }
+  .pos-rx-warn { background: rgba(239,68,68,0.15); border-left: 3px solid var(--red); padding: 8px 12px; font-size: 12px; border-radius: 6px; }
+  .pos-cart { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .pos-cart th, .pos-cart td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text); }
+  .pos-cart th { color: var(--muted); font-weight: 600; }
+  .pos-cart input { width: 60px; padding: 4px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
+  .pos-cart .empty { text-align: center; color: var(--muted); padding: 16px; }
+  .pos-cart .del { background: transparent; border: 1px solid var(--border); color: var(--red); padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+  .pos-cart .ln-warn { font-size: 10px; line-height: 1.5; margin-top: 3px; }
+  .pos-cart .ln-bad { color: var(--red); font-weight: 700; margin-right: 6px; }
+  .pos-cart .ln-near { color: var(--amber); font-weight: 600; margin-right: 6px; }
+  .pos-checkout:disabled { opacity: 0.45; cursor: not-allowed; }
+  .rx-tag { background: var(--red); color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-right: 4px; }
+  .abx-tag { background: var(--amber); color: #3e2723; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-right: 4px; }
+  .pos-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; }
+  .pos-meta input, .pos-meta select { padding: 5px 8px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; }
+  .rx-toggle { display: flex; align-items: center; gap: 6px; }
+  .pos-totals { background: rgba(34,197,94,0.08); padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+  .pos-totals .grand { font-size: 16px; margin-top: 4px; color: var(--green); }
+  .pos-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Label editor modal */
+  .label-modal { width: min(560px, 96vw); max-height: 92vh; overflow: auto; background: var(--card); border-radius: 14px; border: 1px solid var(--border); padding: 0; }
+  .label-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .label-title { font-weight: 700; }
+  .label-close { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; }
+  .label-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  .label-body label { display: flex; flex-direction: column; gap: 4px; }
+  .label-body select, .label-body input, .label-body textarea { padding: 6px 10px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: inherit; font-size: 13px; }
+  .le-doses { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .le-doses input { width: 100%; }
+  .le-quicks { display: flex; gap: 6px; flex-wrap: wrap; }
+  .le-quick { padding: 4px 10px; border: 1px solid var(--border); background: var(--card-h); color: var(--text); border-radius: 999px; font-size: 11px; cursor: pointer; }
+  .le-quick:hover { background: var(--border-h); }
+  .le-preview { background: #fefce8; color: #422006; border-radius: 8px; padding: 10px; font-family: 'Courier New', monospace; font-size: 12px; }
+  .le-sticker > div { padding: 2px 0; border-bottom: 1px dashed #d4d4aa; }
+  .le-sticker > div:last-child { border-bottom: none; }
+  .le-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .le-actions button { padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .le-cancel { background: var(--border-h); color: var(--text); }
+  .le-create { background: var(--accent); color: #0f172a; }
+
+  /* ── Label editor v2 (2 cột với preview kích thước thật) ───────────────── */
+  .label-overlay-v2 { z-index: 200; }
+  .label-modal-v2 {
+    width: min(1100px, 96vw); max-height: 92vh; overflow: hidden;
+    background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .label-head-v2 {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px; background: linear-gradient(90deg, #b45309, #f59e0b);
+    color: #fff7ed; font-weight: 700;
+  }
+  .label-title-v2 { flex: 1; font-size: 15px; }
+  .label-close-v2 { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .label-body-v2 {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px;
+    padding: 18px 22px; overflow: auto;
+  }
+  .le2-left, .le2-right { display: flex; flex-direction: column; gap: 14px; }
+  .le2-field { display: flex; flex-direction: column; gap: 6px; }
+  .le2-lbl { font-size: 12px; color: var(--muted); }
+  .le2-field select, .le2-field input, .le2-field textarea {
+    padding: 10px 12px; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+    font-family: inherit; font-size: 14px;
+  }
+  .le2-doses-box, .le2-timing-box {
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 14px 14px; background: rgba(255,255,255,0.02);
+  }
+  .le2-doses-box legend, .le2-timing-box legend { padding: 0 6px; color: var(--muted); font-size: 12px; }
+  .le2-doses-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .le2-dose { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .le2-dose-lbl { color: var(--muted); font-size: 12px; }
+  .le2-stepper { display: flex; align-items: center; gap: 6px; }
+  .le2-minus, .le2-plus {
+    width: 28px; height: 28px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--card-h);
+    color: var(--text); cursor: pointer; font-weight: 700; font-size: 14px;
+  }
+  .le2-val { min-width: 24px; text-align: center; font-weight: 700; font-size: 18px; }
+  .le2-total { text-align: right; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .le2-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .le2-chip {
+    padding: 8px 14px; border: 1px solid var(--border); background: var(--card-h);
+    color: var(--text); border-radius: 999px; font-size: 13px; cursor: pointer;
+  }
+  .le2-chip:hover { background: var(--border-h); }
+  .le2-chip-active { background: #f59e0b; color: #1c1917; border-color: #f59e0b; font-weight: 700; }
+  .le2-quicks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .le2-quick {
+    padding: 6px 12px; border: 1px solid var(--border); background: var(--card-h);
+    color: var(--text); border-radius: 999px; font-size: 12px; cursor: pointer;
+  }
+  .le2-quick:hover { background: var(--border-h); }
+  .le2-retail-row { display: flex; gap: 12px; }
+  .le2-preview-title { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .le2-sticker {
+    background: #fef3c7; color: #422006; border: 1px solid #d97706; border-radius: 10px;
+    padding: 14px 18px; font-family: 'Courier New', 'Inter', monospace; font-size: 13px;
+    box-shadow: 0 4px 14px rgba(180, 83, 9, 0.25);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .le2-sk-head {
+    font-weight: 800; letter-spacing: 1.5px; font-size: 14px;
+    text-align: left; padding-bottom: 4px; border-bottom: 2px dashed #b45309;
+    margin-bottom: 4px;
+  }
+  .le2-sk-bn, .le2-sk-drug, .le2-sk-strength { padding: 2px 0; }
+  .le2-sk-brand { font-size: 16px; }
+  .le2-sk-doses-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0;
+  }
+  .le2-sk-cell { background: #fde68a; border-radius: 6px; padding: 6px 4px; text-align: center; }
+  .le2-sk-time { font-size: 11px; color: #78350f; }
+  .le2-sk-num { font-weight: 800; font-size: 18px; }
+  .le2-sk-foot { font-size: 12px; color: #78350f; padding-top: 4px; }
+  .le2-sk-notes { font-size: 12px; color: #7c2d12; padding-top: 2px; min-height: 14px; }
+  .le2-hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.5; }
+  /* Header nhà thuốc trên nhãn HDSD + Nhãn BAO BÌ RA LẺ (mẫu image8) */
+  .le2-sk-pharm { font-size: 11px; font-weight: 700; color: #7c2d12; text-align: center; padding-bottom: 3px; border-bottom: 1px solid #d97706; margin-bottom: 2px; }
+  .le2-bag {
+    border: 1px solid #94a3b8; border-radius: 10px; padding: 12px 14px; margin-top: 4px;
+    font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1.5;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  }
+  .le2-bag-pharm { font-size: 12px; line-height: 1.35; border-bottom: 1px solid rgba(0,0,0,0.25); padding-bottom: 4px; margin-bottom: 4px; }
+  .le2-bag-special { text-align: center; font-weight: 800; font-size: 12.5px; letter-spacing: .5px; margin: 2px 0 6px; text-transform: uppercase; }
+  .le2-bag-row { padding: 3px 0; border-bottom: 1px dotted rgba(0,0,0,0.18); }
+  .le2-bag-foot { font-size: 9.5px; font-style: italic; opacity: 0.75; text-align: center; padding-top: 6px; }
+  .label-foot-v2 {
+    display: flex; gap: 10px; justify-content: flex-end;
+    padding: 14px 22px; border-top: 1px solid var(--border);
+  }
+  .le2-cancel, .le2-create {
+    padding: 10px 18px; border-radius: 10px; border: none; cursor: pointer;
+    font-weight: 600; font-size: 13px;
+  }
+  .le2-cancel { background: var(--border-h); color: var(--text); }
+  .le2-create { background: #f59e0b; color: #1c1917; }
+  /* Ô số phút trước/sau ăn trong nhãn HDSD */
+  .le2-offset-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+  /* ── Overlay DÁN NHÃN HDSD lên hộp (kéo-thả chọn chỗ trống) ─────────────── */
+  .sticker-place-overlay, .pkgflow-overlay, .pkg-overlay {
+    position: fixed; inset: 0; z-index: 300; background: rgba(2,6,23,0.74);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .sp-modal, .pkgflow-modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px 18px; width: min(560px, 96vw); max-height: 92vh; overflow: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .sp-head, .pkgflow-modal .sp-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 8px;
+  }
+  .sp-close, .pkgflow-close {
+    background: rgba(239,68,68,0.85); color: #fff; border: none; border-radius: 6px;
+    width: 28px; height: 28px; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  }
+  .sp-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+  .sp-hint b { color: #fde68a; }
+  .sp-stage {
+    position: relative; display: flex; justify-content: center;
+    background: rgba(15,23,42,0.6); border-radius: 12px; padding: 18px; margin-bottom: 12px;
+  }
+  .sp-box { position: relative; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+  .sp-face { display: block; border-radius: 6px; }
+  /* Nhãn kéo-thả = canvas render ĐÚNG thiết kế nhãn HDSD (giống lúc dán thật). */
+  .sp-sticker {
+    position: absolute; left: 0; top: 0; cursor: grab; user-select: none; touch-action: none;
+    border-radius: 4px; box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+    outline: 2px solid rgba(13,148,136,0.9); outline-offset: -1px;
+  }
+  .sp-sticker:active { cursor: grabbing; }
+  /* Phản hồi vùng dán (yêu cầu 2): viền xanh = hợp lệ, đỏ = che thông tin thuốc. */
+  .sp-sticker { transition: outline-color .12s ease, box-shadow .15s ease; }
+  .sp-sticker-bad { outline-color: rgba(239,68,68,0.95) !important; }
+  .sp-sticker-flash-ok {
+    outline-color: rgba(34,197,94,1) !important;
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.55), 0 3px 12px rgba(0,0,0,0.45) !important;
+  }
+  .sp-sticker-flash-bad {
+    outline-color: rgba(239,68,68,1) !important;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.55), 0 3px 12px rgba(0,0,0,0.45) !important;
+    animation: sp-shake .3s ease;
+  }
+  @keyframes sp-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+  /* Toast nhắc thao tác (vd phải đưa thuốc vào khay trước khi dán nhãn). */
+  .pharm-toast {
+    position: fixed; top: 92px; left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    z-index: 400; max-width: 420px; padding: 12px 18px;
+    background: rgba(15,23,42,0.96); color: #fde68a; border: 1px solid rgba(56,189,248,0.5);
+    border-radius: 12px; font-size: 13px; font-weight: 600; line-height: 1.45; text-align: center;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .pharm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .sp-foot, .pkgflow-modal .sp-foot {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px;
+  }
+  .sp-cancel, .sp-apply, .pkgflow-cancel, .pkgflow-next {
+    padding: 9px 16px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600; font-size: 13px;
+  }
+  .sp-cancel, .pkgflow-cancel { background: var(--border-h); color: var(--text); }
+  .sp-apply, .pkgflow-next { background: #10b981; color: #042f2e; }
+  .pkgflow-drug { width: 100%; padding: 8px; border-radius: 8px; background: rgba(15,23,42,0.6); color: var(--text); border: 1px solid var(--border); font-size: 13px; }
+
+  /* ── Modal ghi nhãn BAO BÌ RA LẺ (phong bì trắng/vàng/hồng) ─────────────── */
+  .pkg-modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    width: min(760px, 96vw); max-height: 92vh; overflow: auto; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .pkg-body { display: flex; gap: 18px; padding: 16px 22px; flex-wrap: wrap; }
+  .pkg-form { flex: 1 1 280px; display: flex; flex-direction: column; gap: 10px; }
+  .pkg-preview-wrap { flex: 0 0 280px; }
+  .pkg-sticker {
+    border: 2px solid #9ca3af; border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  }
+  .pkg-sk-head { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+  .pkg-sk-logo {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: #b91c1c; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .pkg-sk-special { text-align: center; font-weight: 800; font-size: 14px; margin: 6px 0; text-transform: uppercase; }
+  .pkg-sk-row { padding: 4px 0; border-bottom: 1px dotted rgba(0,0,0,0.25); font-size: 12.5px; }
+
+  /* ── Phone dialpad ─────────────────────────────────────────────────────── */
+  .phone-overlay { z-index: 200; }
+  .phone-modal {
+    width: min(420px, 96vw); background: var(--card);
+    border-radius: 18px; border: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 18px 22px;
+  }
+  .phone-head { text-align: center; margin-bottom: 14px; }
+  .phone-title { font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+  .phone-body { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .phone-prompt { color: var(--muted); font-size: 13px; }
+  .phone-display {
+    width: 100%; padding: 14px; text-align: center;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 12px; font-size: 28px; font-weight: 700;
+    letter-spacing: 4px; font-family: 'Courier New', monospace;
+    min-height: 22px;
+  }
+  .phone-display-empty::before { content: attr(data-placeholder); color: var(--muted); font-weight: 400; }
+  .phone-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+  .phone-key {
+    aspect-ratio: 1.6 / 1; border-radius: 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    color: var(--text); font-size: 22px; font-weight: 600; cursor: pointer;
+  }
+  .phone-key:hover { background: rgba(255,255,255,0.10); }
+  .phone-call {
+    width: 100%; padding: 12px;
+    background: linear-gradient(180deg, #10b981, #047857); color: #ecfdf5;
+    border: none; border-radius: 999px; font-weight: 700; font-size: 15px;
+    cursor: pointer; margin-top: 4px;
+  }
+  .phone-call:disabled { background: rgba(255,255,255,0.06); color: var(--muted); cursor: not-allowed; }
+  .phone-hint { color: var(--muted); font-size: 12px; text-align: center; }
+  .phone-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .phone-hangup {
+    padding: 8px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--card-h);
+    color: var(--text); cursor: pointer; font-weight: 600;
+  }
+
+  /* ── DS đại học modal ──────────────────────────────────────────────────── */
+  .senior-overlay { z-index: 200; }
+  .senior-modal {
+    width: min(640px, 96vw); background: #ffffff; color: #0f172a;
+    border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    padding: 28px 32px;
+  }
+  .senior-title { font-size: 17px; font-weight: 700; margin: 0 0 10px; }
+  .senior-intro { font-size: 14px; color: #334155; margin: 0 0 16px; line-height: 1.6; }
+  .senior-card {
+    display: flex; align-items: center; gap: 18px;
+    background: #ecfeff; border-radius: 12px; padding: 14px 18px; margin: 0 0 14px;
+  }
+  .senior-avatar {
+    width: 78px; height: 78px; border-radius: 50%;
+    background: #a7f3d0; display: flex; align-items: center; justify-content: center;
+    font-size: 44px;
+  }
+  .senior-name { font-weight: 700; font-size: 15px; }
+  .senior-role, .senior-place { color: #475569; font-size: 13px; }
+  .senior-note { font-size: 13px; color: #475569; line-height: 1.6; margin: 0 0 16px; }
+  .senior-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .senior-close, .senior-confirm {
+    padding: 10px 18px; border-radius: 10px; border: none; cursor: pointer;
+    font-weight: 600; font-size: 13px;
+  }
+  .senior-close { background: #1e293b; color: #f1f5f9; }
+  .senior-confirm { background: #059669; color: #ecfdf5; }
+
+  /* ── P2: Book reference modal (Dược thư / MIMS) ───────────────────────── */
+  .book-overlay { z-index: 200; }
+  .book-modal {
+    width: min(1100px, 96vw); max-height: 92vh; overflow: hidden;
+    background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .book-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 22px; color: #fef9c3;
+  }
+  .book-title { font-weight: 800; font-size: 16px; }
+  .book-sub { font-size: 12px; color: rgba(254,249,195,0.85); margin-top: 2px; }
+  .book-close { margin-left: auto; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; }
+  .book-body { display: grid; grid-template-columns: 320px 1fr; gap: 0; flex: 1; min-height: 0; }
+  .book-left { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .book-search {
+    margin: 12px; padding: 9px 12px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px;
+  }
+  .book-list { overflow-y: auto; flex: 1; padding: 0 12px 12px; }
+  .book-row {
+    padding: 8px 10px; border-radius: 6px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.03); cursor: pointer;
+    font-size: 13px;
+  }
+  .book-row:hover { background: rgba(56,189,248,0.15); }
+  .book-sku { color: #94a3b8; font-family: 'Courier New', monospace; font-size: 11px; margin-left: 4px; }
+  .book-right { padding: 16px 22px; overflow-y: auto; }
+  .book-empty { color: var(--muted); }
+  .book-detail h2 { font-size: 22px; margin: 0 0 4px; color: #fde68a; }
+  .book-detail h3 { font-size: 14px; margin: 18px 0 6px; color: #a7f3d0; }
+  .book-detail p { font-size: 13px; line-height: 1.55; margin: 4px 0 8px; }
+  .book-detail-sub { color: #94a3b8; font-style: italic; margin-bottom: 12px; }
+  .book-detail-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .book-detail-tbl td { padding: 6px 8px; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .book-detail-tbl td:first-child { color: var(--muted); width: 35%; }
+
+  /* ── P3: Inspector modal (zoom hộp 3D + drag xoay + info) ───────────── */
+  .inspector-overlay {
+    position: fixed; inset: 0; z-index: 220;
+    background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .inspector-modal {
+    position: relative;
+    width: min(1320px, 96vw); height: min(760px, 92vh);
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    /* Khu hiển thị thuốc 3D TO hơn (yêu cầu thầy), cột thông tin/nút gọn bên phải. */
+    display: grid; grid-template-columns: 2.1fr 1fr;
+    overflow: hidden;
+  }
+  .ins-close {
+    position: absolute; top: 10px; right: 12px; z-index: 5;
+    width: 34px; height: 34px; border-radius: 9px;
+    background: rgba(15,23,42,0.78); border: 1px solid rgba(255,255,255,0.28);
+    color: #f1f5f9; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ins-close:hover { background: rgba(220,38,38,0.9); border-color: rgba(255,255,255,0.5); }
+  .inspector-3d {
+    position: relative; background: radial-gradient(circle at 50% 50%, #1e293b, #0f172a 80%);
+  }
+  /* touch-action:none → trên điện thoại 1 ngón XOAY được thuốc, không bị trình
+     duyệt cướp cử chỉ thành cuộn trang. */
+  .inspector-3d .ins-canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  .inspector-3d .ins-canvas:active { cursor: grabbing; }
+  /* Panel phải = cột flex KHÔNG cuộn; nội dung cuộn trong .ins-scroll, 3 nút
+     ghim SÁT ĐÁY (.ins-actions, flex-shrink:0) → luôn ở đáy dialog. */
+  .inspector-info {
+    padding: 0; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+  }
+  .ins-scroll {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    padding: 22px 28px 12px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .ins-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ins-brand { width: 100%; font-size: 22px; font-weight: 800; color: #fde68a; }
+  .ins-generic { width: 100%; color: #94a3b8; font-style: italic; font-size: 13px; }
+  .ins-tag {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .ins-tag.ins-rx { background: #b91c1c; color: #fef2f2; }
+  .ins-tag.ins-otc { background: #15803d; color: #ecfdf5; }
+  .ins-tag.ins-abx { background: #d97706; color: #fffbeb; }
+  .ins-tag.ins-warn { background: #7c2d12; color: #fed7aa; }
+  /* Dòng thông tin vận hành gọn (thay bảng trùng nhãn): tồn kho · đơn giá · mã. */
+  .ins-meta {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px;
+    padding: 8px 12px; background: rgba(56,189,248,0.08);
+    border: 1px solid rgba(56,189,248,0.2); border-radius: 10px; color: var(--text);
+  }
+  .ins-meta b { color: #fde68a; }
+  .ins-meta code { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .ins-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ins-tbl td { padding: 7px 6px; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+  .ins-tbl td:first-child { color: var(--muted); width: 40%; }
+  .ins-tbl code { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .ins-hint {
+    color: var(--muted); font-size: 12px; padding: 6px 10px;
+    background: rgba(56,189,248,0.10); border-radius: 8px;
+    border-left: 3px solid #38bdf8;
+  }
+  /* 3 nút thao tác GHIM ở đáy panel info (sticky) → luôn bấm được không cần cuộn
+     dù phần nhãn TT01 phía trên dài. Nền + đổ bóng che nội dung cuộn phía sau. */
+  .ins-actions {
+    flex: 0 0 auto; display: flex; gap: 10px;
+    padding: 14px 28px; background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+  .ins-return, .ins-retail, .ins-confirm {
+    flex: 1; padding: 12px; border-radius: 10px; border: none; cursor: pointer;
+    font-weight: 700; font-size: 13px;
+  }
+  .ins-return { background: var(--border-h); color: var(--text); }
+  .ins-retail { background: linear-gradient(180deg, #f59e0b, #d97706); color: #fff; }
+  .ins-confirm { background: linear-gradient(180deg, #10b981, #047857); color: #ecfdf5; }
+  /* Yêu cầu thầy #12: chọn số lượng đơn vị ra lẻ / cắt viên trong vỉ. */
+  .ins-qty { flex: 0 0 auto; padding: 10px 28px 0; display: flex; flex-direction: column; gap: 8px; }
+  .insq-modes { display: flex; gap: 8px; }
+  .insq-mode { flex: 1; padding: 7px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px;
+    border: 1px solid var(--border-h); background: rgba(255,255,255,0.04); color: var(--text); }
+  .insq-mode.insq-on { background: linear-gradient(180deg,#0ea5e9,#0284c7); color: #fff; border-color: #0284c7; }
+  .insq-row { display: flex; align-items: center; gap: 10px; }
+  .insq-lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .insq-minus, .insq-plus { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border-h);
+    background: rgba(255,255,255,0.06); color: var(--text); font-size: 20px; font-weight: 700; cursor: pointer; }
+  .insq-val { min-width: 34px; text-align: center; font-size: 18px; font-weight: 800; color: #fde68a; }
+  .insq-unit { font-size: 12px; color: var(--muted); }
+
+  /* ── P③: Nhãn thuốc mô phỏng theo TT 01/VBHN-BYT ────────────────────── */
+  .tt-section { width: 100%; }
+  .tt-section-head { font-size: 13px; font-weight: 800; color: #fde68a; margin-bottom: 8px; }
+  .tt-tt { font-weight: 600; color: #94a3b8; font-size: 11px; }
+  .tt-cards { display: flex; flex-direction: column; gap: 12px; }
+  .tt-card-cap { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+  .tt-label {
+    --tt-acc: #0d9488;
+    position: relative; background: #ffffff; color: #0f172a;
+    border: 1px solid #cbd5e1; border-left: 5px solid var(--tt-acc);
+    border-radius: 8px; padding: 12px 14px 8px;
+    font-family: 'Inter', system-ui, sans-serif;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  }
+  .tt-rx-corner {
+    position: absolute; top: 8px; left: 10px;
+    background: #b91c1c; color: #fff; font-weight: 800; font-size: 13px;
+    padding: 1px 8px; border-radius: 5px; letter-spacing: .5px;
+  }
+  .tt-rx-inline { background: #b91c1c; color: #fff; font-weight: 800; padding: 0 5px; border-radius: 4px; font-size: 11px; }
+  .tt-outer .tt-name { padding-left: 42px; min-height: 22px; }
+  .tt-name { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.2; }
+  .tt-name.sm { font-size: 14px; padding-left: 0; }
+  .tt-active { color: var(--tt-acc); font-weight: 700; font-size: 13px; margin-top: 2px; }
+  .tt-active.sm { font-size: 11px; font-weight: 600; color: #334155; }
+  .tt-form { font-size: 12px; color: #334155; margin: 6px 0 8px; }
+  .tt-fields { display: grid; gap: 3px; margin: 0 0 8px; padding: 0; }
+  .tt-fields > div { display: grid; grid-template-columns: 42% 58%; gap: 6px; font-size: 11.5px; border-bottom: 1px dotted #e2e8f0; padding: 2px 0; }
+  .tt-fields dt { color: #64748b; margin: 0; }
+  .tt-fields dd { margin: 0; color: #0f172a; }
+  .tt-warns { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
+  .tt-chip { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+  .tt-chip-rx { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .tt-chip-route { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+  .tt-direct-rows { display: flex; gap: 16px; font-size: 12px; margin: 6px 0 4px; }
+  .tt-maker { font-size: 11px; color: #475569; }
+  .tt-foot { font-size: 10px; font-style: italic; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 5px; margin-top: 4px; text-align: center; }
+  .tt-foot.sm { font-size: 9px; padding-top: 4px; }
+
+  /* ── P6a: Đơn thuốc theo Thông tư 26/2025/TT-BYT ─────────────────────── */
+  .rx-overlay {
+    position: fixed; inset: 0; z-index: 220;
+    background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; overflow-y: auto;
+  }
+  .rx-modal {
+    width: min(820px, 96vw); max-height: 95vh; overflow-y: auto;
+    background: transparent;
+    position: relative;
+  }
+  .rx-tools {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; gap: 8px; justify-content: flex-end;
+    padding-bottom: 8px;
+  }
+  .rx-tools button {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(15,23,42,0.92); color: #f1f5f9; cursor: pointer; font-size: 13px;
+  }
+  .rx-page {
+    background: #ffffff; color: #0f172a;
+    padding: 32px 38px; border-radius: 10px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 13px; line-height: 1.55;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.4);
+  }
+  .rx-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; }
+  .rx-org { text-align: center; flex: 1; }
+  .rx-org-line1 { font-weight: 700; font-size: 13px; text-transform: uppercase; }
+  .rx-org-line2 { font-weight: 700; font-size: 16px; text-transform: uppercase; margin: 2px 0; }
+  .rx-org-line3 { font-size: 11px; color: #475569; }
+  .rx-logo { font-size: 48px; color: #b91c1c; padding: 0 24px; }
+  .rx-title { text-align: center; margin: 16px 0 12px; }
+  .rx-title > div:first-child { font-size: 26px; font-weight: 700; letter-spacing: 4px; }
+  .rx-subtitle { font-size: 11px; font-style: italic; color: #475569; margin-top: 4px; }
+  .rx-meta-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 13px; margin: 8px 0; }
+  .rx-bn-tbl, .rx-drug-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .rx-bn-tbl td { padding: 4px 6px; border: 1px solid #94a3b8; }
+  .rx-bn-tbl td:first-child, .rx-bn-tbl td:nth-child(3) { width: 16%; background: #f8fafc; }
+  .rx-prescribed { margin-top: 14px; }
+  .rx-drug-tbl th, .rx-drug-tbl td { padding: 6px 8px; border: 1px solid #94a3b8; vertical-align: top; }
+  .rx-drug-tbl th { background: #f1f5f9; text-align: left; font-size: 12px; }
+  .rx-drug-tbl td b { color: #0f172a; }
+  .rx-warn {
+    margin-top: 10px; padding: 10px 14px;
+    background: #fef2f2; border-left: 4px solid #b91c1c; color: #7f1d1d;
+    font-size: 12px;
+  }
+  .rx-instr {
+    margin-top: 12px; padding: 10px 14px;
+    background: #f0fdf4; border-left: 4px solid #15803d; color: #14532d;
+    font-size: 12px;
+  }
+  .rx-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 28px; }
+  .rx-sign-box { text-align: center; }
+  .rx-sign-title { font-weight: 700; font-size: 13px; margin-bottom: 30px; }
+  .rx-sign-line { border-bottom: 1px dotted #94a3b8; margin: 0 20px; }
+  .rx-sign-name { color: #475569; font-size: 11px; font-style: italic; margin-top: 4px; }
+  .rx-sign-stamp .rx-stamp {
+    display: inline-block; padding: 3px 10px; margin-bottom: 6px;
+    border: 2px solid #b91c1c; color: #b91c1c; font-weight: 700;
+    transform: rotate(-8deg); border-radius: 6px; font-size: 11px;
+  }
+  .rx-note-foot {
+    margin-top: 22px; padding-top: 10px; border-top: 1px dashed #94a3b8;
+    font-size: 11px; color: #64748b; font-style: italic;
+  }
+
+  /* ── P6b: Chat box BS ─────────────────────────────────────────────────── */
+  .doctor-chat-overlay { z-index: 220; }
+  .dc-modal {
+    width: min(460px, 96vw); height: 600px;
+    background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .dc-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: linear-gradient(90deg, #0f766e, #14b8a6);
+    color: #f0fdfa;
+  }
+  .dc-avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: #ecfdf5; display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .dc-name { font-weight: 700; }
+  .dc-status { font-size: 11px; color: #ccfbf1; }
+  .dc-close {
+    margin-left: auto; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  .dc-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.02); }
+  .dc-bubble {
+    max-width: 80%; padding: 8px 12px; border-radius: 14px; font-size: 13px;
+    word-wrap: break-word; line-height: 1.4;
+  }
+  .dc-doctor { background: rgba(255,255,255,0.08); align-self: flex-start; border-top-left-radius: 4px; }
+  .dc-me     { background: #0ea5e9; color: #f0f9ff; align-self: flex-end; border-top-right-radius: 4px; }
+  .dc-foot { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border); }
+  .dc-input {
+    flex: 1; padding: 9px 12px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 13px;
+  }
+  .dc-send {
+    padding: 9px 14px;
+    background: linear-gradient(180deg, #10b981, #047857); color: #ecfdf5;
+    border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
+  }
+
+  /* ════════════════ ĐIỆN THOẠI / TABLET DỌC (≤ 820px) ════════════════
+     Mọi modal đang chia 2 CỘT cố định (inspector 2.1fr/1fr, POS 280px, sổ sách
+     320px, soạn nhãn 1.1fr/1fr) → trên màn hẹp cột phải bị bóp còn ~100px, chữ
+     vỡ và nút văng ra ngoài. Ở đây xếp lại thành 1 CỘT (khối 3D trên, thông tin
+     + nút cuộn ở dưới) và cho các thanh điều khiển nổi tự xuống dòng.
+     GIỮ ĐỒNG BỘ với public/nha-thuoc-3d.html (bản Express) — sửa 1 nơi phải sửa cả 2. */
+  @media (max-width: 820px) {
+    /* ── Thanh điều khiển nổi trên canvas ── */
+    .drug-search {
+      top: 8px; left: 8px; right: 8px; width: auto;   /* bỏ width:280px cố định */
+    }
+    .light-bar {
+      top: 58px; right: 8px; padding: 4px 10px;        /* xuống dưới ô tìm, hết đè nhau */
+    }
+    .light-bar input[type="range"] { width: 84px; }
+    .cam-bar {
+      left: 8px; right: 8px; bottom: 8px;
+      max-width: none; flex-wrap: wrap;                /* nút "Khách hàng" hết tràn mép */
+      justify-content: flex-start;
+    }
+    .cam-select { max-width: 140px; flex: 1 1 auto; }
+    /* Vùng chạm tối thiểu ~40px cho ngón tay */
+    .cam-btn { padding: 9px 12px; font-size: 12px; min-height: 38px; }
+
+    /* ── Inspector thuốc: 3D trên, thông tin + nút dưới ── */
+    .inspector-overlay { padding: 8px; }
+    .inspector-modal {
+      width: 100%; height: 94vh;
+      grid-template-columns: 1fr;                      /* bỏ 2.1fr 1fr */
+      grid-template-rows: 40vh 1fr;                    /* 3D trên, info dưới */
+    }
+    .ins-scroll { padding: 14px 16px 10px; gap: 10px; }
+    .ins-brand { font-size: 18px; }
+    .ins-actions {
+      flex-wrap: wrap; padding: 10px 12px; gap: 8px;
+    }
+    .ins-actions > button { flex: 1 1 auto; min-height: 44px; }
+
+    /* ── Soạn nhãn HDSD / bao bì ra lẻ: 1 cột ── */
+    .label-body-v2 { grid-template-columns: 1fr; gap: 12px; padding: 12px 14px; }
+    /* min-width:0 — mặc định con của grid/flex là min-width:auto nên KHÔNG co
+       xuống dưới bề rộng nội dung → .le2-left phình 614px trong khung 358px và
+       tràn ngang. Cho phép co lại rồi nội dung bên trong tự xuống dòng. */
+    .le2-left, .le2-right, .pos-body > *, .book-body > * { min-width: 0; }
+    .le2-drug, .le2-drug-search, .le2-notes, .le2-patient { max-width: 100%; }
+    /* Lưới liều 4 cột không đủ chỗ trên máy hẹp → 2×2 */
+    .le2-doses-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .le2-sticker { font-size: 12px; padding: 12px; overflow-x: auto; }
+    .pkg-body { flex-direction: column; gap: 12px; padding: 12px 14px; }
+    .label-foot-v2 { flex-wrap: wrap; gap: 8px; }
+    .label-foot-v2 > button { flex: 1 1 auto; min-height: 44px; }
+
+    /* ── POS + sổ sách: 1 cột ── */
+    .pos-body { grid-template-columns: 1fr; }
+    .book-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+
+    /* Nút bấm trong các dialog đủ lớn để chạm */
+    .sp-foot > button, .salestray-foot > button, .notepad-foot > button { min-height: 44px; }
+  }
+
+  /* ── Điện thoại nhỏ (≤ 480px): canvas cao hơn, chữ gọn hơn ── */
+  @media (max-width: 480px) {
+    .app { grid-template-rows: 56vh 1fr; }
+    .inspector-modal { grid-template-rows: 36vh 1fr; }
+    .cam-bar-label { display: none; }                  /* "📷 Góc nhìn:" chiếm chỗ, bỏ trên máy nhỏ */
+    .drug-search input { font-size: 16px; }            /* ≥16px: iOS không auto-zoom khi focus */
+  }
+</style>
+`;
+
+// importmap gốc trong public/nha-thuoc-3d.html — map bare specifier three CDN.
+const IMPORT_MAP = JSON.stringify({
+  imports: {
+    three: '/vendor/three-0.160/build/three.module.js',
+    'three/addons/': '/vendor/three-0.160/examples/jsm/',
+  },
+});
+
+export default function NhaThuoc3DPage() {
+  useEffect(() => {
+    // 1) CSS gốc vào <head>.
+    const style = document.createElement('style');
+    style.dataset.pharmLegacy = '1';
+    style.textContent = LEGACY_CSS;
+    document.head.appendChild(style);
+
+    // 1b) Override FULLSCREEN. Bản Next bọc MỌI trang trong <main class="container
+    //     py-8"> (cap 1100px + padding) kèm thanh nav sticky → .app bị bó ~1100px,
+    //     khu 3D chỉ còn ~700px. Cho riêng trang nhà thuốc thoát container để tràn
+    //     viền như bản gốc TRƯỚC khi chuyển Next.js. Style này chỉ tồn tại khi trang
+    //     mounted (gỡ ở cleanup) nên KHÔNG ảnh hưởng trang khác. `:has(.app)` giới
+    //     hạn đúng <main> đang chứa nhà thuốc.
+    const fs = document.createElement('style');
+    fs.dataset.pharmFullscreen = '1';
+    fs.textContent = [
+      'body:has(.app) main{max-width:none!important;padding:0!important;margin:0!important;width:100%!important}',
+      'body:has(.app){overflow:hidden}',
+      '.app{height:calc(100vh - var(--pharm-header-h,48px))!important}',
+    ].join('');
+    document.head.appendChild(fs);
+
+    // Đo chiều cao thanh nav Next (sticky, có thể đổi khi responsive) → set biến CSS
+    // để .app fill khít phần viewport còn lại, không hở đáy / không tràn.
+    const setHeaderH = () => {
+      const h = document.querySelector('body > header');
+      if (h) document.documentElement.style.setProperty(
+        '--pharm-header-h', Math.round(h.getBoundingClientRect().height) + 'px');
+    };
+    setHeaderH();
+    window.addEventListener('resize', setHeaderH);
+
+    // 2) importmap — chỉ 1 importmap/tài liệu, phải có trước khi module resolve.
+    //    Guard theo id để không thêm trùng khi client-navigate quay lại.
+    if (!document.getElementById('pharm-importmap')) {
+      const map = document.createElement('script');
+      map.type = 'importmap';
+      map.id = 'pharm-importmap';
+      map.textContent = IMPORT_MAP;
+      document.head.appendChild(map);
+    }
+
+    // 3) Nạp engine vanilla (module). ?ts để re-execute khi quay lại trang.
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = `/legacy/nha-thuoc-3d.js?ts=${Date.now()}`;
+    document.body.appendChild(s);
+
+    // 4) Mốc cứu overlay tải: nếu three.js/CDN hoặc simulation.js nạp LỖI thì
+    //    simulation.js không chạy → overlay đứng mãi không báo gì. 12s nhắc mạng
+    //    chậm; 45s coi như hỏng → báo lỗi + nút tải lại. simulation.js clear 2
+    //    timer này qua window.__sceneLoadingTimers khi dựng scene xong.
+    const slowT = window.setTimeout(() => {
+      const el = document.getElementById('scene-loading-slow');
+      if (el && document.getElementById('scene-loading')) el.hidden = false;
+    }, 12000);
+    const deadT = window.setTimeout(() => {
+      const wrap = document.getElementById('scene-loading');
+      if (!wrap) return;
+      // Scene đã dựng (tab nền: rAF ngủ nên overlay chưa kịp ẩn) → KHÔNG báo lỗi sai.
+      if ((window as any).__sim) { wrap.remove(); return; }
+      const step = document.getElementById('scene-loading-step');
+      const slowEl = document.getElementById('scene-loading-slow');
+      const spin = wrap.querySelector('.scene-loading-spin') as HTMLElement | null;
+      if (spin) spin.style.display = 'none';
+      if (step) step.textContent = 'Không tải được nhà thuốc 3D.';
+      if (slowEl) {
+        slowEl.hidden = false;
+        slowEl.textContent = 'Có thể do mạng hoặc trình duyệt không hỗ trợ WebGL. Hãy tải lại trang.';
+      }
+    }, 45000);
+    (window as any).__sceneLoadingTimers = [slowT, deadT];
+
+    return () => {
+      clearTimeout(slowT);
+      clearTimeout(deadT);
+      s.remove();
+      style.remove();
+      fs.remove();
+      window.removeEventListener('resize', setHeaderH);
+      document.documentElement.style.removeProperty('--pharm-header-h');
+      // importmap KHÔNG gỡ: đã dùng để resolve module; giữ lại vô hại.
+    };
+  }, []);
+
+  // Khung DOM tĩnh gốc (markup <body> của nha-thuoc-3d.html) — GIỮ NGUYÊN mọi
+  // id/class/hidden để simulation.js querySelector trúng. Mọi modal (POS, nhãn,
+  // đơn thuốc, inspector 3D, phone, chat BS…) do engine tạo động rồi append vào
+  // document.body — giữ NGUYÊN hành vi gốc.
+  return (
+    <div className="app">
+      <div className="scene-wrap">
+        <canvas id="scene-canvas"></canvas>
+        {/* Overlay tải: render ngay từ SSR, simulation.js cập nhật bước rồi ẩn khi
+            khung hình 3D đầu tiên đã vẽ. */}
+        <div id="scene-loading" className="scene-loading">
+          <div className="scene-loading-spin"></div>
+          <div className="scene-loading-title">Đang tải nhà thuốc 3D…</div>
+          <div id="scene-loading-step" className="scene-loading-step">Đang khởi động…</div>
+          <div id="scene-loading-slow" className="scene-loading-slow" hidden>Mạng có vẻ chậm. Nếu chờ quá lâu, hãy tải lại trang.</div>
+        </div>
+        {/* scene-overlay đã bỏ theo yêu cầu (button Trang chủ + title) */}
+        <h1 id="scenario-title" hidden>Nhà thuốc GPP 3D</h1>
+        {/* Tooltip hover hộp thuốc: brand · strength · HD · tồn */}
+        <div id="drug-tooltip" className="drug-tooltip" hidden></div>
+        {/* Search box */}
+        <div id="drug-search" className="drug-search">
+          <input id="drug-search-input" type="search" placeholder="🔎 Tìm thuốc theo tên hoặc SKU…" autoComplete="off" />
+          <div id="drug-search-results" className="drug-search-results"></div>
+        </div>
+        <div id="pending-label" className="pending-label" hidden>🏷️ <span id="pending-label-text"></span><button id="pending-label-cancel" type="button" title="Huỷ nhãn đang chờ dán">✕ Huỷ dán</button></div>
+        <div className="cam-bar" id="cam-bar">
+          <span className="cam-bar-label">📷 Góc nhìn:</span>
+          <select className="cam-select" id="cam-select" title="Chọn góc nhìn"></select>
+          <button className="cam-btn avatar-btn" id="avatar-create" type="button">👤 Khách hàng</button>
+        </div>
+        <div className="light-bar" id="light-bar">
+          <span className="light-bar-label">💡</span>
+          <input id="exposure-slider" type="range" min="0.2" max="1.5" step="0.05" />
+          <span id="exposure-value" className="light-bar-label">—</span>
+        </div>
+      </div>
+
+      <aside className="side">
+        <button className="side-toggle" id="side-toggle" type="button" title="Thu/mở panel"
+                aria-label="Thu hoặc mở panel bên phải">⇆</button>
+        <div className="scenario-box">
+          <div className="role">Đối thoại với: <span id="npc-role">—</span></div>
+          <div className="title" id="scenario-subtitle">Đang khởi tạo…</div>
+          <div className="setting" id="scenario-setting"></div>
+        </div>
+
+        <h3>💬 Hội thoại</h3>
+        <div className="model-select-row">
+          <span>🤖 Mô hình:</span>
+          <select id="model-select" title="Chọn mô hình AI cho bệnh nhân/NPC">
+            <option value="qwen">🐫 Qwen (mặc định)</option>
+            <option value="gpt">✨ GPT</option>
+          </select>
+        </div>
+        <div className="chat" id="chat"></div>
+        <div className="chat-input">
+          <textarea id="ta" placeholder="Nhập câu trả lời… (Enter để gửi)" rows={2}></textarea>
+          <button className="btn primary" id="send">Gửi</button>
+        </div>
+
+        {/* 22/07: gom toàn bộ dụng cụ 1 HÀNG (bỏ 2 heading + dòng trạng thái nhãn)
+            → nhường tối đa chỗ cho khung hội thoại. */}
+        <div className="quick-tools tools-onerow">
+          <button className="btn" id="btn-label" type="button" title="Soạn nhãn HDSD mới">🧾 Nhãn HDSD</button>
+          <button className="btn" id="btn-pos" type="button" title="Mở phần mềm bán hàng">💳 Bán hàng</button>
+          <button className="btn" id="btn-rx" type="button" title="Xem đơn thuốc">📋 Đơn thuốc</button>
+          <button className="btn" id="btn-doctor" type="button" title="Gọi bác sĩ">📞 Bác sĩ</button>
+          <label className="rx-line" style={{ margin: 0 }}><input type="checkbox" id="rx-toggle" /> Có đơn hợp lệ</label>
+        </div>
+
+        <button className="btn success" id="finish" type="button">🏁 Kết thúc và chấm điểm</button>
+        <div id="score-panel" hidden></div>
+      </aside>
+    </div>
+  );
+}

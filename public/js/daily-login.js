@@ -1,6 +1,7 @@
 // Daily Login Bonus — popup modal 7-day chain (Duolingo / Genshin style)
 // Tự bật khi user vào app + chưa claim hôm nay. Persist localStorage flag
 // "đã thấy hôm nay" để không popup lại sau khi claim.
+import { fetchMe } from './auth.js';
 
 const KEY_SHOWN = 'tizia:daily:shown';
 
@@ -111,6 +112,8 @@ class DailyLogin {
   }
   async show() {
     try {
+      // Khách: /api/auth/me đã cho biết chưa đăng nhập, không gọi thêm API của tài khoản (chỉ ra 401 đỏ console).
+      if (!(await fetchMe())) return;
       const r = await fetch('/api/daily/me', { credentials:'same-origin' });
       if (r.status === 401) return;
       const d = await r.json();

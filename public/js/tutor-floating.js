@@ -27,6 +27,7 @@
   const selfScript = document.currentScript;
   const autoDomain = selfScript?.dataset?.domain || autoDetectDomain();
   const autoGrade = selfScript?.dataset?.grade || '';
+  const autoLabel = selfScript?.dataset?.label || '';   // req #246: chữ hiện cạnh biểu tượng (vd "Trợ lý AI")
   const autoContext = selfScript?.dataset?.context || (location.pathname.split('/').pop() || '').replace('.html', '');
 
   function autoDetectDomain() {
@@ -182,7 +183,8 @@
     const fab = document.createElement('button');
     fab.id = 'edututor-fab';
     fab.title = 'AI Tutor — hỏi gì cũng được';
-    fab.textContent = '🦉';
+    if (autoLabel) { fab.classList.add('has-label'); fab.innerHTML = '<span style="font-size:28px;line-height:1">🦉</span><span class="lbl"></span>'; fab.querySelector('.lbl').textContent = autoLabel; }
+    else fab.textContent = '🦉';
     fab.addEventListener('click', togglePanel);
     document.body.appendChild(fab);
 
@@ -326,6 +328,7 @@
     if (!text) return;
     ta.value = '';
     addMsg('user', text);
+    try { window.dispatchEvent(new CustomEvent('edututor:ask', { detail: { text } })); } catch {}   // req #247: trang chủ có thể ghi lại câu hỏi
     history.push({ role: 'user', content: text }); saveHistory();
 
     const thinking = addMsg('bot', '🤔 Đang nghĩ…', true);
@@ -339,7 +342,8 @@
         body: JSON.stringify({
           domain: autoDomain,
           grade: autoGrade || undefined,
-          context: autoContext,
+          // Trang có thể cấp ngữ cảnh ĐỘNG (vd nhiệm vụ/bước đang làm) qua window.EduTutorContext()
+          context: (typeof window.EduTutorContext === 'function' && window.EduTutorContext()) || autoContext,
           history: history.slice(-MAX_HISTORY).slice(0, -1),
           message: text,
           styleNote: TUTOR_STYLE_DOC[autoDomain] || TUTOR_STYLE_DOC.general,

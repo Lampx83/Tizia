@@ -12,7 +12,7 @@
 // ============================================================
 
 import { getPlayerName } from './api.js';
-import { renderRequestThread } from './request-thread.js';
+import { renderRequestThread } from './request-thread.js?v=oneScroll1';
 
 const TYPES = [
   { v: 'game',   icon: '🎮', label: 'Thêm trò chơi / mini-game' },
@@ -24,23 +24,84 @@ const TYPES = [
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
   reviewing: { label: 'Đang làm',     cls: 'reviewing' },
+  awaiting_user: { label: '⏳ Chờ bạn bổ sung', cls: 'awaiting' },
   done:      { label: '✓ Hoàn thành', cls: 'done' },
   rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
 };
 
-function inferDomain() {
-  if (typeof window !== 'undefined' && window.SUGGESTION_DOMAIN) {
-    return String(window.SUGGESTION_DOMAIN);
-  }
-  // Ưu tiên ?domain= trên URL (school.html?domain=secondary…) để khớp enrolled_domain
-  try {
-    const q = new URLSearchParams(location.search).get('domain');
-    if (q) return String(q);
-  } catch {}
+// ── "Trường đang vào" (session) ──────────────────────────────────────────
+// Ban điều hành AI thuộc TỪNG trường: nút chỉ hiện khi đang ở trong một trường
+// và đề nghị gửi đi gắn đúng domain của trường đó. Vào campus (/school?domain=X)
+// sẽ nhớ X vào sessionStorage; các trang hoạt động của trường (game/lab/luyện đề…
+// mở bằng URL riêng, không kèm ?domain=) kế thừa lại. Về trang chủ/khám phá/bảng
+// giá/xếp hạng → coi như rời trường, xoá ghi nhớ và ẩn nút.
+const SCHOOL_KEY = 'tizia_school_domain';
+
+function rememberSchool(d) {
+  try { if (d) sessionStorage.setItem(SCHOOL_KEY, String(d)); } catch {}
+}
+function recallSchool() {
+  try { return sessionStorage.getItem(SCHOOL_KEY) || null; } catch { return null; }
+}
+function forgetSchool() {
+  try { sessionStorage.removeItem(SCHOOL_KEY); } catch {}
+}
+
+// Trang toàn cục (không thuộc trường nào) — ở đây phải ẩn nút và rời trường.
+const GLOBAL_PATHS = new Set([
+  '/', '/index.html',
+  '/kham-pha', '/kham-pha.html',
+  '/league', '/league.html',
+  '/leaderboard', '/leaderboard.html',
+  '/pricing', '/pricing.html',
+  '/login', '/login.html',
+  '/register', '/register.html',
+  '/complete-profile', '/complete-profile.html',
+  '/dashboard', '/dashboard.html',
+]);
+function isGlobalPage() {
+  let p = (location.pathname || '/').toLowerCase().replace(/\/+$/, '');
+  if (p === '') p = '/';
+  return GLOBAL_PATHS.has(p);
+}
+
+// Suy ra domain trường từ đường dẫn hoạt động (khi không có ?domain= và chưa nhớ).
+function domainByPath() {
   const p = (location.pathname || '').toLowerCase();
   if (/(^|\/)(it-|playground|cipher|sql|algo|code-lab|web-playground)/.test(p)) return 'it';
-  if (/(pharmacy|pharma|nha-thuoc|compounding|sac-ky|dispense|antibiogram|ps\d|bao-che|herb-garden|titration|pediatric|iv-infusion|gmp|patient-sim|gc\d|calibration-curve|pk-curve|bp-measure|dilution|3d-shelf|2d-arcade|grapher|l[12]-)/.test(p)) return 'pharmacy';
-  return 'school';
+  if (/(pharmacy|pharma|nha-thuoc|tu-thuoc|compounding|sac-ky|dispense|antibiogram|ps\d|bao-che|herb-garden|titration|pediatric|iv-infusion|gmp|patient-sim|gc\d|calibration-curve|pk-curve|bp-measure|dilution|3d-shelf|2d-arcade|grapher|l[12]-)/.test(p)) return 'pharmacy';
+  if (/(luat-giao-thong|bien-bao-giao-thong|driving)/.test(p)) return 'driving';
+  return null;
+}
+
+// Domain trường hiện tại, hoặc null nếu KHÔNG ở trong trường nào (→ ẩn nút).
+function resolveDomain() {
+  // 1) Trang ép domain (window.SUGGESTION_DOMAIN)
+  if (typeof window !== 'undefined' && window.SUGGESTION_DOMAIN) {
+    const d = String(window.SUGGESTION_DOMAIN);
+    rememberSchool(d);
+    return d;
+  }
+  // 2) ?domain= trên URL (trang campus /school?domain=…) → vào trường, ghi nhớ
+  try {
+    const q = new URLSearchParams(location.search).get('domain');
+    if (q) { rememberSchool(q); return String(q); }
+  } catch {}
+  // 3) Trang toàn cục → rời trường, ẩn nút
+  if (isGlobalPage()) { forgetSchool(); return null; }
+  // 4) Đường dẫn hoạt động nhận diện được trường
+  const byPath = domainByPath();
+  if (byPath) { rememberSchool(byPath); return byPath; }
+  // 5) Kế thừa trường đã vào trong phiên (trang hoạt động không kèm ?domain=)
+  const remembered = recallSchool();
+  if (remembered) return remembered;
+  // 6) Không xác định được trường → ẩn nút
+  return null;
+}
+
+// Giữ tương thích tên cũ (một số chỗ khác có thể tham chiếu).
+function inferDomain() {
+  return resolveDomain() || 'school';
 }
 
 function pageContext() {
@@ -71,37 +132,40 @@ function autoMount() {
           <div class="sgf-head-ico">🏛️</div>
           <div class="sgf-head-text">
             <h3 id="sgf-title">Ban điều hành AI</h3>
-            <p>Trường do <b>AI điều hành</b> — gửi đề nghị, AI sẽ xem xét &amp;
-               phản hồi. Yêu cầu được làm xong sẽ tick ✓ kèm lời nhắn.</p>
+            <p>Gửi đề nghị cải tiến trang này — AI sẽ xem xét &amp; phản hồi.</p>
           </div>
           <button type="button" class="sgf-x" data-close aria-label="Đóng">✕</button>
         </div>
 
         <form id="sgf-form" class="sgf-form">
-          <label class="sgf-lab">Loại đề nghị
-            <select id="sgf-type" class="sgf-in">
-              ${TYPES.map(t => `<option value="${t.v}">${t.icon} ${t.label}</option>`).join('')}
-            </select>
-          </label>
+          <!-- Trỏ thẳng vào phần cần sửa thay vì tả bằng lời (đỡ bị hiểu nhầm). -->
+          <div class="sgf-lab">Đối tượng cần thay đổi
+            <button type="button" class="sgf-pick" id="sgf-pick">🎯 Chọn đối tượng trên trang</button>
+            <div class="sgf-target" id="sgf-target" hidden>
+              <span class="sgf-target-ico">🎯</span>
+              <span class="sgf-target-txt"><b id="sgf-target-lb"></b><i id="sgf-target-pa"></i></span>
+              <button type="button" class="sgf-target-x" id="sgf-target-x" title="Bỏ chọn">✕</button>
+            </div>
+          </div>
           <label class="sgf-lab">Tiêu đề <span class="sgf-req">*</span>
             <input id="sgf-title-in" class="sgf-in" maxlength="200"
                    placeholder="VD: Thêm dạng bài Toán có nhiều cách giải" />
           </label>
           <label class="sgf-lab">Mô tả chi tiết (tuỳ chọn) <span id="sgf-detail-count" style="opacity:.55;font-size:11px;float:right">0 / 10000</span>
-            <textarea id="sgf-detail" class="sgf-in" rows="3" maxlength="10000"
+            <textarea id="sgf-detail" class="sgf-in" rows="7" maxlength="10000"
                       placeholder="Càng cụ thể, AI càng dễ hiểu &amp; phản hồi đúng nhu cầu của bạn."></textarea>
           </label>
 
           <div class="sgf-attach">
             <label class="sgf-attach-row">
               <input type="checkbox" id="sgf-shot-check" />
-              <span>📸 Đính kèm ảnh chụp <b>màn hình hiện tại</b> (Ban điều hành xem trực tiếp giao diện anh/chị đang gặp)</span>
+              <span>📸 Đính kèm ảnh chụp màn hình hiện tại</span>
             </label>
             <label class="sgf-attach-row sgf-file-row">
-              <span class="sgf-attach-lbl">📎 Đính kèm file (ảnh / PDF / Word / Excel / PPT / CSDL .db / .sql — tối đa 50MB × 5 file):</span>
+              <span class="sgf-attach-lbl">📎 Đính kèm file</span>
               <input type="file" id="sgf-file-in" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.db,.sqlite,.sqlite3,.sql,application/sql,application/x-sqlite3" />
             </label>
-            <div class="sgf-attach-hint">💡 Có thể <b>kéo-thả</b> file vào khung này hoặc <b>dán ảnh</b> trực tiếp (Ctrl/⌘+V).</div>
+            <div class="sgf-attach-hint">💡 Kéo-thả hoặc dán ảnh (Ctrl/⌘+V) vào đây.</div>
             <div class="sgf-attach-list" id="sgf-attach-list"></div>
           </div>
 
@@ -114,7 +178,7 @@ function autoMount() {
 
         <div class="sgf-inbox">
           <div class="sgf-inbox-head">
-            <span>Yêu cầu gần đây của bạn</span>
+            <span>Yêu cầu của bạn<span id="sgf-inbox-count"></span></span>
             <button type="button" class="sgf-reload" id="sgf-reload" title="Tải lại">↻</button>
           </div>
           <div class="sgf-inbox-list" id="sgf-inbox">Đang tải…</div>
@@ -124,6 +188,37 @@ function autoMount() {
   `;
   document.body.appendChild(root);
   bind(root);
+  refreshFabVisibility();   // ẩn/hiện lần đầu theo trường đang vào
+  hookNavigation();         // theo dõi đổi trang (Next dùng client-side nav)
+}
+
+// Ẩn/hiện nút theo domain trường hiện tại. #sgf-root luôn nằm trong DOM (chèn 1
+// lần) để còn toggle được khi điều hướng nội bộ; ta chỉ đổi display.
+function refreshFabVisibility() {
+  const root = document.getElementById('sgf-root');
+  if (!root) return;
+  const dom = resolveDomain();
+  root.style.display = dom ? '' : 'none';
+}
+
+// Next.js điều hướng bằng history.pushState (không reload cả trang) nên script
+// chèn qua nginx không chạy lại → tự vá pushState/replaceState + popstate để
+// tính lại việc ẩn/hiện mỗi lần đổi URL.
+let navHooked = false;
+function hookNavigation() {
+  if (navHooked) return;
+  navHooked = true;
+  const fire = () => setTimeout(refreshFabVisibility, 0);
+  window.addEventListener('popstate', fire);
+  for (const m of ['pushState', 'replaceState']) {
+    const orig = history[m];
+    if (typeof orig !== 'function') continue;
+    history[m] = function () {
+      const ret = orig.apply(this, arguments);
+      fire();
+      return ret;
+    };
+  }
 }
 
 function bind(root) {
@@ -134,6 +229,38 @@ function bind(root) {
   const sendBtn = root.querySelector('#sgf-send');
   const ctxBox = root.querySelector('#sgf-ctx');
   const inbox = root.querySelector('#sgf-inbox');
+
+  // ---- Chọn đối tượng trên trang ----------------------------------------
+  // Người gửi trỏ thẳng vào phần cần sửa; mô tả phần tử được ghim vào nội dung
+  // yêu cầu để Ban điều hành không phải đoán "phần này" là phần nào.
+  let pickedTarget = null;
+  const pickBtn = root.querySelector('#sgf-pick');
+  const targetBox = root.querySelector('#sgf-target');
+  const targetLb = root.querySelector('#sgf-target-lb');
+  const targetPa = root.querySelector('#sgf-target-pa');
+  function showTarget() {
+    const has = !!pickedTarget;
+    if (targetBox) targetBox.hidden = !has;
+    if (pickBtn) pickBtn.hidden = has;
+    if (has) {
+      targetLb.textContent = pickedTarget.label;
+      targetPa.textContent = pickedTarget.kind + ' · ' + pickedTarget.path;
+    }
+  }
+  root.querySelector('#sgf-target-x')?.addEventListener('click', () => { pickedTarget = null; showTarget(); });
+  pickBtn?.addEventListener('click', async () => {
+    const prevModal = modal.hidden, prevFab = fab.style.display;
+    modal.hidden = true; fab.style.display = 'none';     // ẩn widget để thấy trang
+    try {
+      const mod = await import('/js/pick-target.js');
+      const t = await mod.pickTarget();
+      if (t) { pickedTarget = t; showTarget(); }
+    } catch (err) {
+      msg.textContent = '⚠️ Không bật được chế độ chọn: ' + (err.message || err);
+    } finally {
+      modal.hidden = prevModal; fab.style.display = prevFab;
+    }
+  });
 
   // Live counter cho detail textarea (req #3 bị cụt ở 2000 chars trước đây →
   // giờ giới hạn 10000, hiển thị bộ đếm để SV biết khi nào sắp đầy).
@@ -311,7 +438,7 @@ function bind(root) {
 
   // Upload 1 file/blob qua /api/requests/attachments. Trả về meta {url,name,mime,size,kind}.
   async function uploadOne(blob, name, kind) {
-    const r = await fetch('api/requests/attachments', {
+    const r = await fetch('/api/requests/attachments', {
       method: 'POST',
       headers: {
         'Content-Type': blob.type || 'application/octet-stream',
@@ -322,15 +449,36 @@ function bind(root) {
     });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.message || e.error || 'upload_failed');
+      // 401 → báo tiếng Việt + cắm cờ needLogin để catch phía trên hiện link đăng nhập
+      // (server trả {error:'unauthorized'} trần — đừng show nguyên chữ "unauthorized").
+      const err = new Error(r.status === 401 || e.needLogin
+        ? 'Bạn chưa đăng nhập' : (e.message || e.error || 'upload_failed'));
+      if (r.status === 401 || e.needLogin) err.needLogin = true;
+      throw err;
     }
     return await r.json();
+  }
+
+  // Khách chưa đăng nhập: khoá nút gửi + báo NGAY khi mở form — đừng để điền xong
+  // form + chọn file rồi mới vỡ lở "unauthorized" lúc upload.
+  const LOGIN_MSG_HTML = '⚠️ Bạn chưa đăng nhập. <a href="/login.html" style="color:#fbbf24;text-decoration:underline;font-weight:700">Đăng nhập</a> để gửi đề nghị tới Ban điều hành.';
+  let guestLocked = false;
+  async function checkAuth() {
+    try {
+      const r = await fetch('/api/auth/me');
+      if (r.ok) {
+        if (guestLocked) { guestLocked = false; sendBtn.disabled = false; msg.textContent = ''; }
+      } else if (r.status === 401) {
+        guestLocked = true; sendBtn.disabled = true; msg.innerHTML = LOGIN_MSG_HTML;
+      }
+    } catch {} // lỗi mạng → đừng khoá nhầm; submit sẽ tự báo nếu thật sự 401
   }
 
   const open = () => {
     modal.hidden = false;
     setTimeout(() => root.querySelector('#sgf-title-in')?.focus(), 50);
     loadInbox();
+    checkAuth();
   };
   const close = () => { modal.hidden = true; msg.textContent = ''; };
 
@@ -345,13 +493,16 @@ function bind(root) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const type = root.querySelector('#sgf-type').value;
+    // Dropdown "Loại đề nghị" đã bỏ (yêu cầu user) — mọi đề nghị gửi với type mặc định
+    // 'other'; server/inbox vẫn nhận field type như cũ, chỉ là không cho HS chọn nữa.
+    const type = 'other';
     const title = root.querySelector('#sgf-title-in').value.trim();
     const userDetail = root.querySelector('#sgf-detail').value.trim();
     if (title.length < 4) { msg.textContent = '⚠️ Tiêu đề quá ngắn (≥ 4 ký tự)'; return; }
 
     const detail = [
       `[Trang: ${ctx.title || '—'}] ${ctx.url}`,
+      pickedTarget ? `[Đối tượng: ${pickedTarget.kind} "${pickedTarget.label}" · vị trí ${pickedTarget.path}]` : '',
       userDetail,
     ].filter(Boolean).join('\n');
 
@@ -370,7 +521,8 @@ function bind(root) {
             attachments.push(meta);
           }
         } catch (e) {
-          msg.textContent = '⚠️ Không chụp được màn hình: ' + (e.message || e);
+          if (e.needLogin) { msg.innerHTML = LOGIN_MSG_HTML; }
+          else msg.textContent = '⚠️ Không chụp được màn hình: ' + (e.message || e);
           sendBtn.disabled = false;
           return;
         }
@@ -382,14 +534,15 @@ function bind(root) {
           const meta = await uploadOne(f, f.name, 'file');
           attachments.push(meta);
         } catch (e) {
-          msg.textContent = `⚠️ Không tải được "${f.name}": ${e.message || e}`;
+          if (e.needLogin) { msg.innerHTML = LOGIN_MSG_HTML; }
+          else msg.textContent = `⚠️ Không tải được "${f.name}": ${e.message || e}`;
           sendBtn.disabled = false;
           return;
         }
       }
 
       msg.textContent = 'Đang gửi…';
-      const r = await fetch('api/requests', {
+      const r = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -402,7 +555,7 @@ function bind(root) {
         if (e2.viewOnly || e2.error === 'view_only') {
           msg.innerHTML = `⚠️ Bạn đang ở trường khác. <a href="/school.html?domain=${encodeURIComponent(e2.your_school || '')}" style="color:#fbbf24;text-decoration:underline">Về trường của bạn</a> để gửi đề nghị.`;
         } else if (e2.needLogin) {
-          msg.textContent = '⚠️ Hãy đăng nhập để gửi đề nghị.';
+          msg.innerHTML = LOGIN_MSG_HTML;
         } else if (e2.needEnroll) {
           msg.textContent = '⚠️ Hãy chọn trường để bắt đầu gửi đề nghị.';
         } else {
@@ -431,14 +584,25 @@ function bind(root) {
     inbox.textContent = 'Đang tải…';
     try {
       const dom = inferDomain();
-      const r = await fetch(`api/requests?domain=${encodeURIComponent(dom)}&limit=50`);
+      // limit=200 (không phải 50): user tích cực có thể >50 yêu cầu; xin 50 thì
+      // server tự cắt bớt, mất phần LỊCH SỬ đã xong. Server cap cứng ở 200.
+      const r = await fetch(`/api/requests?domain=${encodeURIComponent(dom)}&limit=200`);
       const data = await r.json();
       const me = (typeof getPlayerName === 'function' && getPlayerName()) || '';
       let items = (data.items || []);
       // Ưu tiên hiển thị của user; nếu chưa có gì thì hiện cái có phản hồi AI gần đây
       const mine = me ? items.filter(it => it.student === me) : [];
       const withReply = items.filter(it => it.admin_note && it.student !== me).slice(0, 3);
-      const shown = (mine.length ? mine : withReply).slice(0, 8);
+      // LỊCH SỬ: hiện HẾT yêu cầu của user (server đã lọc riêng tư theo tài khoản),
+      // sắp theo hoạt động GẦN NHẤT. Trước đây cắt còn 8 + DB đẩy 'done' xuống cuối
+      // → khi có ≥8 việc chưa xong thì mọi việc ĐÃ XONG biến mất khỏi lịch sử.
+      // Danh sách nay cuộn được (CSS max-height) nên hiện đủ không vỡ layout.
+      const shown = (mine.length ? mine : withReply)
+        .slice()
+        .sort((a, b) => (b.updated_at || b.created_at || 0) - (a.updated_at || a.created_at || 0));
+      // Đếm để đầu hộp thư ghi rõ tổng số (đỡ tưởng bị mất).
+      const cnt = root.querySelector('#sgf-inbox-count');
+      if (cnt) cnt.textContent = shown.length ? ` (${shown.length})` : '';
       if (!shown.length) {
         inbox.innerHTML = '<div class="sgf-empty">Chưa có yêu cầu nào. Hãy là người đầu tiên đề xuất cải tiến trang này! 🚀</div>';
         return;
@@ -452,7 +616,7 @@ function bind(root) {
           if (!panel) return;
           if (panel.hidden) {
             panel.hidden = false;
-            renderRequestThread({ host: panel, requestId: id, me, onChange: loadInbox });
+            renderRequestThread({ host: panel, requestId: id, me, onChange: loadInbox, showTitle: true });
           } else { panel.hidden = true; panel.innerHTML = ''; }
         });
       });
@@ -482,7 +646,7 @@ function renderItem(it, me = '') {
     </div>` : '';
   return `
     <div class="sgf-it">
-      <div class="sgf-it-line">
+      <div class="sgf-it-line sgf-it-line-click" data-req-toggle="${it.id}" title="Bấm để xem chi tiết yêu cầu">
         <span class="sgf-it-ico">${t.icon}</span>
         <span class="sgf-it-title">${escapeHtml(it.title)}</span>
         <span class="sgf-it-st ${sm.cls}">${sm.label}</span>
@@ -526,36 +690,56 @@ function injectStyles() {
       #sgf-fab { left: 12px; bottom: 12px; width: 54px; height: 54px; }
       .sgf-fab-ico { font-size: 24px; }
     }
+    /* Chỉ hiện trên desktop — trên mobile nút nổi hay đè lên nội dung game/board. */
+    @media (max-width: 767px) {
+      #sgf-fab { display: none !important; }
+    }
 
     .sgf-modal { position: fixed; inset: 0; z-index: 2147483001; display: grid; place-items: center; }
     .sgf-modal[hidden] { display: none !important; }
     .sgf-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
     .sgf-dialog {
-      position: relative; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 36px);
-      overflow: auto; background: #fff; color: #1f2937; border-radius: 16px;
+      position: relative; width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 36px);
+      overflow-y: auto; overflow-x: hidden; background: #fff; color: #1f2937; border-radius: 16px;
       box-shadow: 0 30px 80px rgba(15,23,42,.45);
-      font: 14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      font: 15px/1.55 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     }
     .sgf-head { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 8px; }
     .sgf-head-ico { font-size: 30px; line-height: 1; }
     .sgf-head-text { flex: 1; }
-    .sgf-head-text h3 { margin: 0 0 4px; font-size: 17px; color: #1f1147; }
-    .sgf-head-text p { margin: 0; font-size: 12.5px; color: #4b5563; }
+    .sgf-head-text h3 { margin: 0 0 4px; font-size: 20px; color: #1f1147; }
+    .sgf-head-text p { margin: 0; font-size: 14px; color: #4b5563; }
     .sgf-x {
       border: 0; background: rgba(0,0,0,.05); color: #475569; width: 30px; height: 30px;
       border-radius: 8px; cursor: pointer; font-size: 14px;
     }
     .sgf-x:hover { background: rgba(0,0,0,.1); }
 
-    .sgf-form { display: flex; flex-direction: column; gap: 10px; padding: 8px 20px 14px; }
-    .sgf-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #475569; font-weight: 600; }
+    .sgf-form { display: flex; flex-direction: column; gap: 12px; padding: 10px 26px 16px; }
+    .sgf-lab { display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: #475569; font-weight: 600; }
+    .sgf-pick { width:100%; cursor:pointer; font:inherit; text-align:left; display:flex; flex-direction:column; gap:2px;
+      background:linear-gradient(135deg,rgba(124,58,237,.13),rgba(79,70,229,.08));
+      border:1px dashed rgba(124,58,237,.5); border-radius:12px; padding:10px 13px; color:inherit;
+      font-size:13.5px; font-weight:700; }
+    .sgf-pick:hover { border-color:rgba(124,58,237,.9); }
+    .sgf-pick small { font-weight:500; font-size:11.5px; opacity:.75; }
+    .sgf-target { display:flex; align-items:center; gap:10px; background:rgba(124,58,237,.12);
+      border:1px solid rgba(124,58,237,.45); border-radius:12px; padding:9px 12px; }
+    .sgf-target-ico { font-size:18px; flex:none; }
+    .sgf-target-txt { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; font-size:13px; }
+    .sgf-target-txt b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sgf-target-txt i { font-style:normal; font-size:11px; opacity:.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sgf-target-x { cursor:pointer; border:0; background:rgba(0,0,0,.08); color:inherit; border-radius:8px;
+      width:26px; height:26px; font-size:13px; flex:none; }
     .sgf-req { color: #ef4444; }
     .sgf-in {
-      width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px;
+      width: 100%; box-sizing: border-box; padding: 10px 13px; border-radius: 10px;
       border: 1px solid #d1d5db; background: #fff; color: #1f2937; font: inherit;
     }
     .sgf-in:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
-    textarea.sgf-in { resize: vertical; min-height: 60px; }
+    textarea.sgf-in { resize: vertical; min-height: 150px; }
+    .sgf-it-line-click { cursor: pointer; }
+    .sgf-it-line-click:hover .sgf-it-title { text-decoration: underline; }
 
     /* Attachments: ảnh chụp màn hình + file đính kèm */
     .sgf-attach { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; font-size: 12.5px; color: #475569; }
@@ -612,6 +796,7 @@ function injectStyles() {
     .sgf-it-st { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; white-space: nowrap; }
     .sgf-it-st.pending   { background: #e2e8f0; color: #475569; }
     .sgf-it-st.reviewing { background: #fde68a; color: #92400e; }
+    .sgf-it-st.awaiting  { background: #bfdbfe; color: #1e40af; }
     .sgf-it-st.done      { background: #bbf7d0; color: #065f46; }
     .sgf-it-st.rejected  { background: #fecaca; color: #991b1b; }
     .sgf-it-note {

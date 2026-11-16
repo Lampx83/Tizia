@@ -34,6 +34,7 @@
 // ============================================================
 
 import { WebSocketServer } from 'ws';
+import { getCurrentUser } from './contexts/identity/auth.js';
 
 const PALETTE = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#84cc16','#fbbf24','#a855f7'];
 
@@ -95,7 +96,11 @@ export function attachOrchestration(httpServer, basePath = '') {
     broadcastToTeachers(room, msg);
   }
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    // Danh tính lấy từ cookie phiên trên request nâng cấp (WS cùng origin tự gửi cookie),
+    // KHÔNG tin role/name client gửi trong 'join' — trước đây ai cũng tự xưng GV được
+    // để phát thông báo, gọi HS sang trang khác, hoặc đuổi HS khỏi lớp.
+    const userP = getCurrentUser(req).catch(() => null);
     const conn = {
       id: nextId++,
       ws,
@@ -108,21 +113,29 @@ export function attachOrchestration(httpServer, basePath = '') {
       joinedAt: nowSec(), lastSeen: nowSec(),
     };
 
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch { return; }
       conn.lastSeen = nowSec();
 
       switch (msg.type) {
         case 'join': {
+          if (conn.classCode) return; // mỗi kết nối chỉ join 1 lần
           const role = msg.role === 'teacher' ? 'teacher' : 'student';
           const classCode = String(msg.classCode || '').trim().toUpperCase().slice(0, 12);
           if (!classCode) {
             send(ws, { type: 'error', error: 'classCode required' });
             return;
           }
+          const user = await userP;
+          if (role === 'teacher' && !['teacher', 'admin'].includes(user?.role)) {
+            send(ws, { type: 'error', error: 'teacher_unauthorized' });
+            try { ws.close(4403, 'teacher_unauthorized'); } catch {}
+            return;
+          }
           conn.role = role;
           conn.classCode = classCode;
-          conn.name = String(msg.name || '').trim().slice(0, 40) || (role === 'teacher' ? 'GV' : 'HS ' + conn.id);
+          conn.userId = user?.id ?? null;
+          conn.name = (user?.display_name || String(msg.name || '')).trim().slice(0, 40) || (role === 'teacher' ? 'GV' : 'HS ' + conn.id);
           const room = getRoom(classCode);
           if (role === 'teacher') room.teachers.set(conn.id, conn);
           else room.students.set(conn.id, conn);

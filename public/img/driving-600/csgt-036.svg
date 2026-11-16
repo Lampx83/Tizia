@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 240" width="260" height="240" role="img">
+<rect width="260" height="240" rx="10" fill="#eef1f5"/>
+<g stroke-linecap="round">
+  <circle cx="130" cy="58" r="20" fill="#e8b98f"/>
+  <path d="M108 50a22 22 0 0 1 44 0z" fill="#4b5563"/>
+  <rect x="104" y="46" width="52" height="7" rx="3" fill="#4b5563"/>
+  <path d="M130 78c-20 0-34 12-34 30v58h68v-58c0-18-14-30-34-30z" fill="#4b5563"/>
+  
+  <rect x="34" y="94" width="70" height="14" rx="7" fill="#4b5563"/>
+  <rect x="156" y="94" width="70" height="14" rx="7" fill="#4b5563"/>
+  <circle cx="30" cy="101" r="11" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <circle cx="230" cy="101" r="11" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="180" y="96" width="46" height="9" rx="4" fill="#e5352b"/>
+  <rect x="112" y="166" width="14" height="52" rx="5" fill="#374151"/>
+  <rect x="134" y="166" width="14" height="52" rx="5" fill="#374151"/>
+</g>
+<text x="130" y="234" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700"
+      fill="#1f2937" text-anchor="middle">Tay dang ngang</text></svg>

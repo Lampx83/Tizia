@@ -62,7 +62,12 @@ const SPACES_PHARMACY = {
       {q:'Sinh khả dụng (bioavailability) là?',o:['Tỉ lệ thuốc vào tuần hoàn chung ở dạng còn hoạt tính','Giá thuốc','Màu viên','Hạn dùng'],a:0}]},
 
   library:{emoji:'📖',name:'Thư viện',accent:'#b59b6a',intro:'Tra cứu thông tin thuốc và ôn tập củng cố kiến thức.',
-    rooms:[{ic:'🔎',name:'Tra cứu thuốc',rd:'Nguồn tin cậy & kỹ năng tra cứu.',panel:[
+    // Bộ công cụ nghiên cứu — mở trong khung Tizia qua /app/<alias> (xem web-next/app/app/[alias]).
+    rooms:[{ic:'📚',name:'Tra cứu tài liệu thư viện',rd:'Tìm sách, tạp chí, ebook trong kho thư viện điện tử của trường.',href:'/app/library-search'},
+      {ic:'📊',name:'Phân tích định lượng',rd:'Xử lý số liệu khảo sát/thực nghiệm khoá luận: thống kê mô tả, kiểm định, biểu đồ.',href:'/app/quantis'},
+      {ic:'🗂️',name:'Phân tích định tính',rd:'Mã hoá phỏng vấn, phiếu khảo sát mở theo lối NVivo.',href:'/app/annota'},
+      {ic:'🗺️',name:'Trắc lượng thư mục',rd:'Bản đồ từ khoá, mạng đồng tác giả, phân tích trích dẫn cho tổng quan tài liệu.',href:'/app/bibliomap'},
+      {ic:'🔎',name:'Tra cứu thuốc',rd:'Nguồn tin cậy & kỹ năng tra cứu.',panel:[
         {h:'Nguồn tra cứu đáng tin'},
         {ul:['Dược thư Quốc gia Việt Nam','Dược điển Việt Nam (tiêu chuẩn chất lượng)','Tờ Hướng dẫn sử dụng (HDSD) trong hộp thuốc','CSDL tương tác: Micromedex, Drugs.com']},
         {h:'Quy trình tra cứu'},
@@ -310,26 +315,13 @@ const SPACES_PHARMACY = {
 
   gpp:{emoji:'💊',name:'Nhà thuốc GPP',accent:'#16a34a',intro:'Quầy thuốc đạt chuẩn GPP — sắp xếp, cấp phát đúng, tư vấn OTC và sàng lọc cờ đỏ.',
     rooms:[{ic:'🏪',name:'Nhà thuốc 3D đầy đủ (Pharmacy-AI port)',rd:'Vào quầy ảo: 180 thuốc, 4 tủ Rx/OTC + tủ kiểm soát đặc biệt, POS, dán nhãn HDSD, tư vấn AI theo SEGUE.',href:'/nha-thuoc-3d.html'},
+      {ic:'🏬',name:'Nhà thuốc thực hành',rd:'Quầy thực hành tổng hợp: nhận diện & sắp xếp thuốc theo tủ Rx/OTC/kiểm soát đặc biệt, tra nhanh theo hoạt chất, kéo-thả cất hàng — kèm hai trò luyện tập Pharma Crush và Pharma Sort.',href:'/tu-thuoc-mo-phong.html'},
       {ic:'🗂️',name:'Sắp xếp thuốc ATC',rd:'Phân loại & xếp kệ.',href:'/sap-xep-hub.html'},
       {ic:'🕹️',name:'Arcade 2D',rd:'Luyện tốc độ phân loại.',href:'/2d-arcade.html'},
-      {ic:'🧊',name:'Kệ thuốc 3D',rd:'Sắp xếp trong không gian 3D.',href:'/3d-shelf.html'},
-      {ic:'💬',name:'Tư vấn OTC',rd:'Bán thuốc không kê đơn an toàn.',panel:[
-        {h:'Quầy tư vấn OTC'},{p:'Khách tới hỏi mua thuốc — bạn tư vấn:'},
-        {mcq:[{q:'Khách ho khan 2 ngày, không sốt. Tư vấn hợp lý?',o:['Thuốc giảm ho + theo dõi, khám nếu kéo dài >1 tuần/khó thở','Bán kháng sinh ngay','Corticoid liều cao','Không tư vấn gì'],a:0,fb:'Ho cấp thường tự khỏi; OTC giảm triệu chứng + dặn cờ đỏ. Kháng sinh không trị ho do virus.'},
-          {q:'Khách đòi kháng sinh trị tiêu chảy thường (không sốt, không máu)?',o:['Bù nước–điện giải (ORS), theo dõi, không cần kháng sinh','Bán kháng sinh ngay','Thuốc cầm tiêu chảy liều cao cho trẻ nhỏ','Nhịn ăn uống hoàn toàn'],a:0,fb:'Tiêu chảy cấp thường do virus → ORS là chính; kháng sinh chỉ khi có chỉ định.'},
-          {q:'Dấu hiệu CỜ ĐỎ cần chuyển khám ngay?',o:['Đau ngực, khó thở, sốt cao kéo dài, triệu chứng thần kinh','Hắt hơi nhẹ','Ngứa mũi thoáng qua','Mệt nhẹ sau thức khuya'],a:0,fb:'Cờ đỏ (red flags) → ngừng tự điều trị, chuyển khám bác sĩ.'}]}]},
-      {ic:'📝',name:'Cấp phát thuốc kê đơn (Rx)',rd:'Quy trình 6 bước an toàn.',panel:[
-        {h:'Checklist cấp phát đơn thuốc'},
-        {check:['Kiểm tra đơn hợp lệ (tên, tuổi BN, chữ ký bác sĩ)','Đối chiếu thuốc – hàm lượng – số lượng','Rà tương tác & chống chỉ định','Dán nhãn & ghi rõ cách dùng','Tư vấn bảo quản & tác dụng phụ thường gặp','Ghi sổ thuốc kê đơn theo quy định']},
-        {note:'Thuốc kê đơn (Rx) chỉ bán khi có đơn hợp lệ; kháng sinh không bán tự do.'}]},
       {ic:'🩸',name:'Đo HA & đường huyết',rd:'Dịch vụ sàng lọc tại nhà thuốc.',panel:[
         {h:'Quy trình đo huyết áp đúng'},
         {ol:['Cho khách nghỉ 5 phút, ngồi tựa lưng, chân chạm đất','Quấn băng đo ngang tim, không nói chuyện khi đo','Đo 2 lần cách 1–2 phút rồi lấy trung bình','Ghi lại kết quả & so với ngưỡng']},
         {note:'HA ≥140/90 mmHg nhiều lần → khuyên khám. Đường huyết đói ≥126 mg/dL (7.0 mmol/L) gợi ý đái tháo đường, cần xác nhận y tế.'}]},
-      {ic:'🚭',name:'Tư vấn cai thuốc lá',rd:'Mô hình 5A.',panel:[
-        {h:'Mô hình 5A cai thuốc lá'},
-        {ul:['Ask – Hỏi về thói quen hút thuốc','Advise – Khuyên bỏ thuốc rõ ràng','Assess – Đánh giá mức sẵn sàng bỏ','Assist – Hỗ trợ (NRT, tư vấn hành vi)','Arrange – Hẹn theo dõi']},
-        {note:'Liệu pháp thay thế nicotine (NRT) + tư vấn hành vi tăng rõ tỉ lệ cai thành công.'}]},
       {ic:'🩺',name:'Đo huyết áp (tương tác)',rd:'Bơm – xả – nghe Korotkoff – đọc & phân loại HA.',href:'/bp-measure.html'},
       {ic:'💊',name:'Cấp phát thuốc (tương tác)',rd:'Đếm đúng số viên + kiểm 5 Đúng, bắt lỗi nhãn.',href:'/dispense.html'}],
     skills:['Sắp xếp thuốc theo ATC','Cấp phát & tư vấn GPP','Sàng lọc cờ đỏ → chuyển khám'],
@@ -432,6 +424,15 @@ const SPACES_PHARMACY = {
 const SPACES_SECONDARY = {
   grade6:{emoji:'6️⃣',name:'Khối lớp 6',accent:'#38bdf8',intro:'Năm đầu cấp THCS — 12 môn × 36 tuần theo Chương trình GDPT 2018. Mỗi tuần: lý thuyết + ví dụ + quiz có thưởng.',
     rooms:[
+      // Ô hướng dẫn (req #139 Enderboy): SV không tìm thấy "sách giáo khoa điện tử"
+      // dù lý thuyết ĐÃ có sẵn trong từng Tuần của mọi môn (mục 📖 Bài học hiện
+      // trước quiz) — vì trang này chỉ có thẻ đi thẳng vào môn, không có gợi ý.
+      // Thêm panel chỉ đường, KHÔNG tạo nội dung/trang mới để tránh trùng lặp.
+      {ic:'📚',name:'📖 Xem lý thuyết (sách giáo khoa điện tử)',rd:'Lý thuyết + ví dụ mẫu đã có sẵn trong từng Tuần của 12 môn bên dưới — bấm vào đây để xem cách mở.',panel:[
+        {h:'Lý thuyết đã có sẵn trong từng môn — không cần trang riêng'},
+        {p:'Mỗi môn bên dưới (Toán, Ngữ văn, Tiếng Anh, KHTN…) đều có phần Bài học — lý thuyết + ví dụ giải mẫu — hiện ra TRƯỚC khi làm quiz của tuần đó, đúng kiểu một cuốn sách giáo khoa điện tử.'},
+        {ol:['Bấm vào một môn bất kỳ, ví dụ Toán 6.','Chọn một Tuần trong danh sách 36 tuần.','Đọc phần 📖 Bài học rồi mới làm quiz bên dưới nó.']},
+        {note:'Áp dụng cho cả 12 môn của khối lớp 6, không riêng môn nào.'}]},
       {ic:'📐',name:'Toán 6',rd:'36 tuần: số tự nhiên, lũy thừa, ƯCLN-BCNN, số nguyên, phân số, tỉ số %, hình học cơ bản.',href:'/module.html?domain=secondary&module=S6TOAN'},
       {ic:'📖',name:'Ngữ văn 6',rd:'36 tuần: truyện đồng thoại, cổ tích, truyền thuyết, thơ lục bát, biện pháp tu từ, từ Hán Việt.',href:'/module.html?domain=secondary&module=S6NV'},
       {ic:'🇬🇧',name:'Tiếng Anh 6',rd:'36 tuần CEFR A1-A2: school, family, neighbourhood, modal verbs, past simple, future, sports, cities.',href:'/module.html?domain=secondary&module=S6TA'},
@@ -453,37 +454,63 @@ const SPACES_SECONDARY = {
       {q:'Thơ lục bát có cặp câu gồm?',o:['Một câu 6 chữ & một câu 8 chữ','Hai câu 7 chữ','Câu 5 chữ','Câu tự do'],a:0},
       {q:'1 thế kỉ bằng bao nhiêu năm?',o:['100 năm','10 năm','1000 năm','50 năm'],a:0}]},
 
-  grade7:{emoji:'7️⃣',name:'Khối lớp 7',accent:'#34d399',intro:'Lớp 7 — nâng cao tư duy. Học Toán, Ngữ văn cùng các môn và luyện đề có phản hồi tức thì.',
-    rooms:[{ic:'📐',name:'Toán 7 — Luyện tập',rd:'Số hữu tỉ, tỉ lệ thức, tam giác, thống kê.',href:'/module.html?domain=secondary&module=S7'},
-      {ic:'📖',name:'Ngữ văn 7 — Luyện tập',rd:'Ca dao, tục ngữ, từ Hán Việt, điệp ngữ.',href:'/module.html?domain=secondary&module=SV7'},
-      {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'Ngữ pháp các thì cơ bản.',panel:[
+  grade7:{emoji:'7️⃣',name:'Khối lớp 7',accent:'#34d399',intro:'Lớp 7 — 12 môn × 35 tuần theo Chương trình GDPT 2018. Mỗi tuần: lý thuyết + ví dụ + quiz có phản hồi tức thì.',
+    // 12 môn × 35 tuần đã có sẵn trong DB (module S7*) nhưng trước đây khối 7 chỉ
+    // trỏ tới 2 module cũ nên SV không tìm thấy — req #108 + #111 (Enderboy):
+    // "thêm kiến thức lớp 7,8,9" / "bổ sung nhiều môn và bài giống lớp 6 cho lớp 7".
+    rooms:[
+      {ic:'📐',name:'Toán 7',rd:'35 tuần: số hữu tỉ, làm tròn & sai số, tỉ lệ thức, thống kê – biểu đồ, tam giác bằng nhau, quan hệ các yếu tố trong tam giác, đa thức một biến.',href:'/module.html?domain=secondary&module=S7TOAN'},
+      {ic:'📖',name:'Ngữ văn 7',rd:'35 tuần: thơ trữ tình hiện đại, truyện ngụ ngôn, tục ngữ, nghị luận, văn biểu cảm; từ ghép – từ láy, dấu chấm phẩy – chấm lửng.',href:'/module.html?domain=secondary&module=S7NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 7',rd:'35 tuần theo Global Success Unit 1–12: hiện tại đơn – tiếp diễn, trạng từ chỉ cách thức, giao thông, âm nhạc – nghệ thuật, dân số.',href:'/module.html?domain=secondary&module=S7TA'},
+      {ic:'🔬',name:'Khoa học tự nhiên 7',rd:'35 tuần tích hợp Lí – Hoá – Sinh: nguyên tử, bảng tuần hoàn, phân tử, tốc độ, âm thanh, ánh sáng, từ, trao đổi chất, cảm ứng, sinh sản.',href:'/module.html?domain=secondary&module=S7KHTN'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 7',rd:'35 tuần: phong kiến châu Âu – Trung Quốc, Đại Việt thời Lý – Trần – Lê, kháng chiến chống Tống; châu Á, châu Mỹ, khí hậu – sông ngòi.',href:'/module.html?domain=secondary&module=S7LSDL'},
+      {ic:'⚖️',name:'GD công dân 7',rd:'35 tuần: tự hào truyền thống quê hương, quan tâm chia sẻ, giữ chữ tín, bạo lực học đường, tệ nạn xã hội, quyền trẻ em.',href:'/module.html?domain=secondary&module=S7GDCD'},
+      {ic:'⚙️',name:'Công nghệ 7',rd:'35 tuần: trồng trọt & lâm nghiệp (nhóm cây trồng, phân bón, trồng – bảo vệ rừng), chăn nuôi và thuỷ sản.',href:'/module.html?domain=secondary&module=S7CN'},
+      {ic:'💻',name:'Tin học 7',rd:'35 tuần: mạng máy tính, tổ chức lưu trữ dữ liệu, soạn thảo nâng cao, bảng tính & biểu đồ, cấu trúc lặp.',href:'/module.html?domain=secondary&module=S7TIN'},
+      {ic:'⚽',name:'GD thể chất 7',rd:'35 tuần: chạy ngắn – xuất phát thấp, nhảy xa, bóng đá, đá cầu, tinh thần fair-play.',href:'/module.html?domain=secondary&module=S7GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 7',rd:'35 tuần: gam Đô trưởng, hát chủ điểm, cảm thụ tác phẩm; màu nóng – lạnh, tranh Đông Hồ, sản phẩm thủ công.',href:'/module.html?domain=secondary&module=S7NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 7',rd:'35 tuần: đặt mục tiêu cá nhân, kỹ năng giao tiếp, văn hoá nhà trường, quản lý cảm xúc, tiết kiệm năng lượng, bình đẳng giới.',href:'/module.html?domain=secondary&module=S7HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 7',rd:'35 tuần: Văn Miếu – Quốc Tử Giám, danh nhân Chu Văn An, Hội Gióng, đền Cổ Loa, làng nghề, Hà Nội đô thị hoá.',href:'/module.html?domain=secondary&module=S7GDDP'},
+      {ic:'🇬🇧',name:'Tiếng Anh 7 — ôn nhanh',rd:'Lật nhanh 4 thì cơ bản trước khi vào bài tuần.',panel:[
         {h:'Các thì thường gặp lớp 7'},
         {cards:[{ic:'⏱️',t:'Present simple',d:'Thói quen, sự thật: I go / She goes.'},
           {ic:'🔄',t:'Present continuous',d:'Đang xảy ra: I am going.'},
           {ic:'⏮️',t:'Past simple',d:'Đã xảy ra & kết thúc: I went.'},
           {ic:'⏭️',t:'Future (will)',d:'Dự định/tương lai: I will go.'}]},
         {note:'Ngôi thứ 3 số ít ở thì hiện tại đơn thêm -s/-es cho động từ.'}]},
-      {ic:'🗺️',name:'Lịch sử & Địa lí 7',rd:'Trung đại & các châu lục.',panel:[
+      {ic:'🗺️',name:'Lịch sử & Địa lí 7 — ôn nhanh',rd:'Điểm lại trung đại & các châu lục.',panel:[
         {h:'Kiến thức trọng tâm'},
         {ul:['Xã hội phong kiến phương Đông & phương Tây','Đại Việt thời Lý – Trần – Lê sơ: dựng nước & giữ nước','Đặc điểm tự nhiên các châu lục: châu Âu, châu Á, châu Phi']},
         {note:'Chiến thắng tiêu biểu: ba lần kháng chiến chống quân Mông – Nguyên thời Trần.'}]},
-      {ic:'⚖️',name:'GDCD 7',rd:'Quản lí cảm xúc & ứng phó căng thẳng.',panel:[
+      {ic:'⚖️',name:'GDCD 7 — tình huống nhanh',rd:'Quản lí cảm xúc & ứng phó căng thẳng.',panel:[
         {mcq:[{q:'Khi căng thẳng trước kì kiểm tra, cách ứng phó tích cực là?',o:['Lập kế hoạch ôn tập, nghỉ ngơi, hít thở sâu','Thức trắng đêm lo lắng','Bỏ thi','Giấu cảm xúc và chịu đựng một mình'],a:0,fb:'Ứng phó tích cực: chia nhỏ việc học, ngủ đủ, vận động, chia sẻ với người tin cậy.'}]}]}],
     skills:['Tư duy logic','Tự luyện đề có phản hồi'],
     quiz:[{q:'Số nào sau đây là số hữu tỉ?',o:['Mọi đáp án trên (3, -0,5 và 2/7 đều là số hữu tỉ)','Chỉ 3','Chỉ 2/7','Không số nào'],a:0},
       {q:'Tổng ba góc trong một tam giác bằng?',o:['180°','90°','360°','100°'],a:0},
       {q:'"Ăn quả nhớ kẻ trồng cây" là?',o:['Tục ngữ','Truyện cổ tích','Thơ Đường','Tiểu thuyết'],a:0}]},
 
-  grade8:{emoji:'8️⃣',name:'Khối lớp 8',accent:'#a78bfa',intro:'Lớp 8 — củng cố nền tảng vững trước năm cuối cấp. Toán, Ngữ văn và các môn bộ môn.',
-    rooms:[{ic:'📐',name:'Toán 8 — Luyện tập',rd:'Hằng đẳng thức, phương trình, Pythagore.',href:'/module.html?domain=secondary&module=S8'},
-      {ic:'📖',name:'Ngữ văn 8 — Luyện tập',rd:'Truyện hiện thực, thơ Đường luật, câu ghép.',href:'/module.html?domain=secondary&module=SV8'},
-      {ic:'🔬',name:'KHTN 8 — Ghi nhớ nhanh',rd:'Lật thẻ Lí – Hoá – Sinh.',panel:[
+  grade8:{emoji:'8️⃣',name:'Khối lớp 8',accent:'#a78bfa',intro:'Lớp 8 — 12 môn × 35 tuần theo Chương trình GDPT 2018, củng cố nền tảng vững trước năm cuối cấp.',
+    // 12 môn × 35 tuần từ DB (module S8*) — mở lối vào giống lớp 6, req #108.
+    rooms:[
+      {ic:'📐',name:'Toán 8',rd:'35 tuần: nhân đa thức, phân thức đại số, định lí Talet, tam giác đồng dạng, xác suất của biến cố.',href:'/module.html?domain=secondary&module=S8TOAN'},
+      {ic:'📖',name:'Ngữ văn 8',rd:'35 tuần: Tức nước vỡ bờ, Hai cây phong, thơ Hồ Chí Minh; trợ từ – thán từ, hội thoại và lượt lời.',href:'/module.html?domain=secondary&module=S8NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 8',rd:'35 tuần Unit 1–12: quá khứ đơn & used to, câu tường thuật, giới thiệu địa danh, luyện nói nêu quan điểm.',href:'/module.html?domain=secondary&module=S8TA'},
+      {ic:'🔬',name:'Khoa học tự nhiên 8',rd:'35 tuần: mol & khối lượng mol, kim loại, cơ thể người (tiêu hoá, bệnh và cách phòng bệnh).',href:'/module.html?domain=secondary&module=S8KHTN'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 8',rd:'35 tuần: cách mạng tư sản Pháp, Việt Nam thời Pháp thuộc (Hiệp ước Nhâm Tuất, khai thác thuộc địa); địa lí sông ngòi Việt Nam.',href:'/module.html?domain=secondary&module=S8LSDL'},
+      {ic:'⚖️',name:'GD công dân 8',rd:'35 tuần: tôn trọng người khác, quyền khiếu nại – tố cáo, quyền và nghĩa vụ học tập, phòng chống bạo lực học đường.',href:'/module.html?domain=secondary&module=S8GDCD'},
+      {ic:'⚙️',name:'Công nghệ 8',rd:'35 tuần: hình chiếu & bản vẽ kĩ thuật, truyền chuyển động, đồ dùng điện gia đình, sơ đồ điện.',href:'/module.html?domain=secondary&module=S8CN'},
+      {ic:'💻',name:'Tin học 8',rd:'35 tuần: toán tử, kiểu danh sách, bảng tính & biểu đồ, tìm kiếm nhị phân, quyền tác giả trong môi trường số.',href:'/module.html?domain=secondary&module=S8TIN'},
+      {ic:'⚽',name:'GD thể chất 8',rd:'35 tuần: chạy bền theo phương pháp Cooper, chiến thuật bóng đá, bóng chuyền, đi bộ thể thao.',href:'/module.html?domain=secondary&module=S8GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 8',rd:'35 tuần: hợp âm 7, dân ca quốc tế, nhạc lãng mạn (Chopin, Schubert); ký hoạ chân dung.',href:'/module.html?domain=secondary&module=S8NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 8',rd:'35 tuần: quản lý thời gian, an toàn mạng & quyền riêng tư, định hướng học tập THPT, tài chính cá nhân.',href:'/module.html?domain=secondary&module=S8HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 8',rd:'35 tuần: Pháp đánh Hà Nội 1882 – Hoàng Diệu, vụ Hà thành đầu độc 1908, Cách mạng tháng Tám, môi trường đô thị.',href:'/module.html?domain=secondary&module=S8GDDP'},
+      {ic:'🔬',name:'KHTN 8 — ghi nhớ nhanh',rd:'Lật thẻ Lí – Hoá – Sinh (bài học đầy đủ ở thẻ Khoa học tự nhiên 8).',panel:[
         {p:'Lật thẻ ôn nhanh kiến thức Khoa học tự nhiên lớp 8.'},
         {flash:[{e:'⚖️',f:'Định luật bảo toàn khối lượng',b:'Tổng khối lượng chất phản ứng = tổng khối lượng sản phẩm'},
           {e:'💪',f:'Áp suất',b:'p = F/S (lực ép trên một đơn vị diện tích)'},
           {e:'🫁',f:'Hệ hô hấp',b:'Trao đổi khí O₂ và CO₂ giữa cơ thể & môi trường'},
           {e:'⚗️',f:'Acid',b:'Dung dịch làm quỳ tím hoá đỏ'}]}]},
-      {ic:'🇬🇧',name:'Tiếng Anh 8',rd:'So sánh hơn – so sánh nhất.',panel:[
+      {ic:'🇬🇧',name:'Tiếng Anh 8 — ôn nhanh',rd:'Lật nhanh so sánh hơn – so sánh nhất.',panel:[
         {h:'So sánh tính từ'},
         {ul:['So sánh hơn: tall → taller than; good → better than','So sánh nhất: tall → the tallest; good → the best','Tính từ dài dùng more / the most: more beautiful, the most beautiful']},
         {mcq:[{q:'Câu nào đúng?',o:['She is taller than me.','She is more tall than me.','She is tallest than me.','She is the taller.'],a:0,fb:'Tính từ ngắn "tall" → "taller than" trong so sánh hơn.'}]}]}],
@@ -492,10 +519,22 @@ const SPACES_SECONDARY = {
       {q:'Định lí Pythagore áp dụng cho tam giác?',o:['Tam giác vuông','Mọi tam giác','Tam giác đều','Tam giác tù'],a:0},
       {q:'Định luật bảo toàn khối lượng do ai phát biểu?',o:['Lavoisier','Newton','Darwin','Mendel'],a:0}]},
 
-  grade9:{emoji:'9️⃣',name:'Khối lớp 9',accent:'#fb7185',intro:'Lớp 9 — năm cuối cấp, tăng tốc ôn thi vào lớp 10. Học chắc Toán, Ngữ văn & lập kế hoạch ôn tập.',
-    rooms:[{ic:'📐',name:'Toán 9 — Luyện tập',rd:'Căn bậc hai, hệ phương trình, đường tròn.',href:'/module.html?domain=secondary&module=S9'},
+  grade9:{emoji:'9️⃣',name:'Khối lớp 9',accent:'#fb7185',intro:'Lớp 9 — 12 môn × 35 tuần theo Chương trình GDPT 2018, năm cuối cấp: học chắc từng môn và lập kế hoạch ôn thi vào lớp 10.',
+    // 12 môn × 35 tuần từ DB (module S9*) — mở lối vào giống lớp 6, req #108.
+    rooms:[
+      {ic:'📐',name:'Toán 9',rd:'35 tuần: căn bậc hai, hệ phương trình, phương trình bậc hai, hệ thức lượng – đường tròn, hình nón.',href:'/module.html?domain=secondary&module=S9TOAN'},
+      {ic:'📖',name:'Ngữ văn 9',rd:'35 tuần: Truyện Kiều (Kiều ở lầu Ngưng Bích), thơ hiện đại (Đoàn thuyền đánh cá, Nói với con), cách dẫn trực tiếp – gián tiếp.',href:'/module.html?domain=secondary&module=S9NV'},
+      {ic:'🇬🇧',name:'Tiếng Anh 9',rd:'35 tuần: City Life, Wonders of Viet Nam, câu điều kiện loại 3, mệnh đề quan hệ xác định, ẩm thực – sức khoẻ.',href:'/module.html?domain=secondary&module=S9TA'},
+      {ic:'🔬',name:'Khoa học tự nhiên 9',rd:'35 tuần: kim loại (nhôm), mạch nối tiếp – song song, thấu kính hội tụ, hoá hữu cơ, gen và protein.',href:'/module.html?domain=secondary&module=S9KHTN'},
+      {ic:'🗺️',name:'Lịch sử & Địa lí 9',rd:'35 tuần: thế giới sau 1945, Cách mạng tháng Tám 1945; nông nghiệp Việt Nam và các vùng kinh tế.',href:'/module.html?domain=secondary&module=S9LSDL'},
+      {ic:'⚖️',name:'GD công dân 9',rd:'35 tuần: dân chủ và kỉ luật, lý tưởng sống của thanh niên, vi phạm pháp luật & trách nhiệm pháp lý, quyền – nghĩa vụ lao động, bảo vệ Tổ quốc.',href:'/module.html?domain=secondary&module=S9GDCD'},
+      {ic:'⚙️',name:'Công nghệ 9',rd:'35 tuần: lắp đặt mạng điện trong nhà, kỹ thuật ghép cây, nấu ăn, khởi nghiệp và tinh thần doanh nhân.',href:'/module.html?domain=secondary&module=S9CN'},
+      {ic:'💻',name:'Tin học 9',rd:'35 tuần: Python (list, slicing), làm trang web đơn giản, bảo vệ thông tin cá nhân, nghề nghiệp ngành CNTT.',href:'/module.html?domain=secondary&module=S9TIN'},
+      {ic:'⚽',name:'GD thể chất 9',rd:'35 tuần: chạy bền 1500 m, bóng rổ, karatedo, phối hợp đội trong bóng chuyền.',href:'/module.html?domain=secondary&module=S9GDTC'},
+      {ic:'🎨',name:'Nghệ thuật 9',rd:'35 tuần: hợp âm 7, hip-hop – rap, mỹ thuật Baroque – Rococo, mỹ thuật Việt Nam thời Đổi mới.',href:'/module.html?domain=secondary&module=S9NT'},
+      {ic:'🧭',name:'HĐ trải nghiệm – hướng nghiệp 9',rd:'35 tuần: quản lý thời gian time-block, định hướng nghề, quản lý tiền, tự lập và trách nhiệm với gia đình.',href:'/module.html?domain=secondary&module=S9HDTN'},
+      {ic:'🏯',name:'GD địa phương Hà Nội 9',rd:'35 tuần: Trung đoàn Thủ đô, Hà Nội thời bao cấp, làng nghề truyền thống, du lịch và quảng bá Thủ đô.',href:'/module.html?domain=secondary&module=S9GDDP'},
       {ic:'📈',name:'Đồ thị hàm số bậc nhất (tương tác)',rd:'Vẽ y=ax+b: kéo hệ số góc, xem đồng biến/nghịch biến & giao trục.',href:'/grapher.html?domain=secondary&type=linear'},
-      {ic:'📖',name:'Ngữ văn 9 — Luyện tập',rd:'Truyện Kiều, thơ hiện đại, nghĩa hàm ý.',href:'/module.html?domain=secondary&module=SV9'},
       {ic:'🎯',name:'Kế hoạch ôn thi vào 10',rd:'Tự lập lộ trình ôn tập.',panel:[
         {h:'Lộ trình ôn thi tuyển sinh lớp 10'},
         {check:['Lập thời khoá biểu ôn theo 3 môn thi (Toán, Văn, Anh)','Hệ thống lại kiến thức trọng tâm từng môn','Luyện đề theo cấu trúc đề thi của tỉnh/thành','Bấm giờ làm đề & soát lỗi sai','Giữ sức khoẻ: ngủ đủ, ăn uống điều độ']},
@@ -512,21 +551,103 @@ const SPACES_SECONDARY = {
       {q:'Tác giả "Truyện Kiều"?',o:['Nguyễn Du','Nguyễn Trãi','Hồ Xuân Hương','Tố Hữu'],a:0},
       {q:'Phương trình bậc hai có dạng tổng quát?',o:['ax² + bx + c = 0 (a ≠ 0)','ax + b = 0','ax³ + b = 0','a/x = b'],a:0}]},
 
-  lab:{emoji:'🔬',name:'Phòng thí nghiệm KHTN',accent:'#14b8a6',intro:'Phòng học bộ môn Khoa học tự nhiên (Lí – Hoá – Sinh): thí nghiệm an toàn và khám phá hiện tượng.',
-    rooms:[{ic:'🥽',name:'An toàn phòng thí nghiệm',rd:'Tự kiểm trước khi làm thí nghiệm.',panel:[
+  lab:{emoji:'🔬',name:'Phòng thí nghiệm KHTN',accent:'#14b8a6',intro:'Phòng học bộ môn Khoa học tự nhiên (Lí – Hoá – Sinh). Đọc lý thuyết ở nhóm phòng 📖 trước, rồi mới vào thí nghiệm và luyện tập.',
+    rooms:[
+      // ── Lý thuyết đọc-trước KHTN 7 (req #111 Enderboy) ────────────────────
+      // SV xin "sách giáo khoa điện tử để có kiến thức trước khi làm bài".
+      // Bài học đầy đủ 35 tuần đã có sẵn trong DB (module S7KHTN) nhưng trước
+      // đây không phòng nào trỏ tới → thêm lối vào + 4 phòng tóm tắt theo 4 mạch
+      // nội dung CT GDPT 2018 để đọc ngay tại lab: lý thuyết → nhầm lẫn thường
+      // gặp → tự kiểm bằng câu hỏi.
+      {ic:'📚',name:'Sách giáo khoa điện tử KHTN 7 — 35 tuần',rd:'Toàn bộ bài học KHTN lớp 7 theo tuần: lý thuyết → ví dụ giải mẫu → quiz có phản hồi. Học sâu từng chủ đề.',href:'/module.html?domain=secondary&module=S7KHTN'},
+
+      {ic:'🧭',name:'📖 KHTN 7 — Mở đầu: học KHTN thế nào?',rd:'Tuần 1 · Phương pháp tìm hiểu tự nhiên 5 bước, kĩ năng tiến trình và dụng cụ hay dùng.',panel:[
+        {h:'Phương pháp tìm hiểu tự nhiên — 5 bước'},
+        {p:'Học Khoa học tự nhiên không phải là học thuộc kết luận, mà là tập làm như nhà khoa học: thấy một hiện tượng thì đặt câu hỏi, dự đoán, rồi kiểm tra dự đoán bằng thực nghiệm trước khi kết luận.'},
+        {ol:['Đề xuất vấn đề cần tìm hiểu: quan sát hiện tượng và đặt câu hỏi.','Đưa ra dự đoán khoa học (giả thuyết) để trả lời câu hỏi đó.','Lập kế hoạch kiểm tra dự đoán: chọn dụng cụ, mẫu vật và cách làm.','Thực hiện kế hoạch: làm thí nghiệm, quan sát và ghi lại số liệu.','Viết báo cáo, thảo luận và trình bày kết quả.']},
+        {h:'Kĩ năng tiến trình cần rèn'},
+        {ul:['Quan sát: dùng giác quan và dụng cụ để thu thập thông tin.','Phân loại: nhóm các đối tượng theo dấu hiệu chung.','Liên kết: nối thông tin mới với điều đã biết để giải thích.','Dự báo: từ quy luật đã thấy, đoán trước điều sẽ xảy ra.','Viết báo cáo & thuyết trình sao cho người khác hiểu được kết quả của em.']},
+        {h:'Dụng cụ hay dùng ở lớp 7'},
+        {cards:[{ic:'⏱️',t:'Cổng quang điện + đồng hồ đo thời gian hiện số',d:'Chính xác tới 0,001 s — dùng khi tính tốc độ, thay cho bấm giây bằng tay.'},
+          {ic:'📈',t:'Dao động kí',d:'Biến âm thanh thành đồ thị: nhìn thấy được biên độ (to – nhỏ) và tần số (cao – thấp).'},
+          {ic:'🔍',t:'Kính lúp & kính hiển vi quang học',d:'Quan sát vật nhỏ và tiêu bản tế bào thực vật – động vật.'}]},
+        {note:'Mẹo học: trước mỗi buổi thực hành, đọc phần lý thuyết tương ứng ở đây rồi mới vào lab — em sẽ biết mình đang đi tìm điều gì thay vì làm theo quán tính.'},
+        {mcq:[{q:'Bước ĐẦU TIÊN của phương pháp tìm hiểu tự nhiên là gì?',o:['Đề xuất vấn đề cần tìm hiểu','Viết báo cáo kết quả','Làm thí nghiệm ngay cho nhanh','Rút ra kết luận'],a:0,fb:'Phải có câu hỏi/vấn đề trước, sau đó mới dự đoán và kiểm tra dự đoán.'},
+          {q:'Muốn "nhìn thấy" độ to và độ cao của một âm thanh, em dùng dụng cụ nào?',o:['Dao động kí','Nhiệt kế','Lực kế','Kính hiển vi'],a:0,fb:'Dao động kí hiển thị đồ thị dao động: biên độ ứng với độ to, tần số ứng với độ cao.'}]}]},
+
+      {ic:'⚛️',name:'📖 KHTN 7 — Chất và sự biến đổi chất',rd:'Tuần 2–9 · Nguyên tử · Nguyên tố hoá học · Bảng tuần hoàn · Phân tử, liên kết & hoá trị.',panel:[
+        {h:'1. Nguyên tử (Tuần 2–3)'},
+        {p:'Nguyên tử là hạt vô cùng nhỏ, trung hoà về điện, tạo nên mọi chất. Theo mô hình Rutherford – Bohr, nguyên tử gồm hạt nhân ở giữa (chứa proton mang điện tích dương và neutron không mang điện) và lớp vỏ gồm các electron mang điện tích âm chuyển động xung quanh theo từng lớp.'},
+        {ul:['Nguyên tử trung hoà về điện vì số proton bằng số electron.','Lớp electron thứ nhất chứa tối đa 2 electron; lớp thứ hai và thứ ba chứa tối đa 8 electron.','Electron ở lớp ngoài cùng quyết định tính chất hoá học của nguyên tử.','Khối lượng nguyên tử tính bằng amu; electron rất nhẹ nên khối lượng tập trung gần như hoàn toàn ở hạt nhân.']},
+        {note:'Nhầm lẫn thường gặp: coi số hiệu nguyên tử là khối lượng. Số hiệu nguyên tử = số proton (cũng bằng số electron); còn khối lượng nguyên tử ≈ số proton + số neutron.'},
+        {h:'2. Nguyên tố hoá học & bảng tuần hoàn (Tuần 4–5)'},
+        {p:'Nguyên tố hoá học là tập hợp những nguyên tử có cùng số proton trong hạt nhân. Mỗi nguyên tố có một kí hiệu hoá học gồm một hoặc hai chữ cái, chữ cái đầu luôn viết hoa: H, O, Na, Ca, Fe.'},
+        {ul:['Bảng tuần hoàn sắp xếp các nguyên tố theo chiều tăng dần điện tích hạt nhân, tức là tăng dần số proton.','Số thứ tự chu kì (hàng ngang) bằng số lớp electron của nguyên tử.','Số thứ tự nhóm A (cột dọc) bằng số electron ở lớp ngoài cùng.','Kim loại nằm ở phía bên trái và giữa bảng, phi kim ở phía trên bên phải, khí hiếm ở nhóm VIIIA ngoài cùng bên phải.']},
+        {note:'SGK Chương trình GDPT 2018 dùng tên nguyên tố theo IUPAC: sodium (Na) thay cho natri, potassium (K) thay cho kali, iron (Fe) thay cho sắt.'},
+        {h:'3. Phân tử — đơn chất và hợp chất (Tuần 6)'},
+        {p:'Phân tử là hạt đại diện cho chất, gồm một số nguyên tử liên kết với nhau và thể hiện đầy đủ tính chất hoá học của chất. Đơn chất do một nguyên tố tạo nên (O₂, Fe); hợp chất do từ hai nguyên tố trở lên tạo nên (H₂O, NaCl, CO₂).'},
+        {p:'Khối lượng phân tử bằng tổng khối lượng các nguyên tử có trong phân tử. Ví dụ H₂O = 2 × 1 + 16 = 18 amu; CO₂ = 12 + 2 × 16 = 44 amu.'},
+        {h:'4. Liên kết hoá học & hoá trị (Tuần 7–8)'},
+        {ul:['Quy tắc octet: nguyên tử có xu hướng đạt 8 electron ở lớp ngoài cùng (riêng helium là 2) giống khí hiếm để trở nên bền vững.','Liên kết ion: kim loại nhường electron thành ion dương, phi kim nhận electron thành ion âm, hai ion trái dấu hút nhau — ví dụ NaCl.','Liên kết cộng hoá trị: hai nguyên tử phi kim góp chung electron — ví dụ H₂, O₂, H₂O, CO₂.','Quy tắc hoá trị: trong công thức AxBy thì x × hoá trị của A = y × hoá trị của B.']},
+        {note:'Nhầm lẫn kinh điển: lẫn chỉ số với hệ số. Trong 2H₂O, số 2 phía trước là hệ số (có 2 phân tử nước), còn số 2 nhỏ bên dưới là chỉ số (mỗi phân tử có 2 nguyên tử H).'},
+        {match:{title:'Nối công thức hoá học với khối lượng phân tử (amu)',pairs:[['H₂O','18'],['CO₂','44'],['O₂','32'],['NaCl','58,5'],['H₂','2']]}},
+        {mcq:[{q:'Số hiệu nguyên tử của một nguyên tố cho biết điều gì?',o:['Số proton trong hạt nhân (cũng bằng số electron)','Số neutron trong hạt nhân','Khối lượng của nguyên tử','Số lớp electron'],a:0,fb:'Số hiệu nguyên tử = số proton, là dấu hiệu đặc trưng của nguyên tố; nguyên tử trung hoà nên cũng bằng số electron.'},
+          {q:'Nguyên tử X có 2 lớp electron, lớp ngoài cùng có 6 electron. X nằm ở đâu trong bảng tuần hoàn?',o:['Chu kì 2, nhóm VIA','Chu kì 6, nhóm IIA','Chu kì 2, nhóm IIA','Chu kì 8, nhóm VIA'],a:0,fb:'Số lớp electron cho số thứ tự chu kì (2); số electron lớp ngoài cùng cho số thứ tự nhóm A (VI).'},
+          {q:'Liên kết trong phân tử NaCl thuộc loại nào?',o:['Liên kết ion','Liên kết cộng hoá trị','Không có liên kết','Liên kết kim loại'],a:0,fb:'Na nhường 1 electron thành Na⁺, Cl nhận 1 electron thành Cl⁻; hai ion trái dấu hút nhau nên là liên kết ion.'}]}]},
+
+      {ic:'⚡',name:'📖 KHTN 7 — Năng lượng và sự biến đổi',rd:'Tuần 10–17 · Tốc độ · Âm thanh · Ánh sáng · Từ và nam châm điện.',panel:[
+        {h:'1. Tốc độ (Tuần 10–11)'},
+        {p:'Tốc độ cho biết vật chuyển động nhanh hay chậm, tính bằng quãng đường chia cho thời gian: v = s / t. Đơn vị thường dùng là m/s và km/h.'},
+        {ul:['Đổi đơn vị: nhân 3,6 để chuyển từ m/s sang km/h; chia 3,6 để chuyển ngược lại từ km/h sang m/s.','Trên đồ thị quãng đường – thời gian, chuyển động thẳng đều là một đường thẳng xiên; đường càng dốc thì vật càng nhanh.','Đoạn đồ thị nằm ngang nghĩa là quãng đường không đổi — vật đang đứng yên.','Tốc độ càng lớn thì quãng đường phanh dừng càng dài, vì vậy khi tham gia giao thông phải giữ khoảng cách an toàn.']},
+        {note:'Ví dụ: xe khách đi 90 km hết 1,5 giờ → v = 90 : 1,5 = 60 km/h, tức khoảng 16,7 m/s.'},
+        {h:'2. Âm thanh (Tuần 12–13)'},
+        {p:'Nguồn âm là vật đang dao động. Sóng âm truyền được trong chất rắn, chất lỏng và chất khí, nhưng không truyền được trong chân không. Trong không khí, âm truyền với tốc độ khoảng 340 m/s.'},
+        {ul:['Biên độ dao động càng lớn thì âm càng TO; độ to của âm có đơn vị decibel (dB).','Tần số là số dao động trong một giây, đơn vị hertz (Hz); tần số càng lớn thì âm càng CAO (bổng).','Âm gặp vật cản sẽ dội lại — đó là phản xạ âm; ta nghe thấy tiếng vang khi âm phản xạ tới tai chậm hơn âm trực tiếp ít nhất 1/15 giây.','Vật cứng, bề mặt nhẵn phản xạ âm tốt; vật mềm, xốp, gồ ghề như rèm vải, thảm, tấm xốp hấp thụ âm tốt nên được dùng để chống ồn.']},
+        {note:'Nhầm lẫn kinh điển: "âm to" không phải "âm cao". To – nhỏ do biên độ, còn cao – thấp do tần số. Một tiếng trống trầm vẫn có thể rất to.'},
+        {h:'3. Ánh sáng (Tuần 14–15)'},
+        {p:'Ánh sáng là một dạng năng lượng: nó làm pin mặt trời phát điện và làm nóng vật được chiếu vào. Trong môi trường trong suốt và đồng tính, ánh sáng truyền theo đường thẳng — vì thế mới có bóng tối và bóng nửa tối.'},
+        {ul:['Định luật phản xạ ánh sáng: tia phản xạ nằm trong mặt phẳng chứa tia tới và pháp tuyến tại điểm tới; góc phản xạ bằng góc tới.','Góc tới là góc giữa tia tới và pháp tuyến (đường vuông góc với mặt gương), không phải góc giữa tia tới và mặt gương.','Ảnh của một vật qua gương phẳng là ảnh ảo, không hứng được trên màn chắn.','Ảnh qua gương phẳng lớn bằng vật, và cách gương một khoảng đúng bằng khoảng cách từ vật tới gương.']},
+        {h:'4. Từ (Tuần 16–17)'},
+        {ul:['Nam châm hút được sắt, thép, nickel, cobalt; không hút nhôm, đồng, thuỷ tinh hay nhựa.','Mỗi nam châm có hai cực: cực Bắc (N) và cực Nam (S); hai cực cùng tên đẩy nhau, khác tên hút nhau.','Xung quanh nam châm và xung quanh dây dẫn có dòng điện đều tồn tại từ trường; có thể phát hiện từ trường bằng kim nam châm nhỏ hoặc mạt sắt.','Đường sức từ đi ra ở cực Bắc và đi vào ở cực Nam của nam châm; chỗ nào đường sức mau thì từ trường ở đó mạnh.','Kim la bàn luôn nằm theo hướng Bắc – Nam vì Trái Đất cũng là một nam châm khổng lồ.','Nam châm điện là ống dây có dòng điện chạy qua, thường có lõi sắt non; ngắt dòng điện thì mất từ tính, nên được dùng làm cần cẩu điện, chuông điện, rơ le.']},
+        {mcq:[{q:'Một xe máy đi được 15 km trong 30 phút. Tốc độ của xe là?',o:['30 km/h','15 km/h','45 km/h','7,5 km/h'],a:0,fb:'30 phút = 0,5 giờ → v = 15 : 0,5 = 30 km/h.'},
+          {q:'Vì sao trên Mặt Trăng, các nhà du hành phải nói chuyện với nhau qua bộ đàm?',o:['Vì quanh Mặt Trăng gần như là chân không, âm không truyền được','Vì trên Mặt Trăng quá lạnh','Vì tai họ bị mũ bảo hộ bịt kín','Vì âm truyền quá nhanh nên nghe không kịp'],a:0,fb:'Sóng âm cần môi trường vật chất (rắn, lỏng, khí) để truyền; trong chân không thì không truyền được âm.'},
+          {q:'Chiếu một tia sáng tới gương phẳng với góc tới bằng 30°. Góc phản xạ bằng bao nhiêu?',o:['30°','60°','15°','90°'],a:0,fb:'Theo định luật phản xạ ánh sáng, góc phản xạ luôn bằng góc tới.'},
+          {q:'Vật nào sau đây KHÔNG bị nam châm hút?',o:['Thanh nhôm','Đinh sắt','Kẹp giấy bằng thép','Đồng xu bằng nickel'],a:0,fb:'Nam châm chỉ hút vật liệu từ như sắt, thép, nickel, cobalt — nhôm không bị hút.'}]}]},
+
+      {ic:'🌱',name:'📖 KHTN 7 — Vật sống',rd:'Tuần 21–33 · Trao đổi chất & chuyển hoá năng lượng · Cảm ứng · Sinh trưởng – phát triển · Sinh sản.',panel:[
+        {h:'1. Trao đổi chất và chuyển hoá năng lượng (Tuần 21–27)'},
+        {p:'Trao đổi chất là tập hợp các biến đổi hoá học trong tế bào cùng với sự trao đổi chất giữa cơ thể và môi trường; đi kèm với nó là sự chuyển hoá năng lượng từ dạng này sang dạng khác. Đây là điều kiện để cơ thể sống tồn tại và lớn lên.'},
+        {ul:['Quang hợp diễn ra ở lục lạp, chủ yếu trong lá: nước và carbon dioxide, nhờ ánh sáng cùng diệp lục, tạo ra glucose và oxygen — năng lượng ánh sáng chuyển thành hoá năng trong chất hữu cơ.','Hô hấp tế bào diễn ra ở ti thể, cả ngày lẫn đêm: glucose và oxygen tạo ra carbon dioxide, nước và giải phóng năng lượng cho mọi hoạt động sống.','Ở thực vật, khí được trao đổi qua khí khổng ở biểu bì lá; ở người, khí được trao đổi tại phế nang của phổi.','Mạch gỗ vận chuyển nước và muối khoáng từ rễ lên lá; mạch rây vận chuyển chất hữu cơ từ lá tới các cơ quan khác.','Thoát hơi nước qua khí khổng tạo lực kéo giúp nước đi lên, đồng thời làm mát cây và mở đường cho carbon dioxide vào lá.']},
+        {note:'Nhầm lẫn thường gặp: nghĩ rằng ban ngày cây chỉ quang hợp còn ban đêm chỉ hô hấp. Thực ra cây hô hấp suốt ngày đêm; ban ngày có thêm quang hợp và quang hợp mạnh hơn hô hấp.'},
+        {h:'2. Cảm ứng ở sinh vật (Tuần 28–29)'},
+        {p:'Cảm ứng là khả năng tiếp nhận kích thích và phản ứng lại kích thích từ môi trường, giúp sinh vật thích nghi và tồn tại.'},
+        {ul:['Ở thực vật, cảm ứng biểu hiện thành tính hướng: hướng sáng của ngọn cây, hướng nước và hướng chất dinh dưỡng của rễ, hướng tiếp xúc của tua cuốn cây mướp.','Phản ứng của thực vật diễn ra chậm, trong khi phản ứng của động vật nhanh hơn nhiều nhờ có hệ thần kinh.','Động vật có tập tính bẩm sinh (nhện giăng tơ, chim di cư) và tập tính học được (chó nghe hiệu lệnh, trâu tự về chuồng đúng giờ).','Ứng dụng trong đời sống: làm giàn cho cây leo, chiếu sáng bổ sung trong nhà kính, huấn luyện vật nuôi.']},
+        {h:'3. Sinh trưởng và phát triển (Tuần 30)'},
+        {ul:['Sinh trưởng là sự tăng lên về kích thước và khối lượng cơ thể; phát triển là những biến đổi về cấu tạo, hình thái và chức năng như nảy mầm, ra hoa, phát dục.','Thực vật lớn lên nhờ mô phân sinh: mô phân sinh đỉnh giúp thân và rễ dài ra, mô phân sinh bên giúp thân to ra.','Động vật có thể phát triển qua biến thái hoàn toàn (bướm: trứng → sâu → nhộng → bướm trưởng thành) hoặc biến thái không hoàn toàn (châu chấu: trứng → ấu trùng → con trưởng thành).','Nhiệt độ, ánh sáng, nước và chất dinh dưỡng đều ảnh hưởng tới sinh trưởng và phát triển.']},
+        {h:'4. Sinh sản ở sinh vật (Tuần 31–32)'},
+        {ul:['Sinh sản vô tính không có sự kết hợp giao tử đực và giao tử cái, cơ thể con giống hệt cơ thể mẹ — thuỷ tức nảy chồi, giâm cành, chiết cành, ghép cây, nuôi cấy mô.','Sinh sản hữu tính có sự kết hợp giao tử đực với giao tử cái tạo thành hợp tử, cơ thể con mang đặc điểm của cả bố và mẹ nên đa dạng hơn.','Ở thực vật có hoa: hạt phấn rơi lên đầu nhuỵ gọi là thụ phấn, sau đó thụ tinh tạo thành hợp tử; bầu nhuỵ phát triển thành quả, noãn phát triển thành hạt.','Nhiệt độ, độ ẩm, thức ăn và hormone điều hoà sinh sản — con người dựa vào đó để điều khiển cây ra hoa trái vụ hay tăng số con ở vật nuôi.']},
+        {h:'5. Cơ thể sinh vật là một thể thống nhất (Tuần 33)'},
+        {p:'Bốn hoạt động sống — trao đổi chất và chuyển hoá năng lượng, sinh trưởng và phát triển, cảm ứng, sinh sản — không tách rời nhau mà tác động qua lại. Tế bào là đơn vị cơ sở; tế bào hợp thành mô, mô thành cơ quan, cơ quan thành hệ cơ quan rồi thành cơ thể, tất cả phối hợp trong một thể thống nhất.'},
+        {match:{title:'Nối quá trình với nơi diễn ra',pairs:[['Quang hợp','Lục lạp trong tế bào lá'],['Hô hấp tế bào','Ti thể'],['Trao đổi khí ở lá','Khí khổng'],['Vận chuyển nước và muối khoáng','Mạch gỗ'],['Vận chuyển chất hữu cơ từ lá','Mạch rây']]}},
+        {mcq:[{q:'Nguyên liệu của quá trình quang hợp là gì?',o:['Nước và carbon dioxide','Glucose và oxygen','Nước và oxygen','Chỉ cần ánh sáng'],a:0,fb:'Quang hợp: nước + carbon dioxide, nhờ ánh sáng và diệp lục, tạo ra glucose + oxygen.'},
+          {q:'Ngọn cây trồng trong phòng nghiêng dần về phía cửa sổ. Đó là hiện tượng gì?',o:['Tính hướng sáng','Tính hướng nước','Tập tính học được','Sinh sản vô tính'],a:0,fb:'Hướng sáng: thực vật phản ứng với kích thích ánh sáng bằng cách sinh trưởng hướng về nguồn sáng.'},
+          {q:'Giâm cành là hình thức sinh sản nào?',o:['Sinh sản vô tính','Sinh sản hữu tính','Thụ phấn','Biến thái hoàn toàn'],a:0,fb:'Giâm cành không có sự kết hợp giao tử nên là sinh sản vô tính; cây con giống hệt cây mẹ.'}]}]},
+
+      // ── Thực hành & ôn tập ────────────────────────────────────────────────
+      {ic:'🥽',name:'An toàn phòng thí nghiệm',rd:'Tự kiểm trước khi làm thí nghiệm.',panel:[
         {h:'Quy tắc an toàn trong phòng thực hành'},
         {check:['Đeo kính bảo hộ khi làm với hoá chất/đun nóng','Không tự ý nếm, ngửi trực tiếp hoá chất','Đun ống nghiệm: hơ đều, miệng ống hướng ra chỗ không có người','Dùng xong tắt đèn cồn bằng nắp, không thổi','Rửa tay sau khi thực hành']},
         {note:'Hoá chất bắn vào mắt → rửa ngay bằng nhiều nước sạch và báo giáo viên.'}]},
-      {ic:'🧲',name:'Vật lí',rd:'Lực, năng lượng, điện cơ bản.',panel:[
+      {ic:'🧲',name:'Vật lí — ôn nhanh',rd:'Lực, năng lượng, điện cơ bản. Đọc phòng 📖 Năng lượng và sự biến đổi trước cho chắc.',panel:[
         {h:'Hiện tượng vật lí quen thuộc'},
         {ul:['Lực làm thay đổi tốc độ hoặc hình dạng vật','Trọng lực kéo mọi vật về phía Trái Đất','Mạch điện kín mới có dòng điện chạy qua','Năng lượng không tự sinh ra hay mất đi, chỉ chuyển hoá']},
         {mcq:[{q:'Bóng đèn sáng được là nhờ dòng điện chuyển hoá điện năng thành?',o:['Quang năng và nhiệt năng','Chỉ âm thanh','Hoá năng','Cơ năng'],a:0,fb:'Đèn sợi đốt: điện năng → quang năng (ánh sáng) + nhiệt năng (toả nhiệt).'}]}]},
-      {ic:'⚗️',name:'Hoá học',rd:'Chất, phản ứng, quỳ tím.',panel:[
+      {ic:'⚗️',name:'Hoá học — ôn nhanh',rd:'Chất, phản ứng, quỳ tím. Đọc phòng 📖 Chất và sự biến đổi chất trước cho chắc.',panel:[
         {p:'Lật thẻ ôn dấu hiệu nhận biết trong Hoá học THCS.'},
         {flash:[{e:'🔴',f:'Acid + quỳ tím',b:'Quỳ tím hoá đỏ'},{e:'🔵',f:'Base + quỳ tím',b:'Quỳ tím hoá xanh'},
           {e:'💨',f:'Dấu hiệu phản ứng',b:'Sủi bọt khí, đổi màu, kết tủa, toả/thu nhiệt'},
           {e:'⚖️',f:'Bảo toàn khối lượng',b:'Khối lượng được bảo toàn trong phản ứng hoá học'}]}]},
-      {ic:'🌿',name:'Sinh học',rd:'Tế bào, cơ thể sống.',panel:[
+      {ic:'🌿',name:'Sinh học — ôn nhanh',rd:'Tế bào, cơ thể sống. Đọc phòng 📖 Vật sống trước cho chắc.',panel:[
         {h:'Cơ sở của sự sống'},
         {ul:['Tế bào là đơn vị cấu tạo & chức năng cơ bản của cơ thể sống','Thực vật quang hợp tạo chất hữu cơ + nhả khí O₂','Cơ thể người gồm nhiều hệ cơ quan phối hợp hoạt động']},
         {note:'Quang hợp cần ánh sáng, nước, khí carbonic — tạo glucose và oxygen.'}]}],
@@ -769,12 +890,6 @@ const SPACES_IT = {
   admin:{emoji:'⚙️',name:'Hành chính – Hiệu bộ',accent:'#94a3b8',intro:'Trung tâm điều hành Trường CNTT: theo dõi tiến độ, chương trình đào tạo 4 năm, hướng nghiệp và tiếp nhận yêu cầu cải tiến.',
     rooms:[{ic:'📊',name:'Bảng điều khiển',rd:'Tiến độ, điểm, huy hiệu.',href:'/dashboard.html'},
       {ic:'🏛️',name:'Ban điều hành AI',rd:'Gửi đề xuất cải tiến môn học/lab & bình chọn.',board:true},
-      {ic:'🎓',name:'Chương trình đào tạo',rd:'Lộ trình Cử nhân CNTT 4 năm.',panel:[
-        {h:'Cử nhân Công nghệ thông tin — 4 năm'},
-        {timeline:[{t:'Năm 1 — Đại cương',d:'Python, Toán rời rạc, Kiến trúc máy tính, Hệ điều hành, Tiếng Anh CNTT.'},
-          {t:'Năm 2 — Cơ sở ngành',d:'Cấu trúc dữ liệu & giải thuật, OOP, CSDL, Mạng, Web.'},
-          {t:'Năm 3 — Chuyên ngành',d:'Kỹ thuật phần mềm, AI/ML, Mobile, DevOps, An toàn thông tin.'},
-          {t:'Năm 4 — Tích hợp',d:'Kiến trúc phần mềm, Cloud, Khoa học dữ liệu, Khoá luận.'}]}]},
       {ic:'🧭',name:'Hướng nghiệp CNTT',rd:'Các vị trí nghề nghiệp.',panel:[
         {h:'Một tấm bằng CNTT — nhiều hướng đi'},
         {cards:[{ic:'👨‍💻',t:'Software Engineer',d:'Phát triển phần mềm, web, hệ thống.'},
@@ -793,7 +908,11 @@ const SPACES_IT = {
       {q:'Khoá luận tốt nghiệp thường nằm ở năm nào?',o:['Năm 1','Năm 2','Năm 4','Không có'],a:2}]},
 
   lecture:{emoji:'🏛️',name:'Giảng đường',accent:'#c2703d',intro:'Học lý thuyết nền tảng ngành CNTT: bài giảng, thuật ngữ tiếng Anh và kiểm tra nhanh.',
-    rooms:[{ic:'🐍',name:'Thực hành Python',rd:'Đọc code & đoán kết quả.',panel:[{h:'Đọc hiểu code Python'},{p:'Chọn kết quả đúng cho từng đoạn code.'},{mcq:[{q:'print(2 ** 3) in ra gì?',o:['8','6','9','23'],a:0,fb:'** là phép luỹ thừa: 2^3 = 8.'},{q:'len("Tizia") trả về?',o:['8','7','9','Báo lỗi'],a:0,fb:'Chuỗi "Tizia" có 8 ký tự.'},{q:'[1,2,3][-1] trả về?',o:['3','1','-1','Báo lỗi'],a:0,fb:'Chỉ số âm đếm từ cuối: [-1] là phần tử cuối = 3.'}]}]},
+    rooms:[
+      // Chương trình đào tạo Cử nhân CNTT 4 năm (req #107) — chuyển từ Hành chính về
+      // Giảng Đường theo đề xuất SV; trang riêng dạng bậc thang tiến trình.
+      {ic:'🎓',name:'Chương trình đào tạo Cử nhân CNTT',rd:'Lộ trình 4 năm dạng bậc thang: mỗi môn có lý thuyết + ví dụ code + nguồn tự học.',href:'/it-curriculum.html?domain=it'},
+      {ic:'🐍',name:'Thực hành Python',rd:'Đọc code & đoán kết quả.',panel:[{h:'Đọc hiểu code Python'},{p:'Chọn kết quả đúng cho từng đoạn code.'},{mcq:[{q:'print(2 ** 3) in ra gì?',o:['8','6','9','23'],a:0,fb:'** là phép luỹ thừa: 2^3 = 8.'},{q:'len("Tizia") trả về?',o:['8','7','9','Báo lỗi'],a:0,fb:'Chuỗi "Tizia" có 8 ký tự.'},{q:'[1,2,3][-1] trả về?',o:['3','1','-1','Báo lỗi'],a:0,fb:'Chỉ số âm đếm từ cuối: [-1] là phần tử cuối = 3.'}]}]},
       {ic:'📽️',name:'Bài giảng nền tảng',rd:'Các môn cốt lõi năm 1–2.',panel:[
         {h:'Các môn nền tảng'},
         {cards:[{ic:'🐍',t:'Lập trình (Python)',d:'Biến, vòng lặp, hàm, cấu trúc cơ bản.'},
@@ -808,6 +927,7 @@ const SPACES_IT = {
         {flash:[{e:'🐞',f:'Bug',b:'Lỗi phần mềm'},{e:'🔁',f:'Loop',b:'Vòng lặp'},
           {e:'🧮',f:'Algorithm',b:'Thuật toán'},{e:'🗃️',f:'Database',b:'Cơ sở dữ liệu'},
           {e:'🔌',f:'API',b:'Giao diện lập trình ứng dụng'},{e:'☁️',f:'Deploy',b:'Triển khai (đưa lên chạy)'}]}]},
+      {ic:'📖',name:'Đọc hiểu tiếng Anh chuyên ngành',rd:'Đọc đoạn văn theo chủ đề, chọn đáp án, nộp bài rồi xem đáp án + giải thích (req #82).',href:'/doc-hieu-tieng-anh.html?domain=it'},
       {ic:'⚖️',name:'Đạo đức nghề CNTT',rd:'Tình huống đạo đức số.',panel:[
         {h:'Đạo đức nghề nghiệp'},
         {mcq:[{q:'Khi debug, bạn vô tình truy cập được dữ liệu cá nhân người dùng. Nên?',o:['Không xem/sao chép, báo nhóm & xử lý theo quy định','Lưu lại để dùng sau','Đăng lên mạng cho vui','Bán cho bên thứ ba'],a:0,fb:'Tôn trọng quyền riêng tư & bảo mật dữ liệu là nguyên tắc cốt lõi (Nghị định 13/2023, GDPR).'},
@@ -818,7 +938,13 @@ const SPACES_IT = {
       {q:'Trình biên dịch (compiler) làm gì?',o:['Dịch mã nguồn sang mã máy/bytecode','Vẽ giao diện','Quản lý cơ sở dữ liệu','Gửi email'],a:0}]},
 
   library:{emoji:'📚',name:'Thư viện số',accent:'#93c5fd',intro:'Tra cứu tài liệu, đọc paper khoa học, học mã nguồn mở và rèn kỹ năng viết khoá luận CNTT.',
-    rooms:[{ic:'🧭',name:'Lộ trình tự học',rd:'Roadmap kỹ năng CNTT.',panel:[{h:'Tự học CNTT hiệu quả'},{ul:['Chọn một hướng (web / AI / mobile / security) và bám lộ trình (vd roadmap.sh)','Học theo dự án: làm sản phẩm nhỏ thay vì chỉ xem video','Ghi chú & dạy lại (Feynman) để nhớ lâu','Tham gia cộng đồng: GitHub, diễn đàn, nhóm học']},{note:'Kiên trì đều đặn quan trọng hơn học dồn — mỗi ngày một chút.'}]},
+    // Bộ công cụ nghiên cứu — mở trong khung Tizia qua /app/<alias> (xem web-next/app/app/[alias]).
+    rooms:[{ic:'📚',name:'Tra cứu tài liệu thư viện',rd:'Tìm sách, tạp chí, ebook trong kho thư viện điện tử của trường.',href:'/app/library-search'},
+      {ic:'🗺️',name:'Trắc lượng thư mục',rd:'Bản đồ từ khoá, mạng đồng tác giả, phân tích trích dẫn — làm tổng quan tài liệu cho khoá luận.',href:'/app/bibliomap'},
+      {ic:'📊',name:'Phân tích định lượng',rd:'Xử lý số liệu thực nghiệm: thống kê mô tả, kiểm định, biểu đồ.',href:'/app/quantis'},
+      {ic:'🗂️',name:'Phân tích định tính',rd:'Mã hoá phỏng vấn người dùng, khảo sát mở khi làm nghiên cứu UX/HCI.',href:'/app/annota'},
+      {ic:'🔳',name:'Tạo mã QR',rd:'Sinh mã QR cho link demo, poster đồ án, danh thiếp.',href:'/app/qrcode'},
+      {ic:'🧭',name:'Lộ trình tự học',rd:'Roadmap kỹ năng CNTT.',panel:[{h:'Tự học CNTT hiệu quả'},{ul:['Chọn một hướng (web / AI / mobile / security) và bám lộ trình (vd roadmap.sh)','Học theo dự án: làm sản phẩm nhỏ thay vì chỉ xem video','Ghi chú & dạy lại (Feynman) để nhớ lâu','Tham gia cộng đồng: GitHub, diễn đàn, nhóm học']},{note:'Kiên trì đều đặn quan trọng hơn học dồn — mỗi ngày một chút.'}]},
       {ic:'🔎',name:'Kỹ năng tra cứu',rd:'Nguồn tin cậy cho dân lập trình.',panel:[
         {h:'Nguồn tra cứu đáng tin'},
         {ul:['Tài liệu chính thức (docs) của ngôn ngữ/framework','MDN Web Docs cho web; man pages cho Linux','Stack Overflow — đọc kỹ, kiểm chứng lại','Paper: Google Scholar, arXiv, IEEE Xplore, ACM DL']},
@@ -859,21 +985,92 @@ const SPACES_IT = {
       {q:'Yếu tố quan trọng nhất của một demo hackathon?',o:['Luồng chính chạy được & rõ ràng','Giao diện cực kỳ cầu kỳ','Nhiều màu sắc','Nhạc nền'],a:0}]},
 
   codelab:{emoji:'💻',name:'Lab Lập trình',accent:'#38bdf8',intro:'Phòng thực hành lập trình: viết code, debug, dùng Git và rèn thói quen clean code.',
-    rooms:[{ic:'💻',name:'Code Lab — Python nhập môn',rd:'6 bài Python cơ bản (I/O, vòng lặp, rẽ nhánh, chuỗi) — chấm trên NEU Codelab.',href:'/it-code-lab.html?domain=it&contest=325049'},
+    rooms:[
+      // Lý thuyết nền tảng kiểu w3schools (req #106 Chu Thi Hue): mỗi module = Lý thuyết →
+      // Ví dụ code → Lỗi thường gặp → Bài tập, ĐỌC TRƯỚC khi vào phòng thực hành bên dưới.
+      {ic:'📖',name:'Python nhập môn — Lý thuyết (đọc trước khi code)',rd:'9 module w3schools: lý thuyết + ví dụ + lỗi thường gặp + bài tập.',panel:[
+        {h:'Module 1 — Nền tảng: biến, kiểu dữ liệu, I/O'},
+        {p:'Biến là "nơi giữ" dữ liệu trong bộ nhớ. Python dùng kiểu động: tự suy kiểu theo giá trị gán. 4 kiểu cơ bản: int, float, str, bool. input() luôn trả về CHUỖI — muốn tính toán phải ép kiểu bằng int() / float().'},
+        {code:'ten = input("Nhập tên: ")\ntuoi = int(input("Nhập tuổi: "))  # ép chuỗi → số\nnam_sinh = 2026 - tuoi\nprint(f"Chào {ten}, có lẽ bạn sinh {nam_sinh}.")'},
+        {note:'Lỗi thường gặp: quên ép kiểu input() → TypeError; nhầm = (gán) với == (so sánh); đặt tên biến trùng từ khoá (list, str).'},
+        {ul:['Nhập chiều cao & cân nặng, tính BMI = cân nặng / (chiều cao)²','Nhập 2 số, in tổng/hiệu/tích/thương','Nhập giá tiền, tính giá sau giảm 15%']},
+        {h:'Module 2 — Luồng điều khiển: if/elif/else, for/while'},
+        {p:'Rẽ nhánh if/elif/else cho chương trình "ra quyết định" theo điều kiện. Vòng lặp for duyệt dãy có sẵn; while lặp tới khi điều kiện sai. Thụt lề (4 dấu cách) xác định khối lệnh.'},
+        {code:'for i in range(1, 6):\n    if i % 2 == 0:\n        print(i, "chẵn")\n    else:\n        print(i, "lẻ")'},
+        {note:'Lỗi thường gặp: quên cập nhật biến điều kiện trong while → vòng lặp vô hạn; sai thụt lề → IndentationError.'},
+        {ul:['In bảng cửu chương của một số nhập vào','Đếm số chẵn từ 1 đến n','Tính tổng các số chia hết cho 3 nhỏ hơn 100']},
+        {h:'Module 3 — Cấu trúc dữ liệu: list, tuple, dict, set'},
+        {p:'list [] có thứ tự, sửa được; tuple () bất biến; dict {khoá: giá trị} tra cứu nhanh theo khoá; set {} tập hợp không trùng. Chọn đúng cấu trúc giúp code gọn và nhanh.'},
+        {code:'sv = {"ten": "An", "diem": [8, 9, 7]}\nsv["diem"].append(10)\nprint(sum(sv["diem"]) / len(sv["diem"]))  # điểm trung bình'},
+        {note:'Lỗi thường gặp: sửa tuple (bất biến) → TypeError; truy cập khoá dict không tồn tại → KeyError (dùng .get()).'},
+        {ul:['Đếm số lần xuất hiện mỗi từ trong câu (dùng dict)','Loại phần tử trùng khỏi list (dùng set)','Sắp xếp danh sách sinh viên theo điểm']},
+        {h:'Module 4 — Hàm & phạm vi biến'},
+        {p:'Hàm gói một khối lệnh làm một việc, nhận tham số và trả về kết quả (return). Biến khai báo trong hàm là biến cục bộ (local), không thấy được bên ngoài.'},
+        {code:'def dien_tich_hcn(dai, rong):\n    return dai * rong\n\nprint(dien_tich_hcn(5, 3))  # 15'},
+        {note:'Lỗi thường gặp: quên return → hàm trả None; nhầm biến cục bộ với toàn cục.'},
+        {ul:['Viết hàm đệ quy tính tổng 1..n','Viết 2 hàm chuyển Celsius↔Fahrenheit','Viết hàm kiểm tra số nguyên tố']},
+        {h:'Module 5 — Chuỗi & xử lý văn bản'},
+        {p:'Chuỗi là dãy ký tự bất biến. Các thao tác hay dùng: cắt lát s[a:b], .split(), .strip(), .lower()/.upper(), .replace(), nối bằng "+".'},
+        {code:'cau = "  Xin chao Tizia  "\nprint(cau.strip().lower())        # "xin chao tizia"\nprint(cau.strip().split(" "))     # [\'Xin\', \'chao\', \'Tizia\']'},
+        {note:'Lỗi thường gặp: chuỗi bất biến — s[0]="x" gây lỗi; quên .strip() làm so sánh sai vì khoảng trắng thừa.'},
+        {ul:['Kiểm tra một chuỗi có phải palindrome','Đếm số nguyên âm trong chuỗi','Viết hoa chữ cái đầu mỗi từ']},
+        {h:'Module 6 — Xử lý file & exception'},
+        {p:'Dùng with open(...) để đọc/ghi file an toàn (tự đóng file). Bọc đoạn dễ lỗi trong try/except để chương trình không "chết" khi gặp dữ liệu sai.'},
+        {code:'try:\n    with open("data.txt", "r", encoding="utf-8") as f:\n        for dong in f:\n            print(dong.strip())\nexcept FileNotFoundError:\n    print("Chưa có file dữ liệu.")'},
+        {note:'Lỗi thường gặp: quên đóng file (nên dùng with); bắt except quá rộng che mất lỗi thật.'},
+        {ul:['Ghi danh sách việc cần làm ra file, đọc lại khi mở lại','Đếm số dòng của một file văn bản','Nhập số an toàn: lặp lại tới khi người dùng nhập đúng']},
+        {h:'Module 7 — Lập trình hướng đối tượng (class)'},
+        {p:'class là "khuôn" mô tả một loại đối tượng: gộp dữ liệu (thuộc tính) và hành vi (phương thức). __init__ khởi tạo đối tượng; self trỏ tới chính đối tượng đó.'},
+        {code:'class KhoanChi:\n    def __init__(self, ten, so_tien):\n        self.ten = ten\n        self.so_tien = so_tien\n    def mo_ta(self):\n        return f"{self.ten}: {self.so_tien}đ"\n\nc = KhoanChi("Ăn trưa", 35000)\nprint(c.mo_ta())'},
+        {note:'Lỗi thường gặp: quên self trong phương thức; quên __init__ nên đối tượng thiếu thuộc tính.'},
+        {ul:['Tạo class HinhChuNhat có phương thức tính diện tích/chu vi','Tạo class TaiKhoan có nạp/rút tiền','Tạo class SinhVien lưu tên + danh sách điểm']},
+        {h:'Module 8 — Thư viện chuẩn thường dùng'},
+        {p:'Python đi kèm nhiều thư viện sẵn: math (toán), random (ngẫu nhiên), datetime (ngày giờ), json (đọc/ghi JSON). Dùng import để nạp.'},
+        {code:'import random, math\nprint(random.randint(1, 6))     # xúc xắc\nprint(math.sqrt(144))           # 12.0\nprint(math.gcd(48, 36))         # 12'},
+        {note:'Lỗi thường gặp: đặt tên file trùng tên thư viện (vd random.py) làm import lỗi.'},
+        {ul:['Viết trò tung xúc xắc 2 viên, thống kê tổng điểm','Tính khoảng cách 2 điểm bằng math','In ngày hôm nay theo định dạng dd/mm/yyyy']},
+        {h:'Module 9 — Dự án tổng hợp: Quản lý chi tiêu'},
+        {p:'Kết hợp toàn bộ kỹ năng: dùng list/dict lưu khoản chi, hàm tách chức năng (thêm/tổng/hiển thị theo danh mục), try/except nhập liệu an toàn, file lưu dữ liệu, class KhoanChi. Tiêu chí chấm: chạy không lỗi, code tổ chức rõ ràng, xử lý input sai.'},
+        {note:'Đây là bài tổng hợp — hãy chia nhỏ thành các hàm, mỗi hàm một nhiệm vụ; kiểm thử từng phần trước khi ghép.'}]},
+      {ic:'💻',name:'Code Lab — Python nhập môn (thực hành)',rd:'Đọc lý thuyết ở trên xong thì vào đây code: bài Python cơ bản, chấm trên NEU Codelab.',href:'/it-code-lab.html?domain=it&contest=325049'},
       {ic:'⚡',name:'Thử thách giải thuật',rd:'Giải nhanh bài nhỏ.',panel:[{h:'Khởi động tư duy lập trình'},{mcq:[{q:'Đảo ngược chuỗi "abc" được?',o:['"cba"','"abc"','"bca"','Báo lỗi'],a:0,fb:'Đảo ngược thứ tự: c-b-a.'},{q:'Tổng 1+2+…+100 bằng?',o:['5050','100','1000','5000'],a:0,fb:'Công thức n(n+1)/2 = 100×101/2 = 5050.'},{q:'Kiểm tra một số là chẵn dùng phép?',o:['n % 2 == 0','n / 2','n * 2','n + 2'],a:0,fb:'Số dư khi chia 2 bằng 0 ⇒ số chẵn.'}]}]},
-      {ic:'🐞',name:'Quy trình debug',rd:'Tìm & sửa lỗi có hệ thống.',panel:[
-        {h:'Debug như một kỹ sư'},
-        {ol:['Tái hiện lỗi một cách ổn định','Khoanh vùng: chia để trị, in log / breakpoint','Đặt giả thuyết & kiểm chứng từng cái','Sửa nguyên nhân gốc, không chỉ triệu chứng','Viết test để lỗi không tái phát']},
-        {note:'Rubber duck debugging: giải thích code cho "vịt nhựa" thường giúp tự phát hiện lỗi.'}]},
+      {ic:'🐞',name:'Quy trình debug',rd:'4 kỹ thuật cốt lõi + 5 đoạn code lỗi thật để luyện.',panel:[
+        {h:'4 kỹ thuật debug cốt lõi'},
+        {ul:['Đọc traceback TỪ DƯỚI LÊN — dòng lỗi cuối cùng mới là lỗi gốc','Print debugging — chèn print() ở điểm nghi ngờ để xem giá trị biến thực tế','Chia nhỏ để cô lập — tách đoạn nghi lỗi ra chạy riêng','Rubber duck — giải thích từng dòng cho "vịt nhựa", thường tự phát hiện lỗi logic']},
+        {h:'Bài 1 — Lỗi cú pháp (SyntaxError)'},
+        {code:'def tinh_tong(a, b)\n    return a + b'},
+        {note:'Gợi ý: thiếu dấu ":" sau khai báo hàm → def tinh_tong(a, b):'},
+        {h:'Bài 2 — Lỗi kiểu dữ liệu (TypeError)'},
+        {code:'tuoi = input("Nhập tuổi: ")\ntuoi_sau_5_nam = tuoi + 5'},
+        {note:'Gợi ý: input() trả về chuỗi — cần int(tuoi) trước khi cộng.'},
+        {h:'Bài 3 — Lỗi logic (chạy được nhưng sai kết quả)'},
+        {code:'def tinh_trung_binh(diem_list):\n    tong = 0\n    for d in diem_list:\n        tong = d      # sai: phải là tong += d\n    return tong / len(diem_list)'},
+        {note:'Gợi ý: không có lỗi runtime nên traceback vô dụng — hãy print(tong) từng vòng để thấy nó bị GHI ĐÈ thay vì cộng dồn.'},
+        {h:'Bài 4 — Lỗi chỉ số (IndexError)'},
+        {code:'danh_sach = [1, 2, 3]\nprint(danh_sach[3])'},
+        {note:'Gợi ý: chỉ số hợp lệ là 0, 1, 2 — chỉ số 3 vượt giới hạn.'},
+        {h:'Bài 5 — Vòng lặp vô hạn'},
+        {code:'i = 0\nwhile i < 10:\n    print(i)'},
+        {note:'Gợi ý: thiếu i += 1 bên trong vòng lặp nên i luôn = 0.'}]},
       {ic:'🌿',name:'Git căn bản',rd:'Lật thẻ lệnh Git thường dùng.',panel:[
         {p:'Lật thẻ ôn các lệnh Git cốt lõi.'},
         {flash:[{e:'📥',f:'git clone',b:'Sao chép repo về máy'},{e:'➕',f:'git add',b:'Đưa thay đổi vào staging'},
           {e:'💾',f:'git commit',b:'Ghi lại một mốc thay đổi'},{e:'🌱',f:'git branch',b:'Tạo/xem nhánh'},
           {e:'🔀',f:'git merge',b:'Hợp nhất nhánh'},{e:'☁️',f:'git push',b:'Đẩy commit lên remote'}]}]},
-      {ic:'✨',name:'Clean code',rd:'Viết code dễ đọc, dễ bảo trì.',panel:[
-        {h:'Nguyên tắc clean code'},
-        {ul:['Đặt tên biến/hàm rõ nghĩa, nhất quán','Hàm ngắn, làm một việc (Single Responsibility)','Tránh lặp (DRY); tách hằng số magic number','Viết test & xử lý lỗi ở ranh giới hệ thống']},
-        {mcq:[{q:'Tên biến nào tốt nhất cho số sinh viên đã đăng ký?',o:['registeredStudentCount','x','data2','tmp'],a:0,fb:'Tên rõ nghĩa giúp code tự tài liệu hoá — người sau (và chính bạn) đọc dễ hơn nhiều.'}]}]}],
+      {ic:'✨',name:'Clean code',rd:'5 nguyên tắc so sánh "trước/sau" + bài refactor.',panel:[
+        {h:'1. Đặt tên rõ nghĩa'},
+        {code:'# Xấu\ndef f(x, y): return x * y * 0.1\n\n# Sạch\ndef tinh_hoa_hong(doanh_so, so_luong):\n    TY_LE = 0.1\n    return doanh_so * so_luong * TY_LE'},
+        {h:'2. Hàm ngắn, làm MỘT việc'},
+        {code:'# Xấu: một hàm ôm quá nhiều việc\ndef xu_ly_don_hang(dh): ... tính tiền ... kiểm kho ... gửi mail ...\n\n# Sạch: tách mỗi việc một hàm\ndef tinh_tong_tien(dh): ...\ndef kiem_tra_ton_kho(dh): ...\ndef gui_email_xac_nhan(dh): ...'},
+        {h:'3. Tránh lặp code (DRY — Don\'t Repeat Yourself)'},
+        {code:'# Xấu\ndt1 = 5 * 3\ndt2 = 8 * 4\n\n# Sạch\ndef dien_tich(dai, rong): return dai * rong\ndt1 = dien_tich(5, 3)\ndt2 = dien_tich(8, 4)'},
+        {h:'4. Format nhất quán (PEP8)'},
+        {ul:['Thụt lề 4 dấu cách, KHÔNG trộn tab với space','Hàm/biến snake_case, class PascalCase','Giới hạn độ dài dòng ~79–99 ký tự']},
+        {h:'5. Comment giải thích "TẠI SAO", không phải "làm gì"'},
+        {code:'# Xấu (thừa — code đã tự nói)\ni += 1  # tăng i lên 1\n\n# Sạch (nói điều code không tự nói được)\ni += 1  # bỏ qua dòng tiêu đề của file CSV'},
+        {h:'🛠️ Bài tập refactor'},
+        {code:'def calc(a, b, c):\n    if c == 1: return a + b\n    if c == 2: return a - b\n    if c == 3: return a * b\n    if c == 4: return a / b'},
+        {note:'Yêu cầu: đổi tên hàm/biến rõ nghĩa, thay số magic (1,2,3,4) bằng hằng số/chuỗi có nghĩa ("cong","tru"…), và xử lý trường hợp chia cho 0.'}]}],
     skills:['Viết & debug code','Dùng Git','Thói quen clean code'],
     quiz:[{q:'Lệnh nào ghi lại một mốc thay đổi trong Git?',o:['git commit','git status','git log','git diff'],a:0},
       {q:'Nguyên tắc DRY nghĩa là?',o:['Do not Repeat Yourself — tránh lặp code','Delete Run Yearly','Data Read Yield','Debug Right Yet'],a:0},
@@ -905,18 +1102,90 @@ const SPACES_IT = {
 
   dblab:{emoji:'🗄️',name:'Trung tâm CSDL',accent:'#60a5fa',intro:'Cơ sở dữ liệu quan hệ: thiết kế bảng, viết SQL, chuẩn hoá và phòng tránh SQL injection.',
     rooms:[{ic:'⌨️',name:'SQL Playground — viết & chạy truy vấn',rd:'Bảng thật trong bộ nhớ: viết SELECT/WHERE/JOIN/GROUP BY, 5 thử thách chấm tự động.',href:'/it-sql-playground.html?domain=it'},
-      {ic:'🔎',name:'SQL căn bản',rd:'Các câu lệnh truy vấn cốt lõi.',panel:[
+      // Nội dung chi tiết 3 phòng CSDL do cô Chu Thi Hue soạn (req #126, #127, #128 · 02/08).
+      {ic:'🔎',name:'SQL căn bản',rd:'6 câu lệnh cốt lõi: cú pháp, ví dụ, lỗi thường gặp.',panel:[
         {h:'Bộ lệnh SQL thường dùng'},
         {cards:[{ic:'📤',t:'SELECT',d:'Lấy dữ liệu từ bảng.'},{ic:'🔗',t:'JOIN',d:'Nối nhiều bảng theo khoá.'},
           {ic:'🧮',t:'GROUP BY',d:'Gom nhóm & tổng hợp (COUNT, SUM).'},{ic:'🎯',t:'WHERE',d:'Lọc theo điều kiện.'},
           {ic:'➕',t:'INSERT',d:'Thêm bản ghi mới.'},{ic:'♻️',t:'UPDATE',d:'Cập nhật bản ghi.'}]},
-        {note:'Khoá chính (primary key) định danh duy nhất; khoá ngoại (foreign key) liên kết bảng.'}]},
-      {ic:'📐',name:'Thiết kế & chuẩn hoá',rd:'ER & dạng chuẩn (1NF–3NF).',panel:[
+
+        {h:'1. SELECT — lấy dữ liệu từ bảng'},
+        {code:'SELECT cột1, cột2 FROM tên_bảng;\nSELECT * FROM tên_bảng;   -- lấy tất cả các cột'},
+        {p:'SELECT là lệnh nền tảng nhất trong SQL, dùng để đọc dữ liệu ra từ một hoặc nhiều bảng. Dấu * nghĩa là lấy toàn bộ cột, nhưng trong thực tế nên chỉ định rõ tên cột cần lấy: lấy dư cột không cần thiết làm chậm truy vấn và khó đọc code.'},
+        {code:'SELECT name, gpa FROM students;            -- tên và điểm trung bình\nSELECT name AS ten_sinh_vien FROM students;  -- AS: đổi tên cột hiển thị\nSELECT DISTINCT class_id FROM students;      -- DISTINCT: bỏ dòng trùng lặp'},
+        {note:'Lỗi thường gặp: quên dấu ; cuối câu lệnh; nhầm tên cột với tên bảng khi nhiều bảng có cột trùng tên.'},
+
+        {h:'2. JOIN — nối nhiều bảng theo khoá'},
+        {code:'SELECT a.cột, b.cột\nFROM bảng_a a\nJOIN bảng_b b ON a.khoá = b.khoá;'},
+        {p:'JOIN kết hợp dữ liệu từ hai bảng trở lên qua khoá ngoại. Đây là thao tác cốt lõi vì dữ liệu trong CSDL quan hệ luôn được tách ra nhiều bảng để tránh trùng lặp, nên gần như mọi truy vấn thực tế đều cần JOIN.'},
+        {ul:['INNER JOIN (mặc định khi chỉ viết JOIN): chỉ lấy những dòng khớp ở CẢ HAI bảng.','LEFT JOIN: lấy toàn bộ bảng bên trái, dòng không khớp ở bảng phải sẽ là NULL — dùng để tìm dữ liệu thiếu liên kết.','RIGHT JOIN: ngược lại LEFT JOIN, ít dùng vì viết lại được bằng LEFT JOIN.']},
+        {code:'SELECT s.name, c.subject_name\nFROM students s\nJOIN classes c ON s.class_id = c.id;'},
+        {note:'Lỗi thường gặp: quên mệnh đề ON khiến hai bảng nhân chéo (Cartesian product) — số dòng tăng vọt bất thường và dữ liệu vô nghĩa.'},
+
+        {h:'3. GROUP BY — gom nhóm & tổng hợp'},
+        {code:'SELECT class_id, COUNT(*) AS so_sinh_vien\nFROM students\nGROUP BY class_id;'},
+        {p:'GROUP BY gom các dòng có cùng giá trị ở một cột thành một nhóm, rồi áp dụng hàm tổng hợp (COUNT, SUM, AVG, MIN, MAX) lên từng nhóm. Đây là công cụ chính để làm thống kê, báo cáo.'},
+        {p:'Muốn lọc SAU khi đã nhóm thì dùng HAVING, không dùng WHERE:'},
+        {code:'SELECT class_id, COUNT(*) AS so_sv\nFROM students\nGROUP BY class_id\nHAVING COUNT(*) > 10;'},
+        {note:'Quy tắc bắt buộc: mọi cột trong SELECT mà không nằm trong hàm tổng hợp đều phải có mặt ở GROUP BY. Lỗi thường gặp: dùng WHERE thay HAVING để lọc theo kết quả tổng hợp — WHERE chạy TRƯỚC khi nhóm nên không lọc được theo COUNT().'},
+
+        {h:'4. WHERE — lọc theo điều kiện'},
+        {code:'SELECT name FROM students WHERE gpa >= 8.0 AND class_id = 3;'},
+        {p:'WHERE lọc ra những dòng thoả điều kiện, chạy trước khi dữ liệu được nhóm hay sắp xếp.'},
+        {ul:['So sánh: = != > < >= <=','BETWEEN x AND y — nằm trong khoảng','IN (a, b, c) — nằm trong danh sách giá trị','LIKE \'Nguyen%\' — tìm theo mẫu văn bản, % là ký tự đại diện','AND, OR — kết hợp nhiều điều kiện; nên đặt dấu ngoặc khi trộn cả hai']},
+        {note:'Lỗi thường gặp: quên ngoặc khi trộn AND/OR khiến điều kiện bị hiểu sai; dùng = để so sánh với NULL (phải viết IS NULL).'},
+
+        {h:'5. INSERT — thêm bản ghi mới'},
+        {code:'INSERT INTO students (name, class_id, gpa) VALUES (\'Nguyễn Văn A\', 3, 8.5);\n\n-- thêm nhiều dòng cùng lúc\nINSERT INTO students (name, class_id, gpa)\nVALUES (\'A\', 1, 7.5), (\'B\', 2, 9.0);'},
+        {p:'Nên luôn chỉ định rõ tên cột thay vì chỉ liệt kê giá trị, để tránh nhầm thứ tự khi cấu trúc bảng thay đổi sau này.'},
+        {note:'Lỗi thường gặp: số giá trị không khớp số cột đã liệt kê; vi phạm khoá chính (thêm trùng ID) hoặc khoá ngoại (class_id không tồn tại trong bảng classes).'},
+
+        {h:'6. UPDATE — cập nhật bản ghi'},
+        {code:'UPDATE students SET gpa = 9.2 WHERE id = 5;\n\n-- cập nhật nhiều cột cùng lúc\nUPDATE students SET gpa = 9.2, class_id = 4 WHERE id = 5;'},
+        {p:'Mệnh đề WHERE ở đây cực kỳ quan trọng: quên WHERE là cập nhật TOÀN BỘ bảng — một trong những lỗi gây hậu quả nặng nhất khi thao tác với CSDL thật.'},
+        {note:'Thói quen an toàn: chạy thử SELECT * FROM bảng WHERE điều_kiện; với đúng điều kiện đó trước, xem có lọc đúng những dòng mình muốn sửa không, rồi mới chạy UPDATE.'},
+
+        {note:'Khoá chính (primary key) định danh duy nhất mỗi dòng; khoá ngoại (foreign key) tham chiếu tới khoá chính của bảng khác — đây chính là cơ sở để JOIN hoạt động.'}]},
+
+      {ic:'📐',name:'Thiết kế & chuẩn hoá',rd:'1NF–3NF: định nghĩa, ví dụ vi phạm và cách sửa.',panel:[
         {h:'Chuẩn hoá dữ liệu'},
         {ol:['1NF — mỗi ô một giá trị nguyên tử','2NF — bỏ phụ thuộc một phần vào khoá','3NF — bỏ phụ thuộc bắc cầu']},
-        {note:'Chuẩn hoá giảm trùng lặp & bất nhất; đôi khi denormalize có chủ đích để tăng tốc đọc.'}]},
-      {ic:'🛡️',name:'Phòng SQL injection',rd:'Bảo mật truy vấn.',panel:[
+
+        {h:'1NF — mỗi ô một giá trị nguyên tử'},
+        {p:'Một bảng đạt 1NF khi mỗi ô dữ liệu chỉ chứa đúng một giá trị đơn, không gộp nhiều giá trị vào chung một cột.'},
+        {code:'-- ❌ VI PHẠM: một ô chứa 2 số điện thoại\nstudents(id, name, phone)\n1, "Nguyễn A", "0901111, 0902222"\n\n-- ✅ SỬA: tách thành bảng riêng, mỗi dòng 1 số\nstudents(id, name)\nstudent_phones(student_id, phone)'},
+
+        {h:'2NF — bỏ phụ thuộc một phần vào khoá'},
+        {p:'Chỉ áp dụng khi khoá chính gồm từ hai cột trở lên (khoá phức hợp). Bảng đạt 2NF khi mọi cột không phải khoá đều phụ thuộc vào TOÀN BỘ khoá chính, không phụ thuộc vào chỉ một phần của nó.'},
+        {code:'-- ❌ VI PHẠM: khoá chính là (student_id, class_id)\n-- nhưng student_name chỉ phụ thuộc student_id\nenrollments(student_id, class_id, student_name, semester)\n\n-- ✅ SỬA\nstudents(id, name)\nenrollments(student_id, class_id, semester)'},
+
+        {h:'3NF — bỏ phụ thuộc bắc cầu'},
+        {p:'Bảng đạt 3NF khi không có cột không-khoá nào phụ thuộc vào một cột không-khoá khác, thay vì phụ thuộc trực tiếp vào khoá chính.'},
+        {code:'-- ❌ VI PHẠM: class_teacher phụ thuộc class_id,\n-- không phụ thuộc trực tiếp vào id sinh viên\nstudents(id, class_id, class_teacher)\n\n-- ✅ SỬA\nstudents(id, class_id)\nclasses(id, teacher_name)'},
+
+        {note:'Chuẩn hoá giảm trùng lặp và tránh bất nhất dữ liệu (sửa tên giáo viên ở một dòng nhưng quên các dòng khác). Tuy nhiên với hệ thống cần đọc rất nhanh (dashboard thống kê truy vấn liên tục), người thiết kế đôi khi CỐ Ý denormalize — chấp nhận lưu trùng vài cột để giảm số JOIN, đánh đổi lấy tốc độ đọc. Đó là quyết định kỹ thuật có chủ đích, không phải lỗi thiết kế, và chỉ nên làm sau khi đã nắm chắc nguyên tắc chuẩn hoá.'}]},
+
+      {ic:'🛡️',name:'Phòng SQL injection',rd:'Vì sao nguy hiểm, cách chống, và lưu trữ mật khẩu đúng.',panel:[
         {h:'Chống SQL injection'},
+
+        {h:'Vì sao SQL injection nguy hiểm'},
+        {p:'SQL injection xảy ra khi ứng dụng ghép trực tiếp dữ liệu người dùng nhập vào chung với câu lệnh SQL dưới dạng chuỗi văn bản, thay vì tách biệt phần "câu lệnh" và phần "dữ liệu". Khi đó kẻ tấn công có thể chèn thêm cú pháp SQL vào ô nhập liệu để đổi hoàn toàn ý nghĩa câu lệnh — ví dụ khiến điều kiện đăng nhập luôn đúng bất kể mật khẩu, hoặc khiến câu lệnh trả về toàn bộ dữ liệu nhạy cảm thay vì một bản ghi. Đây là một trong những lỗ hổng phổ biến và nặng nhất với ứng dụng có kết nối CSDL, vì CSDL thường là nơi lưu thông tin nhạy cảm nhất của cả hệ thống.'},
+
+        {h:'Giải pháp chính: tách dữ liệu khỏi câu lệnh'},
+        {p:'Cách được cộng đồng bảo mật khuyến nghị là dùng câu lệnh tham số hoá (parameterized query, còn gọi là prepared statement): câu lệnh SQL viết với dấu giữ chỗ, dữ liệu người dùng truyền riêng cho driver CSDL xử lý. Nhờ vậy, dù đầu vào có chứa ký tự đặc biệt của SQL thì nó vẫn chỉ được hiểu là giá trị dữ liệu thuần tuý, không thể đổi cấu trúc câu lệnh gốc. Đây là lớp phòng thủ chính và mang tính bắt buộc, không phải tuỳ chọn.'},
+        {p:'Hầu hết công cụ ORM hiện đại (SQLAlchemy của Python, Prisma của Node.js…) đã tự dùng parameterized query ở tầng dưới, nên ưu tiên dùng ORM cũng là cách gián tiếp phòng injection — miễn là không tự ghép chuỗi SQL thô bên trong các phương thức của ORM.'},
+
+        {h:'Vì sao validate ở trình duyệt là không đủ'},
+        {p:'Nhiều người mới học lầm tưởng kiểm tra định dạng ở phía trình duyệt bằng JavaScript là đã an toàn. Thực ra validate ở client chỉ cải thiện trải nghiệm người dùng, không có giá trị bảo mật: kẻ tấn công hoàn toàn có thể gửi request thẳng tới server bằng Postman hay curl, bỏ qua toàn bộ giao diện. Mọi kiểm tra có ý nghĩa bảo mật đều BẮT BUỘC phải làm lại ở phía server, coi mọi dữ liệu gửi lên là không đáng tin cho tới khi được kiểm tra.'},
+
+        {h:'Nguyên tắc quyền tối thiểu (least privilege)'},
+        {p:'Ngay cả khi đã dùng parameterized query và validate đầy đủ, vẫn nên giới hạn quyền của tài khoản CSDL mà ứng dụng dùng để kết nối — chỉ cấp đúng quyền cần thiết (ví dụ đọc/ghi trên vài bảng nhất định) thay vì dùng tài khoản toàn quyền quản trị. Nguyên tắc này không ngăn được lỗ hổng, nhưng nếu lỗ hổng vẫn tồn tại thì nó giới hạn thiệt hại: kẻ tấn công không xoá được toàn bộ dữ liệu hay đọc được các bảng không liên quan.'},
+
+        {h:'Vì sao mật khẩu không được lưu dạng văn bản thường'},
+        {p:'Mật khẩu không bao giờ được lưu plaintext: nếu CSDL bị rò rỉ (dù qua injection hay cách khác) thì toàn bộ mật khẩu lộ ngay. Phải băm bằng thuật toán chuyên dụng như bcrypt hoặc argon2, kèm một giá trị ngẫu nhiên gọi là salt riêng cho mỗi người dùng để chống tấn công bằng bảng tra sẵn (rainbow table). Base64 KHÔNG phải mã hoá — nó giải ngược được dễ dàng nên không bảo vệ gì cả. Tương tự, không lưu mật khẩu hay thông tin nhạy cảm trong cookie, vì cookie có thể bị đánh cắp qua XSS.'},
+        {note:'Tìm hiểu thêm — OWASP Cheat Sheet: SQL Injection Prevention và Password Storage (cheatsheetseries.owasp.org), OWASP: SQL Injection (owasp.org/www-community/attacks/SQL_Injection).'},
+
+        {h:'Tự kiểm tra'},
         {mcq:[{q:'Cách hiệu quả nhất để chống SQL injection?',o:['Dùng prepared statement / tham số hoá truy vấn','Nối chuỗi trực tiếp dữ liệu người dùng','Tin tưởng mọi input','Ẩn thông báo lỗi'],a:0,fb:'Prepared statement tách dữ liệu khỏi câu lệnh — input không thể đổi cấu trúc truy vấn.'},
           {q:'Có nên lưu mật khẩu dạng văn bản thường (plaintext)?',o:['Không — phải băm bằng bcrypt/argon2 + salt','Có, cho tiện','Mã hoá base64 là đủ','Lưu trong cookie'],a:0,fb:'Mật khẩu phải được băm (hash) có salt; base64 KHÔNG phải mã hoá.'}]}]}],
     skills:['Viết SQL truy vấn','Thiết kế & chuẩn hoá CSDL','Bảo mật dữ liệu'],
@@ -925,19 +1194,52 @@ const SPACES_IT = {
       {q:'Phòng SQL injection tốt nhất bằng?',o:['Truy vấn tham số hoá (prepared statement)','Nối chuỗi input','Tắt log','Dùng tài khoản admin'],a:0}]},
 
   netlab:{emoji:'🌐',name:'Lab Mạng máy tính',accent:'#22d3ee',intro:'Mạng máy tính: mô hình OSI/TCP-IP, giao thức, địa chỉ IP và nền tảng bảo mật mạng.',
-    rooms:[{ic:'🧅',name:'Mô hình OSI',rd:'7 tầng & vai trò.',panel:[
+    // Nội dung chi tiết 3 phòng Lab Mạng do cô Chu Thi Hue soạn (req #130 · 02/08).
+    rooms:[{ic:'🧅',name:'Mô hình OSI',rd:'7 tầng, vai trò từng tầng và so sánh với TCP/IP.',panel:[
         {h:'7 tầng OSI (trên → dưới)'},
-        {ul:['7 Application — HTTP, DNS, SMTP','6 Presentation — mã hoá, nén','5 Session — phiên làm việc','4 Transport — TCP/UDP, cổng','3 Network — IP, định tuyến','2 Data Link — MAC, switch','1 Physical — tín hiệu, cáp']},
-        {note:'TCP đảm bảo thứ tự & tin cậy; UDP nhanh nhưng không đảm bảo (dùng cho streaming, game).'}]},
-      {ic:'🔌',name:'Giao thức & cổng',rd:'Lật thẻ giao thức ↔ cổng.',panel:[
-        {p:'Lật thẻ ôn giao thức và số cổng mặc định.'},
+        {p:'Mô hình OSI là khung lý thuyết chia quá trình truyền dữ liệu qua mạng thành 7 tầng độc lập, giúp hiểu và gỡ lỗi mạng một cách có hệ thống thay vì coi mạng là "hộp đen". Mẹo nhớ theo tiếng Anh: All People Seem To Need Data Processing.'},
+        {ul:['Tầng 7 Application — giao tiếp trực tiếp với người dùng/ứng dụng: HTTP, FTP, SMTP.','Tầng 6 Presentation — mã hoá, nén, định dạng dữ liệu: SSL/TLS, JPEG, ASCII.','Tầng 5 Session — thiết lập, duy trì, kết thúc phiên kết nối: login session, API session.','Tầng 4 Transport — đảm bảo dữ liệu đến đúng, đủ, đúng thứ tự: TCP, UDP.','Tầng 3 Network — định tuyến gói tin giữa các mạng: IP, router.','Tầng 2 Data Link — truyền dữ liệu giữa 2 thiết bị trong cùng mạng cục bộ: Ethernet, địa chỉ MAC, switch.','Tầng 1 Physical — truyền tín hiệu điện/quang/sóng: cáp, sóng Wi-Fi, cổng RJ45.']},
+        {h:'Hiểu theo luồng, đừng học vẹt tên tầng'},
+        {p:'Khi bạn gõ một địa chỉ web, dữ liệu đi từ Application (trình duyệt tạo yêu cầu HTTP), được đóng gói dần qua các tầng dưới, tới Physical thì biến thành tín hiệu điện gửi đi trên dây. Bên nhận làm ngược lại: từ tín hiệu điện tái tạo thành yêu cầu HTTP đọc được.'},
+        {h:'Hai tầng dân CNTT chạm vào nhiều nhất'},
+        {ul:['Tầng 3 (Network) và tầng 4 (Transport) — nơi IP, TCP, UDP và cổng hoạt động, liên quan trực tiếp tới lập trình mạng và bảo mật.','Tầng 1–2 thường do phần cứng và hệ điều hành lo; tầng 5–7 gần với logic ứng dụng lập trình viên viết hằng ngày.']},
+        {h:'OSI và TCP/IP khác nhau thế nào?'},
+        {p:'TCP/IP gộp 7 tầng OSI thành 4 tầng: Application, Transport, Internet, Network Access. OSI mang tính lý thuyết và giáo dục để hiểu khái niệm, còn TCP/IP mới là mô hình được triển khai thực tế trên Internet ngày nay.'},
+        {mcq:[{q:'Router chuyển gói tin giữa hai mạng khác nhau — hoạt động này chủ yếu ở tầng nào?',o:['Tầng 3 — Network','Tầng 2 — Data Link','Tầng 4 — Transport','Tầng 7 — Application'],a:0,fb:'Định tuyến gói tin giữa các mạng là nhiệm vụ của tầng Network (tầng 3), nơi giao thức IP làm việc.'}]},
+        {note:'TCP đảm bảo thứ tự & tin cậy; UDP nhanh nhưng không đảm bảo (dùng cho streaming, game). Tìm hiểu thêm: OSI Model Explained (Cloudflare Learning) và Internet 101 trên Khan Academy.'}]},
+
+      {ic:'🔌',name:'Giao thức & cổng',rd:'Vì sao cần cổng, 9 cổng phổ biến, dải cổng và TCP vs UDP.',panel:[
+        {p:'Giao thức là bộ quy tắc quy định cách hai thiết bị giao tiếp; cổng (port) là "địa chỉ phụ" giúp phân biệt nhiều dịch vụ mạng chạy trên cùng một địa chỉ IP.'},
+        {h:'Vì sao cần cổng, không chỉ địa chỉ IP?'},
+        {p:'Một máy chủ có thể chạy cùng lúc web server, mail server và nhiều dịch vụ khác trên cùng một IP. Cổng giúp hệ điều hành biết dữ liệu đến/đi thuộc dịch vụ nào — giống địa chỉ nhà (IP) và số phòng (port) trong một toà chung cư.'},
         {flash:[{e:'🌍',f:'HTTP',b:'Cổng 80 — web'},{e:'🔒',f:'HTTPS',b:'Cổng 443 — web mã hoá TLS'},
           {e:'📛',f:'DNS',b:'Cổng 53 — phân giải tên miền'},{e:'📁',f:'SSH',b:'Cổng 22 — truy cập từ xa an toàn'},
-          {e:'📧',f:'SMTP',b:'Cổng 25 — gửi email'},{e:'🖧',f:'DHCP',b:'Cấp IP động cho thiết bị'}]}]},
-      {ic:'🧮',name:'Địa chỉ IP & subnet',rd:'IPv4, mặt nạ mạng.',panel:[
+          {e:'📧',f:'SMTP',b:'Cổng 25 — gửi email'},{e:'🖧',f:'DHCP',b:'Cổng 67/68 — cấp IP động cho thiết bị'},
+          {e:'📤',f:'FTP',b:'Cổng 21 — truyền file'},{e:'🐬',f:'MySQL',b:'Cổng 3306 — kết nối CSDL MySQL'},
+          {e:'🐘',f:'PostgreSQL',b:'Cổng 5432 — kết nối CSDL PostgreSQL'}]},
+        {h:'Ba dải cổng'},
+        {ul:['0–1023: cổng nổi tiếng (well-known), dành cho dịch vụ chuẩn như HTTP, SSH.','1024–49151: cổng đã đăng ký (registered), dùng cho ứng dụng cụ thể.','49152–65535: cổng động/riêng tư, hệ điều hành tự cấp tạm cho kết nối phía client.']},
+        {h:'TCP và UDP — hai giao thức tầng Transport quan trọng nhất'},
+        {ul:['Đến đủ, đúng thứ tự — TCP: có · UDP: không.','Tốc độ — TCP chậm hơn vì phải xác nhận · UDP nhanh hơn.','Dùng cho — TCP: web, email, tải file (cần chính xác) · UDP: gọi video, game online (cần tốc độ, chấp nhận mất gói).']},
+        {note:'Tìm hiểu thêm: danh sách cổng chính thức của IANA và bài TCP vs UDP của Cloudflare Learning.'}]},
+
+      {ic:'🧮',name:'Địa chỉ IP & subnet',rd:'Cấu trúc IPv4, IP riêng/công cộng, subnet mask và cách tính số thiết bị.',panel:[
         {h:'Cơ bản về IP'},
+        {p:'Địa chỉ IP là định danh của một thiết bị trên mạng; subnet mask quy định phần nào của địa chỉ là "mạng" và phần nào là "thiết bị" trong mạng đó.'},
+        {h:'Cấu trúc địa chỉ IPv4'},
+        {p:'Gồm 4 nhóm số, mỗi nhóm 0–255, cách nhau bởi dấu chấm — ví dụ 192.168.1.10. Về bản chất đó là 32 bit nhị phân, viết dưới dạng thập phân cho dễ đọc.'},
+        {h:'Ba loại địa chỉ hay gặp'},
+        {ul:['Private (mạng nội bộ): 192.168.0.0–192.168.255.255 và 10.0.0.0–10.255.255.255 — dùng trong LAN, không định tuyến thẳng ra Internet.','Public: các dải còn lại do tổ chức quản lý IP toàn cầu cấp phát — định danh duy nhất trên Internet.','Loopback: 127.0.0.1 — máy tự gọi chính mình (localhost).']},
+        {h:'Subnet mask — vì sao phải chia mạng con?'},
+        {p:'Một tổ chức lớn không muốn mọi thiết bị nằm chung một mạng phẳng vì dễ nghẽn và khó quản lý bảo mật. Subnet mask chia một dải IP lớn thành nhiều mạng con nhỏ, mỗi mạng con quản lý độc lập.'},
+        {code:'IP        : 192.168.1.10\nSubnet    : 255.255.255.0   (viết gọn /24)\n            └─ 24 bit đầu (192.168.1) = phần MẠNG\n            └─ 8 bit cuối            = phần THIẾT BỊ\n→ tối đa 2^8 − 2 = 254 thiết bị'},
+        {h:'Công thức tính nhanh'},
+        {ul:['Số thiết bị tối đa = 2^(số bit phần thiết bị) − 2.','/24 → 8 bit thiết bị → 2^8 − 2 = 254 thiết bị.','/28 → 4 bit thiết bị → 2^4 − 2 = 14 thiết bị.','Trừ 2 vì phải dành riêng 1 địa chỉ mạng và 1 địa chỉ broadcast, không gán cho thiết bị thật.']},
+        {check:['Phân biệt được địa chỉ mạng, địa chỉ broadcast và địa chỉ gán được cho thiết bị','Tính được số thiết bị tối đa từ ký hiệu CIDR (/24, /28…)','Biết hai địa chỉ nào trong một dải không bao giờ gán cho thiết bị thật']},
         {mcq:[{q:'Địa chỉ IPv4 192.168.1.10 thuộc loại?',o:['IP riêng (private) — dùng trong mạng nội bộ','IP công cộng toàn cầu','Địa chỉ MAC','Tên miền'],a:0,fb:'Dải 192.168.x.x là IP riêng (RFC 1918), không định tuyến trực tiếp ra Internet.'},
-          {q:'Giao thức nào đảm bảo truyền tin cậy, đúng thứ tự?',o:['TCP','UDP','ICMP','ARP'],a:0,fb:'TCP có bắt tay 3 bước, đánh số & truyền lại gói mất — đảm bảo tin cậy.'}]}]}],
+          {q:'Giao thức nào đảm bảo truyền tin cậy, đúng thứ tự?',o:['TCP','UDP','ICMP','ARP'],a:0,fb:'TCP có bắt tay 3 bước, đánh số & truyền lại gói mất — đảm bảo tin cậy.'},
+          {q:'Mạng 10.0.0.5/28 có tối đa bao nhiêu thiết bị?',o:['14','16','30','254'],a:0,fb:'/28 để lại 4 bit cho phần thiết bị: 2^4 − 2 = 14 (trừ địa chỉ mạng 10.0.0.0 và broadcast 10.0.0.15).'}]},
+        {note:'Tìm hiểu thêm: subnet-calculator.com để luyện chia mạng con, và khoá IP Addressing & Subnetting của Cisco Networking Academy.'}]}],
     skills:['Hiểu mô hình OSI/TCP-IP','Giao thức & cổng','Cơ bản địa chỉ IP'],
     quiz:[{q:'HTTPS dùng cổng mặc định nào?',o:['443','80','21','25'],a:0},
       {q:'Giao thức nào phân giải tên miền thành IP?',o:['DNS','FTP','SMTP','SSH'],a:0},
@@ -971,29 +1273,76 @@ const SPACES_IT = {
       {q:'Chỉ được kiểm thử xâm nhập (pentest) khi?',o:['Có sự cho phép/hợp đồng rõ ràng','Bất cứ lúc nào','Khi tò mò','Khi không ai biết'],a:0}]},
 
   ailab:{emoji:'🤖',name:'Lab AI & Machine Learning',accent:'#a78bfa',intro:'Trí tuệ nhân tạo và học máy: quy trình ML, học có giám sát/không giám sát, overfitting và mạng nơ-ron.',
-    rooms:[{ic:'🔁',name:'Quy trình ML',rd:'Các bước xây dựng mô hình.',panel:[
+    // Nội dung chi tiết 4 phòng Lab AI do cô Chu Thi Hue soạn (req #129 · 02/08).
+    rooms:[{ic:'🔁',name:'Quy trình ML',rd:'6 bước xây dựng mô hình, vì sao phải chia 3 tập dữ liệu.',panel:[
         {h:'Pipeline học máy điển hình'},
-        {timeline:[{t:'Thu thập & làm sạch dữ liệu',d:'Xử lý thiếu/nhiễu, chuẩn hoá đặc trưng.'},
-          {t:'Chia tập',d:'Train / validation / test.'},
-          {t:'Huấn luyện',d:'Chọn mô hình & tối ưu tham số.'},
-          {t:'Đánh giá',d:'Accuracy, precision/recall, F1, AUC.'},
-          {t:'Triển khai & theo dõi',d:'Đưa vào sản phẩm, giám sát trôi dữ liệu.'}]}]},
-      {ic:'🧩',name:'Các kiểu học',rd:'Giám sát vs không giám sát.',panel:[
+        {p:'Quy trình Machine Learning là chuỗi các bước có thứ tự để biến dữ liệu thô thành một mô hình biết dự đoán hoặc phân loại — không phải chỉ đơn thuần "chạy thuật toán".'},
+        {timeline:[{t:'1. Thu thập dữ liệu',d:'Lấy dữ liệu từ nguồn thực tế: CSDL, cảm biến, khảo sát…'},
+          {t:'2. Tiền xử lý dữ liệu',d:'Làm sạch dữ liệu thiếu/lỗi, chuẩn hoá định dạng, mã hoá dữ liệu dạng chữ thành số.'},
+          {t:'3. Chia tập dữ liệu',d:'Tách thành tập huấn luyện (train), kiểm định (validation) và kiểm tra (test).'},
+          {t:'4. Huấn luyện mô hình',d:'Cho mô hình học từ tập train bằng thuật toán đã chọn.'},
+          {t:'5. Đánh giá mô hình',d:'Đo hiệu quả trên tập test bằng accuracy, precision, recall…'},
+          {t:'6. Triển khai & giám sát',d:'Đưa vào dùng thực tế, theo dõi hiệu suất theo thời gian.'}]},
+        {h:'Vì sao phải chia 3 tập, không chỉ 1?'},
+        {ul:['Train set: mô hình học trực tiếp từ đây.','Validation set: dùng để tinh chỉnh mô hình (chọn siêu tham số) mà không "nhìn trộm" đáp án của tập test.','Test set: chỉ dùng MỘT LẦN cuối cùng để đánh giá khách quan. Nếu mô hình đã "nhìn thấy" tập test lúc huấn luyện thì kết quả đánh giá không còn đáng tin.']},
+        {note:'Tỷ lệ chia phổ biến: 70% train – 15% validation – 15% test, hoặc 80/10/10 tuỳ quy mô dữ liệu.'},
+        {h:'Hai lỗi người mới hay mắc'},
+        {ul:['Bỏ qua bước tiền xử lý, đưa thẳng dữ liệu thô vào mô hình → kết quả kém mà không hiểu vì sao.','Đánh giá mô hình trên chính tập đã dùng để huấn luyện → cho kết quả ảo, không phản ánh thực tế.']},
+        {order:{title:'Sắp xếp đúng thứ tự 6 bước xây dựng mô hình',items:['Thu thập dữ liệu','Tiền xử lý dữ liệu','Chia tập train / validation / test','Huấn luyện mô hình','Đánh giá mô hình trên tập test','Triển khai & giám sát']}},
+        {note:'Tìm hiểu thêm: Machine Learning Crash Course của Google (developers.google.com/machine-learning/crash-course) và tài liệu cross-validation của scikit-learn.'}]},
+
+      {ic:'🧩',name:'Các kiểu học',rd:'Có giám sát, không giám sát, tăng cường — khác nhau ở đâu.',panel:[
         {h:'Phân loại bài toán ML'},
+        {p:'Cách phân loại bài toán Machine Learning dựa trên việc dữ liệu huấn luyện có kèm "đáp án đúng" hay không.'},
         {cards:[{ic:'🏷️',t:'Có giám sát',d:'Dữ liệu có nhãn — phân loại, hồi quy.'},
           {ic:'🔍',t:'Không giám sát',d:'Không nhãn — phân cụm, giảm chiều.'},
           {ic:'🎮',t:'Tăng cường',d:'Học qua thưởng/phạt (agent).'},
           {ic:'🧠',t:'Học sâu',d:'Mạng nơ-ron nhiều lớp (ảnh, NLP).'}]},
-        {mcq:[{q:'Dự đoán giá nhà (số liên tục) là bài toán?',o:['Hồi quy (regression)','Phân loại','Phân cụm','Giảm chiều'],a:0,fb:'Đầu ra liên tục → hồi quy; đầu ra nhãn rời rạc → phân loại.'}]}]},
-      {ic:'⚠️',name:'Overfitting',rd:'Khi mô hình học vẹt.',panel:[
+        {h:'A. Học có giám sát (Supervised Learning)'},
+        {p:'Dữ liệu huấn luyện đi kèm nhãn — tức đáp án đúng đã biết trước. Mô hình học cách ánh xạ từ đầu vào đến đầu ra dựa trên các ví dụ đã có nhãn.'},
+        {ul:['Phân loại (classification): đầu ra là nhãn rời rạc — ví dụ email là "spam" hay "không spam".','Hồi quy (regression): đầu ra là giá trị số liên tục — ví dụ dự đoán giá nhà theo diện tích.']},
+        {h:'B. Học không giám sát (Unsupervised Learning)'},
+        {p:'Dữ liệu KHÔNG có nhãn — mô hình tự tìm cấu trúc, quy luật ẩn mà không được cho biết trước đáp án.'},
+        {ul:['Phân cụm (clustering): gom các điểm dữ liệu giống nhau — ví dụ phân nhóm khách hàng theo hành vi mua sắm mà không biết trước có bao nhiêu nhóm.','Giảm chiều (dimensionality reduction): rút gọn số đặc trưng mà vẫn giữ được thông tin quan trọng nhất.']},
+        {h:'So sánh nhanh'},
+        {ul:['Dữ liệu cần — có giám sát: có nhãn · không giám sát: không cần nhãn.','Mục tiêu — có giám sát: dự đoán đầu ra chính xác · không giám sát: tìm cấu trúc ẩn.','Thuật toán tiêu biểu — có giám sát: Linear Regression, Decision Tree · không giám sát: K-Means, PCA.','Ứng dụng — có giám sát: nhận diện ảnh, dự đoán giá · không giám sát: phân khúc khách hàng.']},
+        {h:'C. Học tăng cường (Reinforcement Learning)'},
+        {p:'Kiểu học thứ ba: mô hình (agent) học bằng cách tương tác với môi trường, nhận thưởng hoặc phạt theo hành động, thay vì học từ dữ liệu có sẵn — ví dụ AI chơi cờ vây, xe tự lái.'},
+        {match:{title:'Xếp mỗi tình huống vào đúng kiểu học',pairs:[['Dự đoán thời tiết ngày mai','Có giám sát — hồi quy'],['Gom nhóm bài báo theo chủ đề','Không giám sát — phân cụm'],['Nhận diện chữ viết tay','Có giám sát — phân loại'],['Gợi ý sản phẩm từ hành vi chưa gắn nhãn','Không giám sát'],['AI học chơi cờ qua thắng thua','Học tăng cường']]}},
+        {mcq:[{q:'Dự đoán giá nhà (số liên tục) là bài toán?',o:['Hồi quy (regression)','Phân loại','Phân cụm','Giảm chiều'],a:0,fb:'Đầu ra liên tục → hồi quy; đầu ra nhãn rời rạc → phân loại.'}]},
+        {note:'Tìm hiểu thêm: Supervised vs Unsupervised Learning (ibm.com/topics/supervised-learning) và Google ML Glossary.'}]},
+
+      {ic:'⚠️',name:'Overfitting',rd:'Dấu hiệu, nguyên nhân, 5 cách khắc phục và phân biệt với underfitting.',panel:[
         {h:'Quá khớp (overfitting)'},
-        {ul:['Dấu hiệu: rất tốt trên train nhưng kém trên test','Khắc phục: thêm dữ liệu, regularization (L1/L2), dropout','Dùng cross-validation để đánh giá khách quan','Đơn giản hoá mô hình nếu cần']},
-        {note:'Mục tiêu là TỔNG QUÁT HOÁ — đoán tốt trên dữ liệu CHƯA TỪNG thấy.'}]},
-      {ic:'🧠',name:'Mạng nơ-ron',rd:'Lật thẻ khái niệm.',panel:[
-        {p:'Lật thẻ ôn khái niệm mạng nơ-ron.'},
+        {p:'Overfitting là khi mô hình học quá chi tiết, thuộc cả nhiễu và đặc điểm ngẫu nhiên của tập huấn luyện, nên chạy tốt trên dữ liệu đã học nhưng kém trên dữ liệu mới.'},
+        {p:'Giống một học sinh học vẹt để làm đúng y hệt 10 bài tập mẫu trong sách, nhưng gặp bài mới cùng dạng với số liệu khác thì không giải được — vì không thực sự hiểu bản chất, chỉ nhớ đáp án cụ thể.'},
+        {h:'Dấu hiệu nhận biết'},
+        {ul:['Độ chính xác trên tập train rất cao, gần 100%.','Độ chính xác trên tập test/validation thấp hơn đáng kể.','Khoảng cách giữa hai chỉ số càng lớn thì mô hình càng "học vẹt".']},
+        {h:'Nguyên nhân phổ biến'},
+        {ul:['Mô hình quá phức tạp so với lượng dữ liệu có (quá nhiều tham số).','Huấn luyện quá nhiều vòng lặp (epoch) trên cùng một tập dữ liệu nhỏ.','Dữ liệu huấn luyện có nhiễu nhưng không được xử lý.']},
+        {h:'Năm kỹ thuật khắc phục'},
+        {cards:[{ic:'📚',t:'Thêm dữ liệu huấn luyện',d:'Dữ liệu đa dạng hơn thì mô hình khó học thuộc.'},
+          {ic:'⚖️',t:'Regularization (L1/L2)',d:'Phạt trọng số quá lớn, ép mô hình đơn giản hơn.'},
+          {ic:'🎲',t:'Dropout',d:'Ngẫu nhiên tắt một số nơ-ron khi huấn luyện, tránh phụ thuộc vào một đường dẫn.'},
+          {ic:'⏹️',t:'Early stopping',d:'Dừng khi hiệu suất trên validation bắt đầu giảm, dù train vẫn đang cải thiện.'},
+          {ic:'🔄',t:'Cross-validation',d:'Đánh giá trên nhiều cách chia dữ liệu để có kết quả đáng tin hơn.'}]},
+        {note:'Ngược lại là UNDERFITTING: mô hình quá đơn giản, không học nổi cả quy luật trong tập train — biểu hiện là độ chính xác thấp ở CẢ train lẫn test. Overfitting: train cao, test thấp. Underfitting: cả hai đều thấp.'},
+        {mcq:[{q:'Learning curve cho thấy train 99% nhưng validation chỉ 62%. Đây là hiện tượng gì?',o:['Overfitting','Underfitting','Mô hình vừa khớp','Thiếu dữ liệu test'],a:0,fb:'Khoảng cách lớn giữa train và validation là dấu hiệu kinh điển của overfitting.'},
+          {q:'Cả train lẫn test đều chỉ đạt 55%. Đây là?',o:['Underfitting','Overfitting','Mô hình tốt','Lỗi chia tập'],a:0,fb:'Kém ở cả hai tập nghĩa là mô hình chưa học đủ — underfitting.'}]},
+        {note:'Mục tiêu cuối cùng là TỔNG QUÁT HOÁ — đoán tốt trên dữ liệu CHƯA TỪNG thấy. Tìm hiểu thêm: Overfitting and Underfitting trong Google ML Crash Course.'}]},
+
+      {ic:'🧠',name:'Mạng nơ-ron',rd:'12 thuật ngữ lõi + luồng hoạt động và vì sao gọi là học sâu.',panel:[
+        {p:'Mạng nơ-ron nhân tạo là mô hình học máy mô phỏng cách các nơ-ron sinh học kết nối và truyền tín hiệu, gồm nhiều lớp xử lý dữ liệu tuần tự.'},
         {flash:[{e:'⚖️',f:'Trọng số (weight)',b:'Tham số mô hình học được'},{e:'📈',f:'Hàm kích hoạt',b:'ReLU, sigmoid — thêm phi tuyến'},
           {e:'📉',f:'Hàm mất mát',b:'Đo sai số dự đoán so với thực tế'},{e:'🔙',f:'Backpropagation',b:'Lan truyền ngược để cập nhật trọng số'},
-          {e:'🎚️',f:'Learning rate',b:'Tốc độ cập nhật trọng số'},{e:'🧱',f:'Epoch',b:'Một lượt duyệt toàn bộ dữ liệu train'}]}]}],
+          {e:'🎚️',f:'Learning rate',b:'Tốc độ cập nhật trọng số'},{e:'🧱',f:'Epoch',b:'Một lượt duyệt toàn bộ dữ liệu train'}]},
+        {h:'12 thuật ngữ lõi'},
+        {ul:['Neuron (nơ-ron): đơn vị tính toán cơ bản — nhận nhiều đầu vào, tính tổng có trọng số rồi đưa qua hàm kích hoạt.','Layer (lớp): tập hợp các nơ-ron xử lý song song ở cùng một tầng.','Input layer: lớp đầu tiên, nhận dữ liệu thô.','Hidden layer: các lớp trung gian, nơi mạng học các đặc trưng trừu tượng dần.','Output layer: lớp cuối, cho ra kết quả dự đoán.','Weight (trọng số): hệ số nhân với mỗi đầu vào, được điều chỉnh trong quá trình học.','Bias: hệ số cộng thêm, giúp mô hình linh hoạt hơn khi khớp dữ liệu.','Activation function: hàm phi tuyến áp lên tổng có trọng số, giúp mạng học được quan hệ phức tạp (ReLU, Sigmoid).','Forward propagation: dữ liệu đi từ input qua các lớp để tạo ra output.','Backpropagation: lan truyền ngược sai số để cập nhật trọng số — chính là lúc mạng "học".','Loss function: đo mức sai lệch giữa dự đoán và đáp án đúng.','Epoch: một lượt mô hình học qua toàn bộ tập huấn luyện.']},
+        {h:'Luồng hoạt động tổng quát'},
+        {p:'Dữ liệu vào từ input layer, qua các hidden layer để trích xuất đặc trưng ngày càng trừu tượng, tới output layer cho ra kết quả. Sau đó loss function tính độ sai lệch, backpropagation lan truyền sai số ngược lại để chỉnh trọng số — lặp lại nhiều epoch cho tới khi đạt độ chính xác mong muốn.'},
+        {h:'Vì sao gọi là "học sâu"?'},
+        {p:'Khi mạng có nhiều hidden layer thì gọi là mạng nơ-ron sâu, mỗi lớp học một mức trừu tượng cao hơn lớp trước. Ví dụ trong nhận diện ảnh: lớp đầu học cạnh và đường viền, lớp giữa học hình dạng, lớp sau học khái niệm như "mắt", "khuôn mặt".'},
+        {note:'Tìm hiểu thêm: loạt bài Neural Networks trực quan của 3Blue1Brown và khoá Neural Networks and Deep Learning (deeplearning.ai).'}]}],
     skills:['Hiểu quy trình ML','Phân biệt kiểu học','Tránh overfitting'],
     quiz:[{q:'Học có giám sát (supervised) cần?',o:['Dữ liệu có nhãn','Không cần dữ liệu','Chỉ phần thưởng','Không nhãn'],a:0},
       {q:'Overfitting là khi mô hình?',o:['Tốt trên train nhưng kém trên dữ liệu mới','Kém trên cả train lẫn test','Luôn hoàn hảo','Không học được gì'],a:0},
@@ -1106,7 +1455,8 @@ const SPACES_IT = {
       {q:'Chuỗi ngày học (streak) khuyến khích thói quen?',o:['Học/code đều mỗi ngày','Học 1 lần/tháng','Bỏ học','Học ngẫu nhiên'],a:0}]},
 
   museum:{emoji:'🖥️',name:'Bảo tàng Công nghệ',accent:'#9aa6b2',intro:'Lịch sử ngành máy tính và những con người đặt nền móng cho công nghệ thông tin.',
-    rooms:[{ic:'🏛️',name:'Lịch sử máy tính',rd:'Dòng thời gian các cột mốc.',panel:[
+    rooms:[{ic:'🚀',name:'Khám phá Bảo tàng đầy đủ',rd:'Trục tiến trình phát triển · thành tựu đột phá · thuật ngữ mới · case study thực tế (req #92/#93).',href:'/bao-tang-cong-nghe.html?domain=it'},
+      {ic:'🏛️',name:'Lịch sử máy tính',rd:'Dòng thời gian các cột mốc.',panel:[
         {h:'Dòng thời gian máy tính'},
         {timeline:[{t:'1843 — Ada Lovelace',d:'Thuật toán đầu tiên cho máy của Babbage.'},
           {t:'1936 — Alan Turing',d:'Máy Turing — nền tảng lý thuyết tính toán.'},
@@ -1446,6 +1796,15 @@ const SPACES_PRESCHOOL = {
     rooms:[
       {ic:'🔢',name:'Làm quen Toán · Đếm & Màu',rd:'Đếm 1–5 và nhận biết màu sắc qua đồ vật.',
         href:'/module.html?domain=preschool&module=N1'},
+      // 4 lĩnh vực phát triển còn lại (TT 51/2020) — mỗi thẻ mở module đầy đủ.
+      {ic:'🤸',name:'Phát triển thể chất',rd:'Vận động, ăn ngủ vệ sinh, giữ an toàn.',
+        href:'/module.html?domain=preschool&module=N1TC'},
+      {ic:'🗣️',name:'Phát triển ngôn ngữ',rd:'Chào hỏi, gọi tên đồ vật, nghe kể chuyện.',
+        href:'/module.html?domain=preschool&module=N1NN'},
+      {ic:'😊',name:'Tình cảm – Xã hội',rd:'Nhận biết cảm xúc, lễ phép, chơi cùng bạn.',
+        href:'/module.html?domain=preschool&module=N1TX'},
+      {ic:'🎨',name:'Phát triển thẩm mỹ',rd:'Hát, tô màu, tập tạo hình cùng cô.',
+        href:'/module.html?domain=preschool&module=N1TM'},
       {ic:'🃏',name:'Lật thẻ con vật',rd:'Bé bấm thẻ để gọi tên con vật.',panel:[
         {p:'Bấm vào thẻ để xem tên con vật và bé bắt chước tiếng kêu của chúng nhé!'},
         {flash:[{e:'🐶',f:'Con chó',b:'Kêu "gâu gâu"'},{e:'🐱',f:'Con mèo',b:'Kêu "meo meo"'},{e:'🐤',f:'Gà con',b:'Kêu "chiếp chiếp"'},{e:'🦆',f:'Con vịt',b:'Kêu "cạp cạp"'},{e:'🐰',f:'Con thỏ',b:'Có hai tai dài'},{e:'🐢',f:'Con rùa',b:'Bò chậm rãi'}]}]},
@@ -1490,6 +1849,15 @@ const SPACES_PRESCHOOL = {
     rooms:[
       {ic:'🔟',name:'Đếm tới 10 & Hình khối',rd:'Đếm tới 10 và nhận biết các hình cơ bản.',
         href:'/module.html?domain=preschool&module=N2'},
+      // 4 lĩnh vực phát triển còn lại (TT 51/2020) — mỗi thẻ mở module đầy đủ.
+      {ic:'🤾',name:'Phát triển thể chất',rd:'Khéo tay, thăng bằng, dinh dưỡng, an toàn.',
+        href:'/module.html?domain=preschool&module=N2TC'},
+      {ic:'📖',name:'Phát triển ngôn ngữ',rd:'Kể chuyện theo tranh, làm quen âm chữ cái.',
+        href:'/module.html?domain=preschool&module=N2NN'},
+      {ic:'🤝',name:'Tình cảm – Xã hội',rd:'Chia sẻ, hợp tác nhóm, yêu gia đình.',
+        href:'/module.html?domain=preschool&module=N2TX'},
+      {ic:'🖌️',name:'Phát triển thẩm mỹ',rd:'Vẽ, pha màu, nhận biết nhạc cụ, nhịp điệu.',
+        href:'/module.html?domain=preschool&module=N2TM'},
       {ic:'⭕',name:'Lật thẻ hình khối',rd:'Bé bấm để gọi tên hình.',panel:[
         {flash:[{e:'⭕',f:'Hình tròn',b:'Quả bóng, ông mặt trời'},{e:'⬛',f:'Hình vuông',b:'Quân xúc xắc, bánh chưng'},{e:'🔺',f:'Hình tam giác',b:'Cái nón, miếng dưa hấu'},{e:'⭐',f:'Ngôi sao',b:'Trên lá cờ Tổ quốc'},{e:'❤️',f:'Trái tim',b:'Yêu thương cô và bạn'}]},
         {note:'Bé tìm thử quanh lớp xem có đồ vật nào giống các hình này không.'}]},
@@ -1530,6 +1898,15 @@ const SPACES_PRESCHOOL = {
     rooms:[
       {ic:'🎒',name:'Sẵn sàng vào lớp 1 · Toán',rd:'So sánh nhiều/ít, đếm tới 20, ghép số với số lượng.',
         href:'/module.html?domain=preschool&module=N3'},
+      // 4 lĩnh vực phát triển còn lại (TT 51/2020) — mỗi thẻ mở module đầy đủ.
+      {ic:'🚦',name:'Phát triển thể chất',rd:'Vận động phối hợp, cầm bút, an toàn giao thông.',
+        href:'/module.html?domain=preschool&module=N3TC'},
+      {ic:'📚',name:'Phát triển ngôn ngữ',rd:'29 chữ cái, ghép vần, đọc thơ, kể chuyện.',
+        href:'/module.html?domain=preschool&module=N3NN'},
+      {ic:'🇻🇳',name:'Tình cảm – Xã hội',rd:'Giải quyết xung đột, tự hào Việt Nam, vào lớp 1.',
+        href:'/module.html?domain=preschool&module=N3TX'},
+      {ic:'🎭',name:'Phát triển thẩm mỹ',rd:'Biểu diễn tự tin, cảm nhận dân ca Việt Nam.',
+        href:'/module.html?domain=preschool&module=N3TM'},
       {ic:'✏️',name:'Tập tô chữ & số',rd:'Bé tập cầm bút và tô theo nét.',panel:[
         {h:'Bé cầm bút đúng cách'},
         {ol:['Cầm bút bằng 3 ngón tay (cái – trỏ – giữa)','Đặt tay nhẹ trên bàn, lưng thẳng','Tô từ trên xuống, từ trái sang phải','Tô chậm theo nét đứt rồi đậm dần']},
@@ -1721,7 +2098,6 @@ const SPACES_DRIVING = {
     intro:'Nơi học 600 câu lý thuyết Luật giao thông đường bộ theo Bộ GTVT. Có chế độ luyện + thi thử.',
     rooms:[
       {ic:'📖',name:'600 câu lý thuyết B1/B2',rd:'Luyện theo chương: khái niệm, văn hoá, kỹ thuật, biển báo, sa hình, cấu tạo. Đánh dấu CÂU LIỆT.',href:'/luat-giao-thong-600.html'},
-      {ic:'🧠',name:'AI Quiz tình huống',rd:'AI sinh tình huống thực tế: đi đường mưa, qua đường sắt, gặp xe ưu tiên… Giải thích lý do.',href:'/ai-quiz-gen.html?topic=driving'},
       {ic:'🎓',name:'Học Lái xe thông minh',rd:'Cổng vào nhanh các hoạt động học lý thuyết + biển báo + tình huống.',href:'/hoc-thong-minh.html?subject=driving'},
     ],
     skills:['Hiểu khái niệm cơ bản','Quy tắc nhường đường','Văn hoá lái xe an toàn'],

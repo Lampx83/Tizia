@@ -1,6 +1,7 @@
 // Engagement HUD — Streak · Hearts · Daily Quests (Trục A — Duolingo/Prodigy)
 // Auto-mount floating top-right. Tự ẩn cho guest (401). Mọi trang chỉ cần
 // import module này 1 lần (auth-header.js đã import sẵn).
+import { fetchMe } from './auth.js';
 
 const API = {
   state:  '/api/engagement/state',
@@ -286,6 +287,8 @@ class EngagementHUD {
 
   async refresh(silent = false) {
     try {
+      // Khách: không gọi API của tài khoản (chỉ ra 401 đỏ console), ẩn HUD luôn.
+      if (!(await fetchMe())) { this.hud.hidden = true; return; }
       const [stateRes, leagueRes] = await Promise.all([
         fetch(API.state,  { credentials: 'same-origin' }),
         fetch(API.league, { credentials: 'same-origin' }).catch(() => null),
@@ -325,8 +328,11 @@ class EngagementHUD {
     } else {
       leagueEl.hidden = true;
     }
-    // Streak
-    this.hud.querySelector('.tz-eng-streak .num').textContent = s.streak;
+    // Streak — ẩn HẲN nếu trường của user không áp streak (ĐH/nghề, xem
+    // isStreakEnabledForDomain ở server). Chỉ phổ thông + mầm non mới có 🔥.
+    const streakEl = this.hud.querySelector('.tz-eng-streak');
+    streakEl.hidden = !!s.streak_hidden;
+    if (!s.streak_hidden) streakEl.querySelector('.num').textContent = s.streak;
     // Hearts dot row
     const h = this.hud.querySelector('[data-h]');
     h.innerHTML = '';
@@ -353,8 +359,11 @@ class EngagementHUD {
     const badge = this.hud.querySelector('.tz-eng-quests .badge');
     badge.textContent = claimable > 0 ? `!${claimable}` : remaining;
 
-    // Drawer body
-    this.drawer.querySelector('[data-streak]').textContent = s.streak;
+    // Drawer body — cùng luật: ẩn dòng streak nếu trường không áp streak.
+    const dStreak = this.drawer.querySelector('[data-streak]');
+    dStreak.textContent = s.streak;
+    const dStreakRow = dStreak.closest('span') || dStreak.parentElement;
+    if (dStreakRow) dStreakRow.hidden = !!s.streak_hidden;
     this.drawer.querySelector('[data-longest]').textContent = s.longestStreak;
     this.drawer.querySelector('[data-hearts]').textContent = `${s.hearts}/${s.heartsMax}`;
     const wrap = this.drawer.querySelector('[data-quests]');

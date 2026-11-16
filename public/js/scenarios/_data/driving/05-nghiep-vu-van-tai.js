@@ -341,5 +341,33 @@ export const ITEMS = [
     ],
     a: 0,
     ex: 'Tuyệt đối nghiêm cấm lái xe khi trong cơ thể có nồng độ cồn hoặc đã sử dụng ma tuý, chất kích thích bị cấm — đây là hành vi gây nguy hiểm nghiêm trọng và bị xử lý nặng.'
+  },
+
+  // ===== BỔ SUNG — CHỞ NGƯỜI / AN TOÀN HÀNH KHÁCH (bộ 600 câu, req #29/#33/#34) =====
+  {
+    t: 'Hàng hoá - hành khách',
+    c: false,
+    q: 'Việc chở người trên thùng xe ô tô tải được quy định như thế nào?',
+    o: [
+      'Không được chở người trên thùng xe, trừ những trường hợp được pháp luật cho phép',
+      'Được chở thoải mái nếu thùng rộng',
+      'Chỉ cấm chở người trên thùng xe vào ban đêm',
+      'Tuỳ người lái xe quyết định'
+    ],
+    a: 0,
+    ex: 'Cấm chở người trên thùng xe tải, trừ các trường hợp đặc biệt do pháp luật quy định (người áp tải hàng, lực lượng làm nhiệm vụ, cứu hộ, cứu nạn...).'
+  },
+  {
+    t: 'Hàng hoá - hành khách',
+    c: false,
+    q: 'Để bảo đảm an toàn khi chở trẻ em nhỏ trên ô tô, người lái xe nên làm gì?',
+    o: [
+      'Sử dụng thiết bị an toàn (ghế trẻ em) phù hợp và không để trẻ nhỏ ngồi một mình ở hàng ghế trước',
+      'Bế trẻ trên tay khi ngồi ghế trước',
+      'Để trẻ tự do đứng, đi lại trong xe khi đang chạy',
+      'Cho trẻ thò đầu, tay ra ngoài cửa sổ cho thoáng'
+    ],
+    a: 0,
+    ex: 'Trẻ nhỏ cần dùng ghế/thiết bị an toàn phù hợp, không nên ngồi ghế trước một mình; tuyệt đối không bế trẻ khi xe chạy hay để trẻ thò người ra ngoài.'
   }
 ];

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tizia · Thực hành nghiệp vụ nhà thuốc GPP</title>
+<meta name="description" content="Mô phỏng 2D thực hành 4 nghiệp vụ nhà thuốc đạt chuẩn GPP: nhận biết & phân loại, kiểm nhập, bảo quản – sắp xếp, kiểm kê & thu hồi. Đề tài NCKH Trường CĐ Y tế Hà Nội.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AA%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0e1626; --ink:#e6edf7; --muted:#93a3bd;
+    --line:#22304c; --brand:#16a34a; --brand2:#0ea5a4; --accent:#38bdf8;
+    --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+    --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%, #16304a 0%, var(--bg) 55%);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;line-height:1.55}
+  .topbar{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);
+    background:rgba(10,16,30,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+  .topbar .logo{font-weight:800;font-size:18px;letter-spacing:.2px}
+  .topbar .badge{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:3px 10px;border-radius:999px}
+  .wrap{max-width:920px;margin:0 auto;padding:22px 18px 60px}
+  h2{font-size:22px;margin:.2em 0}
+  h3{margin:.3em 0}
+  .muted{color:var(--muted)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+  .enroll{max-width:480px;margin:24px auto}
+  .form{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .form input,.form select{background:#0b1424;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px 14px;font-size:15px;outline:none}
+  .form input:focus,.form select:focus{border-color:var(--brand2)}
+  .btn{cursor:pointer;border:none;border-radius:11px;padding:11px 18px;font-size:15px;font-weight:600;color:#fff;background:#1f2b45;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{filter:brightness(1.1)}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .btn.ai{background:linear-gradient(135deg,#7c3aed,#2563eb)}
+  .btn.small{padding:7px 12px;font-size:13px}
+  .err{color:#fda4af;font-size:13px;min-height:16px}
+  .hero{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:linear-gradient(120deg,#132339,#0e1a2c);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:8px}
+  .section-title{font-weight:700;margin:22px 2px 10px;font-size:15px;color:#cdd8ec}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .grid.two{grid-template-columns:repeat(2,1fr)}
+  .tile{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:.15s}
+  .tile:hover{transform:translateY(-2px);border-color:var(--brand2)}
+  .tile-ic{font-size:26px}
+  .tile-t{font-weight:600}
+  .tile-d{font-size:13px;color:var(--muted)}
+  .level-card{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;transition:.15s}
+  .level-card:hover{transform:translateY(-2px);border-color:var(--brand)}
+  .level-card.locked{opacity:.55;cursor:not-allowed}
+  .level-card.locked:hover{transform:none;border-color:var(--line)}
+  .lc-icon{font-size:30px;width:44px;text-align:center}
+  .lc-title{font-weight:700}
+  .lc-desc{font-size:13px;color:var(--muted)}
+  .lc-score{font-size:12px;color:var(--accent);margin-top:4px}
+  .lc-hint{font-size:11px;color:var(--warn);margin-left:auto;white-space:nowrap}
+  /* runner */
+  .run-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .run-title{font-weight:700;font-size:17px}
+  .context{background:#0e1a2c;border:1px solid var(--line);border-left:3px solid var(--brand2);border-radius:12px;padding:12px 16px;margin-bottom:14px}
+  .ctx-title{font-weight:600;margin-bottom:6px}
+  .ctx-line{font-size:14px;color:#c3d0e6}
+  .progress{display:flex;align-items:center;gap:6px;margin:10px 0 18px}
+  .dot{width:22px;height:6px;border-radius:99px;background:#243252}
+  .dot.done{background:var(--ok)} .dot.cur{background:var(--accent)}
+  .pcount{margin-left:8px;font-size:12px;color:var(--muted)}
+  .crit{font-size:12px;color:var(--warn);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .prompt{font-size:17px;font-weight:600;margin-bottom:14px}
+  .opts{display:flex;flex-direction:column;gap:10px}
+  .opt{text-align:left;background:#0d1728;border:1px solid var(--line);color:var(--ink);border-radius:11px;padding:13px 16px;font-size:15px;cursor:pointer;transition:.12s}
+  .opt:hover{border-color:var(--brand2);background:#10203a}
+  .opt.sel{border-color:var(--accent)}
+  .opt.ok{border-color:var(--ok);background:rgba(34,197,94,.14)}
+  .opt.bad{border-color:var(--bad);background:rgba(239,68,68,.12)}
+  .fb{margin-top:12px;font-size:14px;min-height:0;opacity:0;transition:.15s}
+  .fb.show{opacity:1;min-height:20px}
+  .fb.ok{color:#86efac} .fb.bad{color:#fca5a5}
+  .result{text-align:center;padding:24px}
+  .res-emoji{font-size:44px}
+  .result .row{display:flex;gap:10px;justify-content:center;margin-top:14px}
+  .ai-box{margin-top:22px;border-top:1px dashed var(--line);padding-top:16px}
+  .ai-card{margin-top:12px;background:#0f1830;border:1px solid #33406a;border-radius:12px;padding:14px}
+  .ai-badge{display:inline-block;font-size:11px;color:#c4b5fd;background:rgba(124,58,237,.18);border:1px solid #4c3a86;border-radius:999px;padding:3px 10px;margin-bottom:8px}
+  .ai-sit{font-size:14px;color:#d5deee;margin-bottom:8px}
+  /* game */
+  .gstatus{font-weight:600;margin-bottom:10px}
+  .game{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .gcol{display:flex;flex-direction:column;gap:10px}
+  .gcard{background:#0d1728;border:1px solid var(--line);color:var(--ink);border-radius:11px;padding:14px;font-size:15px;cursor:pointer;transition:.12s}
+  .gcard:hover{border-color:var(--brand2)}
+  .gcard.sel{border-color:var(--accent);background:#12233d}
+  .gcard.done{border-color:var(--ok);background:rgba(34,197,94,.14);cursor:default;opacity:.85}
+  .gcard.shake{animation:shake .35s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  /* quiz + survey */
+  .quiz{display:flex;flex-direction:column;gap:14px}
+  .q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .q-t{font-weight:600;margin-bottom:10px}
+  .q-o{display:flex;gap:10px;align-items:flex-start;padding:8px 6px;border-radius:8px;cursor:pointer}
+  .q-o:hover{background:#0e1c32}
+  .q-o input{margin-top:4px}
+  .survey{display:flex;flex-direction:column;gap:12px}
+  .sv-item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .sv-text{font-size:14px;margin-bottom:10px}
+  .sv-scale{display:flex;gap:6px;flex-wrap:wrap}
+  .sv-b{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:#0d1728;color:var(--ink);cursor:pointer;font-size:13px}
+  .sv-b:hover{border-color:var(--brand2)}
+  .sv-b.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .row{display:flex;gap:10px}
+  @media (max-width:640px){
+    .grid,.grid.two,.game{grid-template-columns:1fr}
+    .hero{flex-direction:column}
+    .wrap{padding:16px 14px 50px}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="logo">🧪 Thực hành GPP</span>
+    <span class="badge">Trường Dược · Tizia</span>
+  </div>
+  <div class="wrap"><div id="app"></div></div>
+  <script type="module" src="./js/gpp/app.js?v=gpp0906a"></script>
+</body>
+</html>

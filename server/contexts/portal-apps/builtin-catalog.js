@@ -14,7 +14,7 @@
  * Nếu thêm/sửa entry, bump CATALOG_VERSION để force re-seed.
  */
 
-export const CATALOG_VERSION = '2026-06-08-v2-language-driving';
+export const CATALOG_VERSION = '2026-08-16-v5-tu-thuoc-mo-phong';
 
 export const BUILTIN_APPS = [
   // ─────── Mầm non / Lớp 2 ───────
@@ -43,7 +43,34 @@ export const BUILTIN_APPS = [
     target_url: '/2d-arcade.html', category: 'game', domain: 'primary' },
   { alias: 'lop2-curriculum', name: 'Giáo trình Lớp 2', icon: '🎒',
     description: '9 môn × 36 tuần theo CT GDPT 2018 (KNTT/CTST/CD). Lý thuyết + quiz hằng tuần.',
-    target_url: '/lop2.html', category: 'curriculum', domain: 'primary' },
+    // /lop2.html KHÔNG tồn tại (chỉ có lop2-<mini-game>.html) → app này 404 từ lâu.
+    // Giáo trình Lớp 2 nằm ở toà "Lớp 2" của trường Tiểu học, nơi liệt kê đủ 9 môn.
+    target_url: '/space?domain=primary&b=g2', category: 'curriculum', domain: 'primary' },
+  // Lớp 2 — mini-game theo môn (GDPT 2018)
+  { alias: 'lop2-the-thao', name: 'Phản Xạ Cầu Thủ (GDTC)', icon: '⚽',
+    description: 'Trò phản xạ nhanh — luyện Giáo dục Thể chất Lớp 2 vui nhộn.',
+    target_url: '/lop2-the-thao.html', category: 'game', domain: 'primary' },
+  { alias: 'lop2-anh-memory', name: 'Memory Match Tiếng Anh', icon: '🎴',
+    description: 'Lật thẻ tìm cặp từ vựng — luyện Tiếng Anh Lớp 2.',
+    target_url: '/lop2-anh-memory.html', category: 'game', domain: 'primary' },
+  { alias: 'lop2-dao-duc', name: 'Đúng hay Sai? (Đạo đức)', icon: '🤝',
+    description: 'Tình huống Đạo đức Lớp 2 — chọn Đúng/Sai, học ứng xử tốt.',
+    target_url: '/lop2-dao-duc.html', category: 'game', domain: 'primary' },
+  { alias: 'lop2-phan-loai-rac', name: 'Phân Loại Rác (HĐTN)', icon: '♻️',
+    description: 'Kéo rác vào đúng thùng — Hoạt động trải nghiệm Lớp 2 về môi trường.',
+    target_url: '/lop2-phan-loai-rac.html', category: 'game', domain: 'primary' },
+  { alias: 'lop2-am-nhac', name: 'Đô-Rê-Mi Bay (Âm nhạc)', icon: '🎵',
+    description: 'Chạm nốt nhạc đúng nhịp — luyện tai nghe Âm nhạc Lớp 2.',
+    target_url: '/lop2-am-nhac.html', category: 'game', domain: 'primary' },
+  { alias: 'lop2-ghep-van', name: 'Ghép vần Tiếng Việt', icon: '🔤',
+    description: 'Ghép vần thành tiếng — luyện đọc viết Tiếng Việt Lớp 2.',
+    target_url: '/lop2-ghep-van.html', category: 'game', domain: 'primary' },
+  { alias: 'math-fun', name: 'Toán vui', icon: '🧮',
+    description: 'Các trò chơi toán tương tác — luyện tính toán tiểu học vui nhộn.',
+    target_url: '/math-fun.html', category: 'game', domain: 'primary' },
+  { alias: 'pixel-art-studio', name: 'Pixel Art Studio', icon: '🎨',
+    description: 'Vẽ tranh pixel sáng tạo — công cụ nghệ thuật số cho học sinh.',
+    target_url: '/pixel-art-studio.html', category: 'playground', domain: 'general' },
 
   // ─────── Trung học ───────
   { alias: 'ban-do-vn', name: 'Bản đồ Việt Nam Tri Thức', icon: '🗺️',
@@ -131,6 +158,9 @@ export const BUILTIN_APPS = [
   { alias: '3d-shelf', name: 'Kệ thuốc 3D', icon: '📦',
     description: 'Khám phá kệ thuốc 3D — tìm thuốc theo nhóm điều trị, đường dùng.',
     target_url: '/3d-shelf.html', category: 'sim', domain: 'pharmacy' },
+  { alias: 'tu-thuoc-mo-phong', name: 'Tủ thuốc mô phỏng', icon: '🗄️',
+    description: 'Luyện nhận diện & sắp xếp thuốc theo tủ Rx/OTC/kiểm soát đặc biệt — tìm nhanh theo tên hoạt chất, ảnh hộp thuốc thật, bài tập kéo-thả cất hàng mới về.',
+    target_url: '/tu-thuoc-mo-phong.html', category: 'sim', domain: 'pharmacy' },
 
   // ─────── Trường NGOẠI NGỮ (language) ───────
   { alias: 'tu-vung-tieng-anh', name: 'Từ vựng Tiếng Anh', icon: '📚',
@@ -156,6 +186,12 @@ export const BUILTIN_APPS = [
   { alias: 'ai-quiz-driving', name: 'AI Quiz luật giao thông', icon: '🧠',
     description: 'AI sinh quiz tình huống lái xe theo cấp B1/B2/C/D. Đa dạng tình huống, có giải thích lý do.',
     target_url: '/ai-quiz-gen.html?topic=driving', category: 'tool', domain: 'driving' },
+  { alias: 'tra-cuu-bien-bao-gplx', name: 'Tra cứu biển báo GPLX', icon: '📚',
+    description: 'Danh mục đầy đủ 257 biển báo (cấm/nguy hiểm/hiệu lệnh/chỉ dẫn/phụ) theo QCVN 41:2019. Biển cấm kèm mức phạt NĐ 168/2024. Có chế độ đố vui nhận diện.',
+    target_url: '/tra-cuu-bien-bao-gplx', category: 'tool', domain: 'driving' },
+  { alias: 'nhan-dien-bien-bao', name: 'Nhận diện biển báo bằng AI', icon: '📷',
+    description: 'Chụp ảnh hoặc tải ảnh biển báo lên, AI (YOLOv8) nhận diện ngay trên trình duyệt — ảnh không gửi lên máy chủ.',
+    target_url: '/nhan-dien-bien-bao', category: 'tool', domain: 'driving' },
 
   // ─────── Công cụ chung (general) ───────
   { alias: 'ai-quiz-gen', name: 'AI sinh Quiz', icon: '🧠',

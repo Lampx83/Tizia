@@ -15,26 +15,7 @@
 
 import { db, setRequestStatus, createNotification } from '../../db.js';
 
-// ── Schema (audit trail) — Routine ghi quyết định vào đây, dashboard đọc ra ──
-db.exec(`
-  CREATE TABLE IF NOT EXISTS ai_decisions (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_id     INTEGER NOT NULL,
-    decided_by     TEXT    NOT NULL,          -- 'ai' | 'rule' | 'human'
-    model          TEXT,
-    action         TEXT    NOT NULL,          -- approve | reject | defer | priority
-    status_applied TEXT,                       -- status request đã set
-    reason         TEXT,                        -- lý do nội bộ (cho admin)
-    public_note    TEXT,                        -- phản hồi hiển thị cho SV
-    priority_score INTEGER,                     -- 0..100
-    confidence     REAL,                        -- 0..1
-    input_snapshot TEXT,                        -- JSON ảnh chụp đầu vào
-    raw_output     TEXT,                        -- raw LLM (audit/debug)
-    created_at     INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_ai_decisions_request ON ai_decisions(request_id, created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_ai_decisions_time    ON ai_decisions(created_at DESC);
-`);
+// Schema (audit trail ai_decisions) giờ do server/schema.sql sở hữu.
 
 const decisionsForRequestStmt = db.prepare(`
   SELECT id, decided_by, model, action, status_applied, reason, public_note,
@@ -54,13 +35,13 @@ const recentDecisionsStmt = db.prepare(`
  *
  * @returns {{status:'pending', acknowledged:true}}
  */
-export function acknowledgeNewRequest({ requestId, domain, title, student = null }) {
+export async function acknowledgeNewRequest({ requestId, domain, title, student = null }) {
   const note = 'Cảm ơn góp ý của bạn! Ban điều hành đã ghi nhận và sẽ xem xét sớm.';
   // Giữ 'pending' + lưu note tạm hiển thị cho HS (admin_note). listRequests sắp
   // theo votes/created_at nên updated_at đổi không ảnh hưởng thứ tự.
-  setRequestStatus(requestId, 'pending', note);
+  await setRequestStatus(requestId, 'pending', note);
   try {
-    createNotification({
+    await createNotification({
       user_display_name: student,
       request_id: requestId,
       kind: 'reply',
@@ -72,9 +53,9 @@ export function acknowledgeNewRequest({ requestId, domain, title, student = null
   return { status: 'pending', acknowledged: true };
 }
 
-export function getDecisionsForRequest(requestId) {
-  return decisionsForRequestStmt.all(Number(requestId));
+export async function getDecisionsForRequest(requestId) {
+  return await decisionsForRequestStmt.all(Number(requestId));
 }
-export function getRecentDecisions(limit = 50) {
-  return recentDecisionsStmt.all({ limit });
+export async function getRecentDecisions(limit = 50) {
+  return await recentDecisionsStmt.all({ limit });
 }

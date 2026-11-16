@@ -1,0 +1,421 @@
+// Wrap-mount cho trang Next /module.
+// Tái sử dụng NGUYÊN engine + hệ scenario/domain/wallet/reward của app vanilla
+// (phục vụ qua fallback proxy của Next: /js/* → Express). Logic = bản gốc trong
+// inline <script type="module"> của public/module.html: module hub 3-track
+// (Thực hành / Lý thuyết / Luyện kỹ năng), prime content từ DB (/api/curriculum),
+// dispatch quiz/roleplay/lab qua ScenarioEngine, thưởng XP + màn reward khi
+// game-hoá, weekly-lesson cho Tiểu học, hydrate câu hỏi từ ScoreUp.
+// KHÔNG thay đổi hành vi (gate/redirect/format/text tiếng Việt) so với bản gốc.
+import { ScenarioEngine } from '/js/engine/index.js?v=p7';
+import { getScenariosForModule, primeModuleFromDB } from '/js/scenarios/index.js';
+import { renderWeeklyLesson } from '/js/engine/weekly-lesson.js';
+import { hydrateScenarioFromScoreUp } from '/js/engine/scoreup-client.js';
+import { MODULES as PHARMACY_MODULES } from '/js/engine/learning-path.js';
+import { getPlayerName, getClassCode } from '/js/api.js';
+import { loadActiveDomain, getActiveDomainId, isGamifiedDomain } from '/js/engine/domain.js';
+import { awardForResult, recordModuleStars, getProgress,
+         getScenarioRunsMap, recordScenarioRun,
+         loadScenarioRunsFromServer } from '/js/engine/wallet.js';
+import { showRewardOverlay } from '/js/engine/reward-fx.js';
+import { generatePracticeFor, hasPracticeGenerator } from '/js/scenarios/primary-math-practice.js';
+
+const params = new URLSearchParams(location.search);
+const moduleId = params.get('module') || 'L1.1';
+
+// Prime content module này TỪ DB (/api/curriculum) trước khi render — cho phép
+// sửa nóng content không cần deploy. Best-effort: lỗi/chưa seed → dùng bản JS.
+try { await primeModuleFromDB(moduleId); } catch {}
+
+// Load the ACTIVE domain so module metadata + achievement catalog match
+// the school the student came from (falls back to pharmacy modules).
+let DOMAIN_MODULES = PHARMACY_MODULES, ACHIEVEMENTS = [], GET_SUBJECT = null;
+try {
+  const dom = await loadActiveDomain();
+  DOMAIN_MODULES = dom.MODULES || PHARMACY_MODULES;
+  ACHIEVEMENTS = dom.ACHIEVEMENTS || [];
+  GET_SUBJECT = dom.getSubject || null;
+} catch {}
+const MODULES = DOMAIN_MODULES;
+
+const moduleMeta = MODULES.find(m => m.id === moduleId)
+  || PHARMACY_MODULES.find(m => m.id === moduleId);
+// Nhãn môn (cho AI "Học thêm" / "Hỏi cô giáo") — fallback về key nếu thiếu.
+const SUBJECT_LABEL = (GET_SUBJECT && moduleMeta?.subject)
+  ? (GET_SUBJECT(moduleMeta.subject)?.label || moduleMeta.subject)
+  : (moduleMeta?.subject || '');
+
+// Game hoá (XP/reward/quiz phản hồi tức thì) CHỈ cho Tiểu học + THCS.
+const GAMIFIED = isGamifiedDomain(getActiveDomainId());
+
+const picker = document.getElementById('picker');
+const app = document.getElementById('app');
+const title = document.getElementById('page-title');
+const subtitle = document.getElementById('page-subtitle');
+const info = document.getElementById('info');
+const infoText = document.getElementById('info-text');
+const infoChips = document.getElementById('info-chips');
+
+if (!picker || !app) {
+  // Khung DOM chưa mount (StrictMode / unmount) → thoát an toàn.
+} else {
+
+if (moduleMeta) {
+  title.textContent = `${moduleId} · ${moduleMeta.title}`;
+  subtitle.textContent = `Năm ${moduleMeta.yearLevel} · Môn: ${moduleMeta.subject}`;
+  document.title = `${moduleId} · ${moduleMeta.title} — Tizia`;
+  info.style.display = 'block';
+  infoText.innerHTML = `<b>Yêu cầu mở khoá:</b> ${moduleMeta.minStarsToUnlock} sao tích luỹ${moduleMeta.prerequisites?.length ? ` · <b>Tiền đề:</b> ${moduleMeta.prerequisites.join(', ')}` : ''}`;
+  infoChips.innerHTML = `
+    <span class="chip">📚 Năm ${moduleMeta.yearLevel}</span>
+    <span class="chip">🎓 ${moduleMeta.subject}</span>
+    ${moduleMeta.hasCertificate ? '<span class="chip">🏆 Cấp chứng chỉ</span>' : ''}
+  `;
+  // Mini-game gắn với từng môn — mỗi moduleId trỏ tới 1 game khác nhau.
+  // Lớp 2 đã có đủ 9 game riêng; các lớp khác mặc định Bão Số Học cho môn Toán.
+  const MODULE_GAMES = {
+    // ── Lớp 2 — 9 môn × 9 game khác nhau ──
+    'P2':     { href:'/bao-so-hoc.html',          ic:'⛈️',  name:'Bão Số Học',           sub:'mini-game luyện tính nhẩm' },
+    'P2TV':   { href:'/lop2-ghep-van.html',       ic:'🔤', name:'Ghép Vần',              sub:'mini-game ghép chữ thành tiếng' },
+    'P2TA':   { href:'/lop2-anh-memory.html',     ic:'🎴', name:'Memory Match',          sub:'mini-game lật thẻ Anh ↔ Việt' },
+    'P2GDTC': { href:'/lop2-the-thao.html',       ic:'🏃', name:'Phản Xạ Cầu Thủ',       sub:'mini-game luyện phản xạ' },
+    'P2AN':   { href:'/lop2-am-nhac.html',        ic:'🎶', name:'Đô-Rê-Mi Bay',          sub:'mini-game gõ nốt theo nhịp' },
+    'P2MT':   { href:'/pixel-art-studio.html',    ic:'🖌️', name:'Pixel Art Studio',      sub:'mini-game vẽ pixel sáng tạo' },
+    'P2HDTN': { href:'/lop2-phan-loai-rac.html',  ic:'♻️',  name:'Phân Loại Rác',         sub:'mini-game kéo thả phân loại' },
+    'P2TNXH': { href:'/ban-do-vn.html',           ic:'🗺️',  name:'Bản đồ 34 tỉnh',        sub:'mini-game khám phá địa lý' },
+    'P2DD':   { href:'/lop2-dao-duc.html',        ic:'✅', name:'Đúng hay Sai',          sub:'mini-game tình huống đạo đức' },
+    // ── Lớp 1/3/4/5 — KHÔNG liệt kê từng môn ở đây nữa; game suy theo MÔN
+    //    (hậu tố moduleId) qua SUBJECT_GAME bên dưới — req #9 (vừa học vừa chơi).
+    // ── Mầm non N1/N2/N3 — game cute, đếm-nhận diện không cần biết đọc ──
+    'N1': { href:'/dem-qua.html',      ic:'🍎', name:'Đếm Quả Trên Cây',  sub:'tap đúng số quả cô yêu cầu' },
+    'N2': { href:'/ghep-chu-cai.html', ic:'🔤', name:'Ghép Chữ Cái',       sub:'nhận diện bảng chữ cái A-Á-Â' },
+    'N3': { href:'/dem-ngon-tay.html', ic:'✋', name:'Đếm Ngón Tay',       sub:'đếm 1-10 cùng cô' },
+  };
+  // req #9 (Enderboy, 14 lượt): lồng "vừa học vừa chơi" vào MỌI bài học Tiểu
+  // học. Lớp 2 đã có 9 game riêng (ở trên); lớp 1/3/4/5 suy game theo MÔN
+  // (hậu tố moduleId) — tái dùng kho mini-game sẵn có, không tạo link chết.
+  const SUBJECT_GAME = {
+    '':     { href:'/bao-so-hoc.html',         ic:'⛈️',  name:'Bão Số Học',       sub:'mini-game luyện tính nhẩm' },
+    'TV':   { href:'/lop2-ghep-van.html',      ic:'🔤', name:'Ghép Vần',         sub:'mini-game ghép chữ thành tiếng' },
+    'TA':   { href:'/lop2-anh-memory.html',    ic:'🎴', name:'Memory Match',     sub:'mini-game lật thẻ Anh ↔ Việt' },
+    'DD':   { href:'/lop2-dao-duc.html',       ic:'✅', name:'Đúng hay Sai',     sub:'mini-game tình huống đạo đức' },
+    'AN':   { href:'/lop2-am-nhac.html',       ic:'🎶', name:'Đô-Rê-Mi Bay',     sub:'mini-game gõ nốt theo nhịp' },
+    'MT':   { href:'/pixel-art-studio.html',   ic:'🖌️', name:'Pixel Art Studio', sub:'mini-game vẽ pixel sáng tạo' },
+    'GDTC': { href:'/lop2-the-thao.html',      ic:'🏃', name:'Phản Xạ Cầu Thủ',  sub:'mini-game luyện phản xạ' },
+    'HDTN': { href:'/lop2-phan-loai-rac.html', ic:'♻️',  name:'Phân Loại Rác',    sub:'mini-game kéo thả phân loại' },
+    'TNXH': { href:'/ban-do-vn.html',          ic:'🗺️',  name:'Bản đồ 34 tỉnh',   sub:'mini-game khám phá tự nhiên – xã hội' },
+    'KH':   { href:'/cay-tri-thuc.html',       ic:'🌳', name:'Cây Tri Thức',     sub:'mini-game gieo hạt khám phá khoa học' },
+    'LSDL': { href:'/ban-do-vn.html',          ic:'🗺️',  name:'Bản đồ 34 tỉnh',   sub:'mini-game lịch sử – địa lý' },
+    'TIN':  { href:'/lap-trinh-game.html',     ic:'🕹️', name:'Lập Trình Game',   sub:'mini-game kéo khối lập trình' },
+    'CN':   { href:'/lop2-phan-loai-rac.html', ic:'🛠️', name:'Khéo Tay',         sub:'mini-game phân loại & lắp ghép' },
+  };
+  let g = MODULE_GAMES[moduleId];
+  if (!g && /^P[1345]/.test(moduleId)) {
+    g = SUBJECT_GAME[moduleId.replace(/^P[1345]/, '')];
+  }
+  if (g) {
+    const games = document.createElement('div');
+    games.style.cssText = 'margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;';
+    games.innerHTML = `
+      <a href="${g.href}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1502;font-weight:800;text-decoration:none;border-radius:12px;font-size:14px;box-shadow:0 6px 16px rgba(251,191,36,.25);">
+        ${g.ic} ${g.name} <span style="opacity:.7;font-weight:600;font-size:12px;">— ${g.sub}</span>
+      </a>`;
+    info.appendChild(games);
+  }
+} else {
+  // Không có metadata (vd bài học lẻ của lộ trình môn) → lấy tiêu đề từ scenario.
+  const scns = getScenariosForModule(moduleId);
+  const s0 = scns[0];
+  if (s0) {
+    title.textContent = s0.title;
+    const bits = [s0.chapter && `📂 ${s0.chapter}`, s0.boss && '👑 Boss', s0.difficulty && `⭐ Độ khó ${s0.difficulty}/5`].filter(Boolean);
+    subtitle.textContent = bits.join(' · ');
+    document.title = `${s0.title} — Tizia`;
+  } else {
+    title.textContent = moduleId;
+    subtitle.textContent = 'Bài học';
+  }
+}
+
+// 3 track học tập. Thực hành đặt TRÊN CÙNG (ưu tiên trải nghiệm).
+// Tier-aware: đổi label + hint theo cấp học (mầm non đơn giản, ĐH chuyên ngành).
+const TRACK_PRESETS = {
+  preschool: {
+    practice: { icon: '🎈', label: 'Cùng chơi', hint: 'Vừa chơi vừa học' },
+    theory:   { icon: '📖', label: 'Cô kể bé nghe', hint: 'Câu hỏi vui' },
+    skill:    { icon: '🌟', label: 'Bé giỏi', hint: 'Tự lập việc nhỏ' },
+  },
+  primary: {
+    practice: { icon: '🎮', label: 'Thực hành — chơi & khám phá', hint: 'Học bằng làm' },
+    theory:   { icon: '📚', label: 'Học bài', hint: 'Kiến thức nền tảng' },
+    skill:    { icon: '🏆', label: 'Thi tài', hint: 'Luyện sao mỗi tuần' },
+  },
+  secondary: {
+    practice: { icon: '🧪', label: 'Thực hành', hint: 'Mô phỏng & trải nghiệm' },
+    theory:   { icon: '📖', label: 'Lý thuyết', hint: 'Kiến thức trọng tâm' },
+    skill:    { icon: '🎯', label: 'Luyện thi', hint: 'Cuối kì & cuối cấp' },
+  },
+  highschool: {
+    practice: { icon: '🧪', label: 'Thực hành PTN', hint: 'Thí nghiệm & mô phỏng' },
+    theory:   { icon: '📖', label: 'Lý thuyết', hint: 'Bám sát SGK 10-12' },
+    skill:    { icon: '🎯', label: 'Luyện đề', hint: 'Tốt nghiệp & xét tuyển ĐH' },
+  },
+  // ĐH — giữ thuật ngữ chuyên ngành.
+  _default: {
+    practice: { icon: '🧪', label: 'Thực hành — làm & trải nghiệm', hint: 'Ưu tiên: học bằng làm' },
+    theory:   { icon: '📖', label: 'Lý thuyết', hint: 'Kiến thức nền tảng' },
+    skill:    { icon: '🎯', label: 'Luyện kỹ năng', hint: 'Tư vấn · OSCE · viết SOAP · role-play' },
+  },
+};
+const _domId = (typeof getActiveDomainId === 'function') ? getActiveDomainId() : null;
+const _preset = TRACK_PRESETS[_domId] || TRACK_PRESETS._default;
+const TRACKS = [
+  { key: 'practice', ..._preset.practice,
+    kinds: ['compound-lab', 'titration', 'arrange', 'identification', 'calculator', 'drag-match'] },
+  { key: 'theory', ..._preset.theory,
+    kinds: ['quiz'] },
+  { key: 'skill', ..._preset.skill,
+    kinds: ['patient-roleplay', 'soap-write', 'osce-station', 'structure-draw'] },
+];
+const kindToTrack = {};
+for (const t of TRACKS) for (const k of t.kinds) kindToTrack[k] = t.key;
+
+// Cache scenario theo id để startScenario tìm được item sinh ngẫu nhiên
+// (id thay đổi mỗi lần renderPicker, getScenariosForModule không thấy).
+const _dynamicScenarios = new Map();
+let _runsMap = {};
+
+function renderPicker() {
+  _dynamicScenarios.clear();
+  _runsMap = getScenarioRunsMap();
+  const scenarios = getScenariosForModule(moduleId);
+  const experiences = moduleMeta?.experiences || [];
+
+  // Practice generator — sinh fresh bài thực hành mỗi lần vào, đa dạng kind
+  const dynamicPractice = hasPracticeGenerator(moduleId)
+    ? (generatePracticeFor(moduleId) || [])
+    : [];
+  for (const s of dynamicPractice) _dynamicScenarios.set(s.id, s);
+
+  if (!scenarios.length && !experiences.length && !dynamicPractice.length) {
+    app.innerHTML = `<div class="not-found">
+      <h3>⏳ Module ${moduleId} chưa có nội dung</h3>
+      <p>Ban điều hành AI đang phát triển. Bạn có thể gửi yêu cầu ở trang trường để được ưu tiên!</p>
+      <button class="back-btn" onclick="history.back()">← Quay lại</button>
+    </div>`;
+    return;
+  }
+
+  // Gom item vào 3 track
+  const buckets = { practice: [], theory: [], skill: [] };
+  // Experiences (2D/3D/VR/Meta) → luôn là Thực hành
+  for (const e of experiences) {
+    buckets.practice.push({ kind: 'experience', exp: e });
+  }
+  // Dynamic practice → luôn nằm trong nhóm Thực hành
+  for (const s of dynamicPractice) {
+    buckets.practice.push({ kind: 'scenario', scenario: s });
+  }
+  // Scenarios tĩnh → theo kind. Ẩn các bài tĩnh đã được generator thay
+  // thế cùng familyId (tránh hiển thị trùng nhóm với bản random).
+  const dynFamilies = new Set(dynamicPractice.map(s => s.familyId).filter(Boolean));
+  for (const s of scenarios) {
+    const track = kindToTrack[s.kind] || 'theory';
+    if (track === 'practice' && dynFamilies.size) {
+      // skip bài tĩnh trùng grade nếu đã có dynamic — kiểm tra qua id prefix
+      const isStaticOld = /^P\d-toan-(fill|match)$/.test(s.id);
+      if (isStaticOld) continue;
+    }
+    buckets[track].push({ kind: 'scenario', scenario: s });
+  }
+
+  picker.innerHTML = TRACKS.map(t => {
+    const items = buckets[t.key];
+    if (!items.length) return '';
+    const cards = items.map(it => it.kind === 'experience'
+      ? expCard(it.exp)
+      : scnCard(it.scenario)).join('');
+    return `
+      <section class="track track-${t.key}">
+        <div class="track-head">
+          <span class="track-icon">${t.icon}</span>
+          <span class="track-label">${t.label}</span>
+          <span class="track-hint">${t.hint}</span>
+          <span class="track-count">${items.length}</span>
+        </div>
+        <div class="track-cards">${cards}</div>
+      </section>
+    `;
+  }).join('');
+
+  // Wire scenario cards (chạy engine) + experience cards (mở trang)
+  picker.querySelectorAll('.scn-card[data-id]').forEach(card => {
+    card.addEventListener('click', () => startScenario(card.dataset.id));
+  });
+  app.innerHTML = '';
+}
+
+function scnCard(s) {
+  const key = s.familyId || s.id;
+  const runs = (key && _runsMap[key]) || null;
+  const runBadge = runs && runs.runs > 0
+    ? `<span class="run-badge" title="Lần làm gần nhất: ${new Date(runs.lastTs).toLocaleDateString('vi-VN')}">✅ ${runs.runs} lần${runs.bestStars ? ` · ${'⭐'.repeat(runs.bestStars)}` : ''}${runs.bestScore ? ` · ${runs.bestScore}đ` : ''}</span>`
+    : '';
+  return `
+    <div class="scn-card" data-id="${s.id}">
+      <h4>${s.title}</h4>
+      <div class="meta">
+        <span>🎯 ${s.kind}</span>
+        <span>⭐ ${s.difficulty ?? '—'}/5</span>
+        ${s.questions ? `<span>${s.questions.length} câu</span>` : ''}
+        ${s.correctPairs ? `<span>${s.correctPairs.length} cặp</span>` : ''}
+        ${s.targets ? `<span>${s.targets.length} ảnh</span>` : ''}
+        ${s.isStub ? '<span class="stub-tag">nháp</span>' : ''}
+        ${runBadge}
+      </div>
+    </div>`;
+}
+
+function expCard(e) {
+  const external = e.status === 'external' ? 'target="_blank" rel="noopener"' : '';
+  const soon = e.status === 'soon';
+  return `
+    <a class="scn-card exp-card ${soon ? 'soon' : ''}" href="${soon ? '#' : e.url}" ${external}
+       ${soon ? 'aria-disabled="true"' : ''}>
+      <h4>${e.icon || '🧪'} ${e.label}</h4>
+      <div class="meta"><span>${e.tech || ''}</span>${soon ? '<span class="stub-tag">sắp có</span>' : ''}</div>
+      ${e.desc ? `<div class="exp-desc">${e.desc}</div>` : ''}
+    </a>`;
+}
+
+function runEngine(scenario) {
+  picker.innerHTML = '';
+  app.innerHTML = '';
+  _completed = false;
+  const engine = new ScenarioEngine({
+    host: app,
+    scenario,
+    playerName: getPlayerName() || 'Ẩn danh',
+    classCode: getClassCode() || undefined,
+    instantFeedback: GAMIFIED,            // quiz phản hồi tức thì chỉ ở Tiểu học/THCS
+    onComplete: (result) => handleComplete(result, scenario),
+  });
+  engine.start();
+}
+
+async function startScenario(id) {
+  picker.innerHTML = '';
+  app.innerHTML = '';
+  // Ưu tiên dynamic cache (id sinh random) trước khi rơi về scenarios tĩnh
+  const scenario = _dynamicScenarios.get(id)
+    || getScenariosForModule(moduleId).find(s => s.id === id);
+  if (!scenario) return renderPicker();
+
+  // Tuần học có lý thuyết (Tiểu học) → hiện màn bài giảng + nút AI trước,
+  // bấm "Làm bài kiểm tra" mới chạy quiz. Bài AI "Học thêm" chạy như quiz
+  // bonus (không ghi điểm để tránh farm).
+  if (scenario.lesson && GAMIFIED) {
+    renderWeeklyLesson({
+      host: app,
+      scenario,
+      grade: moduleMeta?.yearLevel || 2,
+      subjectLabel: SUBJECT_LABEL,
+      // Khi HS bấm "Làm bài kiểm tra": hydrate câu hỏi từ ScoreUp (kho 20k+
+      // câu — xem memory: project_quiz_code_apis) thay vì hardcode. Fallback
+      // về scenario.questions cũ nếu lookup/fetch fail (offline-friendly).
+      onStartQuiz: async () => {
+        const hydrated = await hydrateScenarioFromScoreUp(scenario);
+        runEngine(hydrated);
+      },
+      onStartBonus: (bonus) => runEngine(bonus),
+    });
+    return;
+  }
+  // Scenario quiz không có lesson (THCS/THPT/đại học) — vẫn thử hydrate từ
+  // ScoreUp nếu có metadata (grade+subject+week), giữ hardcode nếu không.
+  if (scenario.kind === 'quiz' && Number.isFinite(scenario.week)) {
+    const hydrated = await hydrateScenarioFromScoreUp(scenario);
+    runEngine(hydrated);
+    return;
+  }
+  runEngine(scenario);
+}
+
+// Chống nộp/“Hoàn thành” nhiều lần để farm điểm: chỉ xử lý 1 lần.
+let _completed = false;
+
+async function handleComplete(result, scenario) {
+  if (_completed) return;
+  _completed = true;
+
+  // Đếm số lần hoàn thành theo familyId (ổn định kể cả khi id random).
+  try {
+    const fam = scenario?.familyId || scenario?.id;
+    if (fam) recordScenarioRun(fam, result?.stars, result?.score);
+  } catch {}
+
+  // Trường KHÔNG game hoá (Mầm non, THPT, Dược, CNTT, KT…): giữ hành vi cũ —
+  // chỉ hiện kết quả, không thưởng XP/coin, không màn reward.
+  //
+  // NHƯNG: quiz cho preschool/highschool/pharmacy/it/economics đã có done
+  // screen riêng (Big Bubble, Focused Academic, Exam Style) → KHÔNG append
+  // thêm result-card dry generic nữa, gây double-display khó chịu. Đi thẳng
+  // về picker để chọn bài kế tiếp.
+  if (!GAMIFIED) {
+    const HAS_OWN_DONE = new Set(['preschool', 'highschool', 'pharmacy', 'it', 'economics']);
+    const dom = getActiveDomainId();
+    if (scenario.kind === 'quiz' && HAS_OWN_DONE.has(dom)) {
+      renderPicker();
+      return;
+    }
+    showResult(result);
+    return;
+  }
+
+  let award = null;
+  try {
+    const progress = getProgress();
+    const mod = moduleMeta || { id: moduleId, subject: scenario?.subject };
+    award = awardForResult(progress, mod, result, ACHIEVEMENTS);
+    recordModuleStars(moduleId, result.stars);
+  } catch (e) { console.warn('[reward] award failed', e); }
+
+  try {
+    if (award) await showRewardOverlay({ result, award, wallet: award.wallet });
+  } catch (e) { console.warn('[reward] overlay failed', e); }
+
+  // Làm xong → quay lại danh sách bài của chính module này (picker).
+  // Tránh đẩy SV ra campus/school. _completed sẽ được reset khi runEngine()
+  // start scenario kế tiếp, badge "đã làm N lần" cập nhật ngay tại picker.
+  renderPicker();
+}
+
+function showResult(result) {
+  const stars = '⭐'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
+  const poor = result.score < 50;
+  const card = document.createElement('div');
+  card.className = 'result-card' + (poor ? ' poor' : '');
+  card.innerHTML = `
+    <div class="result-stars">${stars}</div>
+    <div class="result-score">${result.score}/100</div>
+    <div style="opacity:0.8;margin-top:6px">Thời gian: ${(result.durationMs / 1000).toFixed(1)}s</div>
+    <div class="result-breakdown">
+      ${result.rubricBreakdown.map(r => `
+        <div class="result-row ${r.score >= 0.5 ? 'ok' : 'bad'}">
+          <b>${r.criterion}</b> — ${r.feedback}
+        </div>
+      `).join('')}
+    </div>
+    <button class="back-btn">← Quay lại danh sách bài tập</button>
+  `;
+  app.appendChild(card);
+  card.querySelector('.back-btn').addEventListener('click', renderPicker);
+}
+
+// Sync run-count từ server trước khi render lần đầu (cross-device).
+// Best-effort: lỗi mạng/guest → vẫn render dựa trên cache localStorage.
+(async () => {
+  try { await loadScenarioRunsFromServer(); } catch {}
+  renderPicker();
+})();
+
+}

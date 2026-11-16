@@ -19,7 +19,7 @@ export async function joinClassByCode(code) {
   const c = String(code || '').trim().toUpperCase();
   if (!c) return null;
   try {
-    const r = await fetch('api/classes/' + encodeURIComponent(c));
+    const r = await fetch('/api/classes/' + encodeURIComponent(c));
     if (!r.ok) return null;
     const cls = await r.json();
     setClassCode(cls.code);
@@ -45,7 +45,7 @@ export async function ensurePlayerName() {
   let name = getPlayerName();
   if (name) return name;
   try {
-    const r = await fetch('api/auth/me', { credentials: 'same-origin' });
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
     if (r.ok) {
       const data = await r.json();
       if (data?.user?.display_name) {
@@ -75,7 +75,7 @@ export async function submitAttempt(payload) {
     // Guest (chưa đăng nhập) → 401: KHÔNG redirect (tránh cắt ngang trải nghiệm
     // ở trường Mầm non), chỉ hiện toast một lần. Pages bắt buộc login đã được
     // gate ở authGate; ở đây chỉ là gracefully degrade.
-    const res = await fetch('api/attempts', {
+    const res = await fetch('/api/attempts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -100,7 +100,7 @@ export async function submitAttempt(payload) {
 export async function getBadges(role) {
   try {
     const qs = role ? ('?role=' + encodeURIComponent(role)) : '';
-    const r = await fetch('api/badges' + qs);
+    const r = await fetch('/api/badges' + qs);
     return r.ok ? await r.json() : [];
   } catch { return []; }
 }
@@ -109,7 +109,7 @@ export async function getMyAchievements() {
   const player = getPlayerName();
   if (!player) return [];
   try {
-    const r = await fetch('api/achievements?player=' + encodeURIComponent(player));
+    const r = await fetch('/api/achievements?player=' + encodeURIComponent(player));
     return r.ok ? await r.json() : [];
   } catch { return []; }
 }
@@ -137,7 +137,7 @@ function showBadgePopup(badges) {
 
 export async function getLeaderboard(version, limit = 10) {
   try {
-    const res = await fetch(`api/leaderboard?version=${encodeURIComponent(version)}&limit=${limit}`);
+    const res = await fetch(`/api/leaderboard?version=${encodeURIComponent(version)}&limit=${limit}`);
     if (!res.ok) return [];
     return await res.json();
   } catch {
@@ -147,7 +147,7 @@ export async function getLeaderboard(version, limit = 10) {
 
 export async function getStats(version) {
   try {
-    const res = await fetch(`api/stats?version=${encodeURIComponent(version)}`);
+    const res = await fetch(`/api/stats?version=${encodeURIComponent(version)}`);
     if (!res.ok) return null;
     return await res.json();
   } catch {

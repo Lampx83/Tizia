@@ -1,0 +1,464 @@
+/* Bảng Phong Thần — style riêng thương hiệu (neon tối), scope dưới .bpt-scope để
+   không đụng theme chung của web-next. Port nguyên từ public/bang-phong-than.html. */
+.bpt-scope {
+  --bg-1: #0b1029;
+  --bg-2: #1e1b4b;
+  --bg-3: #312e81;
+  --ink: #e2e8f0;
+  --ink-soft: #94a3b8;
+  --neon-y: #fde047;
+  --neon-b: #38bdf8;
+  --neon-p: #ec4899;
+  --neon-g: #10b981;
+  --gold: #fbbf24;
+  --silver: #cbd5e1;
+  --bronze: #f97316;
+
+  position: relative;
+  color: var(--ink);
+  font-family: 'Inter', 'Be Vietnam Pro', system-ui, sans-serif;
+}
+.bpt-scope * {
+  box-sizing: border-box;
+}
+
+/* Nền phủ toàn màn hình (fixed) — tái tạo body gốc mà không đụng layout chung */
+.bpt-scope::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse at top, var(--bg-3) 0%, var(--bg-2) 40%, var(--bg-1) 100%);
+  background-attachment: fixed;
+  pointer-events: none;
+}
+
+/* Background sao bay */
+.bpt-scope .stars {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.bpt-scope .star {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0.7;
+  animation: bpt-drift linear infinite;
+}
+@keyframes bpt-drift {
+  from {
+    transform: translateY(110vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.7;
+  }
+  to {
+    transform: translateY(-10vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Top bar */
+.bpt-scope .top {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bpt-scope .back {
+  background: rgba(15, 23, 42, 0.75);
+  color: #fff;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.bpt-scope .back:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: var(--neon-b);
+}
+
+.bpt-scope main {
+  position: relative;
+  z-index: 1;
+  padding: 78px 14px 60px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+/* Header */
+.bpt-scope .hero {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.bpt-scope .hero h1 {
+  font-size: clamp(28px, 5vw, 44px);
+  margin: 0 0 6px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, var(--neon-y), var(--neon-p), var(--neon-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 30px rgba(253, 224, 71, 0.3);
+}
+.bpt-scope .hero p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+}
+
+/* Tabs */
+.bpt-scope .tabs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 18px 0 24px;
+  flex-wrap: wrap;
+}
+.bpt-scope .tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--ink);
+  padding: 9px 18px;
+  border-radius: 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.bpt-scope .tab:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--neon-b);
+}
+.bpt-scope .tab.on {
+  background: linear-gradient(135deg, var(--neon-p), var(--neon-b));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+}
+
+/* Loading */
+.bpt-scope .loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.bpt-scope .spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--neon-y);
+  border-radius: 50%;
+  animation: bpt-spin 1s linear infinite;
+  margin-bottom: 14px;
+}
+@keyframes bpt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Podium */
+.bpt-scope .podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 30px 0 18px;
+  min-height: 340px;
+  flex-wrap: wrap;
+}
+.bpt-scope .pod-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+  flex: 0 0 130px;
+}
+.bpt-scope .pod-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  margin-bottom: 8px;
+  border: 4px solid;
+  box-shadow: 0 0 30px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+.bpt-scope .pod-avatar.r1 {
+  border-color: var(--gold);
+  box-shadow: 0 0 35px rgba(251, 191, 36, 0.7);
+}
+.bpt-scope .pod-avatar.r2 {
+  border-color: var(--silver);
+  box-shadow: 0 0 25px rgba(203, 213, 225, 0.5);
+}
+.bpt-scope .pod-avatar.r3 {
+  border-color: var(--bronze);
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.55);
+}
+.bpt-scope .pod-crown {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+.bpt-scope .pod-name {
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 3px;
+  text-align: center;
+  max-width: 140px;
+  word-wrap: break-word;
+}
+.bpt-scope .pod-score {
+  color: var(--neon-y);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.bpt-scope .pod-bar {
+  width: 96px;
+  border-radius: 14px 14px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 14px;
+  font-weight: 900;
+  font-size: 36px;
+  color: #1f2937;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
+  animation: bpt-pod-rise 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+@keyframes bpt-pod-rise {
+  from {
+    transform: scaleY(0.05);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.bpt-scope .pod-bar.r1 {
+  background: linear-gradient(180deg, #fde047, #ca8a04);
+  height: 170px;
+  animation-delay: 0.3s;
+}
+.bpt-scope .pod-bar.r2 {
+  background: linear-gradient(180deg, #e2e8f0, #94a3b8);
+  height: 130px;
+  animation-delay: 0.15s;
+}
+.bpt-scope .pod-bar.r3 {
+  background: linear-gradient(180deg, #fb923c, #c2410c);
+  height: 100px;
+  animation-delay: 0s;
+}
+
+/* Top 4-10 table */
+.bpt-scope .leader-list {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 6px;
+  backdrop-filter: blur(10px);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.bpt-scope .row {
+  display: grid;
+  grid-template-columns: 60px 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 16px;
+  border-radius: 12px;
+  transition: background 0.15s;
+}
+.bpt-scope .row:hover {
+  background: rgba(56, 189, 248, 0.08);
+}
+.bpt-scope .row + .row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.bpt-scope .rank {
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--ink-soft);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.bpt-scope .row.you {
+  background: linear-gradient(90deg, rgba(253, 224, 71, 0.12), transparent);
+  border: 2px solid var(--neon-y) !important;
+}
+.bpt-scope .row.you .name::after {
+  content: ' · Bạn';
+  color: var(--neon-y);
+  font-size: 12px;
+  font-weight: 800;
+}
+.bpt-scope .name {
+  font-weight: 700;
+  font-size: 14px;
+  word-break: break-word;
+}
+.bpt-scope .badge {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: rgba(236, 72, 153, 0.2);
+  color: var(--neon-p);
+  font-weight: 800;
+  border: 1px solid rgba(236, 72, 153, 0.4);
+}
+.bpt-scope .score {
+  color: var(--neon-y);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+.bpt-scope .bar-mini {
+  grid-column: 1 / -1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.bpt-scope .bar-mini > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--neon-p), var(--neon-b));
+  animation: bpt-bar-grow 1s ease-out;
+}
+@keyframes bpt-bar-grow {
+  from {
+    width: 0 !important;
+  }
+}
+
+/* Collapsible top 11-50 */
+.bpt-scope .more-wrap {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.bpt-scope .more-toggle {
+  width: 100%;
+  background: transparent;
+  color: var(--ink);
+  border: none;
+  padding: 14px 18px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bpt-scope .more-toggle:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+.bpt-scope .more-toggle .chev {
+  transition: transform 0.25s;
+}
+.bpt-scope .more-wrap.open .more-toggle .chev {
+  transform: rotate(180deg);
+}
+.bpt-scope .more-list {
+  display: none;
+  padding: 4px 6px 6px;
+}
+.bpt-scope .more-wrap.open .more-list {
+  display: block;
+}
+.bpt-scope .more-list .row {
+  padding: 9px 14px;
+}
+.bpt-scope .more-list .rank {
+  font-size: 13px;
+}
+.bpt-scope .more-list .name {
+  font-size: 12.5px;
+}
+.bpt-scope .more-list .score {
+  font-size: 13px;
+}
+
+/* Empty state */
+.bpt-scope .empty {
+  text-align: center;
+  padding: 50px 20px;
+  color: var(--ink-soft);
+}
+.bpt-scope .empty .ic {
+  font-size: 46px;
+  margin-bottom: 10px;
+}
+
+/* Footer */
+.bpt-scope .foot {
+  margin-top: 30px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.bpt-scope .foot a {
+  color: var(--neon-b);
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .bpt-scope .pod-slot {
+    flex: 0 0 calc(33% - 10px);
+    min-width: 0;
+  }
+  .bpt-scope .pod-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 32px;
+  }
+  .bpt-scope .pod-bar {
+    width: 80px;
+    font-size: 28px;
+  }
+  .bpt-scope .row {
+    grid-template-columns: 44px 1fr auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .bpt-scope .badge {
+    display: none;
+  }
+}

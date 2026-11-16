@@ -1,0 +1,3961 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { submitAttempt, getPlayerName, ensurePlayerName } from '/js/api.js';
+import { sfx } from '/js/sfx.js';
+import { showWelcomeCard } from '/js/welcome-card.js';
+// Công thức pha chế + hoá chất từ DB (/api/content/lab-recipes, lab-reagents)
+// — không bundle nữa. REAGENTS lưu dạng 1 doc (object map).
+const [RECIPES, REAGENTS] = await Promise.all([
+  fetch('/api/content/lab-recipes', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : { items: [] }).then(j => j.items || []).catch(() => []),
+  fetch('/api/content/lab-reagents', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : { items: [] }).then(j => (j.items || [])[0] || {}).catch(() => ({})),
+]);
+const getRecipeById = (id) => RECIPES.find(r => r.id === id) || RECIPES[0];
+const getRecipeFromUrl = () => {
+  const id = new URLSearchParams(location.search).get('recipe');
+  return id ? getRecipeById(id) : null;
+};
+
+const sessionStartedAt = Date.now();
+
+showWelcomeCard({
+  icon: '🧪',
+  title: 'Phòng bào chế thuốc — Hướng dẫn',
+  intro: 'Thực hiện đơn pha chế theo đúng quy trình GMP rút gọn. 5 bài từ dễ đến khó.',
+  bullets: [
+    'Đọc đơn pha chế (clipboard bên trái) trước khi thao tác.',
+    'Bước nào — chọn dụng cụ tương ứng, click vào reagent rồi click vào dụng cụ (cốc/ống đong).',
+    'Cân hoạt chất đúng khối lượng (±tolerance) hoặc đong đúng thể tích.',
+    'Có thể vào phòng chung để pha chế cùng các SV khác — thấy cursor + tiến độ realtime.',
+    'Hoàn thành cả 6-9 bước rồi bấm "Hoàn thành & Nộp" để lưu điểm.',
+  ],
+  controls: { keys: ['W','A','S','D'], mouse: 'left' },
+  tip: 'Kéo chuột để xoay · cuộn để zoom · click dụng cụ + reagent đúng theo bước.',
+  persistKey: 'tizia:welcome:compounding-lab',
+  dismissLabel: 'Bắt đầu pha chế',
+});
+
+// ============================================================
+// LEVEL/RECIPE SELECTION (modal before scene init)
+// ============================================================
+const lmGrid = document.getElementById('lm-grid');
+const lmModal = document.getElementById('level-modal');
+const lmMpToggle = document.getElementById('lm-mp-toggle');
+const lmName = document.getElementById('lm-name');
+let currentRecipe = getRecipeFromUrl();
+let multiplayerOn = false;
+let myName = getPlayerName() || ('Học viên ' + Math.floor(Math.random() * 900 + 100));
+lmName.value = myName;
+
+function renderLevelModal() {
+  lmGrid.innerHTML = RECIPES.map(r => `
+    <div class="lm-card-mini" data-id="${r.id}">
+      <div class="lm-icon">${r.icon}</div>
+      <div class="lm-short">Cấp ${r.level} · ${r.short}</div>
+      <div class="lm-name">${r.name}</div>
+      <div class="lm-desc">${r.desc}</div>
+      <div class="lm-meta">Thể tích cuối: ${r.finalVolume} ${r.finalUnit} · ${r.steps.length} bước</div>
+      ${r.level === 5 ? '<span class="lm-badge">BÀI THI</span>' : ''}
+    </div>
+  `).join('');
+  lmGrid.querySelectorAll('.lm-card-mini').forEach(card => {
+    card.addEventListener('click', () => {
+      currentRecipe = getRecipeById(card.dataset.id);
+      multiplayerOn = lmMpToggle.checked;
+      myName = lmName.value.trim() || myName;
+      lmModal.style.display = 'none';
+      startGame();
+    });
+  });
+}
+
+// Initial recipe selection — modal opens / URL-direct start happens at end of script
+// (deferred so all scene init + helper functions exist by the time we call startGame).
+document.getElementById('change-level').addEventListener('click', () => {
+  renderLevelModal();
+  lmModal.style.display = 'flex';
+});
+
+// Function declared below — definitions live globally after this block.
+let startGameImpl = () => console.warn('startGame called before scene ready');
+function startGame() { startGameImpl(); }
+
+// ============================================================
+// SCENE SETUP
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeef2ee);
+scene.fog = new THREE.Fog(0xeef2ee, 14, 38);
+
+const camera = new THREE.PerspectiveCamera(44, innerWidth/innerHeight, 0.05, 100);
+camera.position.set(0, 1.72, 2.35);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+// PBR environment for glass + metal reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 1.25, -0.25);
+controls.minDistance = 1.2;
+controls.maxDistance = 5;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minPolarAngle = Math.PI * 0.18;
+
+// ============================================================
+// Camera focus tween — preset POIs (points of interest) for the
+// bottom button bar. Each preset = {pos, target}; clicking tweens
+// the camera over ~800ms then re-enables OrbitControls.
+// ============================================================
+const CAMERA_PRESETS = {
+  default:     { pos: new THREE.Vector3(0,    1.72, 2.35), target: new THREE.Vector3(0,    1.25, -0.25) },
+  counter:     { pos: new THREE.Vector3(0,    1.40, 1.50), target: new THREE.Vector3(0,    0.95,  0.15) },
+  shelf:       { pos: new THREE.Vector3(0,    1.75, 0.80), target: new THREE.Vector3(0,    1.75, -0.55) },
+  balance:     { pos: new THREE.Vector3(-1.0, 1.20, 0.95), target: new THREE.Vector3(-0.95, 1.00, 0.05) },
+  // hardcoded ±5 = ROOM_W/2 (declared later — avoid TDZ ReferenceError)
+  periodic:    { pos: new THREE.Vector3(-3.4, 1.20, -0.30), target: new THREE.Vector3(-5, 1.00, -0.30) },
+  drugclasses: { pos: new THREE.Vector3( 3.4, 1.55, -1.20), target: new THREE.Vector3( 5, 1.55, -1.20) },
+  finalbottle: { pos: new THREE.Vector3(0.35, 1.30, 1.05), target: new THREE.Vector3(0.35, 1.10,  0.15) },
+};
+const camFocus = {
+  active: false,
+  startedAt: 0,
+  duration: 850,
+  fromPos: new THREE.Vector3(),
+  toPos: new THREE.Vector3(),
+  fromTarget: new THREE.Vector3(),
+  toTarget: new THREE.Vector3(),
+  activeKey: null,
+};
+function focusCamera(key) {
+  const p = CAMERA_PRESETS[key];
+  if (!p) return;
+  camFocus.active = true;
+  camFocus.startedAt = performance.now();
+  camFocus.fromPos.copy(camera.position);
+  camFocus.toPos.copy(p.pos);
+  camFocus.fromTarget.copy(controls.target);
+  camFocus.toTarget.copy(p.target);
+  camFocus.activeKey = key;
+  controls.enabled = false;
+}
+function updateCameraFocus() {
+  if (!camFocus.active) return;
+  const t = Math.min(1, (performance.now() - camFocus.startedAt) / camFocus.duration);
+  const e = 1 - Math.pow(1 - t, 3);
+  camera.position.lerpVectors(camFocus.fromPos, camFocus.toPos, e);
+  controls.target.lerpVectors(camFocus.fromTarget, camFocus.toTarget, e);
+  camera.lookAt(controls.target);
+  if (t >= 1) {
+    camFocus.active = false;
+    controls.enabled = true;
+    controls.update();
+  }
+}
+
+// ===== Lighting =====
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+sun.position.set(2.2, 4.2, 2.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -3.5; sun.shadow.camera.right = 3.5;
+sun.shadow.camera.top = 3.5; sun.shadow.camera.bottom = -2;
+sun.shadow.camera.near = 0.1; sun.shadow.camera.far = 12;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xc8e1ff, 0.28);
+fill.position.set(-2, 3, -1);
+scene.add(fill);
+
+// Ceiling spotlights — soft cones over counter
+function ceilingSpot(x) {
+  const sp = new THREE.SpotLight(0xfff5e0, 0.7, 8, Math.PI/5.5, 0.4, 1.3);
+  sp.position.set(x, 2.85, 0.1);
+  sp.target.position.set(x, 0.95, 0.15);
+  sp.castShadow = false;
+  scene.add(sp); scene.add(sp.target);
+  // visible housing
+  const housing = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.09, 0.08, 0.05, 24),
+    new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.55, roughness: 0.35 })
+  );
+  housing.position.set(x, 2.97, 0.1);
+  scene.add(housing);
+  const bulb = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07, 0.07, 0.01, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff8e0 })
+  );
+  bulb.position.set(x, 2.94, 0.1);
+  scene.add(bulb);
+}
+ceilingSpot(-1.2); ceilingSpot(0); ceilingSpot(1.2);
+
+// ============================================================
+// ROOM
+// ============================================================
+function makeMarbleTex(w = 512, h = 512) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, '#fafaf7'); g.addColorStop(0.5, '#efeee9'); g.addColorStop(1, '#e3e2dc');
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  x.strokeStyle = 'rgba(120,120,130,0.18)';
+  for (let i = 0; i < 14; i++) {
+    x.beginPath(); x.lineWidth = 0.4 + Math.random() * 1.6;
+    x.moveTo(Math.random() * w, 0);
+    let py = 0, px = Math.random() * w;
+    while (py < h) {
+      px += (Math.random() - 0.5) * 50; py += 8 + Math.random() * 16;
+      x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+  for (let i = 0; i < 1200; i++) {
+    x.fillStyle = `rgba(80,80,90,${Math.random() * 0.04})`;
+    x.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+function makeTileTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#dde6e1'; x.fillRect(0, 0, 512, 512);
+  x.strokeStyle = '#a8b5af'; x.lineWidth = 3;
+  for (let i = 0; i <= 4; i++) {
+    x.beginPath(); x.moveTo(i * 128, 0); x.lineTo(i * 128, 512); x.stroke();
+    x.beginPath(); x.moveTo(0, i * 128); x.lineTo(512, i * 128); x.stroke();
+  }
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    const g = x.createLinearGradient(i*128, j*128, (i+1)*128, (j+1)*128);
+    g.addColorStop(0, 'rgba(255,255,255,0.08)'); g.addColorStop(1, 'rgba(0,0,0,0.05)');
+    x.fillStyle = g; x.fillRect(i*128, j*128, 128, 128);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 1.5);
+  return t;
+}
+
+// Red brick / terracotta tile floor (matches Unity chemistry-lab reference)
+function makeBrickFloorTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 1024;
+  const x = c.getContext('2d');
+  // Base grout (greyish concrete)
+  x.fillStyle = '#9b8e7b'; x.fillRect(0, 0, 1024, 1024);
+  // Tiles: 4 cols × 4 rows of 256x256 brick tiles
+  const tileSize = 256, gap = 6;
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      // Vary tile color a bit
+      const hue = 12 + Math.random() * 8;
+      const sat = 55 + Math.random() * 15;
+      const lig = 38 + Math.random() * 8;
+      const px = i * tileSize + gap;
+      const py = j * tileSize + gap;
+      const w = tileSize - gap*2, h = tileSize - gap*2;
+      const g = x.createLinearGradient(px, py, px + w, py + h);
+      g.addColorStop(0, `hsl(${hue}, ${sat}%, ${lig + 4}%)`);
+      g.addColorStop(0.5, `hsl(${hue}, ${sat}%, ${lig}%)`);
+      g.addColorStop(1, `hsl(${hue - 2}, ${sat - 5}%, ${lig - 4}%)`);
+      x.fillStyle = g;
+      // Slight rounded corners
+      x.beginPath();
+      const r = 4;
+      x.moveTo(px + r, py);
+      x.lineTo(px + w - r, py); x.quadraticCurveTo(px + w, py, px + w, py + r);
+      x.lineTo(px + w, py + h - r); x.quadraticCurveTo(px + w, py + h, px + w - r, py + h);
+      x.lineTo(px + r, py + h); x.quadraticCurveTo(px, py + h, px, py + h - r);
+      x.lineTo(px, py + r); x.quadraticCurveTo(px, py, px + r, py);
+      x.closePath(); x.fill();
+      // Tile speckles for texture
+      for (let k = 0; k < 80; k++) {
+        x.fillStyle = `rgba(${30 + Math.random() * 30}, ${10 + Math.random() * 15}, ${5 + Math.random() * 10}, ${0.04 + Math.random() * 0.08})`;
+        x.fillRect(px + Math.random() * w, py + Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2);
+      }
+      // Subtle inner highlight
+      x.strokeStyle = 'rgba(255,255,255,0.06)';
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(px + 3, py + 3); x.lineTo(px + w - 3, py + 3);
+      x.stroke();
+    }
+  }
+  // Grout dirt
+  for (let i = 0; i < 600; i++) {
+    x.fillStyle = `rgba(40,30,20,${0.05 + Math.random() * 0.15})`;
+    x.fillRect(Math.random() * 1024, Math.random() * 1024, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+const ROOM_W = 10, ROOM_D = 7, ROOM_H = 3;
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+  new THREE.MeshStandardMaterial({ map: makeBrickFloorTex(), roughness: 0.85, metalness: 0.04 })
+);
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true;
+floor.material.map.repeat.set(3, 2);
+scene.add(floor);
+
+const wallMat = new THREE.MeshStandardMaterial({ map: makeTileTex(), roughness: 0.82 });
+function addWall(w, h, x, y, z, ry) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat);
+  m.position.set(x, y, z); m.rotation.y = ry; m.receiveShadow = true;
+  scene.add(m);
+}
+addWall(ROOM_W, ROOM_H, 0, ROOM_H/2, -ROOM_D/2, 0);
+addWall(ROOM_D, ROOM_H, -ROOM_W/2, ROOM_H/2, 0, Math.PI/2);
+addWall(ROOM_D, ROOM_H,  ROOM_W/2, ROOM_H/2, 0, -Math.PI/2);
+
+const ceil = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+  new THREE.MeshStandardMaterial({ color: 0xf7f8f6, roughness: 0.92 })
+);
+ceil.position.y = ROOM_H; ceil.rotation.x = Math.PI/2; scene.add(ceil);
+
+// Window on right wall — bright blue rectangle with frame
+const windowFrame = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 1.2),
+  new THREE.MeshStandardMaterial({ color: 0xb3dffa, emissive: 0x70b8e0, emissiveIntensity: 0.32, roughness: 0.4 })
+);
+windowFrame.position.set(ROOM_W/2 - 0.02, 1.85, -1);
+windowFrame.rotation.y = -Math.PI/2;
+scene.add(windowFrame);
+
+// ===== Counter + cabinet =====
+const counter = new THREE.Mesh(
+  new THREE.BoxGeometry(3.8, 0.08, 1.5),
+  new THREE.MeshStandardMaterial({ map: makeMarbleTex(1024, 512), roughness: 0.3, metalness: 0.08 })
+);
+counter.position.set(0, 0.9, 0);
+counter.castShadow = true; counter.receiveShadow = true;
+scene.add(counter);
+const cabinet = new THREE.Mesh(
+  new THREE.BoxGeometry(3.8, 0.88, 0.78),
+  new THREE.MeshStandardMaterial({ color: 0xeeeae3, roughness: 0.7 })
+);
+cabinet.position.set(0, 0.44, -0.05);
+cabinet.castShadow = true; cabinet.receiveShadow = true;
+scene.add(cabinet);
+for (let i = -1; i <= 1; i++) {
+  const drawer = new THREE.Mesh(
+    new THREE.BoxGeometry(1.1, 0.26, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0xd9d3c8, roughness: 0.65 })
+  );
+  drawer.position.set(i * 1.2, 0.5, 0.35);
+  scene.add(drawer);
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 0.025, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.35 })
+  );
+  handle.position.set(i * 1.2, 0.5, 0.36);
+  scene.add(handle);
+}
+
+// ===== Shelf + back wall sign =====
+const shelfMat = new THREE.MeshStandardMaterial({ color: 0xa1887f, roughness: 0.85 });
+const shelf = new THREE.Group();
+shelf.position.set(0, 1.65, -0.62);
+scene.add(shelf);
+const shelfBoard = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.04, 0.32), shelfMat);
+shelfBoard.castShadow = true; shelfBoard.receiveShadow = true;
+shelf.add(shelfBoard);
+const shelfBoard2 = shelfBoard.clone();
+shelfBoard2.position.y = 0.55;
+shelf.add(shelfBoard2);
+[-1.7, 1.7].forEach(x => {
+  const bk = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.65, 0.32), shelfMat);
+  bk.position.set(x, 0.28, 0);
+  shelf.add(bk);
+});
+
+// ============================================================
+// Potted plants + books on TOP of the upper shelf (giống Unity reference)
+// ============================================================
+// Plant: terracotta pot + small leaves
+function makePlant(x, z, scale = 1) {
+  const grp = new THREE.Group();
+  grp.position.set(x, 0.575, z);   // shelf.position.y (1.65) + 0.575 = 2.225
+  grp.scale.setScalar(scale);
+  shelf.add(grp);
+  // Pot
+  const pot = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.04, 0.07, 16),
+    new THREE.MeshStandardMaterial({ color: 0xc97e4d, roughness: 0.85 })
+  );
+  pot.position.y = 0.035; pot.castShadow = true;
+  grp.add(pot);
+  // Pot rim
+  const rim = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055, 0.05, 0.012, 16),
+    new THREE.MeshStandardMaterial({ color: 0xa86238, roughness: 0.85 })
+  );
+  rim.position.y = 0.072; grp.add(rim);
+  // Soil
+  const soil = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.044, 0.044, 0.008, 16),
+    new THREE.MeshStandardMaterial({ color: 0x3f2c14, roughness: 1.0 })
+  );
+  soil.position.y = 0.076; grp.add(soil);
+  // Leaves — 6-8 angled planes with green texture
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.7, side: THREE.DoubleSide });
+  const leafMatDark = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7, side: THREE.DoubleSide });
+  for (let i = 0; i < 7; i++) {
+    const ang = (i / 7) * Math.PI * 2;
+    const tilt = 0.5 + Math.random() * 0.6;
+    const leaf = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.04, 0.10),
+      i % 2 === 0 ? leafMat : leafMatDark
+    );
+    leaf.position.set(Math.cos(ang) * 0.015, 0.13, Math.sin(ang) * 0.015);
+    leaf.rotation.y = ang;
+    leaf.rotation.x = -tilt;
+    leaf.rotation.z = (Math.random() - 0.5) * 0.3;
+    grp.add(leaf);
+  }
+  // Central tall leaf
+  const tall = new THREE.Mesh(new THREE.PlaneGeometry(0.045, 0.13), leafMat);
+  tall.position.y = 0.16; tall.rotation.y = Math.random() * Math.PI;
+  grp.add(tall);
+  return grp;
+}
+makePlant(-1.4, -0.04, 1.0);
+makePlant(-1.05, -0.04, 0.85);
+makePlant(1.5, -0.04, 0.9);
+
+// Book stack — pharma textbooks with colored spines
+function makeBook(x, y, z, w, h, d, color, title = '') {
+  const grp = new THREE.Group();
+  grp.position.set(x, y, z); shelf.add(grp);
+  // Pages (off-white box)
+  const pages = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.94, h * 0.96, d * 0.98),
+    new THREE.MeshStandardMaterial({ color: 0xfefefe, roughness: 0.95 })
+  );
+  pages.position.y = h/2;
+  grp.add(pages);
+  // Cover (colored hardback)
+  const cover = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.65 })
+  );
+  cover.position.y = h/2;
+  cover.castShadow = true; cover.receiveShadow = true;
+  grp.add(cover);
+  // Spine title
+  if (title) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 32;
+    const x_ = c.getContext('2d');
+    x_.fillStyle = `#${color.toString(16).padStart(6, '0')}`; x_.fillRect(0, 0, 256, 32);
+    x_.fillStyle = '#fbbf24'; x_.font = 'bold 14px sans-serif'; x_.textAlign = 'center'; x_.textBaseline = 'middle';
+    x_.fillText(title, 128, 16);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const t = new THREE.Mesh(
+      new THREE.PlaneGeometry(h * 0.85, d * 0.6),
+      new THREE.MeshBasicMaterial({ map: tex })
+    );
+    t.position.set(w/2 + 0.001, h/2, 0);
+    t.rotation.y = Math.PI/2; t.rotation.z = -Math.PI/2;
+    grp.add(t);
+  }
+  return grp;
+}
+// Stack at left of shelf top
+makeBook( 0.55, 0.555, 0.0, 0.05, 0.18, 0.13, 0x7f1d1d, 'BÀO CHẾ DƯỢC');
+makeBook( 0.61, 0.555, 0.0, 0.05, 0.16, 0.13, 0x1e3a8a, 'DƯỢC LIỆU');
+makeBook( 0.67, 0.555, 0.0, 0.05, 0.20, 0.13, 0x065f46, 'HÓA DƯỢC II');
+makeBook( 0.73, 0.555, 0.0, 0.05, 0.17, 0.13, 0x92400e, 'GMP-WHO');
+makeBook( 0.79, 0.555, 0.0, 0.05, 0.19, 0.13, 0x6b21a8, 'DƯỢC LÝ');
+// Horizontal book lying on top
+makeBook( 0.65, 0.555 + 0.20, -0.001, 0.20, 0.04, 0.13, 0xb91c1c, 'DDVN V');
+
+// Wall sign "PHÒNG BÀO CHẾ"
+{
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#0f766e'; x.fillRect(0, 0, 1024, 256);
+  x.strokeStyle = '#fde68a'; x.lineWidth = 8; x.strokeRect(8, 8, 1008, 240);
+  x.fillStyle = '#fff'; x.font = 'bold 92px system-ui';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('💊 PHÒNG BÀO CHẾ', 512, 100);
+  x.font = '36px system-ui'; x.fillStyle = '#fde68a';
+  x.fillText('Compounding Pharmacy Lab', 512, 180);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 0.6),
+    new THREE.MeshBasicMaterial({ map: tex })
+  );
+  sign.position.set(0, 2.55, -0.69);
+  scene.add(sign);
+}
+
+// GMP rule poster on left wall
+{
+  const c = document.createElement('canvas'); c.width = 512; c.height = 768;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fefce8'; x.fillRect(0, 0, 512, 768);
+  x.strokeStyle = '#a16207'; x.lineWidth = 4; x.strokeRect(8, 8, 496, 752);
+  x.fillStyle = '#a16207'; x.font = 'bold 38px system-ui'; x.textAlign = 'center';
+  x.fillText('📋 QUY TẮC GMP', 256, 70);
+  x.fillStyle = '#3f2c0a'; x.font = '22px system-ui'; x.textAlign = 'left';
+  const rules = [
+    '1. Đeo găng tay + kính bảo hộ',
+    '2. Cân hoạt chất chính xác',
+    '3. Đong dung môi đúng vạch',
+    '4. q.s. tới đúng thể tích cuối',
+    '5. Lắc đều khi pha hỗn dịch',
+    '6. Dán nhãn rõ ràng',
+    '7. Vệ sinh dụng cụ sau khi xong',
+    '8. Lưu sổ theo dõi pha chế',
+  ];
+  rules.forEach((t, i) => x.fillText(t, 40, 150 + i * 64));
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const poster = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.7, 1.05),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })
+  );
+  poster.position.set(-ROOM_W/2 + 0.01, 1.9, 1);
+  poster.rotation.y = Math.PI/2;
+  scene.add(poster);
+}
+
+// Hazard sign on right wall (small)
+{
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fef08a'; x.fillRect(0, 0, 256, 256);
+  x.strokeStyle = '#000'; x.lineWidth = 4; x.strokeRect(4, 4, 248, 248);
+  x.fillStyle = '#000'; x.beginPath();
+  x.moveTo(128, 32); x.lineTo(224, 200); x.lineTo(32, 200); x.closePath(); x.fill();
+  x.fillStyle = '#fef08a';
+  x.font = 'bold 100px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('!', 128, 150);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.4, 0.4),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+  );
+  sign.position.set(ROOM_W/2 - 0.02, 2.5, 1.5);
+  sign.rotation.y = -Math.PI/2;
+  scene.add(sign);
+}
+
+// Periodic table mini-poster (left wall, below GMP)
+{
+  const c = document.createElement('canvas'); c.width = 768; c.height = 432;
+  const x = c.getContext('2d');
+  x.fillStyle = '#0c4a6e'; x.fillRect(0, 0, 768, 432);
+  x.fillStyle = '#bae6fd'; x.font = 'bold 26px system-ui'; x.textAlign = 'center';
+  x.fillText('BẢNG TUẦN HOÀN — KHOA DƯỢC', 384, 36);
+  // Mini periodic table: 18 columns × 7 rows of colored boxes with symbols
+  const ELEM_ROWS = [
+    'H                                                  He',
+    'Li Be                                  B  C  N  O  F  Ne',
+    'Na Mg                                  Al Si P  S  Cl Ar',
+    'K  Ca Sc Ti V  Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr',
+  ];
+  // Color groups for fun
+  const colorOf = (sym) => {
+    const a = 'H,Li,Na,K'.split(','); const b = 'Be,Mg,Ca'.split(',');
+    const m = 'Sc,Ti,V,Cr,Mn,Fe,Co,Ni,Cu,Zn'.split(',');
+    const halo = 'F,Cl,Br'.split(','); const noble = 'He,Ne,Ar,Kr'.split(',');
+    if (a.includes(sym)) return '#dc2626';
+    if (b.includes(sym)) return '#f59e0b';
+    if (m.includes(sym)) return '#eab308';
+    if (halo.includes(sym)) return '#3b82f6';
+    if (noble.includes(sym)) return '#8b5cf6';
+    return '#14b8a6';
+  };
+  ELEM_ROWS.forEach((row, ri) => {
+    const cells = row.match(/\S+|\s\s/g) || [];
+    let col = 0;
+    for (let k = 0; k < row.length; k += 3) {
+      const sym = row.slice(k, k + 3).trim();
+      const px = 30 + (k / 3) * 38;
+      const py = 80 + ri * 60;
+      if (sym) {
+        x.fillStyle = colorOf(sym);
+        x.fillRect(px, py, 36, 50);
+        x.fillStyle = '#fff'; x.font = 'bold 18px system-ui';
+        x.fillText(sym, px + 18, py + 30);
+      }
+    }
+  });
+  x.fillStyle = '#bae6fd'; x.font = '14px system-ui';
+  x.fillText('Tizia · Compounding Pharmacy Lab', 384, 410);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const poster = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.95, 0.54),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+  );
+  poster.position.set(-ROOM_W/2 + 0.05, 1.0, -0.3);   // 5cm gap to avoid z-fight
+  poster.rotation.y = Math.PI/2;
+  poster.name = 'poi-periodic';
+  scene.add(poster);
+}
+
+// Drug classes chart (right wall, above hazard)
+{
+  const c = document.createElement('canvas'); c.width = 512; c.height = 640;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fef3c7'; x.fillRect(0, 0, 512, 640);
+  x.strokeStyle = '#92400e'; x.lineWidth = 5; x.strokeRect(8, 8, 496, 624);
+  x.fillStyle = '#92400e'; x.font = 'bold 28px system-ui'; x.textAlign = 'center';
+  x.fillText('📊 PHÂN LOẠI THUỐC', 256, 50);
+  x.font = '16px system-ui'; x.fillText('(Hệ thống ATC — WHO)', 256, 76);
+  const drugs = [
+    ['A', 'Tiêu hóa & chuyển hóa', '#10b981'],
+    ['B', 'Máu & cơ quan tạo máu', '#dc2626'],
+    ['C', 'Tim mạch',              '#f59e0b'],
+    ['D', 'Da liễu',               '#a855f7'],
+    ['G', 'Sinh dục & tiết niệu',  '#ec4899'],
+    ['H', 'Hormone hệ thống',      '#06b6d4'],
+    ['J', 'Kháng sinh hệ thống',   '#0ea5e9'],
+    ['L', 'Ức chế miễn dịch',      '#7c3aed'],
+    ['M', 'Cơ-xương khớp',         '#65a30d'],
+    ['N', 'Thần kinh trung ương',  '#4f46e5'],
+    ['R', 'Hô hấp',                '#0284c7'],
+    ['V', 'Đa năng / Khác',        '#525252'],
+  ];
+  x.font = 'bold 18px system-ui'; x.textAlign = 'left';
+  drugs.forEach((d, i) => {
+    const py = 110 + i * 40;
+    x.fillStyle = d[2]; x.fillRect(30, py - 18, 30, 30);
+    x.fillStyle = '#fff'; x.font = 'bold 18px system-ui'; x.textAlign = 'center';
+    x.fillText(d[0], 45, py - 1);
+    x.fillStyle = '#3f2c0a'; x.font = '16px system-ui'; x.textAlign = 'left';
+    x.fillText(d[1], 75, py - 1);
+  });
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const poster = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.55, 0.7),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+  );
+  poster.position.set(ROOM_W/2 - 0.05, 1.55, -1.2);   // 5cm gap to avoid z-fight
+  poster.rotation.y = -Math.PI/2;
+  poster.name = 'poi-drugclasses';
+  scene.add(poster);
+}
+
+// Calendar + clock (left wall, near GMP)
+{
+  const cc = document.createElement('canvas'); cc.width = 256; cc.height = 256;
+  const x = cc.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, 256, 256);
+  x.strokeStyle = '#1f2937'; x.lineWidth = 4; x.strokeRect(4, 4, 248, 248);
+  // Clock face
+  x.fillStyle = '#1f2937'; x.beginPath(); x.arc(128, 110, 84, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#fff'; x.beginPath(); x.arc(128, 110, 80, 0, Math.PI * 2); x.fill();
+  // hour marks
+  x.fillStyle = '#1f2937';
+  for (let h = 0; h < 12; h++) {
+    const a = h * Math.PI / 6 - Math.PI/2;
+    const r1 = 70, r2 = 78;
+    x.beginPath();
+    x.moveTo(128 + r1 * Math.cos(a), 110 + r1 * Math.sin(a));
+    x.lineTo(128 + r2 * Math.cos(a), 110 + r2 * Math.sin(a));
+    x.lineWidth = 3; x.strokeStyle = '#1f2937'; x.stroke();
+  }
+  // hour & minute hands (8:30)
+  x.lineCap = 'round'; x.strokeStyle = '#1f2937';
+  x.lineWidth = 6;
+  const ha = 8.5 * Math.PI / 6 - Math.PI/2;
+  x.beginPath(); x.moveTo(128, 110); x.lineTo(128 + 38 * Math.cos(ha), 110 + 38 * Math.sin(ha)); x.stroke();
+  x.lineWidth = 4; x.strokeStyle = '#0f766e';
+  const ma = 30 * Math.PI / 30 - Math.PI/2;
+  x.beginPath(); x.moveTo(128, 110); x.lineTo(128 + 60 * Math.cos(ma), 110 + 60 * Math.sin(ma)); x.stroke();
+  // center dot
+  x.fillStyle = '#dc2626'; x.beginPath(); x.arc(128, 110, 5, 0, Math.PI * 2); x.fill();
+  // Bottom: date
+  x.fillStyle = '#1f2937'; x.font = 'bold 22px system-ui'; x.textAlign = 'center';
+  x.fillText('Thứ Hai · 26/5', 128, 220);
+  x.font = '14px system-ui'; x.fillStyle = '#6b7280';
+  x.fillText('Phòng bào chế · Ca sáng', 128, 240);
+  const tex = new THREE.CanvasTexture(cc); tex.colorSpace = THREE.SRGBColorSpace;
+  const clock = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.36, 0.36),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+  );
+  clock.position.set(-ROOM_W/2 + 0.01, 2.4, -1.8);
+  clock.rotation.y = Math.PI/2;
+  scene.add(clock);
+}
+
+// ============================================================
+// LAB DECOR — extra realism objects
+// ============================================================
+
+// Fume hood (back-right) — open frame with glass
+{
+  const hood = new THREE.Group();
+  hood.position.set(2.2, 0.9, -0.4);
+  scene.add(hood);
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xeaeaea, roughness: 0.5, metalness: 0.3 });
+  // Two side panels
+  const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.1, 0.5), frameMat);
+  sideL.position.set(-0.4, 0.55, 0); hood.add(sideL);
+  const sideR = sideL.clone(); sideR.position.x = 0.4; hood.add(sideR);
+  // Top
+  const top = new THREE.Mesh(new THREE.BoxGeometry(0.83, 0.05, 0.5), frameMat);
+  top.position.set(0, 1.1, 0); hood.add(top);
+  // Glass sash front
+  const sashMat = new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff, metalness: 0, roughness: 0.05, transmission: 0.95,
+    thickness: 0.4, ior: 1.5, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+  });
+  const sash = new THREE.Mesh(new THREE.PlaneGeometry(0.83, 0.7), sashMat);
+  sash.position.set(0, 0.7, 0.245);
+  hood.add(sash);
+  // Inside back wall (darker)
+  const back = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.83, 1.1),
+    new THREE.MeshStandardMaterial({ color: 0xc5cdc8, roughness: 0.85 })
+  );
+  back.position.set(0, 0.55, -0.245);
+  hood.add(back);
+  // Hood label
+  const lc = document.createElement('canvas'); lc.width = 256; lc.height = 64;
+  const lx = lc.getContext('2d');
+  lx.fillStyle = '#0f766e'; lx.fillRect(0, 0, 256, 64);
+  lx.fillStyle = '#fff'; lx.font = 'bold 28px system-ui'; lx.textAlign = 'center'; lx.textBaseline = 'middle';
+  lx.fillText('FUME HOOD', 128, 32);
+  const lTex = new THREE.CanvasTexture(lc); lTex.colorSpace = THREE.SRGBColorSpace;
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: lTex }));
+  lab.position.set(0, 1.18, 0.252); hood.add(lab);
+}
+
+// Sink + faucet (counter-right edge)
+{
+  const sinkGrp = new THREE.Group();
+  sinkGrp.position.set(1.55, 0.94, 0.1);
+  scene.add(sinkGrp);
+  const sinkBowl = new THREE.Mesh(
+    new THREE.BoxGeometry(0.36, 0.08, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0xb8b8b8, metalness: 0.7, roughness: 0.3 })
+  );
+  sinkBowl.position.y = 0.0;
+  sinkGrp.add(sinkBowl);
+  const sinkHole = new THREE.Mesh(
+    new THREE.BoxGeometry(0.32, 0.005, 0.26),
+    new THREE.MeshStandardMaterial({ color: 0x202020, roughness: 0.4 })
+  );
+  sinkHole.position.y = 0.005;
+  sinkGrp.add(sinkHole);
+  // Faucet vertical pipe
+  const faucetMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.85, roughness: 0.15 });
+  const fpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.25, 12), faucetMat);
+  fpipe.position.set(0, 0.13, -0.13);
+  sinkGrp.add(fpipe);
+  // Faucet horizontal arm
+  const farm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.18, 12), faucetMat);
+  farm.rotation.z = Math.PI/2;
+  farm.position.set(0.0, 0.25, -0.13);
+  sinkGrp.add(farm);
+  // Spout
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 0.08, 12), faucetMat);
+  spout.position.set(0.0, 0.21, -0.07);
+  sinkGrp.add(spout);
+  // Knob
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.012, 16), faucetMat);
+  knob.position.set(0.0, 0.27, -0.13);
+  sinkGrp.add(knob);
+}
+
+// Pipette stand (counter-left, behind balance)
+{
+  const ps = new THREE.Group();
+  ps.position.set(-1.7, 0.94, -0.25);
+  scene.add(ps);
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, 0.02, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.85 })
+  );
+  base.position.y = 0.01; ps.add(base);
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.008, 0.008, 0.32, 12),
+    new THREE.MeshStandardMaterial({ color: 0xb0b0b0, metalness: 0.7, roughness: 0.3 })
+  );
+  post.position.set(-0.06, 0.18, 0); ps.add(post);
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.005, 0.005), new THREE.MeshStandardMaterial({ color: 0x9a9a9a, metalness: 0.6 }));
+    arm.position.set(-0.03, 0.06 + i * 0.07, 0); ps.add(arm);
+    // pipette
+    const pip = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.005, 0.005, 0.22, 12),
+      new THREE.MeshPhysicalMaterial({ color: 0xddeefa, transmission: 0.85, thickness: 0.2, opacity: 0.6, transparent: true })
+    );
+    pip.position.set(0.0, 0.17 - i * 0.005, 0);
+    ps.add(pip);
+    // bulb top
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.015, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 })
+    );
+    bulb.position.set(0.0, 0.29 - i * 0.005, 0);
+    ps.add(bulb);
+  }
+}
+
+// Gloves box (counter-right)
+{
+  const gb = new THREE.Group();
+  gb.position.set(1.0, 0.94, -0.4);
+  scene.add(gb);
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.12, 0.14),
+    new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 })
+  );
+  box.position.y = 0.06;
+  box.castShadow = true; box.receiveShadow = true;
+  gb.add(box);
+  // Label
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = '#2563eb'; x.fillRect(0, 0, 256, 128);
+  x.fillStyle = '#fff'; x.font = 'bold 32px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('🧤 NITRILE', 128, 50);
+  x.font = '20px system-ui';
+  x.fillText('Găng tay xét nghiệm', 128, 88);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.10), new THREE.MeshBasicMaterial({ map: tex }));
+  lab.position.set(0, 0.06, 0.072); gb.add(lab);
+  // Glove sticking out
+  const finger = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.04, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x4dc4ff, roughness: 0.6 })
+  );
+  finger.position.set(-0.04, 0.135, 0);
+  gb.add(finger);
+}
+
+// Tissue box (counter-right, next to gloves)
+{
+  const tb = new THREE.Group();
+  tb.position.set(1.3, 0.94, -0.4);
+  scene.add(tb);
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 0.08, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.55 })
+  );
+  box.position.y = 0.04;
+  box.castShadow = true; box.receiveShadow = true;
+  tb.add(box);
+  // tissue popping out
+  const tissue = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.06, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide })
+  );
+  tissue.position.set(0, 0.10, 0);
+  tissue.rotation.x = -0.4;
+  tb.add(tissue);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fafafa'; x.fillRect(0, 0, 256, 96);
+  x.strokeStyle = '#9ca3af'; x.lineWidth = 2; x.strokeRect(4, 4, 248, 88);
+  x.fillStyle = '#4b5563'; x.font = 'bold 24px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('🧻 Khăn giấy', 128, 48);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.06), new THREE.MeshBasicMaterial({ map: tex }));
+  lab.position.set(0, 0.04, 0.052); tb.add(lab);
+}
+
+// ============================================================
+// Lab stools with chrome wheeled base + teal cushion (giống Unity reference)
+// ============================================================
+function makeStool(x, z, rotY = 0) {
+  const stool = new THREE.Group();
+  stool.position.set(x, 0, z);
+  stool.rotation.y = rotY;
+  scene.add(stool);
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.85, roughness: 0.18 });
+  const blackMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4 });
+  // 5-spoke base (legs)
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2;
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.32, 0.025, 0.04),
+      chromeMat
+    );
+    leg.position.set(Math.cos(ang) * 0.14, 0.025, Math.sin(ang) * 0.14);
+    leg.rotation.y = -ang;
+    leg.castShadow = true; leg.receiveShadow = true;
+    stool.add(leg);
+    // Wheel at end of each leg
+    const wheel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.022, 0.025, 12),
+      blackMat
+    );
+    wheel.rotation.z = Math.PI/2;
+    wheel.position.set(Math.cos(ang) * 0.28, 0.022, Math.sin(ang) * 0.28);
+    wheel.castShadow = true;
+    stool.add(wheel);
+  }
+  // Central hub
+  const hub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16),
+    chromeMat
+  );
+  hub.position.y = 0.04; stool.add(hub);
+  // Gas-lift post
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.03, 0.45, 16),
+    chromeMat
+  );
+  post.position.y = 0.28; post.castShadow = true;
+  stool.add(post);
+  // Seat (teal padded cushion)
+  const seat = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 0.07, 32),
+    new THREE.MeshStandardMaterial({ color: 0x14b8a6, roughness: 0.7 })
+  );
+  seat.position.y = 0.55; seat.castShadow = true; seat.receiveShadow = true;
+  stool.add(seat);
+  // Seat top edge highlight
+  const seatTop = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.175, 0.175, 0.008, 32),
+    new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.6 })
+  );
+  seatTop.position.y = 0.589; stool.add(seatTop);
+  return stool;
+}
+// Tuck 2 stools partly under counter front edge
+makeStool(-1.0, 1.0, 0.3);
+makeStool(1.0, 1.0, -0.4);
+
+// ============================================================
+// Test tube rack with 4 colored samples (giống Unity reference)
+// ============================================================
+{
+  const rack = new THREE.Group();
+  rack.position.set(-1.55, 0.94, 0.4);
+  rack.rotation.y = 0.18;
+  rack.userData = { kind: 'tool', id: 'test-tube-rack', name: 'Giá ống nghiệm — Mẫu QC chuẩn', label: 'Reference standards' };
+  scene.add(rack);
+  // Wooden U-shaped frame
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0xc77e4d, roughness: 0.7 });
+  const woodMatDark = new THREE.MeshStandardMaterial({ color: 0x9c5a30, roughness: 0.75 });
+  // Bottom plank with 4 holes (boxes around holes)
+  const baseW = 0.22, baseD = 0.07, baseT = 0.025;
+  const bottom = new THREE.Mesh(new THREE.BoxGeometry(baseW, baseT, baseD), woodMatDark);
+  bottom.position.y = 0.012; bottom.castShadow = true; bottom.receiveShadow = true;
+  rack.add(bottom);
+  // Vertical side posts
+  for (const sx of [-baseW/2 + 0.012, baseW/2 - 0.012]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.12, baseD), woodMat);
+    post.position.set(sx, 0.06, 0); post.castShadow = true;
+    rack.add(post);
+  }
+  // Top plank with 4 round holes
+  const top = new THREE.Mesh(new THREE.BoxGeometry(baseW, 0.014, baseD), woodMat);
+  top.position.y = 0.12;
+  rack.add(top);
+  // 4 test tubes with colored liquid
+  const tubeColors = [
+    { liquid: 0x1d4ed8, label: 'Cu²⁺' },     // blue copper sulfate
+    { liquid: 0xeab308, label: 'Fe³⁺' },     // yellow iron
+    { liquid: 0x10b981, label: 'Mg²⁺' },     // greenish magnesium
+    { liquid: 0xdc2626, label: 'phenol' },   // red phenolphthalein
+  ];
+  const tubeGlass = new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff, metalness: 0, roughness: 0.04,
+    transmission: 0.97, thickness: 0.3, ior: 1.5,
+    clearcoat: 1, opacity: 0.5, transparent: true, side: THREE.DoubleSide,
+    envMapIntensity: 1.4,
+  });
+  for (let i = 0; i < 4; i++) {
+    const xOff = -baseW/2 + 0.035 + i * 0.05;
+    // Glass tube (open at top — rounded bottom)
+    const tube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.011, 0.011, 0.13, 24, 1, true),
+      tubeGlass
+    );
+    tube.position.set(xOff, 0.10, 0); rack.add(tube);
+    // Tube rounded bottom (small hemisphere)
+    const tubeBot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.011, 16, 12, 0, Math.PI*2, Math.PI/2, Math.PI/2),
+      tubeGlass
+    );
+    tubeBot.position.set(xOff, 0.035, 0); rack.add(tubeBot);
+    // Liquid inside (60-90% full)
+    const fillH = 0.07 + Math.random() * 0.03;
+    const liquid = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.0095, 0.0095, fillH, 24),
+      new THREE.MeshPhysicalMaterial({
+        color: tubeColors[i].liquid, roughness: 0.25,
+        transparent: true, opacity: 0.88, transmission: 0.3,
+      })
+    );
+    liquid.position.set(xOff, 0.04 + fillH/2, 0); rack.add(liquid);
+    // Small white label sticker on tube
+    const lc = document.createElement('canvas'); lc.width = 64; lc.height = 32;
+    const lx = lc.getContext('2d');
+    lx.fillStyle = '#fff'; lx.fillRect(0, 0, 64, 32);
+    lx.strokeStyle = '#000'; lx.lineWidth = 1; lx.strokeRect(1, 1, 62, 30);
+    lx.fillStyle = '#000'; lx.font = 'bold 16px system-ui'; lx.textAlign = 'center'; lx.textBaseline = 'middle';
+    lx.fillText(tubeColors[i].label, 32, 16);
+    const lTex = new THREE.CanvasTexture(lc); lTex.colorSpace = THREE.SRGBColorSpace;
+    const stickerLab = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.018, 0.011),
+      new THREE.MeshBasicMaterial({ map: lTex })
+    );
+    stickerLab.position.set(xOff, 0.07, 0.012); rack.add(stickerLab);
+  }
+}
+
+// Metal sample tray under the test tube rack (small chunks of Cu/Fe/Mg metal samples)
+{
+  const tray = new THREE.Group();
+  tray.position.set(-1.55, 0.94, 0.62);
+  scene.add(tray);
+  const trayMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.008, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0xb0b0b0, metalness: 0.85, roughness: 0.25 })
+  );
+  trayMesh.position.y = 0.004;
+  trayMesh.castShadow = true; trayMesh.receiveShadow = true;
+  tray.add(trayMesh);
+  // Lip
+  for (const [w, d, dx, dz] of [[0.22, 0.003, 0, 0.06], [0.22, 0.003, 0, -0.06], [0.003, 0.12, 0.11, 0], [0.003, 0.12, -0.11, 0]]) {
+    const lip = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.012, d),
+      new THREE.MeshStandardMaterial({ color: 0xa0a0a0, metalness: 0.85, roughness: 0.3 })
+    );
+    lip.position.set(dx, 0.014, dz); tray.add(lip);
+  }
+  // Metal sample chunks
+  const samples = [
+    { color: 0xb87333, x: -0.07, label: 'Cu' },   // copper
+    { color: 0x666666, x: -0.02, label: 'Fe' },   // iron
+    { color: 0xe5e7eb, x: 0.03,  label: 'Mg' },   // magnesium
+    { color: 0xddc070, x: 0.08,  label: 'Zn' },   // zinc
+  ];
+  for (const s of samples) {
+    const chunk = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.012, 0.018),
+      new THREE.MeshStandardMaterial({ color: s.color, metalness: 0.6, roughness: 0.45 })
+    );
+    chunk.position.set(s.x, 0.018, 0);
+    chunk.rotation.y = Math.random() * Math.PI;
+    tray.add(chunk);
+  }
+}
+
+// Safety goggles on counter (placeholder simple)
+{
+  const g = new THREE.Group();
+  g.position.set(-0.55, 0.94, 0.45);
+  g.rotation.y = -0.4;
+  scene.add(g);
+  const strap = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.005, 8, 24), new THREE.MeshStandardMaterial({ color: 0x111827 }));
+  strap.rotation.x = Math.PI/2;
+  strap.position.y = 0.02; g.add(strap);
+  const lens = new THREE.Mesh(
+    new THREE.BoxGeometry(0.13, 0.04, 0.04),
+    new THREE.MeshPhysicalMaterial({ color: 0xddeefa, transmission: 0.9, roughness: 0.05, opacity: 0.55, transparent: true })
+  );
+  lens.position.y = 0.02; g.add(lens);
+}
+
+// ============================================================
+// Microscope (counter-right, behind/near fume hood)
+// ============================================================
+{
+  const m = new THREE.Group();
+  m.position.set(1.85, 0.94, 0.35);
+  m.rotation.y = -0.5;
+  scene.add(m);
+  const black = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5, metalness: 0.35 });
+  const grey = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.5, metalness: 0.55 });
+  const chrome = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2, metalness: 0.85 });
+  // U-shaped base
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.025, 0.14), black);
+  base.position.y = 0.012; base.castShadow = true; base.receiveShadow = true;
+  m.add(base);
+  // Vertical arm
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.22, 0.08), black);
+  arm.position.set(0.04, 0.13, -0.02); m.add(arm);
+  // Stage (sample platform)
+  const stage = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.012, 0.10), grey);
+  stage.position.set(-0.025, 0.085, 0.02); m.add(stage);
+  // Stage clip
+  const clip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.005, 0.02), chrome);
+  clip.position.set(-0.025, 0.092, 0.04); m.add(clip);
+  // Objective turret (cylindrical)
+  const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.018, 16), black);
+  turret.position.set(-0.025, 0.15, 0.02); m.add(turret);
+  // 3 objective lenses
+  for (let i = 0; i < 3; i++) {
+    const ang = i * Math.PI * 2 / 3;
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.025, 12), chrome);
+    lens.position.set(-0.025 + Math.cos(ang) * 0.012, 0.133, 0.02 + Math.sin(ang) * 0.012);
+    m.add(lens);
+  }
+  // Body tube
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.10, 16), black);
+  tube.position.set(-0.025, 0.215, 0.02); m.add(tube);
+  // Eyepiece (angled)
+  const eyepiece = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.012, 0.06, 16), black);
+  eyepiece.position.set(-0.025, 0.28, 0.05);
+  eyepiece.rotation.x = -0.4;
+  m.add(eyepiece);
+  // Focus knob (large round black)
+  const focus = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.018, 16), grey);
+  focus.position.set(0.075, 0.12, -0.02); focus.rotation.z = Math.PI/2;
+  m.add(focus);
+  // Brand decal on side
+  const bc = document.createElement('canvas'); bc.width = 128; bc.height = 32;
+  const bx = bc.getContext('2d');
+  bx.fillStyle = '#1f2937'; bx.fillRect(0, 0, 128, 32);
+  bx.fillStyle = '#fbbf24'; bx.font = 'bold 16px sans-serif'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+  bx.fillText('PharmaScope', 64, 16);
+  const bTex = new THREE.CanvasTexture(bc); bTex.colorSpace = THREE.SRGBColorSpace;
+  const brand = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.015), new THREE.MeshBasicMaterial({ map: bTex }));
+  brand.position.set(0.062, 0.13, 0); brand.rotation.y = Math.PI/2;
+  m.add(brand);
+}
+
+// ============================================================
+// Open lab notebook (3D plane with sketched formula notes)
+// ============================================================
+{
+  const nb = new THREE.Group();
+  nb.position.set(-1.5, 0.94, 0.6);
+  nb.rotation.y = 0.4;
+  scene.add(nb);
+  // Spine + 2 page panels
+  const spine = new THREE.Mesh(
+    new THREE.BoxGeometry(0.012, 0.005, 0.20),
+    new THREE.MeshStandardMaterial({ color: 0x6b3318, roughness: 0.8 })
+  );
+  spine.position.y = 0.005; nb.add(spine);
+  // Page texture (lined notebook with handwritten notes)
+  function makePageTex(side) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 768;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fffef5'; x.fillRect(0, 0, 512, 768);
+    // ruled lines
+    x.strokeStyle = '#a3b5d4'; x.lineWidth = 1;
+    for (let i = 60; i < 760; i += 28) {
+      x.beginPath(); x.moveTo(20, i); x.lineTo(490, i); x.stroke();
+    }
+    // red margin
+    x.strokeStyle = '#dc2626'; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(60, 20); x.lineTo(60, 740); x.stroke();
+    if (side === 'left') {
+      x.fillStyle = '#1d4ed8'; x.font = 'bold 26px "Comic Sans MS", cursive'; x.textAlign = 'left';
+      x.fillText('Ngày: 26/05  Ca sáng', 80, 88);
+      x.fillStyle = '#1f2937'; x.font = '20px "Comic Sans MS", cursive';
+      const lines = [
+        'Bài: Siro Paracetamol 24mg/mL',
+        '— Tính toán liều cho 100 mL —',
+        '',
+        'Paracetamol: 24 × 100 = 2400 mg',
+        '            = 2.4 g  ✓',
+        'Syrup base: 80 mL (đệm vị)',
+        'Nước cất: q.s. → 100 mL',
+        '',
+        'pH theo dược điển: 4-6',
+        'Bảo quản: < 30°C, kín',
+        'Hạn dùng: 24 tháng',
+      ];
+      lines.forEach((l, i) => x.fillText(l, 80, 130 + i * 30));
+    } else {
+      x.fillStyle = '#15803d'; x.font = 'bold 24px "Comic Sans MS", cursive';
+      x.fillText('Quy trình:', 80, 88);
+      x.fillStyle = '#1f2937'; x.font = '18px "Comic Sans MS", cursive';
+      const proc = [
+        '1) Cân Paracetamol 2.4 g ± 0.05',
+        '2) Đặt vào beaker 250 mL',
+        '3) Đong 80 mL Syrup → đổ vào',
+        '4) Khuấy đều bằng đũa',
+        '5) q.s. nước cất đến vạch',
+        '6) Lọc qua giấy lọc',
+        '7) Đóng chai 100 mL',
+        '8) Dán nhãn → kiểm tra',
+        '',
+        'Lưu ý: tránh ánh sáng,',
+        'lắc đều trước khi dùng',
+      ];
+      proc.forEach((l, i) => x.fillText(l, 80, 130 + i * 30));
+      // Doodle: little pill
+      x.fillStyle = '#dc2626';
+      x.beginPath(); x.arc(380, 600, 30, Math.PI/2, -Math.PI/2, false); x.fill();
+      x.fillStyle = '#fbbf24';
+      x.beginPath(); x.arc(380, 600, 30, -Math.PI/2, Math.PI/2, false); x.fill();
+      x.strokeStyle = '#1f2937'; x.lineWidth = 2;
+      x.beginPath(); x.arc(380, 600, 30, 0, Math.PI * 2); x.stroke();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const pageMat = new THREE.MeshStandardMaterial({ map: makePageTex('left'), roughness: 0.95 });
+  const pageMatR = new THREE.MeshStandardMaterial({ map: makePageTex('right'), roughness: 0.95 });
+  const pageL = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.20), pageMat);
+  pageL.rotation.x = -Math.PI/2;
+  pageL.position.set(-0.072, 0.01, 0);
+  nb.add(pageL);
+  const pageR = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.20), pageMatR);
+  pageR.rotation.x = -Math.PI/2;
+  pageR.position.set(0.072, 0.01, 0);
+  nb.add(pageR);
+  // Pencil
+  const pencil = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.004, 0.004, 0.12, 8),
+    new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.6 })
+  );
+  pencil.position.set(0.13, 0.012, -0.07);
+  pencil.rotation.z = Math.PI/2; pencil.rotation.y = -0.3;
+  nb.add(pencil);
+}
+
+// ============================================================
+// Lab coat hanging on a wall hook (left wall)
+// ============================================================
+{
+  const coat = new THREE.Group();
+  coat.position.set(-ROOM_W/2 + 0.02, 1.55, -1.7);
+  coat.rotation.y = Math.PI/2;
+  scene.add(coat);
+  // Hook
+  const hook = new THREE.Mesh(
+    new THREE.TorusGeometry(0.018, 0.004, 8, 16, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.25 })
+  );
+  hook.position.y = 0.4; hook.rotation.x = -Math.PI/2;
+  coat.add(hook);
+  // Coat body (single plane with texture)
+  const cc = document.createElement('canvas'); cc.width = 256; cc.height = 384;
+  const x = cc.getContext('2d');
+  // White coat
+  x.fillStyle = '#fefefe'; x.fillRect(0, 0, 256, 384);
+  // Shading on edges
+  x.fillStyle = '#e5e7eb';
+  x.fillRect(0, 0, 30, 384); x.fillRect(226, 0, 30, 384);
+  // Collar
+  x.fillStyle = '#f3f4f6';
+  x.beginPath();
+  x.moveTo(80, 0); x.lineTo(128, 50); x.lineTo(176, 0);
+  x.closePath(); x.fill();
+  // Buttons
+  x.fillStyle = '#525252';
+  for (let i = 0; i < 4; i++) {
+    x.beginPath(); x.arc(128, 100 + i * 50, 4, 0, Math.PI * 2); x.fill();
+  }
+  // Pocket
+  x.strokeStyle = '#d1d5db'; x.lineWidth = 1.5;
+  x.strokeRect(180, 200, 40, 50);
+  // Name tag
+  x.fillStyle = '#1e3a8a'; x.fillRect(50, 60, 50, 18);
+  x.fillStyle = '#fff'; x.font = 'bold 10px system-ui'; x.textAlign = 'center';
+  x.fillText('DS. ANH', 75, 73);
+  const tex = new THREE.CanvasTexture(cc); tex.colorSpace = THREE.SRGBColorSpace;
+  const body = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.45, 0.7),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide })
+  );
+  body.position.y = 0;
+  coat.add(body);
+}
+
+// ============================================================
+// Trash bin (biohazard yellow, corner)
+// ============================================================
+{
+  const bin = new THREE.Group();
+  bin.position.set(ROOM_W/2 - 0.5, 0, 1.8);
+  scene.add(bin);
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.13, 0.5, 24),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5 })
+  );
+  body.position.y = 0.25; body.castShadow = true; body.receiveShadow = true;
+  bin.add(body);
+  // Lid
+  const lid = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.16, 0.025, 24),
+    new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.5 })
+  );
+  lid.position.y = 0.51; bin.add(lid);
+  // Biohazard label
+  const bc2 = document.createElement('canvas'); bc2.width = 128; bc2.height = 128;
+  const x2 = bc2.getContext('2d');
+  x2.fillStyle = '#facc15'; x2.fillRect(0, 0, 128, 128);
+  x2.fillStyle = '#000'; x2.font = 'bold 14px system-ui'; x2.textAlign = 'center';
+  x2.fillText('☣ BIOHAZARD', 64, 110);
+  // Trefoil
+  x2.fillStyle = '#000';
+  x2.beginPath(); x2.arc(64, 50, 28, 0, Math.PI*2); x2.fill();
+  x2.fillStyle = '#facc15';
+  x2.beginPath(); x2.arc(64, 50, 18, 0, Math.PI*2); x2.fill();
+  x2.fillStyle = '#000';
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI * 2 / 3 - Math.PI/2;
+    x2.beginPath(); x2.arc(64 + Math.cos(a) * 30, 50 + Math.sin(a) * 30, 14, 0, Math.PI*2); x2.fill();
+  }
+  const tex2 = new THREE.CanvasTexture(bc2); tex2.colorSpace = THREE.SRGBColorSpace;
+  // Curved label that wraps around the bin's cylindrical body (instead of a
+  // flat plane floating in front of it). Arc length ≈ label height so the
+  // square biohazard texture stays roughly square when wrapped.
+  const labelArc = Math.PI / 2.5;        // ~72°, centred on +Z (front of bin)
+  const label = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.151, 0.143, 0.18, 32, 1, true, -labelArc / 2, labelArc),
+    new THREE.MeshStandardMaterial({ map: tex2, transparent: true, roughness: 0.6, side: THREE.DoubleSide })
+  );
+  label.position.set(0, 0.25, 0); bin.add(label);
+}
+
+// ============================================================
+// Lab cup of coffee (small atmospheric detail)
+// ============================================================
+{
+  const cup = new THREE.Group();
+  cup.position.set(1.3, 0.94, 0.55);
+  scene.add(cup);
+  const ceramic = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.030, 0.07, 24), ceramic);
+  body.position.y = 0.035; body.castShadow = true; body.receiveShadow = true;
+  cup.add(body);
+  // Coffee surface
+  const coffee = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.032, 0.032, 0.005, 24),
+    new THREE.MeshStandardMaterial({ color: 0x4a2c14, roughness: 0.4 })
+  );
+  coffee.position.y = 0.065; cup.add(coffee);
+  // Handle (small torus partial)
+  const handle = new THREE.Mesh(
+    new THREE.TorusGeometry(0.02, 0.006, 8, 16, Math.PI),
+    ceramic
+  );
+  handle.position.set(0.04, 0.04, 0); handle.rotation.y = Math.PI/2;
+  cup.add(handle);
+  // Logo decal
+  const cc3 = document.createElement('canvas'); cc3.width = 64; cc3.height = 32;
+  const x3 = cc3.getContext('2d');
+  x3.fillStyle = '#fff'; x3.fillRect(0, 0, 64, 32);
+  x3.fillStyle = '#0f766e'; x3.font = 'bold 16px sans-serif'; x3.textAlign = 'center'; x3.textBaseline = 'middle';
+  x3.fillText('Rx ♥', 32, 16);
+  const tex3 = new THREE.CanvasTexture(cc3); tex3.colorSpace = THREE.SRGBColorSpace;
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.02), new THREE.MeshBasicMaterial({ map: tex3 }));
+  decal.position.set(0, 0.035, 0.036); cup.add(decal);
+}
+
+// ============================================================
+// REAGENT BOTTLES (dynamic from recipe)
+// ============================================================
+const reagents = [];
+
+// Lathe profile for a reagent bottle: radius vs height (in meters)
+function bottleProfile() {
+  // smooth curve from bottom → shoulder → neck → lip
+  return [
+    [0.0,    0.000],
+    [0.072,  0.000],
+    [0.078,  0.015],
+    [0.078,  0.190],
+    [0.075,  0.205],
+    [0.063,  0.222],
+    [0.050,  0.237],
+    [0.038,  0.252],
+    [0.030,  0.268],
+    [0.028,  0.285],
+    [0.028,  0.310],
+    [0.034,  0.312],   // outer lip
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+}
+
+function makeBottle({ x, y, z, name, color, liquidColor, isPowder = false, idTag }) {
+  const grp = new THREE.Group();
+  grp.position.set(x, y, z);
+  grp.userData = { type: 'bottle', name, color, liquidColor, isPowder };
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color, metalness: 0, roughness: 0.08,
+    transmission: isPowder ? 0.0 : 0.75, thickness: 0.5, ior: 1.5,
+    clearcoat: 1, clearcoatRoughness: 0.08,
+    transparent: !isPowder, opacity: isPowder ? 1.0 : 0.78,
+    envMapIntensity: 1.4, side: THREE.DoubleSide,
+  });
+  // Lathe-based bottle body (one mesh — smooth curves)
+  const body = new THREE.Mesh(
+    new THREE.LatheGeometry(bottleProfile(), 48),
+    bodyMat
+  );
+  body.castShadow = true; body.receiveShadow = true;
+  grp.add(body);
+  // Cap on top — wrapped in a subgroup so the pour anim can lift it off.
+  const capGrp = new THREE.Group();
+  capGrp.position.y = 0.336;
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.034, 0.042, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2c2c2c, roughness: 0.4, metalness: 0.25 })
+  );
+  cap.castShadow = true;
+  capGrp.add(cap);
+  for (let i = 0; i < 8; i++) {
+    const ridge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.002, 0.038, 0.008),
+      new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 })
+    );
+    const ang = (i / 8) * Math.PI * 2;
+    ridge.position.set(Math.cos(ang) * 0.034, 0, Math.sin(ang) * 0.034);
+    ridge.rotation.y = -ang;
+    capGrp.add(ridge);
+  }
+  grp.add(capGrp);
+  grp.userData.capGroup = capGrp;
+  grp.userData.capBaseY = 0.336;
+  // Liquid/powder fill inside (also a lathe with slight meniscus dip)
+  const fillProfile = [
+    [0.0,    0.005],
+    [0.070,  0.005],
+    [0.075,  0.020],
+    [0.075,  0.165],
+    [0.072,  0.175],   // meniscus: slight inward curve at the surface
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  const fill = new THREE.Mesh(
+    new THREE.LatheGeometry(fillProfile, 36),
+    new THREE.MeshPhysicalMaterial({
+      color: liquidColor, roughness: isPowder ? 1.0 : 0.28, metalness: 0,
+      transmission: isPowder ? 0 : 0.25, opacity: isPowder ? 1.0 : 0.92,
+      transparent: !isPowder,
+    })
+  );
+  grp.add(fill);
+  // Label (front)
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x_ = c.getContext('2d');
+  x_.fillStyle = '#fefefe'; x_.fillRect(0, 0, 256, 128);
+  x_.strokeStyle = '#94a3b8'; x_.lineWidth = 4; x_.strokeRect(4, 4, 248, 120);
+  x_.fillStyle = '#1f2937'; x_.font = 'bold 22px system-ui'; x_.textAlign = 'center'; x_.textBaseline = 'middle';
+  const words = name.split(' ');
+  let line = '', lines = [];
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (x_.measureText(test).width > 200 && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  lines.slice(0, 3).forEach((l, i) => x_.fillText(l, 128, 50 + i * 28));
+  // small icon
+  x_.fillStyle = isPowder ? '#92400e' : '#1d4ed8';
+  x_.font = 'bold 14px system-ui';
+  x_.fillText(isPowder ? '⬛ POWDER' : '💧 LIQUID', 128, 110);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  // Curved label — partial cylinder that wraps around the front of the bottle
+  // (radius 0.080 just outside body radius 0.078). thetaStart=-π/4, length=π/2
+  // → 90° arc centered on +Z, so text reads naturally when viewed from camera.
+  const lab = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0805, 0.0805, 0.10, 32, 1, true, -Math.PI / 4, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide })
+  );
+  lab.position.set(0, 0.13, 0); grp.add(lab);
+  return grp;
+}
+
+function clearReagents() {
+  for (const b of reagents) scene.remove(b);
+  reagents.length = 0;
+}
+
+function setupReagents(recipe) {
+  clearReagents();
+  // Set of reagents needed by this recipe (excluding 'beaker' which isn't a reagent)
+  const needed = new Set();
+  for (const s of recipe.steps) {
+    if (s.reagentId && s.reagentId !== 'beaker' && s.action !== 'transfer' && s.action !== 'bottle' && s.action !== 'place-on-balance') {
+      needed.add(s.reagentId);
+    }
+  }
+  const ids = [...needed, ...(recipe.distractors || [])];
+  const N = ids.length;
+  const xStart = -1.3, xStep = 2.5 / Math.max(N - 1, 1);
+  ids.forEach((id, i) => {
+    const r = REAGENTS[id];
+    if (!r) return;
+    const b = makeBottle({
+      x: xStart + i * xStep, y: 1.69, z: -0.55,
+      name: r.name, color: r.color, liquidColor: r.liquid, isPowder: r.isPowder,
+    });
+    b.userData.id = id;
+    b.userData.kind = 'reagent';
+    b.userData.label = r.category;
+    scene.add(b);
+    addMouthMarker(b, 0.312, 0xff2020);    // RED — reagent bottle lip
+    reagents.push(b);
+  });
+}
+
+// ============================================================
+// LAB TOOLS — balance, beaker, cylinder, mortar, final bottle
+// ============================================================
+
+const balance = new THREE.Group();
+balance.position.set(-0.95, 0.94, 0.05);
+balance.userData = { kind: 'tool', id: 'balance', name: 'Cân điện tử PrecisionLab', label: 'AB-220 · 0.001 g' };
+scene.add(balance);
+const balBase = new THREE.Mesh(
+  new THREE.BoxGeometry(0.45, 0.06, 0.35),
+  new THREE.MeshStandardMaterial({ color: 0xf3f4f6, roughness: 0.35, metalness: 0.4 })
+);
+balBase.castShadow = true; balBase.receiveShadow = true;
+balance.add(balBase);
+const balPan = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.12, 0.12, 0.012, 32),
+  new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.25, metalness: 0.85 })
+);
+balPan.position.set(0.03, 0.05, 0);
+balPan.castShadow = true;
+balance.add(balPan);
+// underside pillar
+const balPillar = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.025, 0.03, 0.02, 16),
+  new THREE.MeshStandardMaterial({ color: 0x9a9a9a, metalness: 0.7, roughness: 0.4 })
+);
+balPillar.position.set(0.03, 0.035, 0);
+balance.add(balPillar);
+const balScreenBack = new THREE.Mesh(
+  new THREE.BoxGeometry(0.2, 0.08, 0.008),
+  new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 })
+);
+balScreenBack.position.set(-0.16, 0.085, 0.1); balScreenBack.rotation.x = -0.28;
+balance.add(balScreenBack);
+const balScreenCanvas = document.createElement('canvas');
+balScreenCanvas.width = 320; balScreenCanvas.height = 110;
+const balScreenCtx = balScreenCanvas.getContext('2d');
+function drawBalScreen(weight, status = 'STABLE') {
+  const x = balScreenCtx, c = balScreenCanvas;
+  x.fillStyle = '#0a2010'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#5fff6c'; x.font = 'bold 72px "Courier New", monospace';
+  x.textAlign = 'right'; x.textBaseline = 'middle';
+  x.shadowColor = '#5fff6c'; x.shadowBlur = 10;
+  const text = (weight >= 0 ? '+' : '') + weight.toFixed(3).padStart(7, ' ');
+  x.fillText(text + ' g', c.width - 16, c.height/2 - 5);
+  x.shadowBlur = 0;
+  x.fillStyle = '#5fff6c'; x.font = '14px "Courier New", monospace';
+  x.textAlign = 'left';
+  x.fillText('▸ ' + status, 14, c.height - 14);
+  // tare hint
+  x.textAlign = 'right';
+  x.fillText('TARE', c.width - 16, c.height - 14);
+}
+const balScreenTex = new THREE.CanvasTexture(balScreenCanvas);
+balScreenTex.colorSpace = THREE.SRGBColorSpace;
+const balScreenFace = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.19, 0.075),
+  new THREE.MeshBasicMaterial({ map: balScreenTex })
+);
+balScreenFace.position.copy(balScreenBack.position);
+balScreenFace.position.z += 0.005; balScreenFace.rotation.x = -0.28;
+balance.add(balScreenFace);
+drawBalScreen(0, 'READY');
+// Brand decal on top
+{
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1f2937'; x.fillRect(0, 0, 256, 48);
+  x.fillStyle = '#fbbf24'; x.font = 'bold 26px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('PrecisionLab AB-220', 128, 24);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const brand = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.038), new THREE.MeshBasicMaterial({ map: tex }));
+  brand.position.set(0.05, 0.035, 0.176); brand.rotation.x = -Math.PI/2;
+  balance.add(brand);
+}
+// 3 buttons (tare, mode, zero)
+const btnMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.4, metalness: 0.2 });
+[-0.05, 0.05, 0.15].forEach((dx, i) => {
+  const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.006, 16), btnMat);
+  btn.position.set(dx, 0.036, 0.13); btn.rotation.x = Math.PI/2;
+  balance.add(btn);
+});
+
+// Beaker
+function makeBeaker(capacity = 250) {
+  const grp = new THREE.Group();
+  grp.userData = { kind: 'tool', id: 'beaker', name: 'Cốc thủy tinh 250 mL', label: 'Borosil glass', capacity };
+  const h = 0.14, r = 0.045;
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff, metalness: 0, roughness: 0.03,
+    transmission: 0.97, thickness: 0.5, ior: 1.5,
+    clearcoat: 1, clearcoatRoughness: 0.03,
+    transparent: true, opacity: 0.5, side: THREE.DoubleSide,
+    envMapIntensity: 1.4,
+  });
+  const outer = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 36, 1, true), glassMat);
+  outer.position.y = h/2; grp.add(outer);
+  const bot = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.005, 36), glassMat);
+  bot.position.y = 0.0025; grp.add(bot);
+  // Rim
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.002, 8, 36), glassMat);
+  rim.position.y = h; rim.rotation.x = Math.PI/2; grp.add(rim);
+  // Pour spout (small triangular lip on +Z side of rim)
+  const spoutShape = new THREE.Shape();
+  spoutShape.moveTo(-0.015, 0);
+  spoutShape.lineTo(0.015, 0);
+  spoutShape.lineTo(0, 0.012);
+  spoutShape.closePath();
+  const spout = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(spoutShape, { depth: 0.008, bevelEnabled: false }),
+    glassMat
+  );
+  spout.position.set(0, h - 0.001, r);
+  spout.rotation.x = Math.PI / 2;
+  grp.add(spout);
+  // Measurement marks
+  const mc = document.createElement('canvas'); mc.width = 128; mc.height = 256;
+  const mcx = mc.getContext('2d');
+  mcx.strokeStyle = '#1d4ed8'; mcx.lineWidth = 1; mcx.fillStyle = '#1d4ed8'; mcx.font = '11px monospace';
+  for (let i = 50; i <= 250; i += 50) {
+    const y = mc.height - i / 250 * (mc.height - 20) - 10;
+    mcx.beginPath(); mcx.moveTo(20, y); mcx.lineTo(36, y); mcx.stroke();
+    mcx.fillText(i + 'mL', 40, y + 4);
+  }
+  mcx.font = 'bold 14px system-ui';
+  mcx.fillText('250 mL', 12, 18);
+  const mTex = new THREE.CanvasTexture(mc); mTex.colorSpace = THREE.SRGBColorSpace;
+  const marks = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.045, 0.12),
+    new THREE.MeshBasicMaterial({ map: mTex, transparent: true })
+  );
+  marks.position.set(r, h/2, 0.001); marks.rotation.y = Math.PI/2;
+  grp.add(marks);
+  const liquid = new THREE.Mesh(
+    new THREE.CylinderGeometry(r - 0.002, r - 0.002, 0.01, 36),
+    new THREE.MeshPhysicalMaterial({ color: 0xa1d99b, roughness: 0.25, transparent: true, opacity: 0.88, transmission: 0.3 })
+  );
+  liquid.position.y = 0.006; liquid.visible = false;
+  grp.add(liquid);
+  grp.userData.liquid = liquid;
+  grp.userData.maxH = h - 0.01;
+  return grp;
+}
+const beaker = makeBeaker();
+beaker.position.set(-0.3, 0.94, 0.15);
+scene.add(beaker);
+
+// Graduated cylinder
+function makeCylinder(capacity = 100) {
+  const grp = new THREE.Group();
+  grp.userData = { kind: 'tool', id: 'cylinder', name: 'Ống đong 100 mL', label: 'Class A graduated cylinder', capacity };
+  const h = 0.2, r = 0.022;
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff, metalness: 0, roughness: 0.04,
+    transmission: 0.97, thickness: 0.4, ior: 1.5,
+    clearcoat: 1, clearcoatRoughness: 0.05,
+    transparent: true, opacity: 0.55, side: THREE.DoubleSide,
+    envMapIntensity: 1.3,
+  });
+  const outer = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true), glassMat);
+  outer.position.y = h/2; grp.add(outer);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 32), glassMat);
+  base.position.y = 0.006; grp.add(base);
+  const bot = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.003, 32), glassMat);
+  bot.position.y = 0.0015; grp.add(bot);
+  // markings
+  const mc = document.createElement('canvas'); mc.width = 64; mc.height = 256;
+  const mcx = mc.getContext('2d');
+  mcx.strokeStyle = '#111'; mcx.lineWidth = 1; mcx.fillStyle = '#111'; mcx.font = '9px monospace';
+  for (let i = 10; i <= 100; i += 10) {
+    const y = mc.height - i / 100 * (mc.height - 10) - 5;
+    mcx.beginPath(); mcx.moveTo(10, y); mcx.lineTo(20, y); mcx.stroke();
+    mcx.fillText(i + '', 24, y + 4);
+  }
+  mcx.font = 'bold 11px system-ui';
+  mcx.fillText('mL', 24, 16);
+  const mTex = new THREE.CanvasTexture(mc); mTex.colorSpace = THREE.SRGBColorSpace;
+  const marks = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.022, 0.18),
+    new THREE.MeshBasicMaterial({ map: mTex, transparent: true })
+  );
+  marks.position.set(r + 0.0005, h/2, 0); marks.rotation.y = Math.PI/2;
+  grp.add(marks);
+  const liquid = new THREE.Mesh(
+    new THREE.CylinderGeometry(r - 0.002, r - 0.002, 0.01, 32),
+    new THREE.MeshPhysicalMaterial({ color: 0xb45309, roughness: 0.3, transparent: true, opacity: 0.9 })
+  );
+  liquid.position.y = 0.006; liquid.visible = false;
+  grp.add(liquid);
+  grp.userData.liquid = liquid;
+  grp.userData.maxH = h - 0.01;
+  return grp;
+}
+const cylinder = makeCylinder();
+cylinder.position.set(0, 0.94, 0.15);
+scene.add(cylinder);
+
+// Final bottle (with dynamic label per recipe)
+const finalBottle = new THREE.Group();
+finalBottle.position.set(0.35, 0.94, 0.15);
+finalBottle.userData = { kind: 'tool', id: 'final-bottle', name: 'Chai thành phẩm', label: 'Empty bottle' };
+scene.add(finalBottle);
+const fbBodyMat = new THREE.MeshPhysicalMaterial({
+  color: 0xfff5d6, metalness: 0, roughness: 0.1,
+  transmission: 0.7, thickness: 0.4, ior: 1.5, clearcoat: 1,
+  transparent: true, opacity: 0.7, envMapIntensity: 1.2,
+});
+// Lathe-based final bottle (single smooth body)
+const fbBody = new THREE.Mesh(new THREE.LatheGeometry(bottleProfile(), 48), fbBodyMat);
+fbBody.castShadow = true; fbBody.receiveShadow = true;
+finalBottle.add(fbBody);
+const fbCap = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.035, 0.034, 0.042, 32),
+  new THREE.MeshStandardMaterial({ color: 0x2c2c2c, roughness: 0.4, metalness: 0.25 })
+);
+fbCap.position.y = 0.336; fbCap.castShadow = true;
+finalBottle.add(fbCap);
+const fbFillProfile = [
+  [0.0,    0.005],
+  [0.070,  0.005],
+  [0.075,  0.020],
+  [0.075,  0.165],
+  [0.072,  0.175],
+].map(([r, y]) => new THREE.Vector2(r, y));
+const fbFill = new THREE.Mesh(
+  new THREE.LatheGeometry(fbFillProfile, 36),
+  new THREE.MeshPhysicalMaterial({ color: 0xc16e1c, roughness: 0.3, transmission: 0.25, opacity: 0.92, transparent: true })
+);
+fbFill.visible = false;
+finalBottle.add(fbFill);
+finalBottle.userData.fill = fbFill;
+// Dynamic label — curved to wrap around the bottle's front face.
+const fbLabelTex = new THREE.CanvasTexture(document.createElement('canvas'));
+const fbLabel = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.0805, 0.0805, 0.10, 32, 1, true, -Math.PI / 4, Math.PI / 2),
+  new THREE.MeshStandardMaterial({ map: fbLabelTex, roughness: 0.85, side: THREE.DoubleSide })
+);
+fbLabel.position.set(0, 0.13, 0);
+finalBottle.add(fbLabel);
+finalBottle.userData.labelTex = fbLabelTex;
+
+function setFinalLabel(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 192;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fefefe'; x.fillRect(0, 0, 256, 192);
+  x.strokeStyle = '#94a3b8'; x.lineWidth = 4; x.strokeRect(4, 4, 248, 184);
+  x.fillStyle = '#0f766e'; x.font = 'bold 20px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  const lines = text.split('\n');
+  lines.forEach((l, i) => x.fillText(l, 128, 70 + i * 28));
+  x.fillStyle = '#7c2d12'; x.font = '14px system-ui';
+  x.fillText('Rx — Pharmacy', 128, 160);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  fbLabel.material.map = tex; fbLabel.material.needsUpdate = true;
+}
+
+// Mortar + pestle
+const mortar = new THREE.Group();
+mortar.position.set(0.85, 0.94, 0.15);
+mortar.userData = { kind: 'tool', id: 'mortar', name: 'Cối + chày', label: 'Sứ ceramic — nghiền dược liệu' };
+scene.add(mortar);
+const mBody = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.08, 0.06, 0.08, 32),
+  new THREE.MeshStandardMaterial({ color: 0xefe7d5, roughness: 0.8 })
+);
+mBody.position.y = 0.04; mBody.castShadow = true; mBody.receiveShadow = true;
+mortar.add(mBody);
+const mInner = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.065, 0.04, 0.045, 32, 1, true),
+  new THREE.MeshStandardMaterial({ color: 0xb8a880, roughness: 0.93, side: THREE.BackSide })
+);
+mInner.position.y = 0.052; mortar.add(mInner);
+const pestle = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.012, 0.018, 0.13, 16),
+  new THREE.MeshStandardMaterial({ color: 0xefe7d5, roughness: 0.8 })
+);
+pestle.position.set(0.06, 0.067, 0); pestle.rotation.z = 0.8;
+pestle.castShadow = true; mortar.add(pestle);
+// Mortar contents — invisible until something is poured in.
+const mortarLiquid = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.060, 0.040, 0.005, 32),
+  new THREE.MeshPhysicalMaterial({ color: 0xb8a880, roughness: 0.45, transparent: true, opacity: 0.92 })
+);
+mortarLiquid.position.y = 0.036;
+mortarLiquid.visible = false;
+mortar.add(mortarLiquid);
+mortar.userData.liquid = mortarLiquid;
+mortar.userData.maxH = 0.04;
+mortar.userData.maxVol = 200; // mL
+
+// Detach the pestle from the mortar so it can be picked up independently.
+// It now lives next to the mortar on the counter.
+mortar.remove(pestle);
+const pestleGrp = new THREE.Group();
+pestleGrp.userData = { kind: 'tool', id: 'pestle', name: 'Chày', label: 'Pestle để nghiền' };
+pestle.position.set(0, 0.066, 0); pestle.rotation.set(0, 0, Math.PI / 2);
+pestleGrp.add(pestle);
+pestleGrp.position.set(0.85, 0.94, 0.30);  // in front of the mortar
+scene.add(pestleGrp);
+
+// ============================================================
+// PIPET (graduated dropper) — small glass tube + rubber bulb. Hút thể
+// tích nhỏ từ container và nhả vào container khác. Dung tích ~5 mL.
+// ============================================================
+const pipetGrp = new THREE.Group();
+pipetGrp.userData = { kind: 'tool', id: 'pipet', name: 'Pipet 5 mL', label: 'Dụng cụ hút thể tích chính xác', capacity: 5 };
+// Glass tube
+const pipetTube = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.008, 0.005, 0.16, 16),
+  new THREE.MeshPhysicalMaterial({ color: 0xeaf6ff, metalness: 0, roughness: 0.05, transmission: 0.95, thickness: 0.2, ior: 1.5, transparent: true, opacity: 0.6 })
+);
+pipetTube.position.y = 0.08;
+pipetGrp.add(pipetTube);
+// Rubber bulb on top
+const pipetBulb = new THREE.Mesh(
+  new THREE.SphereGeometry(0.018, 16, 12),
+  new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 })
+);
+pipetBulb.position.y = 0.17;
+pipetGrp.add(pipetBulb);
+// Liquid inside (hidden until filled)
+const pipetLiquid = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.006, 0.0045, 0.001, 16),
+  new THREE.MeshPhysicalMaterial({ color: 0xa1d99b, roughness: 0.2, transparent: true, opacity: 0.9, transmission: 0.3 })
+);
+pipetLiquid.position.y = 0.04;
+pipetLiquid.visible = false;
+pipetGrp.add(pipetLiquid);
+pipetGrp.userData.liquid = pipetLiquid;
+pipetGrp.position.set(-0.55, 0.94, 0.30);
+scene.add(pipetGrp);
+
+// ============================================================
+// STIRRING ROD (đũa khuấy) — thin glass cylinder, used to mix
+// liquids in beaker / mortar. No quantitative effect — just animates
+// in the container and homogenizes the color.
+// ============================================================
+const stirrerGrp = new THREE.Group();
+stirrerGrp.userData = { kind: 'tool', id: 'stirrer', name: 'Đũa khuấy thủy tinh', label: 'Để khuấy đều dung dịch' };
+const stirRod = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.006, 0.006, 0.18, 16),
+  new THREE.MeshPhysicalMaterial({ color: 0xfffafa, metalness: 0, roughness: 0.05, transmission: 0.9, thickness: 0.2, transparent: true, opacity: 0.7 })
+);
+stirRod.position.y = 0.09;
+stirRod.castShadow = true;
+stirrerGrp.add(stirRod);
+stirrerGrp.position.set(0.55, 0.94, 0.30);
+scene.add(stirrerGrp);
+
+// === DEBUG mouth markers: red = bottle lip, green = container rim, ===
+// ===                       orange = final-bottle, blue = pipet tip   ===
+addMouthMarker(beaker,      0.10, 0x00ff00);
+addMouthMarker(cylinder,    0.20, 0x00ff00);
+addMouthMarker(mortar,      0.08, 0x00ff00);
+addMouthMarker(finalBottle, 0.312, 0xffaa00);
+addMouthMarker(pipetGrp,    0,     0x00aaff);
+addMouthMarker(stirrerGrp,  0.18,  0xaaaa00);
+addMouthMarker(pestleGrp,   0.13,  0xaaaa00);
+
+function updatePipetLiquid(volMl, color) {
+  const liq = pipetGrp.userData.liquid;
+  if (volMl < 0.001) { liq.visible = false; return; }
+  liq.visible = true;
+  const h = (volMl / 5) * 0.14;   // up to ~14 cm fill at 5 mL
+  liq.geometry.dispose();
+  liq.geometry = new THREE.CylinderGeometry(0.006, 0.0045, h, 16);
+  liq.position.y = h / 2 + 0.005;
+  if (color !== undefined) liq.material.color.setHex(color);
+}
+
+// ============================================================
+// POUR ANIMATION — particle stream + bottle tilt
+// ============================================================
+const PARTICLE_COUNT = 24;
+const particles = [];
+const particleGeom = new THREE.SphereGeometry(0.006, 8, 6);
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  const m = new THREE.Mesh(
+    particleGeom,
+    new THREE.MeshStandardMaterial({ color: 0xc16e1c, transparent: true, opacity: 0.95, roughness: 0.4, metalness: 0 })
+  );
+  m.visible = false;
+  scene.add(m);
+  particles.push({ mesh: m, vx: 0, vy: 0, vz: 0, x: 0, y: 0, z: 0, ttl: 0, isPowder: false });
+}
+
+// Tilt-bottle state
+const tiltState = { obj: null, baseRot: null, startedAt: 0, duration: 0, axis: null, angle: 0, peakHoldUntil: 0 };
+
+function tiltBottleTowards(obj, targetWorldPos, duration = 800, peakAngle = 1.2) {
+  if (tiltState.obj && tiltState.obj !== obj) restoreTiltedBottle();
+  const fromWorld = new THREE.Vector3(); obj.getWorldPosition(fromWorld);
+  const dx = targetWorldPos.x - fromWorld.x;
+  const dz = targetWorldPos.z - fromWorld.z;
+  // Axis perpendicular to the (source → target) horizontal direction.
+  // Rotating around (dz, 0, -dx) by positive angle tips the bottle's TOP
+  // toward the target (right-hand rule).  Earlier (-dz, 0, dx) tipped it
+  // away — exactly the bug the user reported.
+  const axis = new THREE.Vector3(dz, 0, -dx).normalize();
+  tiltState.obj = obj;
+  tiltState.baseRot = obj.quaternion.clone();
+  tiltState.startedAt = performance.now();
+  tiltState.duration = duration;
+  tiltState.axis = axis;
+  tiltState.angle = peakAngle;
+  tiltState.peakHoldUntil = performance.now() + duration * 0.55;
+}
+
+function restoreTiltedBottle() {
+  if (!tiltState.obj) return;
+  tiltState.obj.quaternion.copy(tiltState.baseRot);
+  tiltState.obj = null;
+}
+
+function updateTilt() {
+  if (!tiltState.obj) return;
+  const t = (performance.now() - tiltState.startedAt) / tiltState.duration;
+  let curAng;
+  if (t < 0.25) curAng = tiltState.angle * (t / 0.25);                  // ease in to peak
+  else if (t < 0.75) curAng = tiltState.angle;                          // hold
+  else if (t < 1.0) curAng = tiltState.angle * ((1 - t) / 0.25);        // ease out
+  else { restoreTiltedBottle(); return; }
+  const q = new THREE.Quaternion().setFromAxisAngle(tiltState.axis, curAng);
+  tiltState.obj.quaternion.copy(tiltState.baseRot).multiply(q);
+}
+
+// ============================================================
+// POUR ANIMATION SEQUENCE — 5-phase choreography rotating around the
+// IMAGINED HAND-GRIP point (middle of the tool), so the bottle pivots
+// "in hand" instead of swinging its cap 30 cm sideways from the base.
+//
+// Phases:
+//   1. tilt-at-hand     — rotate 0 → X°, grip stays at hand slot
+//   2. translate-to-rim — slide tilted bottle so LIP hits target rim
+//   3. pour             — hold the pose, emit liquid stream
+//   4. untilt-at-rim    — rotate X° → 0, grip stays at the rim location
+//   5. return-to-hand   — slide upright bottle back to the hand slot
+//
+// Math: at every frame, bottle.position = gripWorld − R · (0, gripLocalY, 0).
+// This keeps the grip point fixed in world while the object rotates.
+// ============================================================
+const pourAnimState = {
+  obj: null,
+  targetGrp: null,
+  phase: 'idle',
+  startedAt: 0,
+  durations: { tilt: 350, translate: 550, pour: 1300, untilt: 350, returnBack: 550 },
+  origin: new THREE.Vector3(),         // bottle.position at pour start (return target)
+  gripStart: new THREE.Vector3(),      // grip world pos at pour start
+  gripPour: new THREE.Vector3(),       // grip world pos when lip is at rim
+  baseRot: null,                       // bottle.quaternion at pour start
+  tiltAxis: null,
+  tiltAngle: 1.5,
+  mouthLocalY: 0.312,
+  gripLocalY: 0.15,
+  streamColor: 0x88ccee,
+  streamIsPowder: false,
+  streamSpawned: false,
+  onPourActive: null,
+  onComplete: null,
+};
+// DEBUG hooks (used by automated tests) — exposes pour anim state + a
+// utility to read each tool's mouth-marker world position.
+window.__pourAnimState = pourAnimState;
+window.__scene = scene; window.__camera = camera; window.__renderer = renderer;
+window.__controls = controls; window.__focusCamera = focusCamera;
+window.__getMouthWorld = function (grp) {
+  const m = grp?.userData?._mouthMarker;
+  if (!m) return null;
+  const w = new THREE.Vector3();
+  m.getWorldPosition(w);
+  return { x: w.x, y: w.y, z: w.z };
+};
+// Test helper: trigger a pour directly between two named objects.
+window.__triggerPour = function (srcId, dstId) {
+  const all = [...reagents, beaker, cylinder, mortar, finalBottle, pestleGrp, pipetGrp, stirrerGrp];
+  const src = all.find(o => o.userData?.id === srcId);
+  const dst = all.find(o => o.userData?.id === dstId);
+  if (!src || !dst) return 'missing ' + (src ? dstId : srcId);
+  startPourAnim(src, dst, { color: 0x88ddff });
+  return { ok: true, src: src.userData.name, dst: dst.userData.name };
+};
+window.__probeMouth = function (id) {
+  const all = [...reagents, beaker, cylinder, mortar, finalBottle, pestleGrp, pipetGrp, stirrerGrp];
+  const o = all.find(g => g.userData?.id === id);
+  if (!o) return null;
+  return {
+    mouthLocalY: o.userData?.mouthLocalY,
+    hasMarker: !!o.userData?._mouthMarker,
+    type: o.userData?.type,
+    kind: o.userData?.kind,
+  };
+};
+
+// Local-space Y offset of each tool's POURING OUTLET (its "mouth").
+// For bottles: the LIP just under the cap (≈0.312), NOT the cap top (≈0.357).
+// For containers: the rim height stored at mesh-creation time.
+// For pipet: the tip is at base (0).
+function getMouthLocalY(grp) {
+  // Cached at addMouthMarker time — avoids bbox.max.y picking up the marker
+  // sphere or other decorative children (caused a 12 mm pour offset earlier).
+  if (grp?.userData?.mouthLocalY !== undefined) return grp.userData.mouthLocalY;
+  const id = grp.userData?.id;
+  if (id === 'pipet') return 0;
+  if (grp.userData?.type === 'bottle' || id === 'final-bottle') return 0.312;
+  const w = new THREE.Vector3(); grp.getWorldPosition(w);
+  const bbox = new THREE.Box3().setFromObject(grp);
+  return Math.max(0.02, bbox.max.y - w.y);
+}
+
+// Mouth-position cache — pour anim uses userData.mouthLocalY to align the
+// source's lip with the target's rim. Previously a visible debug sphere was
+// also attached; that's been removed for cleanliness, but the cache stays.
+function addMouthMarker(grp, mouthY, _colorIgnored) {
+  if (grp.userData?.mouthLocalY !== undefined) return;
+  grp.userData.mouthLocalY = mouthY;
+}
+
+// World position of the receiver's MOUTH (top of container centred on origin XZ).
+function getTargetMouthWorld(grp) {
+  const w = new THREE.Vector3(); grp.getWorldPosition(w);
+  // Prefer the cached mouthLocalY (set by addMouthMarker) so we don't
+  // accidentally include decorative children in the rim height.
+  const localY = grp.userData?.mouthLocalY ?? (new THREE.Box3().setFromObject(grp).max.y - w.y);
+  return new THREE.Vector3(w.x, w.y + localY, w.z);
+}
+
+function startPourAnim(srcGrp, dstGrp, opts = {}) {
+  // Cancel any in-progress tilt for this object so the quaternion isn't fought over.
+  if (tiltState.obj === srcGrp) restoreTiltedBottle();
+  // If another anim is mid-flight, snap its previous owner back first.
+  if (pourAnimState.obj && pourAnimState.obj !== srcGrp) {
+    pourAnimState.obj.position.copy(pourAnimState.origin);
+    pourAnimState.obj.quaternion.copy(pourAnimState.baseRot);
+    if (pourAnimState.capGrp) {
+      pourAnimState.obj.attach(pourAnimState.capGrp);
+      pourAnimState.capGrp.position.set(0, pourAnimState.capBaseY, 0);
+      pourAnimState.capGrp.rotation.set(0, 0, pourAnimState.capBaseRot);
+    }
+    pourAnimState.obj = null;
+    pourAnimState.capGrp = null;
+    pourAnimState.phase = 'idle';
+  }
+
+  pourAnimState.obj = srcGrp;
+  pourAnimState.targetGrp = dstGrp;
+  pourAnimState.startedAt = performance.now();
+  // New order per user spec: move upright FIRST, then tilt at the rim.
+  pourAnimState.phase = 'translate-upright';
+  pourAnimState.origin.copy(srcGrp.position);
+  // CLEAN-SLATE rotation — the held-in-hand idle wobble adds X/Y/Z drift
+  // that breaks the gripPour math (lip lands off target by tens of mm).
+  // Reset to upright before capturing baseRot so the pour anim starts from
+  // a known-clean orientation; lift system will resume idle wobble after.
+  srcGrp.rotation.set(0, 0, 0);
+  pourAnimState.baseRot = srcGrp.quaternion.clone();
+
+  // Geometry: where the mouth (lip / tip) is, and where the hand grips.
+  // gripLocalY is the local Y where the user's hand holds the object — for
+  // bottles this is the middle (≈half mouthY). For short containers it's
+  // the middle of the body. This is the rotation pivot for the entire pour.
+  const mouthY = getMouthLocalY(srcGrp);
+  const gripY = opts.gripLocalY ?? Math.max(0.05, mouthY * 0.5);
+  pourAnimState.mouthLocalY = mouthY;
+  pourAnimState.gripLocalY = gripY;
+
+  // Tilt geometry
+  const tiltAngle = opts.tiltAngle || 1.5;     // ~86°
+  pourAnimState.tiltAngle = tiltAngle;
+
+  // Initial grip position in world — bottle.position is the group origin
+  // (BASE), so grip is one gripLocalY above.
+  pourAnimState.gripStart.set(
+    pourAnimState.origin.x,
+    pourAnimState.origin.y + gripY,
+    pourAnimState.origin.z
+  );
+
+  // Target mouth position (rim of receiver). Lift it slightly so the bottle's
+  // lip floats a few cm ABOVE the rim rather than touching it — looks more
+  // natural and matches how someone would actually pour from a real bottle.
+  const POUR_LIFT_Y = opts.liftY ?? 0.045;
+  pourAnimState.pourLiftY = POUR_LIFT_Y;
+  const tp = getTargetMouthWorld(dstGrp);
+  tp.y += POUR_LIFT_Y;
+
+  // Tilt direction = horizontal vector from gripStart toward target.
+  const toTarget = new THREE.Vector3().subVectors(tp, pourAnimState.gripStart);
+  toTarget.y = 0;
+  if (toTarget.length() < 0.001) toTarget.set(1, 0, 0);
+  else toTarget.normalize();
+
+  // Tilt axis perpendicular to toTarget in horizontal plane (RH rule:
+  // positive rotation around this axis swings local +Y toward toTarget).
+  pourAnimState.tiltAxis = new THREE.Vector3(toTarget.z, 0, -toTarget.x).normalize();
+
+  // Compute gripPour: when bottle is at gripPour with rotation = R_pour, its
+  // LIP lands exactly on tp.
+  //   lip_world = gripPour + R_pour · (0, mouthY − gripY, 0)
+  //   = tp  ⇒  gripPour = tp − R_pour · (0, mouthY − gripY, 0)
+  const sin = Math.sin(tiltAngle), cos = Math.cos(tiltAngle);
+  const dy = mouthY - gripY;
+  pourAnimState.gripPour.set(
+    tp.x - toTarget.x * sin * dy,
+    tp.y - cos * dy,
+    tp.z - toTarget.z * sin * dy
+  );
+
+  pourAnimState.streamColor = opts.color ?? 0x88ccee;
+  pourAnimState.streamIsPowder = !!opts.isPowder;
+  pourAnimState.streamSpawned = false;
+  pourAnimState.onPourActive = opts.onPourActive || null;
+  pourAnimState.onComplete = opts.onComplete || null;
+  if (opts.pourDur) pourAnimState.durations.pour = opts.pourDur;
+
+  // Cap-off setup: a real pour starts by unscrewing the cap and holding it
+  // in the OTHER (left) hand. Reparent the cap to the scene so its motion is
+  // independent of the bottle, and animate it to a left-hand world slot.
+  const capGrp = srcGrp.userData?.capGroup || null;
+  pourAnimState.capGrp = capGrp;
+  if (capGrp) {
+    pourAnimState.capBaseY = srcGrp.userData?.capBaseY ?? 0.336;
+    pourAnimState.capBaseRot = capGrp.rotation.z;
+    // Capture cap's current world position BEFORE reparenting.
+    const _capStart = new THREE.Vector3();
+    capGrp.getWorldPosition(_capStart);
+    pourAnimState.capStartWorld = _capStart;
+    // Left-hand world slot: 28 cm to the LEFT of the pour grip, at roughly
+    // the same height, slightly forward toward the camera. Anchored to
+    // gripPour so the cap stays close to the user's left hand at the
+    // workbench (not the shelf where the bottle came from).
+    pourAnimState.capAsideWorld = new THREE.Vector3(
+      pourAnimState.gripPour.x - 0.28,
+      pourAnimState.gripPour.y - 0.02,
+      pourAnimState.gripPour.z + 0.08
+    );
+    // Reparent to scene; preserves world transform so the cap doesn't jump.
+    scene.attach(capGrp);
+  }
+}
+
+// Helper: apply a rotation R (quaternion-from-axis-angle ang) plus a grip-
+// pivoted position. Mutates srcGrp.position and srcGrp.quaternion.
+const _pourTmpQ = new THREE.Quaternion();
+const _pourTmpV = new THREE.Vector3();
+function applyGripPose(srcGrp, gripWorld, tiltAxis, ang, baseRot, gripLocalY) {
+  // Rotation = baseRot · axisAngle(tiltAxis, ang)
+  _pourTmpQ.setFromAxisAngle(tiltAxis, ang);
+  srcGrp.quaternion.copy(baseRot).multiply(_pourTmpQ);
+  // pos = grip − R · (0, gripLocalY, 0)
+  _pourTmpV.set(0, gripLocalY, 0).applyQuaternion(srcGrp.quaternion);
+  srcGrp.position.set(gripWorld.x - _pourTmpV.x, gripWorld.y - _pourTmpV.y, gripWorld.z - _pourTmpV.z);
+}
+
+function pourAnimTotalDuration() {
+  const D = pourAnimState.durations;
+  return D.tilt + D.translate + D.pour + D.untilt + D.returnBack;
+}
+
+const _pourGripNow = new THREE.Vector3();
+function updatePourAnim() {
+  if (!pourAnimState.obj) return;
+  window.__pourTick = (window.__pourTick || 0) + 1;
+  const ps = pourAnimState;
+  const obj = ps.obj;
+  const elapsed = performance.now() - ps.startedAt;
+  const D = ps.durations;
+
+  // Phase 1 — TRANSLATE UPRIGHT: bottle moves from hand-slot to the rim
+  // position while STAYING UPRIGHT (no tilt yet). The cap simultaneously
+  // flies from the bottle's neck to the LEFT-HAND aside slot in world space.
+  if (ps.phase === 'translate-upright') {
+    const t = Math.min(1, elapsed / D.translate);
+    const e = 1 - Math.pow(1 - t, 3);
+    _pourGripNow.lerpVectors(ps.gripStart, ps.gripPour, e);
+    applyGripPose(obj, _pourGripNow, ps.tiltAxis, 0, ps.baseRot, ps.gripLocalY);
+    if (ps.capGrp) {
+      ps.capGrp.position.lerpVectors(ps.capStartWorld, ps.capAsideWorld, e);
+      ps.capGrp.rotation.set(0, 0, ps.capBaseRot + 0.45 * e);
+    }
+    if (t >= 1) { ps.phase = 'tilt-at-rim'; ps.startedAt = performance.now(); }
+    return;
+  }
+
+  // Phase 2 — TILT AT RIM: grip stays at gripPour, rotation 0 → tiltAngle.
+  // Lip swings down to land exactly on target_mouth (markers touch).
+  if (ps.phase === 'tilt-at-rim') {
+    const t = Math.min(1, elapsed / D.tilt);
+    const e = 1 - Math.pow(1 - t, 3);
+    const ang = ps.tiltAngle * e;
+    applyGripPose(obj, ps.gripPour, ps.tiltAxis, ang, ps.baseRot, ps.gripLocalY);
+    if (t >= 1) { ps.phase = 'pour'; ps.startedAt = performance.now(); }
+    return;
+  }
+
+  // Phase 3 — POUR: hold the touching pose, emit stream once, fire callback.
+  if (ps.phase === 'pour') {
+    applyGripPose(obj, ps.gripPour, ps.tiltAxis, ps.tiltAngle, ps.baseRot, ps.gripLocalY);
+    if (!ps.streamSpawned) {
+      ps.streamSpawned = true;
+      const tp = getTargetMouthWorld(ps.targetGrp);
+      const lift = ps.pourLiftY ?? 0.045;
+      const fp = new THREE.Vector3(tp.x, tp.y + lift, tp.z);
+      const intoTp = new THREE.Vector3(tp.x, tp.y - 0.04, tp.z);
+      showStream(fp, intoTp, ps.streamColor, D.pour, ps.streamIsPowder);
+      if (ps.onPourActive) ps.onPourActive();
+    }
+    if (elapsed >= D.pour) { ps.phase = 'untilt-at-rim'; ps.startedAt = performance.now(); }
+    return;
+  }
+
+  // Phase 4 — UN-TILT AT RIM: grip stays at gripPour, rotation tiltAngle → 0.
+  // Lip swings up away from the target's rim while the grip stays in place.
+  if (ps.phase === 'untilt-at-rim') {
+    const t = Math.min(1, elapsed / D.untilt);
+    const e = 1 - Math.pow(1 - t, 3);
+    const ang = ps.tiltAngle * (1 - e);
+    applyGripPose(obj, ps.gripPour, ps.tiltAxis, ang, ps.baseRot, ps.gripLocalY);
+    if (t >= 1) { ps.phase = 'return-to-hand'; ps.startedAt = performance.now(); }
+    return;
+  }
+
+  // Phase 5 — RETURN: upright bottle slides from gripPour back to gripStart.
+  // The cap flies from the aside slot back onto the bottle's neck, then
+  // reparents to the bottle so it follows it again.
+  if (ps.phase === 'return-to-hand') {
+    const t = Math.min(1, elapsed / D.returnBack);
+    const e = 1 - Math.pow(1 - t, 3);
+    _pourGripNow.lerpVectors(ps.gripPour, ps.gripStart, e);
+    applyGripPose(obj, _pourGripNow, ps.tiltAxis, 0, ps.baseRot, ps.gripLocalY);
+    if (ps.capGrp) {
+      // Target = bottle's neck position in world (bottle is upright here).
+      _pourTmpV.set(obj.position.x, obj.position.y + ps.capBaseY, obj.position.z);
+      ps.capGrp.position.lerpVectors(ps.capAsideWorld, _pourTmpV, e);
+      ps.capGrp.rotation.set(0, 0, ps.capBaseRot + 0.45 * (1 - e));
+    }
+    if (t >= 1) {
+      obj.position.copy(ps.origin);
+      obj.quaternion.copy(ps.baseRot);
+      if (ps.capGrp) {
+        obj.attach(ps.capGrp);             // reparent, preserving world
+        ps.capGrp.position.set(0, ps.capBaseY, 0);
+        ps.capGrp.rotation.set(0, 0, ps.capBaseRot);
+      }
+      const cb = ps.onComplete;
+      ps.obj = null;
+      ps.capGrp = null;
+      ps.targetGrp = null;
+      ps.phase = 'idle';
+      if (cb) cb();
+    }
+    return;
+  }
+}
+
+// ============================================================
+// HOLD-LIFT — khi vật được chọn, nó được nhấc lên khỏi mặt
+// bàn/kệ ~18cm với chuyển động đu đưa nhẹ. Khi thả, hạ xuống
+// mượt về vị trí nghỉ. Quaternion (tilt) hoạt động độc lập.
+// ============================================================
+// ============================================================
+// "Cầm trên tay" — object flies to a camera-right "hand" slot when
+// picked up (giống Unity demo). Released → eases back to rest pos.
+// ============================================================
+const LIFT_MS = 320;     // duration of lift-to-hand & lower-to-rest animations
+const LIFT_BOB_AMP = 0.006;
+const liftState = {
+  obj: null,
+  restPos: new THREE.Vector3(),         // world position to return to
+  restRot: new THREE.Euler(),
+  fromPos: new THREE.Vector3(),         // position at start of current phase
+  fromRot: new THREE.Euler(),
+  startedAt: 0,
+  phase: 'idle',                         // 'lifting' | 'held' | 'lowering'
+};
+
+const _liftFwd = new THREE.Vector3();
+const _liftRight = new THREE.Vector3();
+const _liftUp = new THREE.Vector3(0, 1, 0);
+const _liftHand = new THREE.Vector3();
+
+// World-space target position for an object held "in hand". Default is a
+// fixed camera-relative slot at front-right (the "sáng" behaviour the
+// user liked). When MediaPipe is tracking the right hand we instead use
+// that hand cursor's 3D position so the bottle follows the hand.
+function computeHandSlot(obj) {
+  const bb = new THREE.Box3().setFromObject(obj);
+  const size = bb.getSize(new THREE.Vector3());
+
+  // MediaPipe right-hand cursor — live tracking
+  if (handState.running && handState.hands[1].active && handCursors[1].visible) {
+    _liftHand.copy(handCursors[1].position);
+    _liftHand.y -= size.y * 0.4;
+    _liftHand.y += Math.sin(performance.now() * 0.0024) * LIFT_BOB_AMP;
+    return _liftHand;
+  }
+
+  // Default: camera-relative front-right slot (works for mouse / no-webcam).
+  camera.getWorldDirection(_liftFwd);
+  _liftRight.crossVectors(_liftFwd, _liftUp).normalize();
+  const objR = Math.max(size.x, size.z) * 0.5;
+  const dist = 0.52 + objR * 0.6;       // 52cm + offset for big things
+  const side = 0.20;                     // 20cm to the right
+  const down = -0.18;                    // 18cm below eye line
+  _liftHand.copy(camera.position)
+    .addScaledVector(_liftFwd, dist)
+    .addScaledVector(_liftRight, side)
+    .addScaledVector(_liftUp, down);
+  _liftHand.y -= size.y * 0.5;
+  _liftHand.y += Math.sin(performance.now() * 0.0024) * LIFT_BOB_AMP;
+  return _liftHand;
+}
+
+function startLift(obj) {
+  if (!obj) return;
+  // If another object is already lifted, drop it instantly back to rest
+  if (liftState.obj && liftState.obj !== obj) {
+    liftState.obj.position.copy(liftState.restPos);
+    liftState.obj.rotation.copy(liftState.restRot);
+    liftState.obj.renderOrder = 0;
+  }
+  liftState.obj = obj;
+  liftState.restPos.copy(obj.position);
+  liftState.restRot.copy(obj.rotation);
+  liftState.fromPos.copy(obj.position);
+  liftState.fromRot.copy(obj.rotation);
+  liftState.startedAt = performance.now();
+  liftState.phase = 'lifting';
+  obj.renderOrder = 500;
+}
+
+function endLift() {
+  if (!liftState.obj) return;
+  liftState.fromPos.copy(liftState.obj.position);
+  liftState.fromRot.copy(liftState.obj.rotation);
+  liftState.startedAt = performance.now();
+  liftState.phase = 'lowering';
+}
+
+// Tell the lift system: this object now has a NEW resting position.
+// Lowering will animate back to that new pos instead of the original.
+function commitNewRestForHeld(newPos) {
+  if (!liftState.obj) return;
+  liftState.restPos.copy(newPos);
+}
+
+function resetLift() {
+  if (liftState.obj) {
+    liftState.obj.position.copy(liftState.restPos);
+    liftState.obj.rotation.copy(liftState.restRot);
+    liftState.obj.renderOrder = 0;
+  }
+  liftState.obj = null;
+  liftState.phase = 'idle';
+}
+
+function updateLift() {
+  if (!liftState.obj) return;
+  // Yield position control to the pour animation while it owns the same object.
+  if (pourAnimState.obj === liftState.obj) return;
+  const obj = liftState.obj;
+  const elapsed = performance.now() - liftState.startedAt;
+  if (liftState.phase === 'lifting') {
+    const t = Math.min(1, elapsed / LIFT_MS);
+    const e = 1 - Math.pow(1 - t, 3);   // easeOutCubic
+    const target = computeHandSlot(obj);
+    obj.position.lerpVectors(liftState.fromPos, target, e);
+    if (t >= 1) liftState.phase = 'held';
+  } else if (liftState.phase === 'held') {
+    // Chase the camera-relative target every frame + idle rotate + tilt
+    const target = computeHandSlot(obj);
+    obj.position.lerp(target, 0.22);
+    obj.rotation.y += 0.006;
+    obj.rotation.z = Math.sin(performance.now() * 0.0018) * 0.08;
+  } else if (liftState.phase === 'lowering') {
+    const t = Math.min(1, elapsed / LIFT_MS);
+    const e = 1 - Math.pow(1 - t, 3);
+    obj.position.lerpVectors(liftState.fromPos, liftState.restPos, e);
+    obj.rotation.x = liftState.fromRot.x + (liftState.restRot.x - liftState.fromRot.x) * e;
+    obj.rotation.y = liftState.fromRot.y + (liftState.restRot.y - liftState.fromRot.y) * e;
+    obj.rotation.z = liftState.fromRot.z * (1 - e);
+    if (t >= 1) {
+      obj.position.copy(liftState.restPos);
+      obj.rotation.copy(liftState.restRot);
+      obj.renderOrder = 0;
+      liftState.obj = null;
+      liftState.phase = 'idle';
+    }
+  }
+}
+
+// Spawn particles from `fromPos` toward `toPos` over `duration` ms
+function showStream(fromPos, toPos, color, duration = 800, isPowder = false) {
+  const N = isPowder ? 18 : 14;
+  const dt = duration / N;
+  for (let i = 0; i < N; i++) {
+    const p = particles[i % PARTICLE_COUNT];
+    setTimeout(() => spawnParticle(p, fromPos, toPos, color, isPowder), i * dt * 0.5);
+  }
+}
+
+// Swirl particles around `centerPos` — used to visualise stirring.
+function showSwirl(centerPos, radius, color, duration = 1200) {
+  const N = 16;
+  for (let i = 0; i < N; i++) {
+    const angle = (i / N) * Math.PI * 4;
+    const px = centerPos.x + Math.cos(angle) * radius;
+    const pz = centerPos.z + Math.sin(angle) * radius;
+    const p = particles[i % PARTICLE_COUNT];
+    setTimeout(() => spawnParticle(
+      p,
+      new THREE.Vector3(px, centerPos.y + 0.08, pz),
+      new THREE.Vector3(centerPos.x, centerPos.y, centerPos.z),
+      color, false
+    ), i * (duration / N) * 0.5);
+  }
+}
+
+// Dust puff up & out from `centerPos` — used for grinding in mortar.
+function showDustPuff(centerPos, color, duration = 1100) {
+  const N = 18;
+  for (let i = 0; i < N; i++) {
+    const offsetAngle = Math.random() * Math.PI * 2;
+    const offsetR = 0.02 + Math.random() * 0.05;
+    const px = centerPos.x + Math.cos(offsetAngle) * offsetR;
+    const pz = centerPos.z + Math.sin(offsetAngle) * offsetR;
+    const p = particles[i % PARTICLE_COUNT];
+    setTimeout(() => spawnParticle(
+      p,
+      new THREE.Vector3(centerPos.x + (Math.random()-0.5)*0.02, centerPos.y + 0.03, centerPos.z + (Math.random()-0.5)*0.02),
+      new THREE.Vector3(px, centerPos.y + 0.10, pz),
+      color, true
+    ), i * (duration / N) * 0.5);
+  }
+}
+
+// Shake state — wobbles an object in X/Z while keeping Y from lift system.
+const shakeState = { obj: null, startedAt: 0, duration: 0, baseX: 0, baseZ: 0 };
+function startShake(obj, duration = 900) {
+  shakeState.obj = obj;
+  shakeState.startedAt = performance.now();
+  shakeState.duration = duration;
+  shakeState.baseX = obj.position.x;
+  shakeState.baseZ = obj.position.z;
+}
+function updateShake() {
+  if (!shakeState.obj) return;
+  const t = (performance.now() - shakeState.startedAt) / shakeState.duration;
+  if (t >= 1) {
+    shakeState.obj.position.x = shakeState.baseX;
+    shakeState.obj.position.z = shakeState.baseZ;
+    shakeState.obj = null;
+    return;
+  }
+  const amp = 0.025 * (1 - t);
+  shakeState.obj.position.x = shakeState.baseX + Math.sin(t * Math.PI * 18) * amp;
+  shakeState.obj.position.z = shakeState.baseZ + Math.cos(t * Math.PI * 15) * amp * 0.5;
+}
+
+function spawnParticle(p, fromPos, toPos, color, isPowder) {
+  p.mesh.visible = true;
+  p.mesh.material.color.setHex(color);
+  p.mesh.material.opacity = 0.95;
+  p.isPowder = isPowder;
+  p.x = fromPos.x + (Math.random() - 0.5) * 0.012;
+  p.y = fromPos.y;
+  p.z = fromPos.z + (Math.random() - 0.5) * 0.012;
+  // velocity: aim at toPos, gravity will arc
+  const dx = toPos.x - fromPos.x;
+  const dz = toPos.z - fromPos.z;
+  const time = 0.45 + Math.random() * 0.1;  // seconds to land
+  p.vx = dx / time + (Math.random() - 0.5) * 0.05;
+  p.vz = dz / time + (Math.random() - 0.5) * 0.05;
+  // Vy chosen so y reaches toPos.y after `time` with gravity 1.8
+  const g = isPowder ? 2.4 : 1.8;
+  p.vy = (toPos.y - fromPos.y + 0.5 * g * time * time) / time;
+  p.ttl = time + 0.15;
+  p.gravity = g;
+  p.mesh.position.set(p.x, p.y, p.z);
+  // Scale slightly bigger for liquid drops
+  p.mesh.scale.setScalar(isPowder ? 0.7 + Math.random() * 0.5 : 1.0 + Math.random() * 0.4);
+}
+
+function updateStream(dt) {
+  for (const p of particles) {
+    if (!p.mesh.visible) continue;
+    p.ttl -= dt;
+    if (p.ttl <= 0) { p.mesh.visible = false; continue; }
+    p.vy -= p.gravity * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    p.mesh.position.set(p.x, p.y, p.z);
+    if (p.ttl < 0.15) p.mesh.material.opacity = (p.ttl / 0.15) * 0.95;
+  }
+}
+
+// ============================================================
+// REMOTE PLAYERS (multiplayer)
+// ============================================================
+const remotePlayers = new Map();
+function makeRemoteAvatar(id, name, color) {
+  const grp = new THREE.Group();
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 16, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 })
+  );
+  grp.add(sphere);
+  // name label
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = color; x.globalAlpha = 0.85; x.fillRect(0, 0, 256, 64); x.globalAlpha = 1;
+  x.fillStyle = '#fff'; x.font = 'bold 24px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(name, 128, 32);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+  label.scale.set(0.3, 0.075, 1);
+  label.position.y = 0.15;
+  grp.add(label);
+  scene.add(grp);
+  return { grp, sphere, label, name, color };
+}
+
+function ensureRemote(p) {
+  if (remotePlayers.has(p.id)) return;
+  const av = makeRemoteAvatar(p.id, p.name, p.color);
+  if (p.cursor) av.grp.position.set(p.cursor.x, p.cursor.y, p.cursor.z);
+  remotePlayers.set(p.id, av);
+  refreshMpPanel();
+}
+
+// ============================================================
+// GAMEPLAY STATE
+// ============================================================
+const stepNumEl = document.getElementById('step-num');
+const stepTitleEl = document.getElementById('step-title');
+const stepBodyEl = document.getElementById('step-body');
+const meterBar = document.getElementById('meter-bar');
+const meterCur = document.getElementById('meter-cur');
+const meterTgt = document.getElementById('meter-tgt');
+const submitBtn = document.getElementById('submit-btn');
+const restartBtn = document.getElementById('restart-btn');
+const skipBtn = document.getElementById('skip-step-btn');
+const toastEl = document.getElementById('toast');
+const recipeBodyEl = document.getElementById('recipe-body');
+const topbarRecipeEl = document.getElementById('topbar-recipe');
+const lvlPillEl = document.getElementById('lvl-pill');
+
+let state = null;
+
+function showToast(msg, ms = 2200, type = '') {
+  toastEl.textContent = msg;
+  toastEl.className = ''; if (type) toastEl.classList.add(type);
+  toastEl.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.style.display = 'none', ms);
+}
+
+function renderRecipePanel(recipe) {
+  let html = `<div style="font-weight:700;font-size:14px">${recipe.icon} ${recipe.name}</div>`;
+  html += `<div style="font-size:11px;opacity:0.7">${recipe.short} · Cấp ${recipe.level}</div>`;
+  html += `<div class="lbl">Công thức</div><ul>`;
+  for (const s of recipe.steps) {
+    if (s.action === 'pour' && s.reagentId !== 'water') {
+      const r = REAGENTS[s.reagentId];
+      html += `<li class="ix"><span>${r?.name || s.reagentId}</span><span><b>${s.target} ${s.unit}</b></span></li>`;
+    } else if (s.action === 'pour' && s.reagentId === 'water') {
+      html += `<li class="ix"><span>Nước cất q.s.</span><span><b>→ ${s.target} ${s.unit}</b></span></li>`;
+    }
+  }
+  html += `</ul>`;
+  html += `<div class="lbl">Chỉ định</div><div style="font-size:11px">${recipe.indication}</div>`;
+  html += `<div class="totals" style="margin-top:8px">Thể tích cuối: <span style="float:right">${recipe.finalVolume} ${recipe.finalUnit}</span></div>`;
+  recipeBodyEl.innerHTML = html;
+}
+
+function renderStep() {
+  if (!state || !state.recipe) return;
+  const recipe = state.recipe;
+  const i = state.stepIdx;
+  const stepFabFrac = document.getElementById('step-fab-frac');
+  if (i >= recipe.steps.length) {
+    stepNumEl.textContent = 'HOÀN TẤT';
+    stepTitleEl.textContent = '🎉 Bạn đã hoàn thành quy trình!';
+    stepBodyEl.innerHTML = 'Bấm <b>Hoàn thành & Nộp</b> để lưu kết quả.';
+    meterBar.style.width = '100%';
+    meterCur.textContent = ''; meterTgt.textContent = '';
+    submitBtn.disabled = false;
+    if (stepFabFrac) stepFabFrac.textContent = '✓';
+    return;
+  }
+  const s = recipe.steps[i];
+  stepNumEl.textContent = `BƯỚC ${i+1} / ${recipe.steps.length}`;
+  if (stepFabFrac) stepFabFrac.textContent = `${i+1}/${recipe.steps.length}`;
+  stepTitleEl.textContent = s.label;
+
+  let bodyHtml = '';
+  if (s.action === 'place-on-balance') {
+    bodyHtml = 'Click vào <b>cốc thủy tinh</b>, sau đó click vào <b>cân điện tử</b>. Cân tự tare về 0.';
+  } else if (s.action === 'pour') {
+    const r = REAGENTS[s.reagentId];
+    const target = s.target, unit = s.unit, tol = s.tolerance;
+    const cont = s.container === 'cylinder' ? 'ống đong' : (s.container === 'beaker' ? 'cốc' : 'cốc');
+    bodyHtml = `Click vào chai <b>${r?.name || s.reagentId}</b>, rồi click vào <b>${cont}</b>. Đong đến <b>${target} ${unit}</b> (±${tol}).`;
+  } else if (s.action === 'transfer') {
+    bodyHtml = 'Click vào <b>ống đong</b> (đã có dung dịch), rồi click vào <b>cốc</b> để chuyển.';
+  } else if (s.action === 'bottle') {
+    bodyHtml = 'Click vào <b>cốc</b>, rồi click vào <b>chai thành phẩm</b> để đóng chai.';
+  }
+  stepBodyEl.innerHTML = bodyHtml;
+
+  // Meter
+  let cur = 0, tgt = 1, label = '', unit = 'mL';
+  if (s.action === 'place-on-balance') {
+    cur = state.beakerOnBalance ? 1 : 0; tgt = 1; label = 'chờ thao tác'; unit = '';
+  } else if (s.action === 'pour') {
+    if (s.container === 'cylinder') {
+      cur = state.cylinderMl; tgt = s.target; label = `đích: ${s.target} ${s.unit}`; unit = s.unit;
+    } else if (s.container === 'beaker') {
+      if (s.unit === 'g') {
+        // weight step — current weight of THIS reagent step (track per step)
+        cur = state.stepProgress[i] ?? 0; tgt = s.target; label = `đích: ${s.target} g`; unit = 'g';
+      } else {
+        cur = state.beakerVol; tgt = s.target; label = `đích: ${s.target} ${s.unit}`; unit = 'mL';
+      }
+    }
+  } else if (s.action === 'transfer') {
+    cur = state.transferDone ? 1 : 0; tgt = 1; label = 'sẵn sàng đổ'; unit = '';
+  } else if (s.action === 'bottle') {
+    cur = state.bottled ? 1 : 0; tgt = 1; label = 'đóng chai'; unit = '';
+  }
+  const pct = Math.min(100, tgt ? (cur / tgt) * 100 : 0);
+  meterBar.style.width = pct + '%';
+  meterCur.textContent = (typeof cur === 'number' ? cur : 0).toFixed(unit === 'g' ? 3 : 1) + ' ' + unit;
+  meterTgt.textContent = label;
+  submitBtn.disabled = true;
+}
+
+function recomputeStepIdx() {
+  let i = 0;
+  while (i < state.recipe.steps.length && state.completedSteps.has(i)) i++;
+  state.stepIdx = i;
+}
+
+function markStepCompleted(stepIdx) {
+  if (stepIdx < 0 || stepIdx >= state.recipe.steps.length) return;
+  if (state.completedSteps.has(stepIdx)) return;
+  state.completedSteps.add(stepIdx);
+  state.actionLog.push({ t: Date.now(), kind: 'step-done', stepIdx, label: state.recipe.steps[stepIdx].label });
+  sfx.correct();
+  recomputeStepIdx();
+  state.transferDone = false;
+  const next = state.recipe.steps[state.stepIdx];
+  if (next?.container === 'cylinder' && next?.action !== 'transfer') {
+    state.cylinderMl = 0;
+    updateCylinderLiquid(0, 0xc16e1c);
+  }
+  renderStep();
+  sendProgress();
+}
+
+// Legacy advanceStep kept for skip-button compatibility — marks the current
+// step completed with an error log entry.
+function advanceStep(success = true) {
+  if (state.stepIdx < state.recipe.steps.length) markStepCompleted(state.stepIdx);
+}
+
+// Free-form error logging: silent (no blocking toast / no wrong sound), just
+// pushes to the errors list and shows a small non-intrusive hint.
+function logError(msg) {
+  state.errors.push(msg);
+  state.actionLog.push({ t: Date.now(), kind: 'error', msg });
+  showToast('⚠ ' + msg, 1400, 'warn');
+}
+
+function updateBeakerLiquid(volMl, color) {
+  const liq = beaker.userData.liquid;
+  if (volMl < 0.001) { liq.visible = false; return; }
+  liq.visible = true;
+  const maxVol = 250;
+  const h = Math.min(beaker.userData.maxH, volMl / maxVol * beaker.userData.maxH);
+  liq.geometry.dispose();
+  liq.geometry = new THREE.CylinderGeometry(0.043, 0.043, h, 32);
+  liq.position.y = h / 2 + 0.003;
+  if (color !== undefined) liq.material.color.setHex(color);
+}
+
+function updateCylinderLiquid(volMl, color) {
+  const liq = cylinder.userData.liquid;
+  if (volMl < 0.001) { liq.visible = false; return; }
+  liq.visible = true;
+  const h = volMl / 100 * cylinder.userData.maxH;
+  liq.geometry.dispose();
+  liq.geometry = new THREE.CylinderGeometry(0.02, 0.02, h, 32);
+  liq.position.y = h / 2 + 0.003;
+  if (color !== undefined) liq.material.color.setHex(color);
+}
+
+function updateMortarLiquid(volMl, color) {
+  const liq = mortar.userData.liquid;
+  if (volMl < 0.001) { liq.visible = false; return; }
+  liq.visible = true;
+  const h = Math.min(mortar.userData.maxH, volMl / mortar.userData.maxVol * mortar.userData.maxH);
+  liq.geometry.dispose();
+  liq.geometry = new THREE.CylinderGeometry(0.060, 0.040, h, 32);
+  liq.position.y = 0.034 + h / 2;
+  if (color !== undefined) liq.material.color.setHex(color);
+}
+
+function updateFinalBottleFill(volMl, color) {
+  const fill = finalBottle.userData.fill;
+  fill.visible = volMl > 0.001;
+  if (color !== undefined && fill.visible) fill.material.color.setHex(color);
+}
+
+// ============================================================
+// Generic container ops — used by free-form pour-between-containers
+// to read/write each container's contents uniformly.
+// ============================================================
+const containerOps = {
+  'beaker': {
+    grp: () => beaker,
+    get: () => ({ vol: state.beakerVol, color: state.beakerColor, max: 250 }),
+    set: (v, c) => { state.beakerVol = Math.max(0, v); if (c !== undefined) state.beakerColor = c; updateBeakerLiquid(state.beakerVol, state.beakerColor); },
+  },
+  'cylinder': {
+    grp: () => cylinder,
+    get: () => ({ vol: state.cylinderMl, color: cylinder.userData.liquid.material.color.getHex(), max: 100 }),
+    set: (v, c) => { state.cylinderMl = Math.max(0, v); updateCylinderLiquid(state.cylinderMl, c !== undefined ? c : cylinder.userData.liquid.material.color.getHex()); },
+  },
+  'mortar': {
+    grp: () => mortar,
+    get: () => ({ vol: state.mortarVol || 0, color: state.mortarColor || 0xb8a880, max: mortar.userData.maxVol }),
+    set: (v, c) => { state.mortarVol = Math.max(0, v); if (c !== undefined) state.mortarColor = c; updateMortarLiquid(state.mortarVol, state.mortarColor); },
+  },
+  'final-bottle': {
+    grp: () => finalBottle,
+    get: () => ({ vol: state.finalBottleVol || 0, color: state.finalBottleColor || state.recipe?.finalColor || 0xa67c2a, max: (state.recipe?.finalVolume || 100) + 50 }),
+    set: (v, c) => { state.finalBottleVol = Math.max(0, v); if (c !== undefined) state.finalBottleColor = c; updateFinalBottleFill(state.finalBottleVol, state.finalBottleColor); },
+  },
+};
+
+// Animate src carrying to dst, tilting, pouring (with stream), and
+// returning to origin. `moveVol` is transferred at the start of the
+// pour phase (with color blend). Returns the moved volume.
+function pourBetweenContainers(srcGrp, dstId, opts = {}) {
+  const srcId = srcGrp.userData.id;
+  const src = containerOps[srcId];
+  const dst = containerOps[dstId];
+  if (!src || !dst) return 0;
+  const srcS = src.get();
+  if (srcS.vol < 0.01) return 0;
+  const dstS = dst.get();
+  const space = Math.max(0, dstS.max - dstS.vol);
+  if (space < 0.01) return 0;
+  const moveVol = opts.all !== false ? Math.min(srcS.vol, space) : Math.min(srcS.vol, space, opts.amount || srcS.vol);
+
+  startPourAnim(srcGrp, dst.grp(), {
+    color: srcS.color,
+    onPourActive: () => {
+      const sNow = src.get(); const dNow = dst.get();
+      const newDstVol = dNow.vol + moveVol;
+      const blendT = newDstVol > 0 ? moveVol / newDstVol : 0;
+      const newColor = blendColor(dNow.color, srcS.color, Math.min(1, blendT));
+      dst.set(newDstVol, newColor);
+      src.set(sNow.vol - moveVol, sNow.color);
+    },
+    onComplete: opts.onComplete,
+  });
+  return moveVol;
+}
+
+// ============================================================
+// WALK MODE — first-person WASD + pointer-lock mouse-look
+// ============================================================
+const walk = { active: false, keys: {}, yaw: 0, pitch: -0.1 };
+const walkBtn = document.getElementById('walk-btn');
+const crosshairEl = document.getElementById('crosshair');
+const walkHintEl = document.getElementById('walk-hint');
+const _walkForward = new THREE.Vector3();
+const _walkRight = new THREE.Vector3();
+
+function enterWalkMode() {
+  walk.active = true;
+  controls.enabled = false;
+  // Start near the front of the counter, eye height
+  camera.position.set(0, 1.6, 1.6);
+  walk.yaw = 0; walk.pitch = -0.15;
+  renderer.domElement.requestPointerLock?.();
+  walkBtn.classList.add('active');
+  walkBtn.textContent = '🛑 Thoát đi quanh (Esc)';
+  crosshairEl.classList.add('shown');
+  walkHintEl.classList.add('shown');
+}
+function exitWalkMode() {
+  walk.active = false;
+  controls.enabled = true;
+  document.exitPointerLock?.();
+  walkBtn.classList.remove('active');
+  walkBtn.textContent = '🚶 Đi quanh phòng (V)';
+  crosshairEl.classList.remove('shown');
+  walkHintEl.classList.remove('shown');
+}
+walkBtn.addEventListener('click', () => walk.active ? exitWalkMode() : enterWalkMode());
+
+document.addEventListener('keydown', e => {
+  // Ignore typing in chat input
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.key === 'v' || e.key === 'V') { walk.active ? exitWalkMode() : enterWalkMode(); return; }
+  if (e.key === 'Escape' && walk.active) { exitWalkMode(); return; }
+  walk.keys[e.key.toLowerCase()] = true;
+});
+document.addEventListener('keyup', e => { walk.keys[e.key.toLowerCase()] = false; });
+
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== renderer.domElement && walk.active) exitWalkMode();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!walk.active || document.pointerLockElement !== renderer.domElement) return;
+  walk.yaw   -= e.movementX * 0.0025;
+  walk.pitch -= e.movementY * 0.0025;
+  walk.pitch = Math.max(-1.3, Math.min(1.3, walk.pitch));
+});
+
+function updateWalk(dt) {
+  if (!walk.active) return;
+  const eu = new THREE.Euler(walk.pitch, walk.yaw, 0, 'YXZ');
+  camera.quaternion.setFromEuler(eu);
+  const speed = (walk.keys['shift'] ? 2.8 : 1.5) * dt;
+  camera.getWorldDirection(_walkForward); _walkForward.y = 0; _walkForward.normalize();
+  _walkRight.crossVectors(_walkForward, camera.up).normalize();
+  if (walk.keys['w']) camera.position.addScaledVector(_walkForward,  speed);
+  if (walk.keys['s']) camera.position.addScaledVector(_walkForward, -speed);
+  if (walk.keys['d']) camera.position.addScaledVector(_walkRight,    speed);
+  if (walk.keys['a']) camera.position.addScaledVector(_walkRight,   -speed);
+  if (walk.keys[' ']) camera.position.y += speed;
+  if (walk.keys['c']) camera.position.y -= speed;
+  camera.position.y = Math.max(1.0, Math.min(2.5, camera.position.y));
+  // Clamp to room bounds with margin
+  const margin = 0.7;
+  camera.position.x = Math.max(-ROOM_W/2 + margin, Math.min(ROOM_W/2 - margin, camera.position.x));
+  camera.position.z = Math.max(-ROOM_D/2 + margin + 0.6, Math.min(ROOM_D/2 - margin, camera.position.z));
+}
+
+// ============================================================
+// MEDIAPIPE HAND TRACKING — two hands: each pinch acts as a click.
+// When BOTH hands pinch on a valid pour/transfer/bottle combo at the
+// same moment, a "two-hand bonus" is applied: smaller chunk variance
+// (steadier pour, less overshoot). Mortar grinding gesture: both
+// hands pinching near the mortar with circular motion in the right
+// hand → animate grinding particles.
+// ============================================================
+const handState = {
+  running: false, landmarker: null, video: null, lastVideoTime: -1,
+  // Per-hand state — slot 0 = left hand, slot 1 = right hand. Slots
+  // are assigned from MediaPipe handedness when available.
+  hands: [
+    { active: false, x: 0, y: 0, pinching: false, label: 'Left',  color: 0x38bdf8, ringHex: '#38bdf8' },
+    { active: false, x: 0, y: 0, pinching: false, label: 'Right', color: 0xfb923c, ringHex: '#fb923c' },
+  ],
+  bothPinchAt: 0,           // timestamp the most recent both-pinch combo was detected
+};
+const handBtn = document.getElementById('hand-btn');
+const camPreviewEl = document.getElementById('cam-preview');
+const camCtx = camPreviewEl.getContext('2d');
+// Two cursor spheres in 3D — one per hand.
+const handCursors = [
+  new THREE.Mesh(new THREE.SphereGeometry(0.020, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.92, depthTest: false })),
+  new THREE.Mesh(new THREE.SphereGeometry(0.020, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfb923c, transparent: true, opacity: 0.92, depthTest: false })),
+];
+for (const c of handCursors) { c.renderOrder = 999; c.visible = false; scene.add(c); }
+
+// Floating "two-hand combo" badge in the DOM
+const twoHandBadgeEl = document.createElement('div');
+twoHandBadgeEl.style.cssText = 'position:absolute;top:118px;right:12px;z-index:11;background:linear-gradient(135deg,#38bdf8,#fb923c);color:#fff;padding:6px 12px;border-radius:14px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.18);display:none;animation:pulse 0.8s ease-in-out infinite';
+twoHandBadgeEl.textContent = '🙌 Hai tay phối hợp · rót ổn định';
+document.body.appendChild(twoHandBadgeEl);
+const _pulseStyle = document.createElement('style');
+_pulseStyle.textContent = '@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }';
+document.head.appendChild(_pulseStyle);
+
+const SECURE_FOR_CAMERA = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
+if (!SECURE_FOR_CAMERA) {
+  handBtn.textContent = '🖱️ Webcam cần HTTPS';
+  handBtn.style.background = '#6b7280';
+  handBtn.style.color = '#fff';
+  handBtn.style.cursor = 'help';
+  handBtn.addEventListener('click', () => showToast('⚠️ Webcam cần HTTPS hoặc localhost', 2200));
+} else {
+  handBtn.addEventListener('click', () => handState.running ? stopHandTracking() : initHandTracking());
+}
+
+async function initHandTracking() {
+  handBtn.disabled = true; handBtn.textContent = '⏳ Đang tải MediaPipe...';
+  try {
+    const { HandLandmarker, FilesetResolver } = await import('/vendor/mediapipe/vision_bundle.mjs');
+    const fileset = await FilesetResolver.forVisionTasks('/vendor/mediapipe/wasm');
+    handState.landmarker = await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: '/models/hand_landmarker.task', delegate: 'GPU' },
+      runningMode: 'VIDEO', numHands: 2,
+    });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });
+    handState.video = document.createElement('video');
+    handState.video.srcObject = stream;
+    handState.video.autoplay = true; handState.video.muted = true; handState.video.playsInline = true;
+    await new Promise(r => (handState.video.onloadedmetadata = r));
+    await handState.video.play();
+    handState.running = true;
+    handBtn.classList.add('active');
+    handBtn.textContent = '✋ Tắt hand tracking (2 tay)';
+    handBtn.disabled = false;
+    camPreviewEl.classList.add('shown');
+    for (const c of handCursors) c.visible = true;
+    showToast('🤲 Hai tay: chụm cái+trỏ để cầm/đặt. Cầm chai + chụm tay kia vào cốc để rót ổn định.', 4500, 'ok');
+  } catch (err) {
+    handBtn.disabled = false; handBtn.textContent = '🖐️ Bật điều khiển tay';
+    showToast('❌ Hand tracking lỗi: ' + (err.message || err.name), 3000, 'err');
+  }
+}
+
+function stopHandTracking() {
+  handState.running = false;
+  handState.video?.srcObject?.getTracks().forEach(t => t.stop());
+  handState.video = null;
+  handBtn.classList.remove('active');
+  handBtn.textContent = '🖐️ Bật điều khiển tay';
+  camPreviewEl.classList.remove('shown');
+  for (const c of handCursors) c.visible = false;
+  for (const h of handState.hands) { h.active = false; h.pinching = false; }
+  twoHandBadgeEl.style.display = 'none';
+}
+
+const _handPlaneN = new THREE.Vector3();
+const _handHit = new THREE.Vector3();
+const _handRay = new THREE.Vector2();
+function updateHand(time) {
+  if (!handState.running || !handState.landmarker || !handState.video) return;
+  if (handState.video.currentTime === handState.lastVideoTime) return;
+  handState.lastVideoTime = handState.video.currentTime;
+  const result = handState.landmarker.detectForVideo(handState.video, time);
+  camCtx.drawImage(handState.video, 0, 0, camPreviewEl.width, camPreviewEl.height);
+
+  // Reset active flags; will be re-set per hand from result.
+  for (const h of handState.hands) h.active = false;
+
+  if (!result.landmarks || !result.landmarks.length) {
+    // No hands → clear pinches & hide cursors
+    for (let i = 0; i < handState.hands.length; i++) {
+      handState.hands[i].pinching = false;
+      handCursors[i].visible = false;
+    }
+    twoHandBadgeEl.style.display = 'none';
+    return;
+  }
+
+  // Assign each detected hand to slot 0 (left) or 1 (right) using MediaPipe
+  // handedness. The webcam image is mirrored, so MediaPipe's "Left" really
+  // is the user's right hand on screen — we honor the on-screen mapping by
+  // using the raw label (because we already mirror NDC x below).
+  const slotsUsed = [false, false];
+  for (let li = 0; li < result.landmarks.length; li++) {
+    const lm = result.landmarks[li];
+    const handed = result.handednesses?.[li]?.[0]?.categoryName || (li === 0 ? 'Left' : 'Right');
+    let slot = handed === 'Left' ? 0 : 1;
+    if (slotsUsed[slot]) slot = 1 - slot;          // collision → take other slot
+    if (slotsUsed[slot]) continue;                 // both taken (rare) → skip extra hand
+    slotsUsed[slot] = true;
+    const hand = handState.hands[slot];
+    hand.active = true;
+
+    const t = lm[4], idx = lm[8];
+    // Draw landmarks for this hand
+    const drawColor = hand.ringHex;
+    camCtx.fillStyle = drawColor;
+    for (const p of lm) { camCtx.beginPath(); camCtx.arc(p.x * camPreviewEl.width, p.y * camPreviewEl.height, 3, 0, Math.PI*2); camCtx.fill(); }
+    camCtx.strokeStyle = hand.pinching ? '#ef4444' : drawColor;
+    camCtx.lineWidth = 2;
+    camCtx.beginPath();
+    camCtx.moveTo(t.x * camPreviewEl.width, t.y * camPreviewEl.height);
+    camCtx.lineTo(idx.x * camPreviewEl.width, idx.y * camPreviewEl.height);
+    camCtx.stroke();
+    // NDC (mirror x)
+    const px = (t.x + idx.x) / 2, py = (t.y + idx.y) / 2;
+    _handRay.x = (1 - px) * 2 - 1;
+    _handRay.y = -(py * 2 - 1);
+    hand.x = _handRay.x; hand.y = _handRay.y;
+    raycaster.setFromCamera(_handRay, camera);
+    camera.getWorldDirection(_handPlaneN);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(_handPlaneN, new THREE.Vector3(0, 1.0, 0));
+    if (raycaster.ray.intersectPlane(plane, _handHit)) {
+      handCursors[slot].position.copy(_handHit);
+      handCursors[slot].visible = true;
+    }
+    // Pinch detection (hysteresis)
+    const pinchDist = Math.hypot(t.x - idx.x, t.y - idx.y);
+    const wasPinching = hand.pinching;
+    if (!hand.pinching && pinchDist < 0.05) hand.pinching = true;
+    else if (hand.pinching && pinchDist > 0.08) hand.pinching = false;
+    handCursors[slot].material.color.setHex(hand.pinching ? 0xef4444 : hand.color);
+    handCursors[slot].scale.setScalar(hand.pinching ? 1.25 : 1.0);
+    // On pinch START → click on hovered object (per-hand click).
+    if (hand.pinching && !wasPinching) {
+      const hits = raycaster.intersectObjects(getClickable(), true);
+      if (hits.length) {
+        const grp = pickTopGroup(hits[0].object);
+        if (grp) {
+          // Flag two-hand bonus if the OTHER hand is also pinching.
+          const otherIdx = 1 - slot;
+          const other = handState.hands[otherIdx];
+          if (other.active && other.pinching) {
+            state.twoHandBonus = true;
+            handState.bothPinchAt = performance.now();
+            sfx.grab();
+          }
+          handleClickOn(grp);
+          state.twoHandBonus = false;     // consume the flag immediately
+        }
+      }
+    }
+    // Send cursor to multiplayer (using whichever hand is more "active")
+    if (slot === 1 && ws && ws.readyState === 1) sendCursor(_handHit.x, _handHit.y, _handHit.z);
+  }
+
+  // Hide any unused cursors this frame.
+  for (let i = 0; i < handState.hands.length; i++) {
+    if (!handState.hands[i].active) { handCursors[i].visible = false; handState.hands[i].pinching = false; }
+  }
+
+  // Show two-hand combo badge while both hands are pinching.
+  const bothPinching = handState.hands[0].active && handState.hands[1].active
+                    && handState.hands[0].pinching && handState.hands[1].pinching;
+  twoHandBadgeEl.style.display = bothPinching ? 'block' : 'none';
+}
+
+// ===== Pointer interaction =====
+let selectedTool = null;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+function ndcFromEvent(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function getClickable() {
+  return [beaker, cylinder, finalBottle, balance, mortar, pestleGrp, pipetGrp, stirrerGrp, ...reagents];
+}
+
+function pickTopGroup(object) {
+  let g = object;
+  while (g.parent && !g.userData?.kind) g = g.parent;
+  return g.userData?.kind ? g : null;
+}
+
+const holdBadgeEl = document.getElementById('hold-badge');
+const holdNameEl = document.getElementById('hold-name');
+
+function setSelectedTool(t) {
+  if (selectedTool === t) return;
+  if (selectedTool) selectedTool.traverse(o => { if (o.material?.emissive) o.material.emissive.setHex(0x000000); });
+  selectedTool = t;
+  if (selectedTool) {
+    selectedTool.traverse(o => { if (o.material?.emissive) o.material.emissive.setHex(0x114b2a); });
+    const n = selectedTool.userData?.name || selectedTool.userData?.id;
+    showToast('✋ Đang cầm: ' + n + ' — click vào dụng cụ để đặt/rót', 1800, 'ok');
+    holdNameEl.textContent = 'Đang cầm: ' + n;
+    holdBadgeEl.classList.add('shown');
+    if (walk.active) holdBadgeEl.classList.add('walk-mode');
+    else holdBadgeEl.classList.remove('walk-mode');
+    sfx.grab();
+    startLift(selectedTool);
+  } else {
+    holdBadgeEl.classList.remove('shown');
+    endLift();
+  }
+  updateHoverPressText();
+}
+
+function updateHoverPressText() {
+  if (!hoverPressEl) return;
+  if (selectedTool) {
+    hoverPressEl.innerHTML = '<span class="icon">🖱️</span><span class="kb">CLICK</span><span>để rót/đặt vào đây</span>';
+  } else {
+    hoverPressEl.innerHTML = '<span class="icon">🖱️</span><span class="kb">CLICK</span><span>để cầm</span>';
+  }
+}
+
+// Find first uncompleted recipe step that matches the (action, held, target) tuple.
+function findMatchingStepIdx(action, su, tu) {
+  for (let i = 0; i < state.recipe.steps.length; i++) {
+    if (state.completedSteps.has(i)) continue;
+    const s = state.recipe.steps[i];
+    if (s.action !== action) continue;
+    if (action === 'place-on-balance' && su.id === 'beaker' && tu.id === 'balance') return i;
+    if (action === 'pour' && su.id === s.reagentId) {
+      const cId = s.container === 'cylinder' ? 'cylinder' : 'beaker';
+      if (tu.id === cId) return i;
+    }
+    if (action === 'transfer' && su.id === 'cylinder' && tu.id === 'beaker') return i;
+    if (action === 'bottle' && su.id === 'beaker' && tu.id === 'final-bottle') return i;
+  }
+  return -1;
+}
+
+// ============================================================
+// FREE-FORM INTERACTION — any physically sensible combo executes.
+// Held tool/reagent + clicked target → router picks the action:
+//   • → balance    = place
+//   • reagent → container = pour reagent (with step matching for beaker/cylinder)
+//   • container → container = transfer contents (mixing colors)
+// Recipe matching is checked separately; mismatches log silently for
+// end-of-game review. Same-id clicks (self-pour) are a no-op.
+// ============================================================
+function handleClickOn(target) {
+  if (!target) { setSelectedTool(null); return; }
+  const tu = target.userData;
+
+  // FIRST CLICK: pick up any tool / reagent.
+  const isPickup = !selectedTool || (tu.kind === 'reagent' && selectedTool.userData?.kind === 'reagent');
+  if (isPickup) { setSelectedTool(target); return; }
+
+  const su = selectedTool.userData;
+
+  // Self-target → no-op (clicking the same object you're holding).
+  if (su.id === tu.id) { setSelectedTool(null); return; }
+
+  // ----- A. PIPET — hút/nhả thể tích nhỏ -----
+  if (su.id === 'pipet' && containerOps[tu.id]) {
+    if (state.pipetVol < 0.01) {
+      // EMPTY pipet → SUCK from target
+      const dstS = containerOps[tu.id].get();
+      if (dstS.vol < 0.05) {
+        logError(`${tu.name} rỗng — không hút được`);
+        setSelectedTool(null); return;
+      }
+      const amount = Math.min(5, dstS.vol);
+      const tipPos = new THREE.Vector3(); pipetGrp.getWorldPosition(tipPos); tipPos.y += 0.02;
+      const srcPos = new THREE.Vector3(); containerOps[tu.id].grp().getWorldPosition(srcPos); srcPos.y += 0.08;
+      showStream(srcPos, tipPos, dstS.color, 700);
+      sfx.grab();
+      setTimeout(() => {
+        state.pipetVol = amount;
+        state.pipetColor = dstS.color;
+        updatePipetLiquid(state.pipetVol, state.pipetColor);
+        containerOps[tu.id].set(dstS.vol - amount, dstS.color);
+        showToast(`💧 Hút ${amount.toFixed(1)} mL từ ${tu.name}`, 1300);
+        setSelectedTool(null);
+      }, 500);
+      return;
+    } else {
+      // LOADED pipet → DROP into target (uses the full carry-tilt-pour-return anim)
+      const dstS = containerOps[tu.id].get();
+      const space = Math.max(0, dstS.max - dstS.vol);
+      if (space < 0.01) { logError(`${tu.name} đã đầy`); setSelectedTool(null); return; }
+      const amount = Math.min(state.pipetVol, space);
+      startPourAnim(pipetGrp, containerOps[tu.id].grp(), {
+        color: state.pipetColor,
+        tiltAngle: 1.0,
+        pourDur: 450,
+        onPourActive: () => {
+          const dNow = containerOps[tu.id].get();
+          const newVol = dNow.vol + amount;
+          const blendT = newVol > 0 ? amount / newVol : 0;
+          const newColor = blendColor(dNow.color, state.pipetColor, Math.min(1, blendT));
+          containerOps[tu.id].set(newVol, newColor);
+          state.pipetVol -= amount;
+          updatePipetLiquid(state.pipetVol, state.pipetColor);
+        },
+        onComplete: () => {
+          showToast(`💧 Nhỏ ${amount.toFixed(1)} mL vào ${tu.name}`, 1300);
+          setSelectedTool(null);
+        },
+      });
+      return;
+    }
+  }
+
+  // ----- B. STIRRER — khuấy container có dung dịch -----
+  if (su.id === 'stirrer' && containerOps[tu.id]) {
+    const dstS = containerOps[tu.id].get();
+    if (dstS.vol < 0.5) {
+      logError(`${tu.name} (gần) rỗng — không có gì để khuấy`);
+      setSelectedTool(null); return;
+    }
+    const centerPos = new THREE.Vector3(); containerOps[tu.id].grp().getWorldPosition(centerPos); centerPos.y += 0.06;
+    showSwirl(centerPos, 0.03, dstS.color, 1100);
+    sfx.grab();
+    setTimeout(() => {
+      // Homogenize: nudge color closer to its own average — slight saturation shift
+      // For now: just mark stirred. Visual swirl is the feedback.
+      state.stirCount[tu.id] = (state.stirCount[tu.id] || 0) + 1;
+      showToast(`🌀 Đã khuấy ${tu.name}`, 1200);
+      sendAction('stir-' + tu.id);
+      setSelectedTool(null);
+    }, 700);
+    return;
+  }
+
+  // ----- C. PESTLE — nghiền cối có hỗn hợp -----
+  if (su.id === 'pestle' && tu.id === 'mortar') {
+    const mState = containerOps.mortar.get();
+    if (mState.vol < 0.5) {
+      logError('Cối rỗng — không có gì để nghiền');
+      setSelectedTool(null); return;
+    }
+    const centerPos = new THREE.Vector3(); mortar.getWorldPosition(centerPos); centerPos.y += 0.04;
+    showDustPuff(centerPos, mState.color, 1100);
+    sfx.grab();
+    setTimeout(() => {
+      state.grindCount++;
+      showToast(`💢 Đã nghiền cối (lần ${state.grindCount})`, 1400);
+      sendAction('grind-mortar');
+      setSelectedTool(null);
+    }, 800);
+    return;
+  }
+
+  // Pestle clicked on something other than mortar → error
+  if (su.id === 'pestle' && tu.id !== 'mortar') {
+    logError(`Chày chỉ dùng được với cối — không thể với ${tu.name}`);
+    setSelectedTool(null); return;
+  }
+
+  // Pipet / stirrer placed on balance: handled by next block (PLACE ON BALANCE).
+
+  // ----- 1. PLACE ON BALANCE — any tool/reagent can be placed on cân -----
+  if (tu.id === 'balance') {
+    commitNewRestForHeld(new THREE.Vector3(balance.position.x + 0.03, balance.position.y + 0.06, balance.position.z));
+    if (su.id === 'beaker') state.beakerOnBalance = true;
+    drawBalScreen(0, 'TARE OK');
+    sendAction('place-' + su.id + '-on-balance');
+    const idx = findMatchingStepIdx('place-on-balance', su, tu);
+    if (idx >= 0) markStepCompleted(idx);
+    else logError(`Đặt ${su.name} lên cân — không nằm trong quy trình`);
+    setSelectedTool(null);
+    return;
+  }
+
+  // ----- 2. POUR REAGENT → CONTAINER (beaker / cylinder / mortar / final-bottle) -----
+  if (su.kind === 'reagent' && containerOps[tu.id]) {
+    const idx = findMatchingStepIdx('pour', su, tu);
+    if (idx >= 0) {
+      // Recipe-matched pour → quantitative tracking (beaker/cylinder only by recipe shape)
+      doPour(tu.id, selectedTool, state.recipe.steps[idx], idx);
+    } else {
+      // Free pour into any container — visual + spill some contents into target.
+      // doFreePour handles its own setSelectedTool(null) in onComplete.
+      doFreePour(tu.id, selectedTool);
+      const dstName = tu.id === 'beaker' ? 'cốc' : tu.id === 'cylinder' ? 'ống đong' : tu.id === 'mortar' ? 'cối' : 'chai thành phẩm';
+      logError(`Rót ${su.name} vào ${dstName} — không có trong đơn`);
+    }
+    return;
+  }
+
+  // ----- 3. POUR CONTAINER → CONTAINER (cylinder→beaker, beaker→final-bottle, mortar→cốc, etc.) -----
+  if (containerOps[su.id] && containerOps[tu.id]) {
+    const srcInfo = containerOps[su.id].get();
+    if (srcInfo.vol < 0.01) {
+      logError(`${su.name} rỗng — không có gì để đổ`);
+      setSelectedTool(null);
+      return;
+    }
+    const dstSpace = Math.max(0, containerOps[tu.id].get().max - containerOps[tu.id].get().vol);
+    if (dstSpace < 0.01) {
+      logError(`${tu.name} đã đầy`);
+      setSelectedTool(null);
+      return;
+    }
+
+    // Determine if this combo matches a recipe step.
+    const matchAction = (su.id === 'cylinder' && tu.id === 'beaker')      ? 'transfer'
+                      : (su.id === 'beaker'   && tu.id === 'final-bottle') ? 'bottle'
+                      : null;
+    const idx = matchAction ? findMatchingStepIdx(matchAction, su, tu) : -1;
+
+    pourBetweenContainers(selectedTool, tu.id, {
+      onComplete: () => {
+        if (matchAction === 'transfer' && idx >= 0) {
+          state.transferDone = true;
+          showToast(`Đã chuyển ${srcInfo.vol.toFixed(1)} mL vào cốc`, 1500);
+          sendAction('transfer-to-beaker');
+          markStepCompleted(idx);
+        } else if (matchAction === 'bottle' && idx >= 0) {
+          state.bottled = true;
+          finalBottle.userData.fill.material.color.setHex(state.recipe.finalColor);
+          state.finalBottleColor = state.recipe.finalColor;
+          updateFinalBottleFill(state.finalBottleVol || srcInfo.vol, state.finalBottleColor);
+          sendAction('bottled');
+          showToast('🎉 Đã đóng chai!', 2500, 'ok');
+          sfx.perfect();
+          markStepCompleted(idx);
+        } else {
+          logError(`Đổ ${su.name} → ${tu.name} — không có trong đơn`);
+        }
+        setSelectedTool(null);
+      },
+    });
+    return;
+  }
+
+  // ----- Any other combo: log silently and release -----
+  logError(`Thao tác không hợp lý: ${su.name} → ${tu.name}`);
+  setSelectedTool(null);
+}
+
+function doPour(containerKind, reagentGrp, step, stepIdx) {
+  const reagentInfo = REAGENTS[step.reagentId];
+  const dstGrp = containerOps[containerKind].grp();
+
+  // Compute chunk size BEFORE animating (so onPourActive uses the right number).
+  const i = stepIdx;
+  state.stepProgress[i] = state.stepProgress[i] ?? 0;
+  const bonus = state.twoHandBonus;
+  if (bonus) state.twoHandPours++;
+  let chunk;
+  if (step.unit === 'g') {
+    chunk = bonus ? step.target * (0.10 + Math.random() * 0.10)
+                  : step.target * (0.18 + Math.random() * 0.20);
+  } else {
+    chunk = bonus ? step.target * (0.08 + Math.random() * 0.08)
+                  : step.target * (0.12 + Math.random() * 0.18);
+  }
+  if (state.stepProgress[i] + chunk > step.target * 0.92 && state.stepProgress[i] + chunk < step.target + step.tolerance) {
+    chunk = Math.min(step.target - state.stepProgress[i] + (Math.random() - 0.3) * step.tolerance * 0.4, chunk);
+  }
+
+  startPourAnim(reagentGrp, dstGrp, {
+    color: reagentInfo?.liquid || 0x88ccee,
+    isPowder: !!reagentInfo?.isPowder,
+    onPourActive: () => {
+      state.stepProgress[i] += chunk;
+      const cur = state.stepProgress[i];
+      if (containerKind === 'beaker') {
+        if (step.unit === 'g') {
+          state.beakerWeight = cur;
+          drawBalScreen(cur, 'STABLE');
+          state.beakerVol = Math.max(state.beakerVol, cur * 3);
+          state.beakerColor = REAGENTS[step.reagentId]?.liquid || 0xfafafa;
+          updateBeakerLiquid(state.beakerVol, state.beakerColor);
+        } else {
+          state.beakerVol = cur;
+          state.beakerColor = blendColor(state.beakerColor || REAGENTS[step.reagentId]?.liquid, REAGENTS[step.reagentId]?.liquid || 0xddeefa, 0.4);
+          updateBeakerLiquid(state.beakerVol, state.beakerColor);
+        }
+      } else {
+        state.cylinderMl = cur;
+        updateCylinderLiquid(cur, REAGENTS[step.reagentId]?.liquid || 0xc16e1c);
+      }
+      renderStep();
+      sendProgress();
+    },
+    onComplete: () => {
+      const cur = state.stepProgress[i];
+      if (Math.abs(cur - step.target) <= step.tolerance) {
+        showToast(`✅ Đạt ${cur.toFixed(step.unit === 'g' ? 3 : 1)} ${step.unit}`, 1700, 'ok');
+        sendAction(`pour-${step.reagentId}-done`);
+        markStepCompleted(i); setSelectedTool(null);
+      } else if (cur > step.target + step.tolerance) {
+        logError(`Quá tay ${reagentInfo?.name}: ${cur.toFixed(step.unit === 'g' ? 3 : 1)} ${step.unit} (đích ${step.target})`);
+        markStepCompleted(i); setSelectedTool(null);
+      } else {
+        showToast(`+${chunk.toFixed(step.unit === 'g' ? 3 : 1)} ${step.unit} · còn ${(step.target - cur).toFixed(step.unit === 'g' ? 3 : 1)}`, 1100);
+        // Don't deselect — user keeps holding to pour again.
+      }
+    },
+  });
+}
+
+// Free pour into any container — uses the same carry-tilt-pour-return
+// animation; deposits a small unmetered portion (5–15 units).
+function doFreePour(containerKind, reagentGrp) {
+  const ru = reagentGrp.userData;
+  const info = REAGENTS[ru.id];
+  const dst = containerOps[containerKind];
+  if (!dst) return;
+  const dstS = dst.get();
+  const space = Math.max(0, dstS.max - dstS.vol);
+  const portion = Math.min(space, 5 + Math.random() * 10);
+
+  startPourAnim(reagentGrp, dst.grp(), {
+    color: info?.liquid || 0x88ccee,
+    isPowder: !!info?.isPowder,
+    onPourActive: () => {
+      if (portion < 0.01) return;
+      const dstS2 = dst.get();
+      const newVol = dstS2.vol + portion;
+      const blendT = newVol > 0 ? portion / newVol : 0;
+      const newColor = blendColor(dstS2.color, info?.liquid || dstS2.color, Math.min(1, blendT));
+      dst.set(newVol, newColor);
+    },
+    onComplete: () => setSelectedTool(null),
+  });
+}
+
+function blendColor(a, b, t) {
+  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
+  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return (r << 16) | (g << 8) | bl;
+}
+
+// ============================================================
+// MULTIPLAYER CLIENT
+// ============================================================
+let ws = null;
+let myId = null;
+let myColor = '#14b8a6';
+const mpPanelEl = document.getElementById('mp-panel');
+const mpPlayersEl = document.getElementById('mp-players');
+const mpChatLogEl = document.getElementById('mp-chat-log');
+const mpChatInput = document.getElementById('mp-chat-input');
+const mpActionBtn = document.getElementById('mp-action');
+
+function connectMultiplayer() {
+  if (ws) return;
+  const url = new URL('ws-lab', document.baseURI).href.replace(/^http/, 'ws');
+  ws = new WebSocket(url);
+  ws.addEventListener('open', () => {
+    ws.send(JSON.stringify({ type: 'join', name: myName, recipeId: state.recipe.id }));
+    document.getElementById('mp-fab')?.classList.add('active');
+    mpActionBtn.textContent = '👥 Đang trong phòng';
+    mpActionBtn.style.background = 'linear-gradient(135deg, #14b8a6, #0f766e)';
+    mpActionBtn.style.color = '#fff';
+  });
+  ws.addEventListener('message', ev => {
+    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    switch (msg.type) {
+      case 'welcome':
+        myId = msg.id; myColor = msg.color;
+        for (const p of msg.snapshot.players) if (p.id !== myId) ensureRemote(p);
+        refreshMpPanel();
+        break;
+      case 'join':
+        ensureRemote(msg.player);
+        addChatLog(`<b>${msg.player.name}</b> đã vào phòng`, '#16a34a');
+        break;
+      case 'leave': {
+        const r = remotePlayers.get(msg.id);
+        if (r) { scene.remove(r.grp); remotePlayers.delete(msg.id); }
+        refreshMpPanel();
+        break;
+      }
+      case 'cursor': {
+        const r = remotePlayers.get(msg.id);
+        if (r) r.grp.position.set(msg.x, msg.y, msg.z);
+        break;
+      }
+      case 'progress': {
+        const r = remotePlayers.get(msg.id);
+        if (r) { r.step = msg.step; r.weight = msg.weight; r.beakerVol = msg.beakerVol; r.recipeId = msg.recipeId; refreshMpPanel(); }
+        break;
+      }
+      case 'action':
+        addChatLog(`<i style="opacity:0.7">${remotePlayers.get(msg.id)?.name || '?'} → ${msg.name}</i>`);
+        break;
+      case 'chat':
+        addChatLog(`<b style="color:${msg.color}">${msg.name}:</b> ${escapeHtml(msg.text)}`);
+        break;
+    }
+  });
+  ws.addEventListener('close', () => {
+    ws = null;
+    document.getElementById('mp-fab')?.classList.remove('active');
+    mpPanelEl.classList.remove('open');
+    mpActionBtn.textContent = '👥 Tham gia phòng chung';
+    mpActionBtn.style.background = '';
+    mpActionBtn.style.color = '';
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function addChatLog(html, color) {
+  const row = document.createElement('div');
+  row.className = 'chat-row';
+  if (color) row.style.color = color;
+  row.innerHTML = html;
+  mpChatLogEl.appendChild(row);
+  mpChatLogEl.scrollTop = mpChatLogEl.scrollHeight;
+  while (mpChatLogEl.children.length > 30) mpChatLogEl.removeChild(mpChatLogEl.firstChild);
+}
+
+function refreshMpPanel() {
+  const items = [`<div class="pl-row pl-me"><span class="pl-dot" style="background:${myColor}"></span>${escapeHtml(myName)} (bạn) <span class="pl-prog">B${state?.stepIdx + 1 || 1}</span></div>`];
+  for (const [id, r] of remotePlayers) {
+    items.push(`<div class="pl-row"><span class="pl-dot" style="background:${r.color}"></span>${escapeHtml(r.name)} <span class="pl-prog">B${r.step || 1}</span></div>`);
+  }
+  mpPlayersEl.innerHTML = items.join('');
+}
+
+let lastCursorSent = 0;
+function sendCursor(x, y, z) {
+  if (!ws || ws.readyState !== 1) return;
+  const now = performance.now();
+  if (now - lastCursorSent < 50) return;
+  lastCursorSent = now;
+  ws.send(JSON.stringify({ type: 'cursor', x, y, z }));
+}
+
+function sendProgress() {
+  if (!ws || ws.readyState !== 1 || !state) return;
+  ws.send(JSON.stringify({
+    type: 'progress',
+    step: state.stepIdx + 1,
+    weight: state.beakerWeight || 0,
+    beakerVol: state.beakerVol || 0,
+    recipeId: state.recipe.id,
+  }));
+  refreshMpPanel();
+}
+
+function sendAction(name, reagent = '') {
+  if (!ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'action', name, reagent }));
+}
+
+mpActionBtn.addEventListener('click', () => {
+  if (ws) { ws.close(); return; }
+  connectMultiplayer();
+});
+
+mpChatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const t = mpChatInput.value.trim();
+    if (t && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'chat', text: t }));
+    mpChatInput.value = '';
+  }
+});
+
+// ============================================================
+// START GAME (called after level selected)
+// ============================================================
+startGameImpl = function () {
+  // Force-clear any in-progress lift before resetting positions.
+  resetLift();
+  // Setup reagents for this recipe
+  setupReagents(currentRecipe);
+  setFinalLabel(currentRecipe.finalBottleLabel);
+
+  // Reset scene state
+  beaker.position.set(-0.3, 0.94, 0.15);
+  state = {
+    recipe: currentRecipe,
+    stepIdx: 0,
+    beakerOnBalance: false,
+    beakerWeight: 0,
+    beakerVol: 0,
+    beakerColor: 0xa1d99b,
+    cylinderMl: 0,
+    // Free-form additions: mortar + final-bottle can also receive pours.
+    mortarVol: 0,
+    mortarColor: 0xb8a880,
+    finalBottleVol: 0,
+    finalBottleColor: 0,
+    // New tools
+    pipetVol: 0,
+    pipetColor: 0xa1d99b,
+    stirCount: { beaker: 0, cylinder: 0, mortar: 0 },
+    grindCount: 0,
+    shakeCount: 0,
+    // Double-click detection for shake gesture on the final bottle.
+    _lastClickAt: 0, _lastClickId: null,
+    bottled: false,
+    transferDone: false,
+    stepProgress: {},
+    errors: [],
+    // Free-form mode: any sensible action executes; steps can be done out
+    // of order. completedSteps tracks which recipe steps have been satisfied;
+    // actionLog records every user action (matched or not) for end-of-game review.
+    completedSteps: new Set(),
+    actionLog: [],
+    // Two-hand bonus — set true transiently by hand-tracking when BOTH hands
+    // pinch at the same moment. Consumed by doPour to use smaller, steadier
+    // chunks (less variance, no overshoot). Tracked also for end-game stats.
+    twoHandBonus: false,
+    twoHandPours: 0,
+  };
+  updateBeakerLiquid(0, 0);
+  updateCylinderLiquid(0, 0);
+  updateMortarLiquid(0, 0xb8a880);
+  updatePipetLiquid(0, 0xa1d99b);
+  finalBottle.userData.fill.visible = false;
+  drawBalScreen(0, 'READY');
+  setSelectedTool(null);
+
+  // UI
+  lvlPillEl.textContent = `LV ${currentRecipe.level}`;
+  topbarRecipeEl.textContent = currentRecipe.name;
+  renderRecipePanel(currentRecipe);
+  renderStep();
+
+  if (multiplayerOn && !ws) connectMultiplayer();
+};
+
+// ===== Event handlers =====
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  // Position the hold-badge at the click point BEFORE handleClickOn fires —
+  // otherwise the badge appears at (0,0) until the user moves the mouse.
+  if (!walk.active && e.clientX !== undefined) {
+    holdBadgeEl.style.left = e.clientX + 'px';
+    holdBadgeEl.style.top = e.clientY + 'px';
+  }
+  if (walk.active) {
+    // Walk-mode click: raycast from screen center (crosshair)
+    if (document.pointerLockElement !== renderer.domElement) {
+      renderer.domElement.requestPointerLock?.();
+      return;
+    }
+    mouse.set(0, 0);
+    raycaster.setFromCamera(mouse, camera);
+  } else {
+    ndcFromEvent(e);
+    raycaster.setFromCamera(mouse, camera);
+  }
+  const hits = raycaster.intersectObjects(getClickable(), true);
+  if (hits.length) {
+    const grp = pickTopGroup(hits[0].object);
+    if (grp) {
+      // SHAKE GESTURE — double-click the final-bottle when it's not held to wobble it
+      // (useful for "lắc đều" after bottling).
+      if (state && grp.userData?.id === 'final-bottle' && !selectedTool) {
+        const now = performance.now();
+        if (state._lastClickId === 'final-bottle' && now - state._lastClickAt < 400) {
+          startShake(finalBottle, 900);
+          state.shakeCount++;
+          state._lastClickAt = 0; state._lastClickId = null;
+          showToast('🤝 Lắc đều chai thành phẩm', 1500, 'ok');
+          sendAction('shake-bottle');
+          sfx.grab();
+          return;
+        }
+        state._lastClickAt = now; state._lastClickId = 'final-bottle';
+      }
+      handleClickOn(grp);
+    }
+  } else {
+    setSelectedTool(null);
+  }
+});
+
+const hoverLabelEl = document.getElementById('hover-label');
+const hoverPressEl = document.getElementById('hover-press');
+let hoverTarget = null;
+const _hoverProj = new THREE.Vector3();
+const _hoverWorld = new THREE.Vector3();
+const _cursorWorld = new THREE.Vector3();
+const _cursorPlane = new THREE.Plane();
+const _cursorDir = new THREE.Vector3();
+const _cursorHit = new THREE.Vector3();
+
+// Glowing outline ring (Unity-style halo) — pulses opacity when hovering
+const outlineRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.085, 0.005, 12, 36),
+  new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0, depthTest: false })
+);
+outlineRing.renderOrder = 998;
+outlineRing.rotation.x = Math.PI/2;
+outlineRing.visible = false;
+scene.add(outlineRing);
+
+// Track emissive boost for current hover target
+let _emissiveBoostObjs = [];
+function applyEmissiveBoost(grp, on) {
+  if (on) {
+    _emissiveBoostObjs.length = 0;
+    grp.traverse(o => {
+      if (o.material?.emissive) {
+        _emissiveBoostObjs.push({ obj: o, prev: o.material.emissive.getHex(), prevI: o.material.emissiveIntensity ?? 1 });
+        o.material.emissive.setHex(0x14532d);
+        o.material.emissiveIntensity = 0.6;
+      }
+    });
+  } else {
+    for (const e of _emissiveBoostObjs) {
+      e.obj.material.emissive.setHex(e.prev);
+      e.obj.material.emissiveIntensity = e.prevI;
+    }
+    _emissiveBoostObjs.length = 0;
+  }
+}
+
+function setHoverTarget(grp) {
+  if (grp === hoverTarget) return;
+  // Clear previous boost (but DON'T clear if selectedTool — selection emissive should win)
+  if (hoverTarget && hoverTarget !== selectedTool) applyEmissiveBoost(hoverTarget, false);
+  hoverTarget = grp;
+  outlineRing.visible = !!grp;
+  if (!grp) {
+    hoverLabelEl.classList.remove('shown');
+    hoverPressEl.classList.remove('shown');
+    return;
+  }
+  // Apply emissive boost (skip if already the selected tool)
+  if (grp !== selectedTool) applyEmissiveBoost(grp, true);
+  // Resize outline ring to match group bounds
+  const bb = new THREE.Box3().setFromObject(grp);
+  const sz = bb.getSize(new THREE.Vector3());
+  const r = Math.max(sz.x, sz.z) * 0.55 + 0.015;
+  outlineRing.geometry.dispose();
+  outlineRing.geometry = new THREE.TorusGeometry(r, 0.005, 12, 48);
+
+  const u = grp.userData;
+  hoverLabelEl.style.setProperty('--cat-color', u.kind === 'reagent' ? '#0ea5e9' : '#14b8a6');
+  hoverLabelEl.querySelector('.ht').textContent = u.name || u.id;
+  hoverLabelEl.querySelector('.hs').textContent = u.label || (u.kind === 'reagent' ? 'Hoạt chất / Tá dược' : 'Dụng cụ phòng lab');
+  hoverLabelEl.querySelector('.hc').textContent = u.kind === 'reagent' ? 'Reagent' : 'Tool';
+  hoverLabelEl.classList.add('shown');
+  // Show press prompt only when not actively dragging
+  if (!selectedTool || selectedTool !== grp) hoverPressEl.classList.add('shown');
+}
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  ndcFromEvent(e);
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(getClickable(), true);
+  if (hits.length) setHoverTarget(pickTopGroup(hits[0].object));
+  else setHoverTarget(null);
+  // Multiplayer cursor — project onto counter plane (y=0.94)
+  if (ws && ws.readyState === 1) {
+    camera.getWorldDirection(_cursorDir);
+    _cursorPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1.1, 0));
+    if (raycaster.ray.intersectPlane(_cursorPlane, _cursorHit)) {
+      sendCursor(_cursorHit.x, _cursorHit.y, _cursorHit.z);
+    }
+  }
+});
+renderer.domElement.addEventListener('pointerleave', () => setHoverTarget(null));
+
+// ===== Hold badge follows cursor (mouse mode), pinned in walk mode =====
+document.addEventListener('pointermove', (e) => {
+  if (!selectedTool || walk.active) return;
+  holdBadgeEl.style.left = e.clientX + 'px';
+  holdBadgeEl.style.top = e.clientY + 'px';
+});
+
+// ===== Esc clears selection =====
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.key === 'Escape' && selectedTool && !walk.active) {
+    setSelectedTool(null);
+    showToast('↩️ Đã bỏ chọn', 1000);
+  }
+});
+document.getElementById('hold-clear').addEventListener('click', () => setSelectedTool(null));
+
+// ===== Help card — hidden by default; FAB at bottom-left toggles it =====
+const helpCard = document.getElementById('help-card');
+const helpFab = document.getElementById('help-fab');
+const helpToggle = document.getElementById('help-toggle');
+function setHelpOpen(open) {
+  helpCard.classList.toggle('open', open);
+  helpFab.classList.toggle('open', open);
+  helpFab.textContent = open ? '×' : '?';
+}
+helpFab.addEventListener('click', () => setHelpOpen(!helpCard.classList.contains('open')));
+helpToggle.addEventListener('click', () => setHelpOpen(false));
+
+// ===== Recipe / Step / MP panels — each toggled by its own FAB =====
+function makePanelToggle(panelId, fabId) {
+  const panel = document.getElementById(panelId);
+  const fab = document.getElementById(fabId);
+  if (!panel || !fab) return () => {};
+  const set = (open) => {
+    panel.classList.toggle('open', open);
+    fab.classList.toggle('open', open);
+  };
+  fab.addEventListener('click', () => set(!panel.classList.contains('open')));
+  return set;
+}
+const setRecipeOpen = makePanelToggle('recipe', 'recipe-fab');
+const setStepOpen = makePanelToggle('step', 'step-fab');
+const setMpOpen = makePanelToggle('mp-panel', 'mp-fab');
+const setActionOpen = makePanelToggle('action-menu', 'action-fab');
+
+// ===== UI buttons =====
+restartBtn.addEventListener('click', () => location.reload());
+skipBtn.addEventListener('click', () => {
+  if (state && state.stepIdx < state.recipe.steps.length) {
+    state.errors.push(`Bỏ qua bước ${state.stepIdx + 1}`);
+    advanceStep(false);
+  }
+});
+
+// ===== Camera focus buttons =====
+const camFocusBar = document.getElementById('cam-focus-bar');
+camFocusBar.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-focus]');
+  if (!btn) return;
+  focusCamera(btn.dataset.focus);
+  for (const b of camFocusBar.querySelectorAll('button')) b.classList.remove('active');
+  btn.classList.add('active');
+});
+
+submitBtn.addEventListener('click', async () => {
+  if (!state || state.stepIdx < state.recipe.steps.length) return;
+  // Score = base 100 - penalties
+  let score = 100;
+  const breakdown = [];
+  // Weight/volume accuracy across pour steps
+  for (let i = 0; i < state.recipe.steps.length; i++) {
+    const s = state.recipe.steps[i];
+    if (s.action !== 'pour') continue;
+    const got = state.stepProgress[i] ?? 0;
+    const diff = Math.abs(got - s.target);
+    const pct = diff / s.target * 100;
+    const pen = Math.min(20, Math.round(pct * 0.6));
+    score -= pen;
+    breakdown.push(`${REAGENTS[s.reagentId]?.name || s.reagentId}: ${got.toFixed(s.unit === 'g' ? 3 : 1)} ${s.unit} (đích ${s.target}, −${pen})`);
+  }
+  // Order penalty: if the user did the recipe out of order, count step gaps.
+  const doneInOrder = state.actionLog
+    .filter(e => e.kind === 'step-done')
+    .map(e => e.stepIdx);
+  let outOfOrder = 0;
+  for (let k = 1; k < doneInOrder.length; k++) {
+    if (doneInOrder[k] < doneInOrder[k-1]) outOfOrder++;
+  }
+  if (outOfOrder > 0) {
+    const pen = Math.min(15, outOfOrder * 3);
+    score -= pen;
+    breakdown.push(`Sai thứ tự thao tác: ${outOfOrder} lần (−${pen})`);
+  }
+  // Two-hand bonus: +2 per stable pour, capped at +10
+  if (state.twoHandPours > 0) {
+    const bonus = Math.min(10, state.twoHandPours * 2);
+    score += bonus;
+    breakdown.push(`🤲 Rót bằng 2 tay: ${state.twoHandPours} lần (+${bonus})`);
+  }
+  const errPenalty = state.errors.length * 5;
+  score -= errPenalty;
+  if (state.errors.length) breakdown.push(`Lỗi thao tác: ${state.errors.length} (−${errPenalty})`);
+  score = Math.max(0, score);
+
+  const verdict = score >= 90 ? '🎉 Xuất sắc — đạt GMP!'
+                : score >= 70 ? '👍 Khá — vẫn còn sai số nhỏ.'
+                : score >= 50 ? '🙂 Trung bình — cần luyện thêm.'
+                : '📚 Cần làm lại — nhiều sai sót.';
+
+  const errorsHtml = state.errors.length
+    ? `<div style="margin-top:14px;padding:10px 12px;background:rgba(220,38,38,0.08);border-left:3px solid #dc2626;border-radius:6px;text-align:left">
+         <div style="font-weight:700;color:#b91c1c;margin-bottom:4px">⚠ Lỗi quy trình (${state.errors.length})</div>
+         <ul style="margin:4px 0 0;padding-left:18px;font-size:12px;line-height:1.5;color:#7f1d1d">
+           ${state.errors.map(e => `<li>${e}</li>`).join('')}
+         </ul>
+       </div>`
+    : '<div style="margin-top:10px;font-size:12px;color:#15803d;text-align:center">✅ Không có lỗi quy trình</div>';
+
+  document.getElementById('result-card').innerHTML = `
+    <div class="verdict">${verdict}</div>
+    <div class="score-big" style="color:${score>=70?'#15803d':score>=50?'#0369a1':'#b91c1c'}">${score} / 100</div>
+    <div style="text-align:center;font-size:13px;opacity:0.7">${state.recipe.icon} ${state.recipe.name}</div>
+    <ul>${breakdown.map(b => `<li>· ${b}</li>`).join('')}</ul>
+    ${errorsHtml}
+    <div class="actions">
+      <a href="./">← Trang chính</a>
+      <button id="result-retry">🔄 Bài khác</button>
+      <button class="primary" id="result-close">Đóng</button>
+    </div>
+  `;
+  document.getElementById('result-modal').style.display = 'flex';
+  document.getElementById('result-retry').onclick = () => {
+    document.getElementById('result-modal').style.display = 'none';
+    renderLevelModal();
+    lmModal.style.display = 'flex';
+  };
+  document.getElementById('result-close').onclick = () => document.getElementById('result-modal').style.display = 'none';
+
+  if (myName && myName !== 'Ẩn danh') {
+    try { ensurePlayerName(myName); } catch {}
+  }
+  await submitAttempt({
+    version: 'compounding-lab',
+    score,
+    correct: state.recipe.steps.length,
+    total: state.recipe.steps.length,
+    durationMs: Date.now() - sessionStartedAt,
+    level: state.recipe.level,
+    details: {
+      recipe: state.recipe.id,
+      stepProgress: state.stepProgress,
+      errors: state.errors,
+      actionLog: state.actionLog,
+      outOfOrder,
+    },
+  });
+});
+
+// ===== Render loop =====
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const clock = new THREE.Clock();
+// Kick off: either go straight into recipe (URL param) or show modal
+if (currentRecipe) {
+  startGame();
+} else {
+  renderLevelModal();
+  lmModal.style.display = 'flex';
+}
+
+renderer.setAnimationLoop((time) => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  updateCameraFocus();
+  if (!walk.active && !camFocus.active) controls.update();
+  updateWalk(dt);
+  updateStream(dt);
+  updateTilt();
+  updatePourAnim();
+  updateLift();
+  updateShake();
+  updateHand(time ?? performance.now());
+
+  // hover label position
+  if (hoverTarget) {
+    hoverTarget.getWorldPosition(_hoverWorld);
+    _hoverProj.copy(_hoverWorld).project(camera);
+    if (_hoverProj.z > 1 || _hoverProj.z < -1) {
+      hoverLabelEl.classList.remove('shown');
+      hoverPressEl.classList.remove('shown');
+    } else {
+      const top = _hoverWorld.clone(); top.y += 0.22;
+      top.project(camera);
+      const sx = (_hoverProj.x * 0.5 + 0.5) * innerWidth;
+      const sy = (-top.y * 0.5 + 0.5) * innerHeight;
+      hoverLabelEl.style.left = sx + 'px';
+      hoverLabelEl.style.top  = Math.max(60, sy) + 'px';
+      // press prompt right below the object center
+      const cy = (-_hoverProj.y * 0.5 + 0.5) * innerHeight;
+      hoverPressEl.style.left = sx + 'px';
+      hoverPressEl.style.top = cy + 'px';
+    }
+    // Animate outline ring (position at base of object + pulse opacity)
+    outlineRing.position.copy(_hoverWorld);
+    outlineRing.position.y = Math.max(_hoverWorld.y - 0.06, 0.945);
+    outlineRing.material.opacity = 0.55 + 0.4 * Math.sin(performance.now() * 0.006);
+  }
+
+  // remote labels orient to camera (sprites auto-orient)
+  // (no per-frame update needed for sprites)
+  renderer.render(scene, camera);
+});

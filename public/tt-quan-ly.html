@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quản lý Nhà thuốc thực hành</title>
+<style>
+  :root{--bg:#f4f8fc;--card:#fff;--ink:#1f3b63;--mut:#5d7391;--line:#dce8fa;--pri:#2f7fd8;--ok:#2c8f55;--bad:#b03a2e}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'Nunito',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 16px 60px}
+  h1{margin:0 0 2px;font-size:1.5rem} .sub{color:var(--mut);margin:0 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(40,80,120,.06)}
+  h2{margin:0 0 8px;font-size:1.1rem} .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button,.btn{border:0;border-radius:10px;padding:8px 14px;background:var(--pri);color:#fff;font:800 .85rem 'Nunito',sans-serif;cursor:pointer;text-decoration:none;display:inline-block}
+  button.ghost,.btn.ghost{background:#fff;color:var(--pri);border:2px solid var(--pri)} button.bad{background:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:.86rem} th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f0f6ff;font-weight:800;position:sticky;top:0} tbody tr.click{cursor:pointer} tbody tr.click:hover{background:#f7fbff}
+  .msg{margin:8px 0 0;font-weight:700} .msg.ok{color:var(--ok)} .msg.err{color:var(--bad)} .mut{color:var(--mut);font-size:.84rem}
+  .scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .bac{display:inline-block;min-width:26px;text-align:center;border-radius:8px;padding:1px 6px;font-weight:900;font-size:.78rem}
+  .bac.b0{background:#eef2f6;color:#9aa8b8} .bac.b1{background:#fff4d6;color:#8a5a00} .bac.b2{background:#e3f0ff;color:#1d5fae} .bac.b3{background:#e2f5e8;color:#1f6e3d}
+  .unl td,.unl th{text-align:center} .unl td:first-child,.unl th:first-child{text-align:left}
+  .pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.74rem;font-weight:800;background:#eaf4ff;color:var(--pri)} .pill.test{background:#fff4d6;color:#8a5a00} .pill.teacher{background:#e6f6ec;color:var(--ok)}
+  dialog{border:0;border-radius:16px;padding:0;width:min(780px,94vw);max-height:88vh;box-shadow:0 20px 60px rgba(0,0,0,.4)} dialog::backdrop{background:rgba(10,20,40,.5)}
+  .dh{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)} .db{padding:0 16px 16px;overflow:auto;max-height:72vh}
+  code{background:#f0f6ff;border-radius:6px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📋 Quản lý Nhà thuốc thực hành</h1>
+  <p class="sub">Tải danh sách lớp để giới hạn người vào, và xem bảng phân tích thao tác của người học. <a href="/tu-thuoc-mo-phong.html">← Về trang luyện tập</a></p>
+  <div id="deny" class="card" hidden><b>Bạn không có quyền ở trang này.</b> Hãy đăng nhập bằng tài khoản giảng viên quản lý (admin, hoặc tài khoản được cấu hình).</div>
+
+  <div id="main" hidden>
+  <div class="card">
+    <h2>1) Danh sách lớp được phép vào</h2>
+    <p class="mut">File Excel (.xlsx) hoặc CSV có 3 cột: <b>Mã sinh viên</b>, <b>Họ tên</b>, <b>Lớp</b> (dòng đầu là tiêu đề). Sau khi tải lên, <b>chỉ sinh viên có mã + lớp khớp danh sách</b> mới vào được trang luyện tập.
+      Khi chưa tải danh sách, trang để mở cho mọi người.</p>
+    <div class="row">
+      <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt">
+      <label class="row" style="gap:6px"><input type="radio" name="mode" value="replace" checked> Thay toàn bộ danh sách</label>
+      <label class="row" style="gap:6px"><input type="radio" name="mode" value="append"> Thêm vào danh sách cũ</label>
+      <button id="up" disabled>⬆ Tải lên</button>
+    </div>
+    <div id="upMsg" class="msg"></div>
+    <p class="mut" id="rosterInfo"></p>
+    <div class="row"><button class="ghost" id="viewRoster">👁 Xem danh sách hiện tại</button><button class="bad" id="clearRoster">🗑 Xoá danh sách (mở lại cho mọi người)</button></div>
+    <div id="rosterBox" class="scroll" hidden style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>2) Mở khoá nhiệm vụ cho lớp</h2>
+    <p class="mut">Nhiệm vụ 1, 2 luôn mở. Nhiệm vụ 3, 4, 5 chỉ mở khi cô tích ô tương ứng (hàng <b>Tất cả lớp</b> mở cho mọi lớp). Sinh viên đang ở trang sẽ thấy nhiệm vụ mở trong vòng 1 phút, không cần tải lại. Nhiệm vụ 4, 5 đang xây dựng nên tích trước cũng chưa có gì để làm.</p>
+    <div class="scroll" style="max-height:300px"><table class="unl"><thead><tr><th>Lớp</th><th>Nhiệm vụ 3</th><th>Nhiệm vụ 4</th><th>Nhiệm vụ 5</th></tr></thead><tbody id="unlTb"></tbody></table></div>
+    <div id="unlMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>3) Bảng phân tích thao tác của người học</h2>
+    <div class="row" style="margin-bottom:8px">
+      <select id="fClass"><option value="">Tất cả lớp</option></select>
+      <input id="fText" placeholder="Tìm mã SV / họ tên">
+      <button class="ghost" id="reload">↻ Làm mới</button>
+      <a class="btn ghost" href="/api/tt/manage/export.csv">⬇ Xuất nhật ký (CSV)</a>
+    </div>
+    <p class="mut">Thời gian hoạt động = tổng các khoảng giữa hai thao tác liên tiếp cách nhau dưới 5 phút. Bấm một dòng để xem dòng thời gian chi tiết.</p>
+    <p class="mut" id="tierLegend"></p>
+    <div class="scroll"><table><thead><tr><th>Mã SV</th><th>Họ tên</th><th>Lớp</th><th>Số lần vào</th><th>Số thao tác</th><th>Thời gian hoạt động</th><th>Bậc NV1</th><th>Bậc NV2</th><th>Bậc NV3</th><th>Nhiệm vụ hoàn thành</th><th>Lần báo lỗi</th><th>Câu hỏi trợ lý</th><th>Mở phần mềm</th><th>Lần cuối</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div id="sumMsg" class="msg mut"></div>
+  </div>
+  </div>
+</div>
+<dialog id="dlg"><div class="dh"><b id="dt"></b><button class="ghost" onclick="dlg.close()">Đóng</button></div><div class="db"><table><thead><tr><th>Thời điểm</th><th>Thao tác</th><th>Chi tiết</th></tr></thead><tbody id="dbody"></tbody></table></div></dialog>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=(u,o)=>fetch(u,Object.assign({credentials:'same-origin'},o)).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||('HTTP '+r.status)),{status:r.status});return d});
+const dur=ms=>{const m=Math.round(ms/60000);return m<1?'<1 phút':m<60?m+' phút':Math.floor(m/60)+' giờ '+(m%60)+' phút'};
+const when=t=>new Date(Number(t)).toLocaleString('vi-VN');
+let rows=null, students=[];
+$('file').addEventListener('change',async e=>{
+  const f=e.target.files[0]; rows=null; $('up').disabled=true; $('upMsg').textContent='';
+  if(!f)return;
+  try{
+    let list=[];
+    if(/\.(xlsx|xls)$/i.test(f.name)){
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'}); const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,defval:''});
+      list=aoa; rows={csv:aoa.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n')};
+    } else { rows={csv:await f.text()}; }
+    $('upMsg').className='msg mut'; $('upMsg').textContent='Đã chọn '+f.name+' — bấm "Tải lên" để áp dụng.'; $('up').disabled=false;
+  }catch(err){$('upMsg').className='msg err';$('upMsg').textContent='Không đọc được file: '+err.message}
+});
+$('up').addEventListener('click',async()=>{
+  if(!rows)return; const mode=document.querySelector('input[name=mode]:checked').value;
+  if(mode==='replace'&&!confirm('Thay TOÀN BỘ danh sách hiện tại bằng file này?'))return;
+  try{const d=await api('/api/tt/manage/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({csv:rows.csv,mode})});
+    $('upMsg').className='msg ok';$('upMsg').textContent='✅ Đã nhập '+d.imported+' sinh viên. Tổng danh sách: '+d.total+'.';loadAll();
+  }catch(err){$('upMsg').className='msg err';$('upMsg').textContent='⚠️ '+err.message}
+});
+$('viewRoster').addEventListener('click',async()=>{
+  const b=$('rosterBox'); if(!b.hidden){b.hidden=true;return}
+  const d=await api('/api/tt/manage/roster'); b.hidden=false;
+  b.innerHTML='<table><thead><tr><th>Mã SV</th><th>Họ tên</th><th>Lớp</th></tr></thead><tbody>'+d.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td>${esc(r.cls)}</td></tr>`).join('')+'</tbody></table>';
+});
+$('clearRoster').addEventListener('click',async()=>{
+  if(!confirm('Xoá toàn bộ danh sách lớp? Sau đó trang luyện tập sẽ mở cho mọi người vào.'))return;
+  await api('/api/tt/manage/roster',{method:'DELETE'}); $('rosterBox').hidden=true; loadAll();
+});
+const BAC=['—','1 · Làm được','2 · Làm đúng','3 · Thành thạo'];
+function bac(t){ t=t||{level:0,done:0,solo:0,hardSolo:0}; return `<td title="Hoàn thành ${t.done} lượt · ${t.solo} lượt tự chủ (gợi ý đã ẩn, 0 lỗi, không hỏi AI) · ${t.hardSolo} lượt tự chủ ở mức Khó trở lên"><span class="bac b${t.level}">${t.level||'—'}</span></td>`; }
+function render(){
+  const c=$('fClass').value, q=$('fText').value.trim().toLowerCase();
+  const list=students.filter(s=>(!c||s.cls===c)&&(!q||(s.code+' '+s.name).toLowerCase().includes(q)));
+  $('tb').innerHTML=list.map(s=>`<tr class="click" data-c="${esc(s.code)}" data-n="${esc(s.name)}"><td>${esc(s.code)} ${s.kind==='test'?'<span class="pill test">thử</span>':s.kind==='teacher'?'<span class="pill teacher">GV</span>':''}</td><td>${esc(s.name)}</td><td>${esc(s.cls)}</td><td>${s.sessions}</td><td>${s.events}</td><td>${dur(s.activeMs)}</td>${[1,2,3].map(m=>bac(s.tiers&&s.tiers[m])).join('')}<td>${s.missionsDone}</td><td>${s.errors}</td><td>${s.tutorQuestions}</td><td>${s.posOpens}</td><td>${when(s.last)}</td></tr>`).join('');
+  $('sumMsg').textContent=list.length?'':'Chưa có thao tác nào được ghi.';
+}
+$('tb').addEventListener('click',async e=>{
+  const tr=e.target.closest('tr[data-c]'); if(!tr)return;
+  const d=await api('/api/tt/manage/activity?code='+encodeURIComponent(tr.dataset.c));
+  $('dt').textContent='Dòng thời gian — '+tr.dataset.c+' '+tr.dataset.n+' (mới nhất ở trên, tối đa 1000 dòng)';
+  $('dbody').innerHTML=d.rows.map(r=>{let det='';try{const o=JSON.parse(r.detail||'null');det=o?Object.entries(o).map(([k,v])=>k+': '+v).join(' · '):''}catch{det=r.detail||''}return `<tr><td>${when(r.t)}</td><td>${esc(r.kind)}</td><td>${esc(det)}</td></tr>`}).join('');
+  $('dlg').showModal();
+});
+['fClass','fText'].forEach(i=>$(i).addEventListener('input',render)); $('reload').addEventListener('click',loadAll);
+async function loadAll(){
+  try{
+    const [s,cfg]=await Promise.all([api('/api/tt/manage/summary'),api('/api/tt/config')]);
+    students=s.students; const tr=s.tierRule||{solo:2,hardSolo:2};
+    $('tierLegend').innerHTML='<b>Bậc theo từng nhiệm vụ</b> (rê chuột lên ô để xem số lượt): <span class="bac b1">1</span> Làm được — hoàn thành ít nhất 1 lượt (có thể còn sai, còn gợi ý) · <span class="bac b2">2</span> Làm đúng — ≥ '+tr.solo+' lượt tự chủ, mỗi lượt một bộ thuốc mới (gợi ý đã ẩn, không lỗi, không hỏi Trợ lý AI) · <span class="bac b3">3</span> Thành thạo — trong các lượt tự chủ đó, ≥ '+tr.hardSolo+' lượt tự chủ ở mức Khó / Rất khó. Gợi ý tự ẩn sau 2 lần hoàn thành một nhiệm vụ.';
+    loadUnlocks();
+    $('rosterInfo').textContent=s.rosterN?('Danh sách hiện có '+s.rosterN+' sinh viên, '+cfg.classes.length+' lớp: '+cfg.classes.join(', ')+'.'):'Chưa có danh sách — trang luyện tập đang mở cho mọi người.';
+    const cur=$('fClass').value; $('fClass').innerHTML='<option value="">Tất cả lớp</option>'+[...new Set(students.map(x=>x.cls).filter(Boolean))].sort().map(c=>`<option${c===cur?' selected':''}>${esc(c)}</option>`).join(''); render();
+    $('main').hidden=false;$('deny').hidden=true;
+  }catch(e){ if(e.status===403||e.status===401){$('deny').hidden=false;$('main').hidden=true}else{$('upMsg').className='msg err';$('upMsg').textContent=e.message} }
+}
+async function loadUnlocks(){
+  try{
+    const d=await api('/api/tt/manage/unlocks'); const on=new Set(d.rows.map(r=>r.cls+'|'+r.mission));
+    const rows=['*',...d.classes];
+    $('unlTb').innerHTML=rows.map(c=>`<tr><td>${c==='*'?'<b>Tất cả lớp</b>':esc(c)}</td>${d.missions.map(m=>`<td><input type="checkbox" data-cls="${esc(c)}" data-m="${m}"${on.has(c+'|'+m)?' checked':''}></td>`).join('')}</tr>`).join('')
+      +(d.classes.length?'':'<tr><td colspan="4" class="mut">Chưa có lớp nào (chưa tải danh sách, chưa có sinh viên đăng nhập) — dùng hàng "Tất cả lớp".</td></tr>');
+  }catch(e){ $('unlMsg').className='msg err'; $('unlMsg').textContent='⚠️ '+e.message; }
+}
+$('unlTb').addEventListener('change',async e=>{
+  const cb=e.target.closest('input[data-m]'); if(!cb)return;
+  try{ await api('/api/tt/manage/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cls:cb.dataset.cls,mission:Number(cb.dataset.m),on:cb.checked})});
+    $('unlMsg').className='msg ok'; $('unlMsg').textContent='✅ Đã '+(cb.checked?'mở':'khoá')+' nhiệm vụ '+cb.dataset.m+' cho '+(cb.dataset.cls==='*'?'tất cả lớp':'lớp '+cb.dataset.cls)+'.';
+  }catch(err){ cb.checked=!cb.checked; $('unlMsg').className='msg err'; $('unlMsg').textContent='⚠️ '+err.message; }
+});
+loadAll();
+</script>
+</body>
+</html>
