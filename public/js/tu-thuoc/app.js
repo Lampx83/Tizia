@@ -1,31 +1,13 @@
 /* Nhà thuốc thực hành (tu-thuoc-mo-phong.html) — mã chính. Tách khỏi HTML 14/11/2026 để trình duyệt lưu đệm.
-   Sửa file này / style.css / data.js thì đổi ?v= tương ứng trong tu-thuoc-mo-phong.html — không đổi thì
+   Sửa file này / style.css thì đổi ?v= tương ứng trong tu-thuoc-mo-phong.html — không đổi thì
    người học giữ bản cũ tới 1 ngày (Cache-Control max-age=86400). */
 
-/* ---------- parse CSV (quote-aware) ---------- */
-function parseCSV(text){
-  const rows=[]; let row=[], field='', inQ=false;
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(inQ){
-      if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
-      else field+=c;
-    }else{
-      if(c==='"') inQ=true;
-      else if(c===','){ row.push(field); field=''; }
-      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-      else if(c==='\r'){}
-      else field+=c;
-    }
-  }
-  if(field.length||row.length){ row.push(field); rows.push(row); }
-  return rows;
-}
-
-const rows = parseCSV(CSV_DATA.trim());
-const header = rows[0].map(h=>h.trim());
-const allRecords = rows.slice(1).filter(r=>r[0]).map(r=>{
-  const o={}; header.forEach((h,i)=> o[h]=(r[i]||'').trim());
+/* Danh mục thuốc nằm trong DB (collection "tu-thuoc-catalog"), nạp sẵn bởi <script src="/api/content/tu-thuoc-catalog/script.js">
+   đặt ngay trước app.js. Mỗi phần tử là 1 dòng sheet, khoá = tiêu đề cột. Seed: public/js/scenarios/_data/tu-thuoc-catalog.js */
+const CATALOG = (window.__CONTENT__ && window.__CONTENT__['tu-thuoc-catalog']) || [];
+if(!CATALOG.length) setTimeout(()=>alert('Không tải được danh mục thuốc. Kiểm tra kết nối mạng rồi tải lại trang.'), 0);
+const allRecords = CATALOG.filter(r=>r['STT Buổi']).map(r=>{
+  const o={}; for(const k in r) if(k!=='id') o[k]=String(r[k]??'').trim();
   /* req #249 (phản hồi): tên hiển thị khắp trang = cột I "Tên thuốc chuẩn" (vd "Betaloc 50 H60v AstraZeneca"),
      không phải "Mẫu thuốc TH" (vd "Metoprolol vỉ"). Tên mẫu cũ giữ ở _gen làm KHOÁ (tiến độ đã lưu, ảnh, phân loại kê đơn). */
   o._gen = o['Tên hoạt chất'];

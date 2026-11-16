@@ -83,6 +83,18 @@ export async function attachContent(router) {
     res.json({ ok: true, collection: req.params.collection, items });
   });
 
+  // Cùng dữ liệu nhưng dạng <script> thường: trang cũ (không module, code chạy ngay khi tải) cần data có sẵn
+  // TRƯỚC script kế tiếp — fetch() bất đồng bộ sẽ phá thứ tự đó. Kết quả gán vào window.__CONTENT__[collection].
+  router.get('/api/content/:collection/script.js', async (req, res) => {
+    const name = String(req.params.collection || '');
+    if (!/^[a-z0-9-]{2,60}$/.test(name)) return res.status(400).type('application/javascript').send('/* bad collection */');
+    const items = await getCollection(name);
+    res.set('Cache-Control', 'public, max-age=60');
+    res.type('application/javascript').send(
+      `window.__CONTENT__=window.__CONTENT__||{};window.__CONTENT__[${JSON.stringify(name)}]=${JSON.stringify(items)};`,
+    );
+  });
+
   // Liệt kê collection + số item (admin/debug).
   router.get('/api/content', async (_req, res) => {
     res.json({ ok: true, collections: await listCollsStmt.all() });

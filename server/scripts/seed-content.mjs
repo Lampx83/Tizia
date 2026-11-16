@@ -72,6 +72,8 @@ const REGISTRY = [
   { collection: 'it-program',         file: 'it-program.js',          export: 'IT_PROGRAM',     key: 'key' },
   // Đọc hiểu tiếng Anh chuyên ngành (req #82 SV Duc anh) — trang doc-hieu-tieng-anh.html.
   { collection: 'reading-en',         file: 'reading-en.js',          export: 'READING_EN', key: 'id' },
+  // Danh mục thuốc của Nhà thuốc thực hành (trang nạp qua /api/content/tu-thuoc-catalog/script.js).
+  { collection: 'tu-thuoc-catalog',   file: 'tu-thuoc-catalog.js',    export: 'TU_THUOC_CATALOG', key: 'id' },
 ];
 
 const { seedCollection, collectionCount, upsertItem } = DRY ? {} : await import('../contexts/content/index.js');
