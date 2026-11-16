@@ -102,7 +102,8 @@ def reconcile(run_dir: Path, *, by: str, reason: str, journal: Path | None = Non
         raise ReconcileError(f"{len(pending)} trial cleanup_pending: chỉ reconcile từng trial một")
     row = pending[0]
     key = {"id": row["id"], "mode": row["mode"], "repeat": row["repeat"]}
-    if intent_path.exists() and json.loads(intent_path.read_text(encoding="utf-8")) != key:
+    intent = json.loads(intent_path.read_text(encoding="utf-8")) if intent_path.exists() else None
+    if intent is not None and {k: intent.get(k) for k in key} != key:
         raise ReconcileError("trial-intent.json không khớp trial cleanup_pending")
     states, extra = {}, {}
     if journal is None:

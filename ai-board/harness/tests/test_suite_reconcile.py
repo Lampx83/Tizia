@@ -52,7 +52,8 @@ def pending_run(world, monkeypatch):
     rows = [json.loads(line) for line in original.decode("utf-8").splitlines()]
     first = {**rows[0], "cleanup_pending": True, "infra_error": True, "error": "trial_process_error"}
     results.write_text(json.dumps(first, ensure_ascii=False) + "\n", encoding="utf-8")
-    intent = {"id": first["id"], "mode": first["mode"], "repeat": first["repeat"]}
+    intent = {"id": first["id"], "mode": first["mode"], "repeat": first["repeat"],
+              "budget": {"model_calls": 400}, "source": "abc", "model": "m"}  # runner writes extra fields
     (run_dir / "trial-intent.json").write_text(json.dumps(intent), encoding="utf-8")
     yield run_dir, argv, deps, rows, first
     results.write_bytes(original)
