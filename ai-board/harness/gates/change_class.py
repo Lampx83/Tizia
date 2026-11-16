@@ -58,3 +58,20 @@ def structural(path: str | None) -> bool:
     if not path or _TEST.search(path):
         return False
     return any(pattern.search(path) for pattern in (_MIGRATION, _AUTH, _PAYMENT, _SCHEMA_FILE))
+
+
+_DISPLAY =re.compile(r"^public/[^\"'<>|*?]+\.(?:html|css)$")
+_SCRIPTED = re.compile(r"<script\b|\son[a-z]+\s*=|javascript:|\bexpression\s*\(", re.I)
+
+
+def display_only(changes: list[tuple[str, str, str]]) -> bool:
+    """(path, before, after) của mọi file đổi: chỉ public/*.html|css, không script/handler; còn lại là logic."""
+    moved = [(path.replace("\\", "/"), before or "", after or "") for path, before, after in changes if (before or "") != (after or "")]
+    if not moved:
+        return False
+    for path, before, after in moved:
+        if not _DISPLAY.match(path):
+            return False
+        if path.endswith(".html") and (_SCRIPTED.search(before) or _SCRIPTED.search(after)):
+            return False
+    return True

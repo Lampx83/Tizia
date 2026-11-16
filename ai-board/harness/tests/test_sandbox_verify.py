@@ -431,7 +431,8 @@ def test_every_state_key_the_guest_gate_reads_is_uploaded():
         text = (root / rel).read_text(encoding="utf-8")
         read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", text))
         read |= set(re.findall(r"""guest_input\(state, ["']([a-z_]+)["']""", text))
-    written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout", "should_stop"}  # gate output / set by gate5_guest / replaced by checkout_dir
+    # plan and checks_pin are host-only: the plan is private to the worker, the guest gets derived `checks`.
+    written_or_guest_side = {"evidence", "base_pages_dir", "full_checkout", "should_stop", "plan", "checks_pin"}  # gate output / set by gate5_guest / replaced by checkout_dir
     assert read - written_or_guest_side <= set(guest_inputs.GUEST_INPUTS), read
 
 
