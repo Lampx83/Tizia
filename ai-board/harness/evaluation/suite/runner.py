@@ -433,11 +433,12 @@ def cmd_report(args) -> int:
 def cmd_reconcile(args) -> int:
     from verification.sandbox import RunnerClient
     try:
-        client = RunnerClient.from_env()
+        client = RunnerClient.from_env() if args.journal else None
     except OSError:
         client = None
     try:
-        out = reconcile.reconcile(Path(args.run_dir), by=args.by, reason=args.reason, journal=Path(args.journal), client=client)
+        out = reconcile.reconcile(Path(args.run_dir), by=args.by, reason=args.reason,
+                                  journal=Path(args.journal) if args.journal else None, client=client)
     except reconcile.ReconcileError as error:
         print(f"[suite] reconcile từ chối: {error}", file=sys.stderr)
         return 2
@@ -635,7 +636,7 @@ def main(argv=None, deps=None) -> int:
     rec.add_argument("run_dir")
     rec.add_argument("--by", required=True, help="who decides (audit)")
     rec.add_argument("--reason", required=True, help="why (audit)")
-    rec.add_argument("--journal", required=True, help="owned journal file (ai-board-owned-*/runs) listing the run ids")
+    rec.add_argument("--journal", help="owned journal file (ai-board-owned-*/runs) listing the run ids; omit for a model-only trial (requires idle vLLM)")
     rec.set_defaults(handler=cmd_reconcile)
     args = parser.parse_args(argv)
     if args.cmd == "run" and not set(args.modes.split(",")) <= set(trial.MODES):

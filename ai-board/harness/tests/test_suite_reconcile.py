@@ -142,3 +142,96 @@ def test_run_refuses_while_intent_pending_without_reconcile(pending_run):
     calls = len(deps.models.calls)
     assert runner.main(argv, deps) == 2
     assert len(deps.models.calls) == calls
+
+
+def idle(running=0, waiting=0):
+    return lambda: {"running": running, "waiting": waiting}
+
+
+def serve_metrics(body, status=200):
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        seen = []
+
+        def do_GET(self):
+            Handler.seen.append((self.path, self.headers.get("Authorization")))
+            self.send_response(status)
+            self.end_headers()
+            self.wfile.write(body.encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, Handler
+
+
+def test_model_only_idle_clears_intent_and_audits(pending_run):
+    run_dir, _, _, _, first = pending_run
+    out = reconcile.reconcile(run_dir, by="owner", reason="URLError giữa chừng", probe=idle())
+    assert out["run_ids"] == {}
+    audit = [json.loads(line) for line in (run_dir / reconcile.AUDIT).read_text(encoding="utf-8").splitlines()]
+    assert len(audit) == 1 and audit[0]["by"] == "owner" and audit[0]["mode"] == "model_idle"
+    assert audit[0]["model_inflight"] == {"running": 0, "waiting": 0} and "journal_sha256" not in audit[0]
+    lines = [json.loads(line) for line in (run_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert lines[-1]["cleanup_pending"] is False and lines[-1]["infra_error"] is True and lines[-1]["id"] == first["id"]
+    assert not (run_dir / "trial-intent.json").exists()
+
+
+def test_model_only_refuses_when_busy_or_unreachable_and_changes_nothing(pending_run):
+    run_dir, _, _, _, _ = pending_run
+    before = {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()}
+    for probe in (idle(running=1), idle(waiting=2)):
+        with pytest.raises(reconcile.ReconcileError, match="chưa xác nhận idle"):
+            reconcile.reconcile(run_dir, by="owner", reason="x", probe=probe)
+
+    def down():
+        raise reconcile.ReconcileError("model server không truy cập được: URLError")
+    with pytest.raises(reconcile.ReconcileError, match="không truy cập"):
+        reconcile.reconcile(run_dir, by="owner", reason="x", probe=down)
+    assert {p.name: p.read_bytes() for p in run_dir.iterdir() if p.is_file()} == before
+
+
+def test_model_only_refuses_when_sandbox_cleanup_pending(pending_run):
+    run_dir, _, _, _, first = pending_run
+    results = run_dir / "results.jsonl"
+    results.write_text(json.dumps({**first, "capture": {"sandbox_cleanup_pending": True}}) + "\n", encoding="utf-8")
+    with pytest.raises(reconcile.ReconcileError, match="--journal"):
+        reconcile.reconcile(run_dir, by="owner", reason="x", probe=idle())
+
+
+def test_vllm_inflight_parses_metrics_and_sends_key():
+    body = ('# HELP vllm:num_requests_running r\nvllm:num_requests_running{model_name="m"} 0.0\n'
+            'vllm:num_requests_waiting{model_name="m"} 3.0\n')
+    server, handler = serve_metrics(body)
+    try:
+        env = {"VLLM_URL": f"http://127.0.0.1:{server.server_port}/v1", "VLLM_SECKEY": "k"}
+        assert reconcile.vllm_inflight(env) == {"running": 0.0, "waiting": 3.0}
+    finally:
+        server.shutdown()
+    assert handler.seen == [("/metrics", "Bearer k")]
+
+
+def test_vllm_inflight_refuses_missing_gauges_unconfigured_and_dead_server():
+    server, _ = serve_metrics("other_metric 1\n")
+    try:
+        with pytest.raises(reconcile.ReconcileError, match="thiếu"):
+            reconcile.vllm_inflight({"VLLM_URL": f"http://127.0.0.1:{server.server_port}"})
+    finally:
+        server.shutdown()
+        server.server_close()
+    with pytest.raises(reconcile.ReconcileError, match="chưa cấu hình"):
+        reconcile.vllm_inflight({})
+    with pytest.raises(reconcile.ReconcileError, match="không truy cập"):
+        reconcile.vllm_inflight({"VLLM_URL": f"http://127.0.0.1:{server.server_port}"})
+
+
+def test_cli_model_only_refuses_when_unconfigured(pending_run, monkeypatch):
+    run_dir, _, _, _, _ = pending_run
+    monkeypatch.delenv("VLLM_URL", raising=False)
+    assert runner.main(["reconcile", str(run_dir), "--by", "owner", "--reason", "x"]) == 2
+    assert not (run_dir / reconcile.AUDIT).exists()
+
