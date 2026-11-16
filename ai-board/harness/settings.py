@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False
     plan_repair: bool = True
-    repair_same_session: bool = True
+    repair_same_session: bool = False  # off until A/B measured
     repair_sampling_diversity: bool = False
     scope_first_warning: bool = False
     tool_doc_inject: bool = False
