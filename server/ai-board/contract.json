@@ -39,7 +39,7 @@
   "max_repairs": 1,
   "repair_replan": {
     "_why": "Failure-class repair/replan. A repair round continues until a state hash repeats, repairs stagnate (limits.loop_guard) or no_progress_rounds rounds in a row show no progress (fewer failing tests, later gate, or changed diff); max_repairs is only the high safety cap; and a plan-class failure requeues one replan while the automatic round limit (2 plans) still allows it. Budget, lease, plan revision and ledger rules are unchanged; the same failure twice stops instead of looping.",
-    "enabled": true,
+    "enabled": false,
     "max_repairs": 12,
     "no_progress_rounds": 2,
     "soft": { "soft_start": 2, "soft_step": 1 }
