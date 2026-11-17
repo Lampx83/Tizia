@@ -111,6 +111,17 @@ export function repairCap(contract = CONTRACT) {
   return flag?.enabled ? Math.max(contract.max_repairs, Number(flag.max_repairs) || 0) : contract.max_repairs;
 }
 
+/** Root leases allowed at once: 1 unless every active worker is on the hosted API, then backlog seconds / target, capped. */
+export function allowedWorkers(provider, otherProviders, backlogSeconds, spec = CONTRACT.limits.workers) {
+  if (provider !== 'api' || otherProviders.some(other => other !== 'api')) return spec.vllm_max;
+  return Math.min(spec.api_max, Math.max(1, Math.ceil(backlogSeconds / spec.target_s)));
+}
+
+/** Estimated seconds left for open roots: planning when no plan yet, plus one step per child ticket (at least one). */
+export function backlogSeconds(roots, spec = CONTRACT.limits.workers) {
+  return roots.reduce((sum, root) => sum + (root.planned ? 0 : spec.plan_s) + spec.step_s * Math.max(1, Number(root.children) || 0), 0);
+}
+
 const MAX_BUDGET_EXTENSION = 200;
 // ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
 export const LIMITS = CONTRACT.limits;

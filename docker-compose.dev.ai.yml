@@ -132,6 +132,15 @@ services:
       - ai-board-repo-2:/repo
       - ai-board-memory-2:/opt/ai-board/ai-board/memory
 
+  ai-board-worker-3:
+    extends: { service: ai-board-worker }
+    container_name: aiboard-worker-3
+    hostname: ai-board-worker-3
+    profiles: !override [multi-worker]
+    volumes: !override
+      - ai-board-repo-3:/repo
+      - ai-board-memory-3:/opt/ai-board/ai-board/memory
+
   image-registry:
     extends: { file: docker-compose.yml, service: image-registry }
     container_name: aiboard-registry
@@ -250,6 +259,10 @@ volumes:
     name: tizia_ai-board-repo-2
   ai-board-memory-2:
     name: tizia_ai-board-memory-2
+  ai-board-repo-3:
+    name: tizia_ai-board-repo-3
+  ai-board-memory-3:
+    name: tizia_ai-board-memory-3
   sandbox-runner-state:
     name: tizia_sandbox-runner-state
   online-runner-state:

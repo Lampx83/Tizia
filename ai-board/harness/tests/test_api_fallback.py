@@ -251,3 +251,22 @@ def test_local_only_router_drops_the_backup_instead_of_refusing():
     router = ModelRouter(env(), catalog(), probe=busy(0, 0))
     router.local_only = True
     assert [c['id'] for c in router.candidates('gate1')] == ['v']
+
+
+def test_lease_verdict_pins_the_provider_for_every_router(monkeypatch):
+    from providers import routing
+    monkeypatch.setattr(routing, 'LEASE_VERDICT', 'api')
+    assert picked(env(), busy(0, 0)) == ['h']
+    monkeypatch.setattr(routing, 'LEASE_VERDICT', 'vllm')
+    assert picked(env(), busy(5, 0)) == ['v', 'h']
+
+
+def test_lease_provider_reports_what_gate1_would_use():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from worker_planner import lease_provider
+    client = lambda probe: SimpleNamespace(routing=ModelRouter(env(), catalog(), probe=probe))
+    assert lease_provider(client(busy(1, 0))) == 'api'
+    assert lease_provider(client(busy(0, 0))) == 'vllm'
+    assert lease_provider(SimpleNamespace(routing=None)) == 'vllm'

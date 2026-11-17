@@ -182,6 +182,13 @@ def _repaired_snapshot(snapshot: dict, reason: str, note: str | None = None) -> 
     return {**snapshot, "plan_repair": note or _plan_repair_note(reason)}
 
 
+def lease_provider(client) -> str:
+    """'api' when gate 1 would run on the hosted API right now, else 'vllm'."""
+    router = getattr(client, 'routing', None)
+    found = router.candidates('gate1') if router else []
+    return 'api' if found and found[0]['provider'] == 'api' else 'vllm'
+
+
 def gate1_probe_client():
     """OllamaClient cho preflight; timeout = AI_BOARD_GATE1_PROBE_TIMEOUT_S (mặc định 45s), không ảnh hưởng call thật."""
     from providers.client import OllamaClient

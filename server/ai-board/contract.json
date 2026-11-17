@@ -46,6 +46,14 @@
   },
   "default_budget_limit": 200,
   "limits": {
+    "workers": {
+      "_why": "How many workers may hold a root lease at once. The shared vLLM runs one model workload at a time, so any vLLM worker caps the board at 1. When every active worker runs on the hosted API the cap is ceil(estimated backlog seconds / target_s), between 1 and api_max. Backlog estimate per open root: plan_s if it has no plan yet, plus step_s for each child ticket (at least one). The 150 s and 300 s come from one measured single-file run (420 s end to end) and are a starting point.",
+      "vllm_max": 1,
+      "api_max": 3,
+      "target_s": 300,
+      "plan_s": 150,
+      "step_s": 300
+    },
     "api": {
       "_why": "Hosted API route only (provider api); vLLM keeps its own values. We cap the window below the API's own for cost and latency. Gemini counts thinking against output, so thinking roles get reasoning_extra_tokens on top of max_tokens. Overrides: AI_BOARD_API_MAX_TOKENS[_ROLE], AI_BOARD_API_CONTEXT_TOKENS, AI_BOARD_API_RUN_TOKENS, AI_BOARD_API_RPM.",
       "context_window_tokens": 32768,

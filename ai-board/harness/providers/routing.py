@@ -13,6 +13,8 @@ ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'class
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
 GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
 FALLBACK_PROBE_TTL_S = 300
+# Set by the worker for one lease: the server sized its worker cap on this provider, so it must not change mid-run.
+LEASE_VERDICT = None
 
 
 def _prefix(provider):
@@ -96,7 +98,7 @@ class ModelRouter:
 
     def _use_api(self):
         """Fallback verdict, probed once per router: vLLM busy or unreachable means hosted API."""
-        pinned = get_settings(self.settings).api_verdict
+        pinned = get_settings(self.settings).api_verdict or LEASE_VERDICT
         if pinned:
             return pinned == 'api'
         # Router lives for the whole worker process: re-probe after a TTL so a later run sees vLLM's current state.

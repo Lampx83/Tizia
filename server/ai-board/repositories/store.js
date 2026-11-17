@@ -14,7 +14,7 @@ import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
-  SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, assertConfirmed, cleanAttachments, cleanModelCall,
+  SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
   assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
   validatePrePrVerdict, wallClockLimit,
 } from './store-contract.js';
@@ -809,7 +809,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     }
   }
 
-  const claimTransaction = ({ workerId, version, mode, intent, now, leaseMs, yieldNew }) => db.tx(async () => {
+  // ponytail: provider per worker lives in this process only; after a server restart unknown workers count as vLLM (cap 1) until they claim again.
+  const workerProviders = new Map();
+  const claimTransaction = ({ workerId, version, mode, intent, now, leaseMs, yieldNew, provider }) => db.tx(async () => {
+    workerProviders.set(workerId, provider === 'api' ? 'api' : 'vllm');
     if (!WORKER_MODES.has(mode)) throw new WorkerContractError('invalid worker mode');
     if (!CLAIM_INTENTS.has(intent)) throw new WorkerContractError('invalid claim intent');
     // Serialize admission only, scoped to this board; model execution never holds this lock.
@@ -831,6 +834,10 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     `, [workerId, now]);
     if (current) return { ...current, trigger: triggerFor(current.phase, intent) };
     if (yieldNew) return null; // có người đang chat: không nhận ticket mới, việc đang giữ vẫn trả về ở trên
+    const busy = await db.all("SELECT lease_owner FROM ai_tickets WHERE kind='root' AND status='running' AND lease_owner<>? AND lease_expires_at>?", [workerId, now]);
+    const open = await db.all(`SELECT t.plan_hash IS NOT NULL AS planned, (SELECT count(*) FROM ai_tickets c WHERE c.parent_id=t.id) AS children
+      FROM ai_tickets t WHERE t.kind='root' AND t.status IN ('queued','running')`);
+    if (busy.length >= allowedWorkers(workerProviders.get(workerId), busy.map(row => workerProviders.get(row.lease_owner) || 'vllm'), backlogSeconds(open))) return null;
 
     const candidate = await db.get(`
       SELECT t.id, t.phase, t.status, t.lease_token
@@ -887,11 +894,11 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       trigger: triggerFor(phase, intent) };
   });
 
-  async function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = LEASE_MS,
+  async function claimNext({ workerId, version = 'unknown', mode = 'off', intent = 'precheck', now = Date.now(), leaseMs = LEASE_MS, provider = 'vllm',
     yieldNew = false }) {
     workerId = String(workerId || '').trim();
     if (!/^[A-Za-z0-9._:-]{2,80}$/.test(workerId)) throw new WorkerContractError('invalid worker id');
-    return await claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs, yieldNew });
+    return await claimTransaction({ workerId, version: String(version).slice(0, 80), mode, intent, now, leaseMs, yieldNew, provider });
   }
 
   // Nhánh candidate của verdict qua kiểm tra gần nhất (thứ admin có thể hoàn tác).

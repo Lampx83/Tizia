@@ -16,7 +16,7 @@ from typing import Any, Callable
 from worker_client import (DEFAULT_BUDGET_LIMIT, REPO_ROOT, LeaseLostError, WorkerClient, _is_stale_lease, _plan_rejection,
                            _with_body, default_worker_id, server_url, take_secret)
 from worker_execution import _load_harness, _real_deps, drop_screenshots, harness_change_runner
-from worker_planner import HarnessPlanner, PlanBlockedError, _repaired_snapshot, gate1_probe_client, model_preflight
+from worker_planner import HarnessPlanner, PlanBlockedError, _repaired_snapshot, gate1_probe_client, lease_provider, model_preflight
 from worker_publish import SHOTS_TYPE, _forge, observe_base, pr_text, screenshot_payload, sync_pull_requests
 from runtime.limits import scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
@@ -39,6 +39,7 @@ class HttpWorker:
     preview_publisher: Any = None  # optional local private preview; never changes the release verdict
     folder_base_ref: str = "HEAD"  # nhánh folder gộp ref này mỗi lượt: clone riêng → origin/<base>, checkout dev → HEAD
     model_check: Callable[[], dict | None] | None = None  # model_preflight(): lỗi → không claim
+    provider_check: Callable[[], str] | None = None  # 'api' | 'vllm' this worker would use now; sizes the server's worker cap
     clock: Callable[[], float] = time.monotonic  # injectable for the GPU wait backoff
     _report_gate: Callable[[float], None] | None = dataclasses.field(default=None, init=False, repr=False)
     _gpu_retry_at: float = dataclasses.field(default=0.0, init=False, repr=False)
@@ -124,13 +125,18 @@ class HttpWorker:
             self._gpu_backoff_s, self._gpu_retry_at = 0.0, 0.0
             self._report_gpu(None)
 
+        from providers import routing
+        routing.LEASE_VERDICT = None
+        provider = self.provider_check() if self.provider_check else "vllm"
         claim = self.client.post("/api/ai-board/worker/claim", {
             "worker_id": self.worker_id, "version": self.version, "mode": self.mode,
-            "intent": "plan" if self.planner else "precheck",
+            "intent": "plan" if self.planner else "precheck", "provider": provider,
         })
         ticket = claim.get("ticket")
         if not ticket:
             return {"status": "idle"}
+        if self.provider_check:
+            routing.LEASE_VERDICT = provider
         ticket_id = ticket["id"]
         lease = {"worker_id": self.worker_id, "lease_token": ticket["lease_token"]}
         if self.sync:
@@ -597,7 +603,9 @@ def main(argv: list[str] | None = None) -> int:
     from repositories import memory
     print(json.dumps({"memory_pruned": memory.prune(DEFAULT_PATH, source=repo)}))
     if args.plan or args.execute:  # shadow thuần không gọi model → không preflight
-        worker.model_check = model_preflight(gate1_probe_client())
+        probe_client = gate1_probe_client()
+        worker.model_check = model_preflight(probe_client)
+        worker.provider_check = lambda: lease_provider(probe_client)
         worker.planner = HarnessPlanner(tracer, progress=worker.gate_started, source=repo if repo_dir else None,
                                        client=worker.client, worker_id=worker.worker_id)
         if engine_url := get_settings().engine_url:
