@@ -215,3 +215,28 @@ def test_compaction_threshold_is_larger_on_api():
     assert prepare('api').startswith('x')
     with pytest.raises(CompactionPause):
         prepare('vllm')
+
+
+def test_verdict_is_reprobed_after_the_ttl():
+    from providers.routing import FALLBACK_PROBE_TTL_S
+    now, loads = [0.0], [{'running': 0, 'waiting': 0}]
+    router = ModelRouter(env(), catalog(), probe=lambda _s: loads[0], clock=lambda: now[0])
+    assert [c['id'] for c in router.candidates('gate1')] == ['v']
+    loads[0] = {'running': 3, 'waiting': 0}
+    now[0] = FALLBACK_PROBE_TTL_S / 2
+    assert [c['id'] for c in router.candidates('gate1')] == ['v']
+    now[0] = FALLBACK_PROBE_TTL_S + 1
+    assert [c['id'] for c in router.candidates('gate1')] == ['h']
+
+
+def test_vllm_cooldown_mid_run_fails_over_to_api():
+    router = ModelRouter(env(), catalog(), probe=busy(0, 0), clock=lambda: 10.0)
+    assert [c['id'] for c in router.candidates('gate3_light')] == ['v']
+    router.cooldowns['vllm'] = 70.0
+    assert [c['id'] for c in router.candidates('gate3_light')] == ['h']
+
+
+def test_pinned_suite_verdict_does_not_fail_over_on_cooldown():
+    router = ModelRouter(env(AI_BOARD_API_VERDICT='vllm'), catalog(), probe=busy(0, 0), clock=lambda: 10.0)
+    router.cooldowns['vllm'] = 70.0
+    assert router.candidates('gate3_light') == []
