@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     scope_first_warning: bool = False
     tool_doc_inject: bool = False
     gate_feedback_cap: bool = True
+    repair_skip_broken_check: bool = True
     prompt_role_split: bool = False
     prompt_tail_restate: bool = False
     rewoo_gate2_reads: bool = False
