@@ -172,8 +172,8 @@ def form_warnings_on() -> bool:
     return bool(get_settings().form_errors_as_warnings)
 
 
-def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None) -> dict:
-    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema. lenient: lỗi hình thức vào warnings thay vì raise."""
+def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None, request: dict | None = None) -> dict:
+    """Parse + validate. Raise ValueError với lý do ngắn nếu sai schema. lenient: lỗi hình thức vào warnings thay vì raise. request: bật derived_checks."""
     def form(message: str) -> None:
         if not lenient:
             raise ValueError(message)
@@ -218,6 +218,10 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
         if not isinstance(acceptance, list) or not acceptance or any(
                 not isinstance(item, str) or not item.strip() for item in acceptance):
             raise ValueError("acceptance phải là mảng chuỗi không rỗng")
+    settings = get_settings()
+    if request is not None and getattr(settings, "derived_checks", False):
+        from gates import derived_checks
+        derived_checks.apply(plan, request, with_checks=bool(getattr(settings, "plan_checks", False)))
     if get_settings().compile_prose_verify:
         files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
         for st in subtasks:
@@ -412,7 +416,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                         extra=plan_extra)
         stage = "plan parse"
         try:
-            plan = parse_plan(body.get("response", ""), lenient=lenient, warnings=form_warnings)
+            plan = parse_plan(body.get("response", ""), lenient=lenient, warnings=form_warnings, request=request)
             # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
             # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
             if isinstance(plan, dict) and plan.get("subtasks"):
