@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const HARNESS = 'ai-board/harness';
 const SKIP_DIRS = new Set(['tests', 'eval', 'evaluation', '__pycache__']);
 const FILES = ['server/ai-board/guard-lexicon.json', 'server/ai-board/contract.json',
-  'server/ai-board/classifier-calibration.json', 'server/ai-board/model-routing.json',
+  'server/ai-board/classifier-calibration.json', 'server/ai-board/model-routing.json', 'server/ai-board/redaction-patterns.json',
   'scripts/smoke-user-state.sh', 'ai-board/sandbox-runner/guest/guest-boot.sh',
   'ai-board/sandbox-runner/guest/isolate-evaluator.sh'];
 const MARKER = /^# guest-inputs: ([0-9a-f]{64})\r?$/m;
