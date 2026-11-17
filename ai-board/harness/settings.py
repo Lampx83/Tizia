@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     sandbox_repo_scripts_tiers: str = ""  # csv tier names ("multi", "single") that get repo-script argv; "" = none
     skill_select: bool | None = None
     multimodal: bool = False
+    vision_advisory: bool = False
     verified_loop: bool = False
     context_compaction: bool = False
     tool_native: bool = False
