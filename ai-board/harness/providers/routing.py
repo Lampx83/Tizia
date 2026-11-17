@@ -94,6 +94,9 @@ class ModelRouter:
 
     def _use_api(self):
         """Fallback verdict, probed once per router: vLLM busy or unreachable means hosted API."""
+        pinned = get_settings(self.settings).api_verdict
+        if pinned:
+            return pinned == 'api'
         if self.api_busy is None:
             probe = self._probe
             if probe is None:

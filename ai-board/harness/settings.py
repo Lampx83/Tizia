@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     api_context_tokens: int | None = Field(default=None, gt=0)
     api_run_tokens: int | None = Field(default=None, gt=0)
     api_rpm: int | None = Field(default=None, ge=0)
+    api_verdict: Literal["", "api", "vllm"] = ""  # suite pins the fallback choice so every trial of a run uses one provider
     api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = False
