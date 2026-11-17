@@ -131,6 +131,15 @@ def _bind(value, results: dict):
     return value
 
 
+def _cut(body: dict, trace, where: str) -> bool:
+    """True when the reply was cut at the token cap; notes model_output_truncated on the trace."""
+    if body.get("done_reason") != "length":
+        return False
+    if trace:
+        trace.note("tool", where, "model_output_truncated: reply cut at the token cap")
+    return True
+
+
 def _rewoo(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None, proposal_id=None,
            skill_context=None) -> dict | None:
     """Kế hoạch đọc một lượt, harness chạy tuần tự, tổng hợp một lượt; None khi bất kỳ bước nào hỏng."""
@@ -141,7 +150,7 @@ def _rewoo(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
     body = deps.call_model(model, prompt + protocol, gate=1, budget=budget, format="json", db_path=db_path,
                            proposal_id=proposal_id, prompt_name="react_plan.md", skill_context=skill_context,
                            extra={"max_total_output_tokens": spec["max_tokens"]})
-    steps = None if body.get("done_reason") == "length" else _plan_steps(body.get("response", ""), spec["tool_calls"])
+    steps = None if _cut(body, trace, "rewoo") else _plan_steps(body.get("response", ""), spec["tool_calls"])
     if steps is None:
         return None
     results, evidence = {}, ""
@@ -157,7 +166,7 @@ def _rewoo(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
     body = deps.call_model(model, prompt + REWOO_SYNTHESIS + f"\nRESULTS:\n<<<{evidence}>>>", gate=1, budget=budget,
                            format="json", db_path=db_path, proposal_id=proposal_id, prompt_name="react_plan.md",
                            skill_context=skill_context, extra={"max_total_output_tokens": spec["max_tokens"]})
-    if body.get("done_reason") == "length":
+    if _cut(body, trace, "rewoo"):
         return None
     try:
         name, args = parse_action(body.get("response", ""))
@@ -194,7 +203,7 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
                                db_path=db_path, proposal_id=proposal_id, prompt_name="react_plan.md",
                                skill_context=skill_context,
                                extra={"max_total_output_tokens": spec["max_tokens"]})
-        if body.get("done_reason") == "length":
+        if _cut(body, trace, "react_plan"):
             return None  # reply cut at the cap: the one-shot plan call takes over instead of more replies
         try:
             name, args = parse_action(body.get("response", ""))
@@ -263,7 +272,7 @@ def explore(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=
             body = deps.call_model(model, prompt + protocol + transcript, gate=1, budget=budget, format="json",
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="react_plan.md",
                                    skill_context=skill_context, extra={"max_total_output_tokens": spec["max_tokens"]})
-            if body.get("done_reason") == "length":
+            if _cut(body, trace, "explore"):
                 break
             try:
                 name, args = parse_action(body.get("response", ""))

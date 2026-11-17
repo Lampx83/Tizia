@@ -23,6 +23,7 @@ from gates import visual, vision_advisory
 from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
 from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
+from runtime import limits
 from runtime.meter import redact
 from settings import get_settings
 from verification import check_registry, checks as gate_checks
@@ -92,6 +93,11 @@ def no_oracle_review(generated_ok: bool, smoke_ok: bool, result: dict, tests_abs
     The plan's acceptance commands cannot be unfinished here: a failing one already raised."""
     return bool((generated_ok or tests_absent_ok) and smoke_ok and not result.get("probe_id")
                 and result.get("reason") == functional.NO_ORACLE)
+
+
+def deadline_s() -> float:
+    """Wall-clock cap of one gate 5 run: the node cap from the contract."""
+    return float(limits.budget()["node_wall_clock_s"])
 
 
 def _internal() -> bool:
@@ -616,6 +622,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
 
         owned = Compose(runner, checkout, project, password, compose, logs)
         command = owned.command
+        owned.deadline = time.monotonic() + deadline_s()
 
         try:
             config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
@@ -665,10 +672,12 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 raise RuntimeError("không có generated test để chạy")
             if not test_files:
                 logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
+            stage = "boot"  # copying files into the container is environment, not the candidate
             for test_file in test_files:
                 parent = str(Path("/app", test_file).parent).replace("\\", "/")
                 command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                 command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
+            stage = "ordinary"
             generated_ok = False
             try:
                 if test_files:  # `node --test` with no file would run the whole suite
@@ -767,6 +776,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     attrs["tizia.gate5.check.passed"] = row["candidate"]
             http_observed = True
             stage = 'plan'
+            owned.check_deadline()
             observed_pages = html or ([primary] if primary else [])
             probe_kind = "route" if probe_id == functional.ROUTE_PROBE else "browser"
             with _check_span(trace, probe_kind, ",".join(urlsplit(p).path for p in observed_pages)) as probe_span:
@@ -797,6 +807,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             skipped = [page for page in html if page not in shot_pages]
             if skipped:
                 logs.append(f"Chỉ chụp {len(shot_pages)} trong {len(html)} trang đổi; không chụp: {', '.join(skipped)}")
+            owned.check_deadline()
             if shot_pages:
                 def cp(local: Path, target: str) -> None:
                     command([*compose, "cp", str(local), f"tizia:{target}"])
@@ -850,7 +861,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
+            if owned.expired:
+                reason, stage = "gate5_deadline: gate 5 exceeded its wall-clock cap", "deadline"
         finally:
+            owned.deadline = None
             try:
                 diagnostic = command([*compose, "logs", "--no-color"], log_output=False)
                 logs.append("Container logs before teardown:\n" + redact((diagnostic.stdout or "").replace(password, "[synthetic credential]"))[-8000:])

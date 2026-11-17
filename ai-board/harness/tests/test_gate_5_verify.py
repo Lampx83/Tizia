@@ -174,6 +174,25 @@ def test_teardown_failure_is_environmental_not_repairable(tmp_path):
     assert out["failure_class"] == "transient"
 
 
+def test_gate5_past_its_deadline_ends_with_a_named_transient_reason(tmp_path, monkeypatch):
+    monkeypatch.setattr(verify, "deadline_s", lambda: 0.0)
+    runner = FakeRunner()
+    out = verify.run(state(checkout(tmp_path)), runner=runner)
+    assert out["blocked"] is True
+    assert out["reason"].startswith("gate5_deadline")
+    assert out["failure_class"] == "transient"
+    assert not any(args[0] != "docker" for args, _ in runner.calls)
+    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert out["evidence"]["teardown_confirmed"] is True
+
+
+@pytest.mark.parametrize("action", ["cp"])
+def test_compose_copy_failure_is_environment_not_candidate(tmp_path, action):
+    out = verify.run(state(checkout(tmp_path)), runner=FakeRunner(fail=action))
+    assert out["blocked"] is True
+    assert out["failure_class"] == "transient"
+
+
 def test_up_failure_still_tears_down(tmp_path):
     runner = FakeRunner(fail="up")
     out = verify.run(state(checkout(tmp_path)), runner=runner)

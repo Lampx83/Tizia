@@ -475,6 +475,8 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
         return _blocked(f"sandbox {error.phase}: {error.code}")
     except ValueError as error:
         return _blocked(str(error), "ordinary")
+    except OSError as error:
+        return _blocked(f"sandbox package: {error}")
 
     run_id = f"g5-{uuid.uuid4().hex[:24]}"  # one id per Gate 5 invocation; a retry is a new invocation
     result = None

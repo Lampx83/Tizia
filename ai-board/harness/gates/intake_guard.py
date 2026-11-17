@@ -40,6 +40,10 @@ VERDICTS = ("allow", "needs_info", "human_review", "reject", "critical")  # tăn
 _LLM_NEEDS_INFO = {"personal_data", "off_topic"}
 MAX_TITLE, MAX_DETAIL = 200, 2000  # prompt + input vừa num_ctx 8192 của qwen3:8b
 _WORD = re.compile(r"[^\W\d_]{2,}")
+_FORMAT_CUE = re.compile(r"dinh dang|format|dau (?:cham|phay|ngan cach)|doi ten|rename|lam tron")
+_MONEY_ACTION = re.compile(r"thanh toan|rut tien|hoan tien|refund|ma giam gia|ma khuyen mai|mua goi|nang cap|dang ky goi|"
+                           r"vnpay|momo|zalopay|the (?:tin dung|ngan hang)|tai khoan ngan hang|so tai khoan|tien that|"
+                           r"vi dien tu|credit card|subscription|billing|invoice|pricing|thu phi|tinh phi|tra phi|giam gia")
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 
 
@@ -51,6 +55,9 @@ def deterministic(text: str) -> dict[str, str]:
     """{nhãn: verdict} từ luật rẻ: lexicon, PII, link ngoài allowlist, vô nghĩa."""
     text = readonly_verification_text(text)
     hits = {label: guard.LEXICON["labels"][label]["intake"] for label in guard.topic_hits(text)}
+    folded = guard.fold(text)
+    if hits.get("money") and _FORMAT_CUE.search(folded) and not _MONEY_ACTION.search(folded):
+        del hits["money"]  # display/rename only; money files are still critical at the gate 4 diff check
     if guard._pii(text, set()):
         hits["personal_data"] = "needs_info"
     if any(not guard.host_allowed(m.group(1)) for m in guard._URL.finditer(text)):

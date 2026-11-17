@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 from pathlib import Path
 
 from runtime.meter import redact
@@ -10,6 +11,7 @@ from runtime.meter import redact
 STAGE_CLASS = {
     "preflight": "transient",   # missing checkout/skill/Dockerfile: environment
     "boot": "transient",        # compose config/up/exec before containers are trusted
+    "deadline": "transient",    # gate 5 ran past its wall-clock cap: environment hung, not the candidate
     "config": "critical",       # compose config outside this run's isolation
     "address": "critical",      # container address/port not safe to probe
     "env": "critical",          # container env leaks secrets or wrong DSN
@@ -49,16 +51,40 @@ class CommandFailed(RuntimeError):
         self.returncode, self.output = returncode, output
 
 
+class Gate5Deadline(RuntimeError):
+    """Gate 5 wall-clock cap reached."""
+
+
 class Compose:
     """One owned Compose project: runs commands, redacts logs, tears down."""
 
     def __init__(self, runner, checkout: Path, project: str, password: str, compose: list[str], logs: list[str]):
         self.runner, self.checkout, self.project = runner, checkout, project
         self.password, self.compose, self.logs = password, compose, logs
+        self.deadline, self.expired = None, False
+
+    def check_deadline(self) -> float | None:
+        """Seconds left; raise Gate5Deadline when none. None when no deadline is set."""
+        if self.deadline is None:
+            return None
+        left = self.deadline - time.monotonic()
+        if left <= 0:
+            self.expired = True
+            raise Gate5Deadline("gate5_deadline: gate 5 exceeded its wall-clock cap")
+        return left
 
     def command(self, args: list[str], *, env=None, log_output=True, timeout=None) -> subprocess.CompletedProcess:
-        result = self.runner(args, cwd=self.checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
-                             stdin=subprocess.DEVNULL, check=False, timeout=timeout)
+        left = self.check_deadline()
+        if left is not None:
+            timeout = left if timeout is None else min(timeout, left)
+        try:
+            result = self.runner(args, cwd=self.checkout, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True,
+                                 stdin=subprocess.DEVNULL, check=False, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if left is not None and timeout == left:
+                self.expired = True
+                raise Gate5Deadline("gate5_deadline: gate 5 exceeded its wall-clock cap") from None
+            raise
         text = redact(f"{result.stdout or ''}{result.stderr or ''}".replace(self.password, "[synthetic credential]"))
         output = "[output redacted]"
         if log_output:
