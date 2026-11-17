@@ -36,8 +36,11 @@ class RecordingDeps(Deps):
     """Deps that keeps every raw model body of the trial (route, finish reason, text hash) for provenance and loop detection."""
     ledger: list = dataclasses.field(default_factory=list)
     capture: dict = dataclasses.field(default_factory=dict)
+    seed: int | None = None
 
     def call_model(self, *args, **kwargs):
+        if self.seed is not None:
+            kwargs["options"] = {"seed": self.seed, **(kwargs.get("options") or {})}
         if self.stop_on_model_error and self.capture.get("model_failure"):
             raise RuntimeError("model cleanup pending; no additional request")
         if self.stop_on_model_error and self.capture.get('usage_missing'):
@@ -75,9 +78,14 @@ class RecordingDeps(Deps):
         return body
 
 
-def recording(base: Deps) -> RecordingDeps:
+def trial_seed(run_seed: int, case_id: str, repeat: int) -> int:
+    """Fixed per-(case, repeat) model seed derived from the run's model seed."""
+    return int.from_bytes(hashlib.sha256(f"{run_seed}/{case_id}/{repeat}".encode()).digest()[:4], "big") & 0x7FFFFFFF
+
+
+def recording(base: Deps, seed: int | None = None) -> RecordingDeps:
     fields = {f.name: getattr(base, f.name) for f in dataclasses.fields(Deps)}
-    return RecordingDeps(**{**fields, "network": network_request.Queue(eval_mode=True)}, ledger=[])
+    return RecordingDeps(**{**fields, "network": network_request.Queue(eval_mode=True)}, ledger=[], seed=seed)
 
 
 def request_of(task: dict, variant: str | None = None) -> dict:
@@ -256,7 +264,7 @@ def ref_errors(diff: str, repo: Path, sha: str, plan: dict | None) -> int:
 
 def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: eval_fast.FastTier | None = None,
               fast_lock: threading.Lock | None = None, *, wall_s: int = 300, review: bool = False,
-              budget: Budget | None = None) -> dict:
+              budget: Budget | None = None, seed: int | None = None) -> dict:
     """Never raises for model/infra outcomes (they are result rows). eval_fast.FastTierError propagates: the environment is broken, not the model."""
     gate3_guards.fallbacks(reset=True)
     budget = budget if budget is not None else Budget(max_wall_clock_s=wall_s, max_units=600)
@@ -266,7 +274,7 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         if base_deps.models.deadline is not None:
             deadline = min(deadline, base_deps.models.deadline)
         base_deps = dataclasses.replace(base_deps, models=dataclasses.replace(base_deps.models, deadline=deadline))
-    deps = recording(base_deps)
+    deps = recording(base_deps, seed)
     deps.capture["enabled"] = task.get("split") == "dev"
     kind, _, variant = mode.partition(":")
     taskpack.prepare_checkout(root, task["base_sha"], source)

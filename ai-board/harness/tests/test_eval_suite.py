@@ -33,8 +33,10 @@ class SuiteModels:
     gate3_model: str = "fake"
     gate3_model_light: str = "fake"
     calls: list = dataclasses.field(default_factory=list)
+    seeds: list = dataclasses.field(default_factory=list)
 
     def generate(self, model, prompt, **kw):
+        self.seeds.append(kw.get("seed"))
         key = re.search(r"\[(\w{6,})\]", prompt).group(1)
         case = self.cases[key]
         if "summary_vi" in prompt and "capabilities" in prompt:
@@ -736,3 +738,41 @@ def test_run_shape_suffix_separates_arms_and_hides_secrets():
     assert off != on and off.startswith("-me2e-r3-env") and "s" not in off.split("env")[0][-1:]
     assert run_shape_suffix(args, {"AI_BOARD_REACT_SCHEMA": "0", "AI_BOARD_SECKEY": "other"}) == off
     assert run_shape_suffix(SimpleNamespace(modes="e2e", repeats=1, cases=6), {}) == "-me2e-r1-n6"
+
+
+def test_trial_seed_is_stable_and_differs_per_case_and_repeat():
+    a = trial.trial_seed(5, "c1", 1)
+    assert a == trial.trial_seed(5, "c1", 1)
+    assert len({a, trial.trial_seed(5, "c1", 2), trial.trial_seed(5, "c2", 1), trial.trial_seed(6, "c1", 1)}) == 4
+    assert 0 <= a < 2 ** 31
+
+
+def test_model_seed_reaches_provider_options_and_rows_list_the_derived_triples(world):
+    root, _ = world
+    deps, models = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "3", "--repeats", "2", "--modes", "e2e", "--root", str(root),
+            "--allow-dirty", "--model-seed", "42"]
+    assert runner.main(argv, deps) == 0
+    run_dir = next((root / "suite").glob("*-ms42-*"))
+    rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()]
+    triples = {(r["id"], r["repeat"], r["model_seed"]) for r in rows}
+    assert len(triples) == 6 and all(s == trial.trial_seed(42, i, rep) for i, rep, s in triples)
+    assert models.seeds and set(models.seeds) <= {s for _, _, s in triples}
+    meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert meta["seeds"] == {"model": 42, "split": SEED, "bootstrap": metrics.BOOTSTRAP_SEED}
+
+
+def test_compare_reports_bootstrap_seed():
+    assert metrics.compare(_rows([(True,)] * 3), _rows([(True,)] * 3))["bootstrap_seed"] == 7
+    assert metrics.compare(_rows([(True,)] * 3), _rows([(True,)] * 3), seed=9)["bootstrap_seed"] == 9
+
+
+def test_public_manifest_has_no_page_on_both_sides(world):
+    root, _ = world
+    split = json.loads(next((root / "corpus").glob("full-s*/manifest.json")).read_text(encoding="utf-8"))["split"]
+    assert not set(split["dev"]["pages"]) & set(split["heldout"]["pages"])
+
+
+def test_page_overlap_check_flags_shared_page_and_corpus_refuses_it():
+    assert eval_corpus.page_overlap([{"split": "dev", "file": "a.html"}, {"split": "heldout", "file": "b.html"}]) == []
+    assert eval_corpus.page_overlap([{"split": "dev", "file": "a.html"}, {"split": "heldout", "file": "a.html"}]) == ["a.html"]

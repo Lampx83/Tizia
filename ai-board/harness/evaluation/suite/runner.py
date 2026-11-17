@@ -328,7 +328,8 @@ def cmd_run(args, deps=None) -> int:
             return 2
         tasks += taskpack.load_pack(pack)
     modes = args.modes.split(",")
-    name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + ("-dirty" if prov["dirty"] else "") + run_shape_suffix(args, os.environ)
+    model_seed = args.seed if args.model_seed is None else args.model_seed
+    name = (f"s{args.seed}-{args.split}-{prov['ref'][:12]}" + (f"-ms{args.model_seed}" if args.model_seed is not None else "") + ("-dirty" if prov["dirty"] else "") + run_shape_suffix(args, os.environ)
             + (f"-think0-{args.reasoning_off.replace(',', '+')}" if args.reasoning_off else "")
             + (f"-think1-{args.reasoning_on.replace(',', '+')}" if args.reasoning_on else "")
             + (f"-ctx-{args.context_arm}" if args.context_arm != "default" else "")
@@ -351,7 +352,7 @@ def cmd_run(args, deps=None) -> int:
             + (f"-api-{re.sub(r'[^A-Za-z0-9.]+', '-', model)}" if provider == "api" else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov, **({"provider": "api"} if provider == "api" else {}),
+    meta = {"seed": args.seed, "seeds": {"model": model_seed, "split": args.seed, "bootstrap": metrics.BOOTSTRAP_SEED}, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov, **({"provider": "api"} if provider == "api" else {}),
             "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
             **dataset_pin,
             **({"case_ids": case_meta} if case_meta else {})}
@@ -375,6 +376,7 @@ def cmd_run(args, deps=None) -> int:
 
     def work(item):
         task, mode, repeat = item
+        seed = trial.trial_seed(model_seed, task["id"], repeat)
         if stop.is_set() or (run_dir / "STOP").exists() or (deadline and time.monotonic() > deadline):
             return None
         try:
@@ -390,12 +392,12 @@ def cmd_run(args, deps=None) -> int:
                        "reasoning": prov["reasoning"], "context_arm": args.context_arm}, timeout_s=args.trial_timeout_s)
             else:
                 row = trial.run_trial(task, mode, deps, root, ROOT, fast, fast_lock,
-                                      wall_s=args.trial_timeout_s, review=args.review)
+                                      wall_s=args.trial_timeout_s, review=args.review, seed=seed)
         except eval_fast.FastTierError as error:  # environment broken: keep finished work, stop the run
             abort.append(str(error)[:300])
             stop.set()
             return None
-        row = {**row, "repeat": repeat, **{k: task[k] for k in metrics.CELLS if k in task}}
+        row = {**row, "repeat": repeat, "model_seed": seed, **{k: task[k] for k in metrics.CELLS if k in task}}
         store.add(row)
         if row.get("cleanup_pending"):
             abort.append("trial cleanup/remote idle requires reconciliation")
@@ -562,6 +564,7 @@ def main(argv=None, deps=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--seed", type=int, required=True)
+    run.add_argument("--model-seed", type=int, default=None, help="base of the per-(case, repeat) model seed; default --seed")
     limits.add_api_args(run)
     run.add_argument("--split", choices=("dev", "heldout", "all", "none"), default="dev", help="none = only the --pack tasks")
     run.add_argument("--repeats", type=int, default=3)

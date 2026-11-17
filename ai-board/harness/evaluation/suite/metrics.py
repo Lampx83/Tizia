@@ -187,7 +187,10 @@ def _binom_two_sided(b: int, c: int) -> float:
     return min(1.0, round(2 * tail, 4))
 
 
-def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int = 4000) -> dict:
+BOOTSTRAP_SEED = 7
+
+
+def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = BOOTSTRAP_SEED, boot: int = 4000) -> dict:
     """Paired by task id (mean resolved over repeats). A = baseline, B = candidate. Verdict needs both the bootstrap CI and the sign test to agree."""
     valid = {"baseline": round(100 * (1 - infra_rate(rows_a)), 1), "candidate": round(100 * (1 - infra_rate(rows_b)), 1)}
     infra = bool(rows_a and rows_b) and max(infra_rate(rows_a), infra_rate(rows_b)) > infra_max_rate()
@@ -216,7 +219,7 @@ def compare(rows_a: list[dict], rows_b: list[dict], *, seed: int = 7, boot: int 
     else:
         ci = [lo, hi]
     return {"verdict": verdict, "tasks": len(ids), "delta_points": delta, "ci95_points": ci, "tasks_better": better, "tasks_worse": worse, "sign_test_p": p,
-            "valid_percent": valid, "inconclusive_infra": infra}
+            "valid_percent": valid, "inconclusive_infra": infra, "bootstrap_seed": seed}
 
 
 def compare_groups(rows_a: list[dict], rows_b: list[dict], **kw) -> dict:

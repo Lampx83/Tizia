@@ -78,7 +78,7 @@ def main() -> None:
         with contextlib.redirect_stdout(sys.stderr):
             row = trial.run_trial(request["task"], request["mode"], deps, Path(request["root"]),
                                   request["source"], fast, wall_s=request["wall_s"],
-                                  review=request.get("review", False),
+                                  review=request.get("review", False), seed=request.get("seed"),
                                   budget=Budget.restore(request["budget"]) if request.get("budget") else None)
     finally:
         if fast:
