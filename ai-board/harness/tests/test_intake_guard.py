@@ -99,6 +99,20 @@ def test_educational_requests_pass_the_deterministic_layer():
         assert intake_guard.deterministic(text) == {}, text
 
 
+def test_number_formatting_request_is_not_money():
+    for text in ["Hiển thị giá gói bằng định dạng 1.000đ, dấu chấm ngăn cách hàng nghìn",
+                 "Đổi tên cột 'học phí' trong file xuất CSV",
+                 "Đổi định dạng số tiền sang 1.000 đ trong bảng giá"]:
+        assert 'money' not in intake_guard.deterministic(text), text
+
+
+def test_formatting_words_do_not_hide_a_real_money_request():
+    for text in ["Đổi định dạng trang và thêm nút thanh toán qua VNPay",
+                 "Đổi tên gói và thêm mã giảm giá 20%",
+                 "Format the page and add a refund button"]:
+        assert intake_guard.deterministic(text).get('money') == 'human_review', text
+
+
 def test_llm_can_escalate_to_human_review_but_never_reject_on_its_own():
     intake_guard._CACHE.clear()
     out = intake_guard.run("Thêm trang", "một yêu cầu bình thường", llm(["sexual"]), Budget())
