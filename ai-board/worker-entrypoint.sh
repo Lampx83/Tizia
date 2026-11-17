@@ -34,6 +34,14 @@ ollama_host=$(python -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os
 if [ -n "$ollama_host" ]; then
   for ip in $(getent ahostsv4 "$ollama_host" | awk '{print $1}' | sort -u); do iptables -A AIBOARD_OUT -d "$ip" -j ACCEPT; done
 fi
+# Hosted model fallback: only when the owner turned it on; tcp 443 to the API host's current addresses.
+# ponytail: IPs resolved once at container start; a CDN-fronted API that rotates addresses needs a restart or an egress proxy.
+if [ "${AI_BOARD_API_FALLBACK:-}" = 1 ]; then
+  api_host=$(python -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ.get("API_URL") or os.environ.get("BASE_URL") or "").hostname or "")')
+  if [ -n "$api_host" ]; then
+    for ip in $(getent ahostsv4 "$api_host" | awk '{print $1}' | sort -u); do iptables -A AIBOARD_OUT -d "$ip" -p tcp --dport 443 -j ACCEPT; done
+  fi
+fi
 # GitHub is only needed when something talks to it: a remote origin (clone/fetch) or a token (PRs). A local origin
 # (e.g. the e2e mirror) needs no ranges, and then no call to api.github.com at all.
 origin=$REPO_URL
