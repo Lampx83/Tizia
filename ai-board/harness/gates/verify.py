@@ -37,9 +37,9 @@ CA_DIR = Path('/usr/local/share/ca-certificates')
 
 def acceptance_commands(state: dict) -> list[str]:
     """Lệnh acceptance cấp feature của plan, chỉ những lệnh chạy được (cổng 1 đã bắt buộc với plan nhiều lớp)."""
-    from gates.brainstorm import RUNNABLE  # cùng định nghĩa "lệnh chạy được" với cổng 1
+    from gates.brainstorm import is_runnable
     items = guest_input(state, "acceptance") or []
-    return [str(item).strip() for item in items if isinstance(item, str) and RUNNABLE.match(item.strip())]
+    return [str(item).strip() for item in items if isinstance(item, str) and is_runnable(item)]
 
 
 _GREP_LITERAL = re.compile(r"""(\b[ef]?grep(?:\s+(?:-[A-Za-z]+|--))*)\s+(?:'([^']*)'|"([^"]*)")""")

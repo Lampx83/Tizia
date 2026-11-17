@@ -50,6 +50,7 @@ def _quoted(raw):
 
 _CSS_SIMPLE = r'(?:[A-Za-z_*][\w-]*|[.#][A-Za-z_][\w-]*|\[[\w-]+(?:[~|^$*]?=[^\]]*)?\])(?:[.#][A-Za-z_][\w-]*|::?[a-z-]+|\[[^\]]*\])*'
 _CSS_SELECTOR = re.compile(rf'^{_CSS_SIMPLE}(?:\s*[>+~]?\s*{_CSS_SIMPLE})*$')
+_HEX_COLOR = re.compile(r'^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
 _CSS_MARK = re.compile(r'[.#\[>+~:]')
 
 
@@ -59,8 +60,9 @@ def _skip_selectors():
 
 
 def _is_css_selector(text):
-    """Quote shaped like a CSS selector (ASCII only, has a marker like '.', '#', '>', ':')."""
-    return bool(_CSS_MARK.search(text) and _CSS_SELECTOR.match(text.strip()))
+    """Quote shaped like a CSS selector or a hex color (ASCII only, selector has a marker like '.', '#', '>', ':')."""
+    text = text.strip()
+    return bool(_HEX_COLOR.match(text) or (_CSS_MARK.search(text) and _CSS_SELECTOR.match(text)))
 
 
 def _text_quotes(raw):
