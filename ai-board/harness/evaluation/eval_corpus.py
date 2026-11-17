@@ -276,6 +276,12 @@ def text_sha(text: dict) -> str:
     return hashlib.sha1(json.dumps(text, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
 
+def page_overlap(rows: list[dict]) -> list[str]:
+    """Pages used by both dev and held-out cases, sorted."""
+    side = lambda name: {r["file"] for r in rows if r["split"] == name}  # noqa: E731
+    return sorted(side("dev") & side("heldout"))
+
+
 def write_corpus(root: Path, seed: int, source) -> list[dict]:
     """Corpus theo seed + commit ghim → file ghi dưới <root>, byte-identical khi sinh lại; trả mọi case (dev + held-out) có chữ request.
     Dev: corpus/{texts,texts-todo}.json, corpus/full-s<seed>/{cases,manifest}.json. Held-out: cùng cấu trúc dưới <root>/heldout/ (VAULT);
@@ -300,6 +306,8 @@ def write_corpus(root: Path, seed: int, source) -> list[dict]:
     cases = [{**c, **texts[c["split"]][c["key"]]} for c in cases]
     rows = [{**{k: c[k] for k in ("id", "key", "file", "types", "level", "style", "split", "page_bytes") if k in c},
              "text_sha": text_sha(texts[c["split"]][c["key"]])} for c in cases]
+    if shared := page_overlap(rows):
+        raise CorpusError(f"trang xuất hiện ở cả dev và held-out: {shared}")
     sides = {side: [r for r in rows if r["split"] == side] for side in home}
     public = {"seed": seed, "base_sha": PIN, "cases": sides["dev"], "split": {
         side: {"cases": len(part), "pages": sorted({r["file"] for r in part}), "types": sorted({t for r in part for t in r["types"]})}
