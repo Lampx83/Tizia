@@ -59,7 +59,9 @@ class History:
         if any(type(value) is not int or value <= 0 for value in (window, compactor_window)):
             raise CompactionPause('context capacity unavailable')
         self.released = []
-        limit = min(window * .75, limits.loop()['compaction_tokens'])
+        routing = getattr(deps.models, 'routing', None)
+        hosted = bool(routing) and routing.candidates(role)[:1] and routing.candidates(role)[0]['provider'] == 'api'
+        limit = min(window * .75, limits.api_limits(role)['compaction'] if hosted else limits.loop()['compaction_tokens'])
         rendered = self.render(prefix, sized=True)
         if self._input_bound(rendered) + 3072 < limit:
             return self.render(prefix)

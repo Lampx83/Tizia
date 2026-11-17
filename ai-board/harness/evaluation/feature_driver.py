@@ -66,9 +66,10 @@ def _real_trial(task: dict) -> dict:
     from evaluation.suite import trial
     from runtime.budget import Budget
     from runtime.pipeline import Deps, ENV_FILE, ROOT
+    from providers.routing import local_only
     from settings import get_settings
     load_dotenv(ENV_FILE)
-    deps = dataclasses.replace(Deps.real(), stop_on_model_error=True)
+    deps = dataclasses.replace(local_only(Deps.real()), stop_on_model_error=True)
     root = Path(get_settings().eval_dir or eval_run.DEFAULT_ROOT)
     return trial.run_trial(task, "e2e", deps, root, ROOT, wall_s=WALL_S, budget=Budget(max_wall_clock_s=WALL_S, max_units=600))
 

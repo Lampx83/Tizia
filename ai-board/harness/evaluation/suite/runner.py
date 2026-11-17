@@ -21,7 +21,7 @@ from pathlib import Path
 from evaluation import eval_corpus
 from evaluation import eval_fast
 from gates import gate3_guards, plan_validate
-from runtime import tool_loop, tool_manifest
+from runtime import limits, tool_loop, tool_manifest
 from runtime.budget import Budget
 from services.context import VARIANT_FILES
 from evaluation import requests_dataset
@@ -201,6 +201,7 @@ def run_shape_suffix(args, env) -> str:
 def cmd_run(args, deps=None) -> int:
     from runtime.pipeline import ENV_FILE, ROOT
     from runtime.pipeline import Deps
+    from providers.routing import local_only
     real_run = deps is None
     if args.case_ids and (args.cases or args.kinds):
         print("[suite] --case-ids không dùng chung với --cases/--kinds", file=sys.stderr)
@@ -214,7 +215,7 @@ def cmd_run(args, deps=None) -> int:
     if real_run:  # fail closed unless the first candidate of every measured role is vLLM
         from dotenv import load_dotenv
         load_dotenv(ENV_FILE)
-        deps = Deps.real()
+        deps = local_only(Deps.real())
         router = getattr(deps.models, "routing", None)
         for role in ("gate1", "gate25", "gate3_light"):
             first = router.candidates(role)[:1] if router else []
@@ -242,6 +243,7 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
     os.environ["AI_BOARD_GATE25_ANSWERED"] = "1" if args.gate25_answered else ""
     os.environ["AI_BOARD_REACT_PLAN"] = "1" if args.react_plan else ""
+    limits.apply_api_args(args)
     os.environ["AI_BOARD_GATE25_SIM_USER"] = "1" if args.gate25_sim_user else ""
     os.environ["AI_BOARD_SANDBOX_TOOL"] = "1" if args.sandbox_tool else ""
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
@@ -549,6 +551,7 @@ def main(argv=None, deps=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--seed", type=int, required=True)
+    limits.add_api_args(run)
     run.add_argument("--split", choices=("dev", "heldout", "all", "none"), default="dev", help="none = only the --pack tasks")
     run.add_argument("--repeats", type=int, default=3)
     run.add_argument("--modes", default="e2e,e2e:approved,gold,e2e:nodia",

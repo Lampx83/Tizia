@@ -61,13 +61,14 @@ def main() -> None:
     from evaluation.suite.launcher import sqlite_launcher
     from runtime.budget import Budget
     from runtime.pipeline import Deps, ENV_FILE
+    from providers.routing import local_only
 
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
     request = json.load(sys.stdin)
     ablation.apply(request.get("context_arm", "default"))
     load_dotenv(ENV_FILE)
-    deps = dataclasses.replace(Deps.real(), stop_on_model_error=True)
+    deps = dataclasses.replace(local_only(Deps.real()), stop_on_model_error=True)
     if deps.models.routing:
         deps.models.routing.catalog["reasoning"] = request.get("reasoning", {})
     fast = eval_fast.FastTier(sqlite_launcher, Path(request["root"])) if request.get("fast_tier") else None

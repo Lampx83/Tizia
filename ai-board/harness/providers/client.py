@@ -5,9 +5,11 @@ import json
 import math
 import os
 import select
+import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass, replace
 from providers.routing import ModelRouter
 from runtime.meter import measure
@@ -18,6 +20,21 @@ from settings import get_settings
 RETRY_STATUS = (500, 502, 503, 504)
 RETRY_PAUSES_S = (3.0, 8.0)
 _sleep = time.sleep
+_api_gate, _api_next = threading.Lock(), [0.0]
+
+
+def _api_throttle():
+    """Spread hosted calls to the contract requests_per_minute (0 = off); one shared clock across threads."""
+    from runtime.limits import api_limits
+    rpm = api_limits()['rpm']
+    if not rpm:
+        return
+    with _api_gate:
+        now = time.monotonic()
+        wait = _api_next[0] - now
+        _api_next[0] = max(now, _api_next[0]) + 60.0 / rpm
+    if wait > 0:
+        _sleep(wait)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -165,27 +182,33 @@ class OllamaClient:
             if extra and extra.get('messages'):
                 messages += extra['messages']
             payload = {'model': model, 'messages': messages, 'stream': False}
+            hosted = self.route_label == 'api'  # hosted endpoints reject vLLM-only fields
             for source, target in [('num_predict', 'max_tokens'), ('temperature', 'temperature'),
                                    ('top_p', 'top_p'), ('top_k', 'top_k'), ('presence_penalty', 'presence_penalty'),
                                    ('min_p', 'min_p'), ('seed', 'seed'), ('stop', 'stop')]:
+                if hosted and source in ('top_k', 'min_p'):
+                    continue
                 if source in options:
                     payload[target] = options[source]
             if format:
                 payload['response_format'] = ({'type': 'json_schema', 'json_schema':
                     {'name': 'ai_board', 'schema': format}} if isinstance(format, dict)
                     else {'type': 'json_object'})
-            if extra and 'thinking' in extra:  # explicit per-role choice; absent = server default (legacy callers)
+            if extra and 'thinking' in extra and not hosted:  # explicit per-role choice; absent = server default (legacy callers)
                 payload['chat_template_kwargs'] = {'enable_thinking': bool(extra['thinking'])}
             if extra and extra.get('tools'):
                 payload['tools'] = extra['tools']
                 if extra.get('tool_choice'):
                     payload['tool_choice'] = extra['tool_choice']
             logprobs = bool(extra and extra.get('logprobs'))
+            if logprobs and hosted:
+                raise ValueError('logprobs classifier runs only on the local model')
             if logprobs:  # classifier: one token + top-N logprobs, thinking off (Ollama `think: false`)
                 payload.update(logprobs=True, top_logprobs=extra.get('top_logprobs', 20),
                                chat_template_kwargs={'enable_thinking': False})
-            body = self._post('/chat/completions' if self.base_url.endswith('/v1') else '/v1/chat/completions',
-                              payload, retry=False)  # Deps owns retries and charges each HTTP attempt.
+            if hosted:
+                _api_throttle()
+            body = self._post(self._chat_path(), payload, retry=False)  # Deps owns retries and charges each HTTP attempt.
             try:
                 choice = body['choices'][0]
                 content = choice['message']['content']
@@ -294,7 +317,16 @@ class OllamaClient:
                            seckey=self.vllm_seckey, protocol='vllm', vllm_url='').context_window(model)
         return self._request_token_bound({'model': model}) if self.protocol == 'vllm' else NUM_CTX
 
+    def _chat_path(self):
+        """vLLM: /v1 appended unless present. Hosted: a base with its own path (e.g. /v1beta/openai) is the API root."""
+        if self.base_url.endswith('/v1') or (self.route_label == 'api' and urlsplit(self.base_url).path not in ('', '/')):
+            return '/chat/completions'
+        return '/v1/chat/completions'
+
     def _request_token_bound(self, payload):
+        if self.route_label == 'api' and self.protocol == 'vllm':
+            from runtime.limits import api_limits
+            return api_limits()['context']
         if self.protocol != 'vllm':
             context, output = payload['options']['num_ctx'], payload['options'].get('num_predict')
             if type(context) is not int or context <= 0 or type(output) is not int or output <= 0:

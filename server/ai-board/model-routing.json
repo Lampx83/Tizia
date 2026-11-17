@@ -7,19 +7,24 @@
   "classifier_calibration_id": "qwen35-35b-a3b-int4-danger-stack-r1",
   "roles": {
     "gate1": [
-      "vllm-heavy-coder"
+      "vllm-heavy-coder",
+      "api-hosted-coder"
     ],
     "gate25": [
-      "vllm-heavy-coder"
+      "vllm-heavy-coder",
+      "api-hosted-coder"
     ],
     "gate3_light": [
-      "vllm-heavy-coder"
+      "vllm-heavy-coder",
+      "api-hosted-coder"
     ],
     "gate3_heavy": [
-      "vllm-heavy-coder"
+      "vllm-heavy-coder",
+      "api-hosted-coder"
     ],
     "gate4_review": [
-      "vllm-heavy-coder"
+      "vllm-heavy-coder",
+      "api-hosted-coder"
     ],
     "classifier": [
       "vllm-qwen35-35b-classifier"
@@ -105,7 +110,7 @@
     "api-hosted-coder": {
       "provider": "api",
       "model": "set-by-API_MODEL",
-      "enabled": false,
+      "enabled": true,
       "approved_roles": [
         "gate1",
         "gate25",

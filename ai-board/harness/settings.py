@@ -75,6 +75,21 @@ class Settings(BaseSettings):
     gate25_sim_user: bool = False
     private_preview_enabled: bool = False
     model_routing: bool = False
+    api_max_tokens: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate1: int | None = Field(default=None, gt=0)
+    api_max_tokens_brainstorm: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate25: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate3_light: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate3_heavy: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate4_review: int | None = Field(default=None, gt=0)
+    api_max_tokens_repair_planner: int | None = Field(default=None, gt=0)
+    api_max_tokens_repair_agent: int | None = Field(default=None, gt=0)
+    api_max_tokens_compactor: int | None = Field(default=None, gt=0)
+    api_max_tokens_react_plan: int | None = Field(default=None, gt=0)
+    api_context_tokens: int | None = Field(default=None, gt=0)
+    api_run_tokens: int | None = Field(default=None, gt=0)
+    api_rpm: int | None = Field(default=None, ge=0)
+    api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = False
     compile_prose_verify: bool = False
