@@ -886,10 +886,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                               prompt_name="plan_validate.md", options=options,
                                               **({"extra": {"force_thinking": True}} if think else {}))
         body = ask(_validator_options())
-        if body.get('done_reason') == 'length' and 'retry' in fixes() and not think:  # degenerate whitespace runs: resample once
+        if body.get('done_reason') == 'length' and not think:  # degenerate whitespace runs: resample once
             body = ask({**(_validator_options() or {}), 'temperature': 0.3})
         if body.get('done_reason') == 'length':
-            return None, {"gate": 2.5, "blocked": True, "reason": "validator output truncated at token limit",
+            return None, {"gate": 2.5, "blocked": True, "reason": "model_output_truncated: validator output truncated at token limit",
                           "public_message": "Kế hoạch đang chờ quản trị viên kiểm tra vì phản hồi kiểm chứng chưa hoàn chỉnh."}
         try:
             result = parse_validation(body.get("response", ""))

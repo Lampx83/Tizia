@@ -136,6 +136,16 @@ def test_reply_cut_at_the_token_cap_falls_back_after_one_call(repo, react_on):
     assert len(deps.prompts) == 1  # the remaining replies of the plan phase stay unspent
 
 
+def test_cut_reply_is_reported_as_model_output_truncated(repo, react_on):
+    root, sha = repo
+    notes = []
+    deps = Scripted({"response": '{"tool": "read_file", "argu', "done_reason": "length"})
+    deps.trace = SimpleNamespace(note=lambda *args, **kw: notes.append(args))
+
+    assert react_plan.run("P", deps, Budget(max_wall_clock_s=999), model="m", source=root, sha=sha) is None
+    assert any("model_output_truncated" in " ".join(map(str, n)) for n in notes)
+
+
 def test_both_plan_calls_use_the_contract_token_cap(repo, react_on):
     from runtime import limits
     root, sha = repo

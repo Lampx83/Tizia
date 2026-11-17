@@ -379,6 +379,31 @@ def test_retry_fix_resamples_a_truncated_validator_once(monkeypatch):
     assert models.calls[1]['temperature'] == 0.3
 
 
+def test_truncated_validator_is_resampled_once_by_default():
+    class FirstTruncated(FakeModels):
+        def generate(self, *args, **kwargs):
+            body = super().generate(*args, **kwargs)
+            if len(self.calls) == 1:
+                body['done_reason'] = 'length'
+            return body
+    plan = plan_with(['features'])
+    models = FirstTruncated(plan)
+    result = plan_validate.run({'id': 'x'}, deps_with(models), Budget(), {'plan': plan})
+    assert 'truncated' not in (result.get('reason') or '') and len(models.calls) == 2
+
+
+def test_twice_truncated_validator_names_the_stop_reason():
+    class Truncated(FakeModels):
+        def generate(self, *args, **kwargs):
+            body = super().generate(*args, **kwargs)
+            body['done_reason'] = 'length'
+            return body
+    plan = plan_with(['features'])
+    models = Truncated(plan)
+    result = plan_validate.run({'id': 'x'}, deps_with(models), Budget(), {'plan': plan})
+    assert result['blocked'] and result['reason'].startswith('model_output_truncated') and len(models.calls) == 2
+
+
 def test_context_fix_widens_the_excerpt_with_the_subtask_verify(monkeypatch):
     seen = {}
     monkeypatch.setattr(plan_validate.file_context, 'excerpt', lambda text, words, *, budget, filename, pinned=(): seen.update(words=words, budget=budget) or '')
