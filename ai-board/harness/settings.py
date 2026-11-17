@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
+    file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
+    file_header_context: bool = False  # tree/outline hiện dòng header của từng file
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None
