@@ -39,7 +39,15 @@ fi
 if [ "${AI_BOARD_API_FALLBACK:-}" = 1 ]; then
   api_host=$(python -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ.get("API_URL") or os.environ.get("BASE_URL") or "").hostname or "")')
   if [ -n "$api_host" ]; then
-    for ip in $(getent ahostsv4 "$api_host" | awk '{print $1}' | sort -u); do iptables -A AIBOARD_OUT -d "$ip" -p tcp --dport 443 -j ACCEPT; done
+    # DNS may not answer in the first seconds after start; without the rule every API call is refused.
+    api_ips=""; i=0
+    while [ -z "$api_ips" ] && [ "$i" -lt 10 ]; do
+      api_ips=$(getent ahostsv4 "$api_host" | awk '{print $1}' | sort -u) || api_ips=""
+      [ -n "$api_ips" ] || sleep 2
+      i=$((i + 1))
+    done
+    [ -n "$api_ips" ] || echo "API host $api_host did not resolve: hosted fallback has no egress" >&2
+    for ip in $api_ips; do iptables -A AIBOARD_OUT -d "$ip" -p tcp --dport 443 -j ACCEPT; done
   fi
 fi
 # GitHub is only needed when something talks to it: a remote origin (clone/fetch) or a token (PRs). A local origin
