@@ -11,6 +11,7 @@ CLI (cwd ai-board/harness): python -m repositories.code_index build --source <re
 from __future__ import annotations
 
 import argparse
+import ast
 import bisect
 import functools
 import json
@@ -170,6 +171,33 @@ def parse(path: str, text: str) -> dict:
                      links={"css": _uniq(page.css), "js": _uniq(page.js + inline_js), "pages": _uniq(page.pages)},
                      inline_handlers=page.inline_handlers)
     return entry
+
+
+HEADER_EXTS = (".js", ".mjs", ".py", ".html")
+_HEADER_SKIP = re.compile(r"^(#!|<!doctype|['\"]use strict['\"]|\s*$)", re.I)
+_HEADER_OPEN = re.compile(r"^\s*(?:<!--|//+|/\*+)")
+_HEADER_TRIM = re.compile(r"^\s*(?:<!--|//+|/\*+|\*+)?[\s*]*|[\s*]*(?:-->|\*+/)?\s*$")
+
+
+def file_header(path: str, text: str) -> str | None:
+    """First header line (comment/docstring) at file top; None if absent or type unchecked."""
+    if not path.endswith(HEADER_EXTS):
+        return None
+    if path.endswith(".py"):
+        try:
+            doc = (ast.get_docstring(ast.parse(text)) or "").strip()
+        except (SyntaxError, ValueError):
+            return None
+        return doc.splitlines()[0] if doc else None
+    rows = [x for x in text.lstrip("﻿").splitlines()[:8] if not _HEADER_SKIP.match(x)]
+    if not rows or not _HEADER_OPEN.match(rows[0]):
+        return None
+    # opener alone on its line (`/**`, `<!--`): the text sits on the next line
+    for row in rows[:2]:
+        line = _HEADER_TRIM.sub("", row)
+        if line:
+            return line
+    return None
 
 
 def anchors(entry: dict) -> set[str]:
