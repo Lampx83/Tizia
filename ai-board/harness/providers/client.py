@@ -7,6 +7,7 @@ import os
 import select
 import threading
 import time
+import socket
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
@@ -367,7 +368,7 @@ class OllamaClient:
         for pause in ((*RETRY_PAUSES_S, None) if retry else (None,)):
             timeout = self.remaining_s()
             root = current() if path.endswith(('/generate', '/chat/completions')) else None
-            attempt, body = None, None
+            attempt, body, unsent = None, None, False
             provider = self.route_label if self.protocol == 'vllm' else 'ollama'
             if root is not None:
                 attempt = root.reserve('model', provider=provider, token_bound=self._request_token_bound(payload))
@@ -382,12 +383,17 @@ class OllamaClient:
                 if error.code not in RETRY_STATUS or pause is None:
                     raise
             except urllib.error.URLError as error:  # connection refused/reset; a read timeout is TimeoutError, not retried
+                # No connection means no request reached the provider: settle at zero instead of holding the full reservation.
+                unsent = isinstance(error.reason, (socket.gaierror, ConnectionRefusedError, TimeoutError))
                 if isinstance(error.reason, TimeoutError) or pause is None:
                     raise
             finally:
                 if attempt is not None:
-                    root.settle(attempt, measure(provider, body if isinstance(body, dict) else {},
-                                                int((time.monotonic() - started) * 1000)))
+                    metrics = measure(provider, body if isinstance(body, dict) else {},
+                                      int((time.monotonic() - started) * 1000))
+                    if unsent:
+                        metrics = {**metrics, 'tokens_in': 0, 'tokens_out': 0}
+                    root.settle(attempt, metrics)
             if self.deadline is not None and pause >= self.remaining_s():
                 raise TimeoutError('Model request deadline exceeded') from None
             _sleep(pause)
