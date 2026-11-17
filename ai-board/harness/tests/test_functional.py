@@ -364,3 +364,13 @@ def test_plain_label_next_to_a_selector_is_still_checked(selector_flag_on):
 @pytest.mark.parametrize('label', ['Tài liệu 1.2', 'Nộp bài', 'Tizia: bắt đầu', 'Next page'])
 def test_labels_that_only_look_like_punctuation_stay_visible(label, selector_flag_on):
     assert functional.text_expectation(ASK(f"Thêm '{label}' vào trang")) == {'present': [label], 'absent': []}
+
+
+@pytest.mark.parametrize('color', ['#16a34a', '#fff', '#16a34a80'])
+def test_hex_color_quotes_are_not_visible_text_when_flag_on(color, selector_flag_on):
+    assert functional.text_expectation(ASK(f"Đổi chữ thành '{color}'")) == {'present': [], 'absent': []}
+
+
+def test_hex_color_quote_kept_when_flag_off(monkeypatch):
+    monkeypatch.delenv(SELECTOR_FLAG, raising=False)
+    assert functional.text_expectation(ASK("Thêm '#16a34a' vào trang")) == {'present': ['#16a34a'], 'absent': []}

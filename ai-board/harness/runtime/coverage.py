@@ -7,7 +7,11 @@ from pathlib import Path
 _HEADING = "ket qua mong doi"
 _ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*(.+?)\s*$")
 _WORD = re.compile(r"[a-z0-9]{3,}")
-_RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|grep\s|rg\s|bash\s|sh\s|docker compose\s|psql\s)")
+
+
+def _runnable(text):
+    from gates.brainstorm import is_runnable  # lazy: gates.brainstorm imports runtime
+    return is_runnable(text)
 
 
 def _fold(text):
@@ -39,7 +43,7 @@ def uncovered(spec, plan):
 
 def uncovered_items(items, plan):
     subtasks = [t for t in (plan or {}).get("subtasks") or [] if isinstance(t, dict)]
-    runnable = [t for t in subtasks if _RUNNABLE.match(str(t.get("verify") or "").strip())]
+    runnable = [t for t in subtasks if _runnable(str(t.get("verify") or ""))]
     missing = []
     for item in items:
         words = set(_WORD.findall(_fold(item)))
@@ -78,7 +82,7 @@ def spec_conditions(spec, call_model=None):
 
 
 def has_runnable(plan):
-    return any(isinstance(t, dict) and _RUNNABLE.match(str(t.get("verify") or "").strip()) for t in (plan or {}).get("subtasks") or [])
+    return any(isinstance(t, dict) and _runnable(str(t.get("verify") or "")) for t in (plan or {}).get("subtasks") or [])
 
 
 def non_runnable_layered(plan):
@@ -87,7 +91,7 @@ def non_runnable_layered(plan):
     if brainstorm.unified_verify() and not brainstorm.is_feature_plan(plan or {}):
         return []
     return [f"{t.get('file')}: {str(t.get('verify') or '').strip()[:80]}" for t in (plan or {}).get("subtasks") or []
-            if isinstance(t, dict) and t.get("layer") and not _RUNNABLE.match(str(t.get("verify") or "").strip())]
+            if isinstance(t, dict) and t.get("layer") and not _runnable(str(t.get("verify") or ""))]
 
 
 _PATH = re.compile(r"(?<![\w/.:-])((?:[\w-]+/)*[\w-]+(?:\.[\w-]+)*\.(?:html|mjs|js|css|json|py|md|sql))(?![\w-])", re.I)

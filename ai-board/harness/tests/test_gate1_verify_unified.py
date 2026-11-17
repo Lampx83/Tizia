@@ -68,3 +68,27 @@ def test_flag_on_passes_false_blocks(monkeypatch, plan):
 def test_flag_on_still_blocks_prose_in_feature_plans(monkeypatch, plan):
     _flag(monkeypatch, True)
     assert _blocked(plan)
+
+
+RUNNABLE_TABLE = [
+    ("node --test x.test.js", True, True), ("curl -s localhost:8041", True, True), ("pytest tests", True, True),
+    ("grep -q 'a' public/x.html", True, False), ("rg 'a' public", True, False),
+    ("public/x.html chứa 'a'", False, False), ("echo ok", False, False),
+]
+
+
+@pytest.mark.parametrize("text,on,off", RUNNABLE_TABLE)
+def test_one_verify_classifier_for_every_consumer(monkeypatch, text, on, off):
+    from gates import verify
+    for flag, want in ((True, on), (False, off)):
+        _flag(monkeypatch, flag)
+        assert brainstorm.is_runnable(text) is want
+        assert coverage._runnable(text) is want
+        assert bool(verify.acceptance_commands({"acceptance": [text]})) is want
+
+
+def test_gate5_keeps_grep_acceptance_gate1_accepted(monkeypatch):
+    from gates import verify
+    _flag(monkeypatch, True)
+    item = "grep -q 'x' public/a.html"
+    assert verify.acceptance_commands({"acceptance": [item, "mô tả"]}) == [item]
