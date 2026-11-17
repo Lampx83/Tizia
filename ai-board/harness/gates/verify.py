@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
-from gates import visual
+from gates import visual, vision_advisory
 from gates.gate5_session import STAGE_CLASS, Compose, failure_class, missing_tool
 from verification import functional, style
 from verification.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
@@ -863,12 +863,19 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
                 stage = "teardown"  # leaked containers are the environment's problem, not the candidate's
 
+    advisory = None
+    if get_settings().vision_advisory and not reason and shots:
+        with _check_span(trace, "vision", "advisory") as span:
+            advisory = vision_advisory.run(state, {"screenshot": screenshot, "screenshots": shots}, deps, budget)
+            span["tizia.gate5.vision.status"] = advisory["status"]
+            span["tizia.gate5.vision.overall"] = advisory.get("overall") or ""
     evidence = {"text": "Smoke scripts/smoke-user-state.sh: một luồng user-state, không bao phủ toàn ứng dụng.\n"
                         + "\n".join(logs), "smoke_passed": smoke_ok, "http_observed": http_observed, "runner": runner_name,
                 "screenshot": str(screenshot) if screenshot else None, "screenshots": shots,
                 "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
                 "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed,
                 **({"checks": checks_result} if checks_result else {}),
+                **({"vision_advisory": advisory} if advisory else {}),
                 **({"check_registry": check_registry.REGISTRY.hash} if registry_on else {})}
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,

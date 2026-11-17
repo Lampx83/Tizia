@@ -57,13 +57,14 @@ def visual(result: dict) -> bool:
     return "giao diện tệ hơn" in str(result.get("reason") or "")
 
 
-def images(result: dict, *, max_images: int = MAX_IMAGES, temp_root=None, read=None) -> list[dict]:
+def images(result: dict, *, max_images: int = MAX_IMAGES, temp_root=None, read=None, phases=("after",), page=None,
+           force=False) -> list[dict]:
     """Ảnh đính kèm cho lời gọi: {'mime','b64','page','width','phase'}, tối đa 1 ảnh/trang đã đổi.
 
     [] khi lỗi không phải hiển thị. Cổng 5 chỉ chụp trang đã đổi nên mọi ảnh AFTER đều đúng trang; ảnh BEFORE là
     code cũ nên bỏ. Chỉ đọc file trong thư mục chụp của chính run (SHOT_DIR dưới temp), phần còn lại bị loại.
     """
-    if not visual(result):
+    if not (force or visual(result)):
         return []
     evidence = result.get("evidence") or {}
     root = Path(temp_root or tempfile.gettempdir()).resolve()
@@ -76,7 +77,7 @@ def images(result: dict, *, max_images: int = MAX_IMAGES, temp_root=None, read=N
 
     best: dict[str, dict] = {}
     for shot in evidence.get("screenshots") or []:
-        if not isinstance(shot, dict) or shot.get("phase") != "after" or not shot.get("path"):
+        if not isinstance(shot, dict) or shot.get("phase") not in phases or not shot.get("path"):
             continue
         path = Path(shot["path"]).resolve()
         if path.parent.parent != root or not path.parent.name.startswith(SHOT_DIR) or not path.is_file():
@@ -85,9 +86,11 @@ def images(result: dict, *, max_images: int = MAX_IMAGES, temp_root=None, read=N
         if mime is None:
             continue
         shot = {**shot, "path": str(path), "mime": mime}
-        page = str(shot.get("page") or "")
-        if page not in best or rank(shot) < rank(best[page]):
-            best[page] = shot
+        shot_page = str(shot.get("page") or "")
+        if page is not None and shot_page != page:
+            continue
+        if shot_page not in best or rank(shot) < rank(best[shot_page]):
+            best[shot_page] = shot
 
     out = []
     for shot in sorted(best.values(), key=rank)[:max_images]:
