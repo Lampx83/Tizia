@@ -665,6 +665,7 @@ export function attachAiBoardWorkerRoutes(router, {
       version: req.body?.version,
       mode: req.body?.mode,
       intent: req.body?.intent || 'precheck',
+      provider: req.body?.provider,
       leaseMs,
       yieldNew: activeChats() > 0, // người đang chat làm rõ: GPU cho họ trước
     });

@@ -47,11 +47,12 @@ async function board() {
   return { db, addRoot, addFolder, ticket, claims, probe, close };
 }
 
-test('two real HttpWorkers claim two roots of different owners at once and both finish', async () => {
+test('two real HttpWorkers on the hosted API claim two roots of different owners at once and both finish', async () => {
   const b = await board();
   try {
     const a = await b.addRoot(1, 'a'), c = await b.addRoot(2, 'c');
-    const outs = await Promise.all([b.probe('mw-worker-1'), b.probe('mw-worker-2')]);
+    const api = { PROBE_PROVIDER: 'api' };
+    const outs = await Promise.all([b.probe('mw-worker-1', api), b.probe('mw-worker-2', api)]);
     assert.equal(outs.reduce((sum, out) => sum + out.gate4_calls, 0), 2);
     assert.ok(outs.every(out => out.result.status !== 'idle'), JSON.stringify(outs));
     assert.equal(await b.claims(a), 1);
@@ -86,5 +87,27 @@ test('two roots in one folder run one at a time: the second waits behind the fir
     assert.equal(await b.claims(first), 1);
     assert.equal(await b.claims(second), 0);
     assert.equal((await b.ticket(second)).status, 'queued');
+  } finally { await b.close(); }
+});
+
+test('worker cap: a vLLM worker holds the board at one lease; api workers scale with the backlog estimate up to the cap', async () => {
+  const { allowedWorkers, backlogSeconds } = await import('../server/ai-board/repositories/store-contract.js');
+  const spec = { vllm_max: 1, api_max: 3, target_s: 300, plan_s: 150, step_s: 300 };
+  assert.equal(backlogSeconds([{ planned: false, children: 0 }, { planned: true, children: 2 }], spec), 150 + 300 + 600);
+  assert.equal(allowedWorkers('vllm', [], 9000, spec), 1);
+  assert.equal(allowedWorkers('api', ['vllm'], 9000, spec), 1);
+  assert.equal(allowedWorkers('api', [], 300, spec), 1);
+  assert.equal(allowedWorkers('api', ['api'], 600, spec), 2);
+  assert.equal(allowedWorkers('api', ['api', 'api'], 9000, spec), 3);
+});
+
+test('a second worker gets nothing while a vLLM worker holds a lease, whatever it reports itself', async () => {
+  const b = await board();
+  try {
+    await b.addRoot(1, 'a'); await b.addRoot(2, 'c');
+    const claim = { PROBE_CLAIM_ONLY: '1' };
+    assert.ok((await b.probe('mw-worker-1', claim)).ticket);
+    assert.equal((await b.probe('mw-worker-2', claim)).ticket, null);
+    assert.equal((await b.probe('mw-worker-3', { ...claim, PROBE_PROVIDER: 'api' })).ticket, null);
   } finally { await b.close(); }
 });

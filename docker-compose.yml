@@ -137,6 +137,17 @@ services:
       - ai-board-memory-2:/opt/ai-board/ai-board/memory
       - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
 
+  # Third worker: only gets work when every active worker runs on the hosted API (limits.workers in contract.json).
+  ai-board-worker-3:
+    extends: { service: ai-board-worker }
+    container_name: tizia-ai-board-worker-3
+    hostname: ai-board-worker-3
+    profiles: !override [multi-worker]
+    volumes: !override
+      - ai-board-repo-3:/repo
+      - ai-board-memory-3:/opt/ai-board/ai-board/memory
+      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+
   image-registry:
     container_name: tizia-image-registry
     image: registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
@@ -222,6 +233,8 @@ volumes:
   ai-board-memory:
   ai-board-repo-2:
   ai-board-memory-2:
+  ai-board-repo-3:
+  ai-board-memory-3:
   sandbox-runner-state:
   sandbox-registry:
   seaweedfs-data:

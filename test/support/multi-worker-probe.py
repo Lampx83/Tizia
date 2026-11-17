@@ -41,10 +41,12 @@ def runner(plan, ticket_id, max_units, **kwargs):
 
 worker = HttpWorker(WorkerClient(sys.argv[1], sys.argv[2]), worker_id=sys.argv[3], mode='active',
     planner=lambda _: ({}, 0), change_runner=runner, candidates=SimpleNamespace(discard=lambda _: None))
+worker.provider_check = lambda: os.environ.get('PROBE_PROVIDER', 'vllm')
 try:
     if os.environ.get('PROBE_CLAIM_ONLY'):
         claim = WorkerClient(sys.argv[1], sys.argv[2]).post('/api/ai-board/worker/claim', {
-            'worker_id': sys.argv[3], 'version': 'probe', 'mode': 'active', 'intent': 'plan'})
+            'worker_id': sys.argv[3], 'version': 'probe', 'mode': 'active', 'intent': 'plan',
+            'provider': os.environ.get('PROBE_PROVIDER', 'vllm')})
         print(json.dumps({'ticket': (claim.get('ticket') or {}).get('id'), 'gate4_calls': 0}))
         sys.exit(0)
     print(json.dumps({'result': worker.run_once(), 'gate4_calls': len(calls)}))
