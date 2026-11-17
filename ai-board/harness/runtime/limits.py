@@ -47,6 +47,11 @@ def tri_state(value, spec):
     return spec["default_enabled"] if value is None else value
 
 
+def oracle_validation() -> dict:
+    """Contract evaluation.oracle_validation: label count and rate minimums a soft check needs before it may decide a verdict."""
+    return dict(_parsed()["evaluation"]["oracle_validation"])
+
+
 def loop(env=None) -> dict:
     """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override.
     Bật progress loop thì trần mềm nâng theo limits.progress: bước còn tiến bộ không bị cắt, còn trần thật là

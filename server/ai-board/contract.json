@@ -262,7 +262,17 @@
     }
   },
   "clock": { "_why": "Hiển thị giờ AI Board. DB giữ epoch ms tuyệt đối; chỉ format đổi theo múi giờ này.", "tz": "Asia/Ho_Chi_Minh" },
-  "evaluation": { "infra_max_rate": 0.1, "min_group_tasks": 10 },
+  "evaluation": {
+    "infra_max_rate": 0.1,
+    "min_group_tasks": 10,
+    "oracle_validation": {
+      "_why": "Proposed, owner confirms. A soft check decides a verdict only if, on owner labels, it has min_labels and the 95% lower bound (bootstrap over dup_group) of both rates reaches the minimums; else advisory.",
+      "min_labels": 100,
+      "min_catch_wrong": 0.9,
+      "min_accept_right": 0.9,
+      "advisory_until_validated": true
+    }
+  },
   "branch_prefix": "ai-board/",
   "branch_slug_max": 60,
   "branch_pattern": "^ai-board/\\d{4}-\\d{2}-\\d{2}-[a-z0-9-]{1,60}$",
