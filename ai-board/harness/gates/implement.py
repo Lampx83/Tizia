@@ -372,7 +372,7 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
     report(check, ok, detail): tường thuật từng phép kiểm cho trace."""
     report = report or (lambda *_: None)
     if done_reason == "length":
-        message = "output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn"
+        message = "model_output_truncated: output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn"
         report("output length", False, message)
         raise ValueError(message)
     if current is not None:
@@ -796,7 +796,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         raw = body.get("response", "")
         if body.get('_route'):
             failed_candidates.add(body['_route']['candidate'])
-            model = routing.catalog['candidates'][body['_route']['candidate']]['model']
+            model = body.get('_model') or routing.catalog['candidates'][body['_route']['candidate']]['model']
         try:
             out = parse_codegen(raw, existing=current is not None)
         except ValueError as e:

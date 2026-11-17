@@ -19,6 +19,7 @@ from settings import get_settings
     (None, "Chữ cần bỏ vẫn còn trên trang", 5, None, "check_failed"),
     ("blocked_gate_4", "static fail", 4, None, "check_failed"),
     (None, "repair stuck", 3, None, "model_limit"),
+    (None, "model_output_truncated: finish_reason=length, reply rỗng", 3, "ordinary", "model_output_truncated"),
 ])
 def test_classify_stable_class(outcome, reason, gate, failure_class, cls):
     assert stop_report.classify(outcome, reason, gate, failure_class) == cls
@@ -45,7 +46,7 @@ def test_build_and_render_name_tried_and_blocker():
 @pytest.mark.parametrize("cls, route", [
     ("human_review", "needs_review"), ("check_failed", "claude_code_queue"), ("model_limit", "claude_code_queue"),
     ("plan_invalid", "claude_code_queue"), ("budget", "claude_code_queue"),
-    ("needs_clarification", "clarify"), ("infra", "retry"),
+    ("needs_clarification", "clarify"), ("infra", "retry"), ("model_output_truncated", "claude_code_queue"),
 ])
 def test_next_step_route_per_class(cls, route):
     step = stop_report.next_step(cls)

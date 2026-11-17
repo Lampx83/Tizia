@@ -19,6 +19,7 @@ import path_policy
 from services import repomap
 from services import file_context
 from repositories import memory
+from settings import get_settings
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,19 @@ def tree(source, sha: str, *, path: str = "public") -> str:
         return ""
     names = [posixpath.basename(line.split("\t", 1)[1]) + ("/" if " tree " in line else "")
              for line in raw.splitlines() if "\t" in line]
+    if get_settings().file_header_context:
+        names = [_with_header(source, sha, path.rstrip("/") + "/" + n) for n in names[:HEADER_FILES]] + names[HEADER_FILES:]
     return f"{path.rstrip('/')}/: " + ", ".join(names) if names else ""
+
+
+HEADER_FILES = 25  # one git show per listed file: cap
+
+
+def _with_header(source, sha: str, file: str) -> str:
+    """`name — header` for a file with a header line; bare name otherwise."""
+    text = _show(source, sha, file) if file.endswith(code_index.HEADER_EXTS) else None
+    head = code_index.file_header(file, text) if text else None
+    return f"{posixpath.basename(file)} — {head[:80]}" if head else posixpath.basename(file)
 
 
 def outline(source, sha: str, *, file: str, index_path=None) -> str:
@@ -55,6 +68,9 @@ def outline(source, sha: str, *, file: str, index_path=None) -> str:
     if text is None:
         return f"{file}: (chưa tồn tại ở base)"
     out = code_index.outline_text(file, code_index.parse(file, file_context.strip_comments(text, file)))  # export trong comment không tính
+    head = code_index.file_header(file, text) if get_settings().file_header_context else None
+    if head:
+        out += f"\nmục đích: {head}"
     if index_path:
         note = _note(source, sha, file, index_path)
         if note:

@@ -19,6 +19,7 @@ RULES
 6. The test reads the file with `readFileSync(new URL('../{file}', import.meta.url), 'utf8')` and asserts that the new string is in the file.
 7. Keep indentation, Vietnamese diacritics, and the existing HTML style. Do not add inline <script> or on*= handlers.
 7a. A NEW page that needs JS loads exactly 1 line, with no content inside: `<script type="module" src="./js/features/<slug>/<name>.js"></script>`. That module is its own subtask in the plan, located in public/js/features/; do not load js/engine/, js/domains/, or external URLs.
+7b. A NEW file ("code") starts with a one-line header saying what the file is for: HTML `<!-- ... -->` after the doctype, JS `// ...`, Python module docstring. New functions get a one-line docstring/JSDoc only when the name does not explain them. Comments only for a non-obvious WHY; no history or ticket comments.
 
 EXAMPLE (file already present, insert one block before </body> after line L41):
 {{"edits": [{{"after_line": 40, "insert": "  <p class=\"note\">Nội dung mới.</p>"}}], "test_file": "test/trang-note.test.js", "test": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {{ readFileSync }} from 'node:fs';\n\ntest('trang có đoạn mới', () => {{\n  const html = readFileSync(new URL('../public/trang.html', import.meta.url), 'utf8');\n  assert.ok(html.includes('Nội dung mới.'));\n}});\n"}}

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     sandbox_repo_scripts_tiers: str = ""  # csv tier names ("multi", "single") that get repo-script argv; "" = none
     skill_select: bool | None = None
     multimodal: bool = False
+    vision_advisory: bool = False
     verified_loop: bool = False
     context_compaction: bool = False
     tool_native: bool = False
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     scope_first_warning: bool = False
     tool_doc_inject: bool = False
     gate_feedback_cap: bool = True
+    repair_skip_broken_check: bool = True
     prompt_role_split: bool = False
     prompt_tail_restate: bool = False
     rewoo_gate2_reads: bool = False
@@ -75,6 +77,22 @@ class Settings(BaseSettings):
     gate25_sim_user: bool = False
     private_preview_enabled: bool = False
     model_routing: bool = False
+    api_max_tokens: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate1: int | None = Field(default=None, gt=0)
+    api_max_tokens_brainstorm: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate25: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate3_light: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate3_heavy: int | None = Field(default=None, gt=0)
+    api_max_tokens_gate4_review: int | None = Field(default=None, gt=0)
+    api_max_tokens_repair_planner: int | None = Field(default=None, gt=0)
+    api_max_tokens_repair_agent: int | None = Field(default=None, gt=0)
+    api_max_tokens_compactor: int | None = Field(default=None, gt=0)
+    api_max_tokens_react_plan: int | None = Field(default=None, gt=0)
+    api_context_tokens: int | None = Field(default=None, gt=0)
+    api_run_tokens: int | None = Field(default=None, gt=0)
+    api_rpm: int | None = Field(default=None, ge=0)
+    api_verdict: Literal["", "api", "vllm"] = ""  # suite pins the fallback choice so every trial of a run uses one provider
+    api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = False
     compile_prose_verify: bool = False
@@ -92,6 +110,9 @@ class Settings(BaseSettings):
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
+    derived_checks: bool = False  # gate 1: verify/checks của css_color/replace/insert/remove suy từ request bằng code, thay lệnh model viết
+    file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
+    file_header_context: bool = False  # tree/outline hiện dòng header của từng file
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None

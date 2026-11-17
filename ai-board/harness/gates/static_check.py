@@ -24,7 +24,8 @@ from services import candidate
 from security import classifier
 from verification import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
-from repositories import repo_at_commit, server_hsm
+from repositories import code_index, repo_at_commit, server_hsm
+from settings import get_settings
 from runtime import levels, subtask_files
 from runtime.budget import BudgetExhausted
 
@@ -281,6 +282,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             base_cache[path] = base_read(path) or ""
         return base_cache[path]
 
+    check_header = get_settings().file_header_check
     issues: list[str] = oversize_issues(state) if check_size else []
     needs_careful_review = bool(issues)
     for d in diffs:
@@ -307,9 +309,15 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             if not candidate:
                 continue
             path = Path(scratch_repo) / candidate
-            if path.suffix != ".js" or not path.exists():
+            if not path.exists() or path.suffix not in (".js", *code_index.HEADER_EXTS):
                 continue
             code = path.read_text(encoding="utf-8")
+            if check_header and base_read is not None and base_read(candidate) is None and not code_index.file_header(candidate, code):
+                reason = f"'{candidate}': file mới thiếu dòng chú thích đầu file nói file dùng để làm gì"
+                return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                        "issues": [*issues, reason], "failure_class": "ordinary"}
+            if path.suffix != ".js":
+                continue
             bad_imports = lint_imports(code, candidate, base_code(candidate))
             if bad_imports:
                 reason = f"'{candidate}': {'; '.join(bad_imports)}"

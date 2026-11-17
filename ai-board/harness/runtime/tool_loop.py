@@ -188,6 +188,7 @@ def sha_of(text: str) -> str:
 PRODUCT, INFRA = "product", "infra"
 KIND_INFRA = "infra_error"
 MODEL_CALL = "model_call"
+TRUNCATED = "model_output_truncated"
 
 
 class ToolError(ValueError):
@@ -248,6 +249,12 @@ def _network(deps, name: str, args: dict) -> str:
     if text is None:
         raise NetworkPause
     return text
+
+
+def _truncated_reply(body: dict) -> bool:
+    """Text-only reply that is empty and cut at the token budget."""
+    done = (body.get("_metrics") or {}).get("done_reason") or body.get("done_reason")
+    return not body.get("tool_calls") and not (body.get("response") or "").strip() and done == "length"
 
 
 def _observed_error(name: str, observation: str) -> tuple[str, str] | None:
@@ -1024,6 +1031,10 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         ws.call_id = cid
         started_ms = int(time.time() * 1000)
         called, invalid = None, False
+        if _truncated_reply(body):  # re-asking the same prompt would only truncate again
+            text = f"{TRUNCATED}: finish_reason=length, reply rỗng (thinking dùng hết ngân sách token)"
+            _tool_span(deps, MODEL_CALL, n, child, "truncated", text, started_ms, cid, model_call)
+            return _result("blocked", text, "ordinary", steps=steps, finish_reason="length")
         thought = thought_of(body) if schema_on else None
         try:
             name, args = parse_request(body)

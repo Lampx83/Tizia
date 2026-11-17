@@ -112,6 +112,16 @@ def _request_attrs(options: dict, extra: dict | None, body: dict | None = None, 
             **({'skills': extra['_skill_evidence'], 'skill_selection': extra['_skill_selection']} if extra.get('_skill_evidence') else {})}
 
 
+def _api_options(role, router, options, budget):
+    """Hosted route: per-role max_tokens (+ thinking allowance) and run token ceiling; returns (options, resolved limits)."""
+    cap = limits.api_limits(role)
+    tokens = cap['max_tokens'] or options.get('num_predict')
+    if tokens and router.reasoning(role):
+        tokens += cap['reasoning_extra']
+    budget.max_tokens = cap['run_tokens']
+    return ({**options, 'num_predict': tokens} if tokens else options), cap
+
+
 def _split_call(prompt: str, role: str, routing, extra: dict | None, options: dict, format=None) -> tuple[str, dict | None, dict]:
     """Split mode (AI_BOARD_PROMPT_ROLE_SPLIT=1): system message + user, per-role gate 3 params; logprobs calls stay as they were."""
     context = (extra or {}).get('_skill_context')
@@ -280,6 +290,9 @@ class Deps:
                 continue
             client = router.client(candidate, self.models)
             evidence = router.evidence(role, candidate, reason if last_error is None else 'infrastructure_failover')
+            cand_options = options
+            if candidate['provider'] == 'api':
+                cand_options, evidence['limits'] = _api_options(role, router, options, budget)
             for wait_s in (0.0,) + MODEL_RETRY_BACKOFF_S:
                 if not budget.tick() or not budget.can_request():
                     raise BudgetExhausted('budget exhausted before routed model call')
@@ -294,7 +307,7 @@ class Deps:
                     self.trace.note('tool', 'model routing', f"{role}: {candidate['id']} ({evidence['reason']})", evidence)
                 body, error = {}, None
                 try:
-                    call_extra, call_options = extra, options
+                    call_extra, call_options = extra, cand_options
                     if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
                         call_extra, call_options = thinking_policy.apply(role, router, extra, options)  # reasoning tokens count against max_tokens
                     body = client.generate(candidate['model'], prompt, format=format, extra=call_extra,
@@ -376,6 +389,8 @@ class Deps:
                 call_extra, call_options = extra, options
                 if candidate['provider'] == 'vllm' and not (extra or {}).get('logprobs'):
                     call_extra, call_options = thinking_policy.apply(resolved, routing, extra, options)
+                elif candidate['provider'] == 'api':
+                    call_options, evidence['limits'] = _api_options(resolved, routing, options, budget)
                 sent.update(evidence=evidence, extra=call_extra, options=call_options)
                 return client.generate(candidate['model'], prompt, format=format, extra=call_extra,
                                        _single_attempt=True, **call_options)

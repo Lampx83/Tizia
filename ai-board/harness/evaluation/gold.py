@@ -23,6 +23,7 @@ from runtime import meter  # noqa: E402
 from runtime.budget import Budget  # noqa: E402
 from gates import implement  # noqa: E402
 from runtime.pipeline import ROOT, Deps  # noqa: E402
+from providers.routing import local_only  # noqa: E402
 
 PAGE = "public/tinh-nang.html"
 CASES = {
@@ -118,7 +119,7 @@ def main(argv=None) -> int:
     from runtime.pipeline import ENV_FILE
     from dotenv import load_dotenv
     load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
-    base = Deps.real()
+    base = local_only(Deps.real())
     rows = []
     for model in args.models.split(","):
         for name in args.cases.split(","):

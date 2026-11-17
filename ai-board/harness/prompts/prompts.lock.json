@@ -6,7 +6,7 @@
   "context_compaction.md": "39aa9086a31cf4ad65eef385d2d35bfa43aed4ea8e07ffb06fb7dc28c3661eb7",
   "grill.md": "d3590654c04307d3ba35d56fd9e4b5e2aeb20bb9d4c99ae521a1fefb09fd00b3",
   "grill_output.schema.json": "929b2adf1f8159bc19f3ebfb984667b215fe6ecdfd99fe09cde1acd667a31b8a",
-  "implement.md": "439884afd3a4cf617862f005e9edb900c70420874beeb2f7d8b24b9585da454b",
+  "implement.md": "3654256e45c7f70853001c4b5f668bd3cac8c56661fa8c804e243a10cae76e36",
   "intake_guard.md": "230384edad87c179e1d2661898db82c0e346a4240a1bb13a15a9a147ae9ab9e2",
   "judge.md": "b83a3f00ff04e2a1b526b1ef9b355310102580572c03ced4ba4db05059d08bd6",
   "note_refresh.md": "666f619892e29e34e62ce8585e6f22488206e040e96429906dafd4aaa61aa08e",
@@ -17,5 +17,5 @@
   "search_terms.md": "d4a7526cb91c859369c147bdd0f5aea7cccf7cae610780c71d2ffc34bd6b9b96",
   "spec_conditions.md": "3a15fe7e3500fee104a4325aa7ce5de6295410d2f4495343a6f4ce00c39f8de0",
   "system_roles.md": "3db576725ce2618361c339cfa7540ab18449cd2ebd28923c166f36925cafa1e5",
-  "tool_loop.md": "a67e4dbe2ab2548a112aa8c8cf6d8b5567fb7085cf37c78e90e37d990bf27b41"
+  "tool_loop.md": "137d05fa424f8c9f82cc50e9e33c89373beb011e82f3b22748d3f230de29a3bf"
 }

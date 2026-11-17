@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shlex
 
 from runtime import network_request
+from settings import get_settings
 
 REPAIR_CODE, REPLAN, STOP_ADMIN, RETRY = "repair_code", "replan", "stop_admin", "retry"
 _SCOPE = re.compile(r"out of scope|ngoài scope|ScopeViolation|allowed_scope|import cấm", re.I)
@@ -12,6 +14,27 @@ _SYNTAX = re.compile(r"SyntaxError|node --check|Unexpected token|Unexpected iden
 _MISSING = re.compile(r"Cannot find module '([^']+)'|ERR_MODULE_NOT_FOUND[^\n]*?'([^']+)'", re.I)
 _ASSERT = re.compile(r"AssertionError|^\s*not ok\b|^# fail [1-9]|expected", re.I | re.M)
 _FAILS = re.compile(r"^# fail (\d+)", re.M)
+_ACCEPTANCE = "feature acceptance failed:"
+_SHELL_BROKEN = re.compile(
+    r"\bsh: [^\n]*(syntax error|unterminated|unexpected)|unterminated quoted string|"
+    r"\bgrep: [^\n]*(unmatched|unrecognized option|invalid option|trailing backslash)|usage: grep", re.I)
+
+
+def broken_check(reason: str, text: str) -> bool:
+    """Acceptance command failed because the command itself is malformed, not because the code is wrong."""
+    if not reason.startswith(_ACCEPTANCE):
+        return False
+    if _SHELL_BROKEN.search(reason) or _SHELL_BROKEN.search(text):
+        return True
+    rest = reason[len(_ACCEPTANCE):].strip()
+    cuts = [i for i in range(len(rest)) if rest.startswith(" | ", i)]
+    for candidate in [rest[:i] for i in reversed(cuts)] + [rest]:
+        try:
+            shlex.split(candidate)
+            return False
+        except ValueError:
+            continue
+    return True
 
 
 def _text(result: dict) -> str:
@@ -64,6 +87,8 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=(
         out = (network_request.PACKAGE_REQUEST, STOP_ADMIN)
     elif _SYNTAX.search(text):
         out = ("syntax", REPAIR_CODE)
+    elif get_settings().repair_skip_broken_check and broken_check(reason, text):
+        out = ("broken_check", STOP_ADMIN)
     elif reason.startswith("feature acceptance failed"):
         out = ("acceptance_command", REPAIR_CODE)
     elif _ASSERT.search(text) or "generated tests failed" in reason:

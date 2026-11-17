@@ -524,7 +524,8 @@ class _Execution:
             return "done"
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
             from runtime import repair_agent as agent
-            if agent.applies(last.get("repair_action")) and self._agent_available() and self._diagnose_routes(last):
+            if (agent.applies(last.get("repair_action")) and last.get("repair_class") != "broken_check"
+                    and self._agent_available() and self._diagnose_routes(last)):
                 return "agent"
             return "done"
         entry = {"gate": last["gate"], "reason": last["reason"]}
