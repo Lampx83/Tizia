@@ -12,6 +12,7 @@ CATALOG = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'model-r
 ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor', 'elevation_risk', 'repair_planner'}
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
 GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
+FALLBACK_PROBE_TTL_S = 300
 
 
 def _prefix(provider):
@@ -84,6 +85,7 @@ class ModelRouter:
             self.settings['API_URL'] = self.settings['BASE_URL']
         self.clock, self.cooldowns = clock, {}
         self.local_only, self.api_busy, self._probe = False, None, probe
+        self.api_checked_at = None
 
     def api_model(self):
         """Hosted model id: API_MODEL, else the provider default. Raise ValueError on unsupported API_MODEL_PROVIDER."""
@@ -97,7 +99,9 @@ class ModelRouter:
         pinned = get_settings(self.settings).api_verdict
         if pinned:
             return pinned == 'api'
-        if self.api_busy is None:
+        # Router lives for the whole worker process: re-probe after a TTL so a later run sees vLLM's current state.
+        stale = self.api_checked_at is None or self.clock() - self.api_checked_at > FALLBACK_PROBE_TTL_S
+        if self.api_busy is None or stale:
             probe = self._probe
             if probe is None:
                 from evaluation.suite.reconcile import vllm_inflight as probe
@@ -106,6 +110,7 @@ class ModelRouter:
                 self.api_busy = load['running'] + load['waiting'] > 0
             except Exception:
                 self.api_busy = True
+            self.api_checked_at = self.clock()
         return self.api_busy
 
     def _swap(self, role):
@@ -113,8 +118,12 @@ class ModelRouter:
         if not (get_settings(self.settings).api_fallback and self.settings.get('API_KEY')):
             return False
         pool = [self.catalog['candidates'][name] for name in self.catalog['roles'].get(role, [])]
-        return (any(item['provider'] == 'api' and item['enabled'] and role in item['approved_roles'] for item in pool)
-                and self._use_api())
+        if not any(item['provider'] == 'api' and item['enabled'] and role in item['approved_roles'] for item in pool):
+            return False
+        # vLLM failed mid-run (cooldown armed): fail over instead of leaving the role with no candidate.
+        # A pinned suite verdict never switches provider mid-run (results must stay comparable).
+        cooled = not get_settings(self.settings).api_verdict and self.cooldowns.get('vllm', 0) > self.clock()
+        return cooled or self._use_api()
 
     @classmethod
     def from_env(cls, settings):
