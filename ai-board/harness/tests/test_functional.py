@@ -342,7 +342,7 @@ def selector_flag_on(monkeypatch):
 
 
 def test_flag_off_keeps_the_previous_text_expectation(monkeypatch):
-    monkeypatch.delenv(SELECTOR_FLAG, raising=False)
+    monkeypatch.setenv(SELECTOR_FLAG, '0')
     assert functional.text_expectation(REPLAY_SELECTOR) == {'present': ['.types button'], 'absent': []}
 
 
@@ -372,5 +372,5 @@ def test_hex_color_quotes_are_not_visible_text_when_flag_on(color, selector_flag
 
 
 def test_hex_color_quote_kept_when_flag_off(monkeypatch):
-    monkeypatch.delenv(SELECTOR_FLAG, raising=False)
+    monkeypatch.setenv(SELECTOR_FLAG, '0')
     assert functional.text_expectation(ASK("Thêm '#16a34a' vào trang")) == {'present': ['#16a34a'], 'absent': []}

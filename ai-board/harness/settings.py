@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     api_verdict: Literal["", "api", "vllm"] = ""  # suite pins the fallback choice so every trial of a run uses one provider
     api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
-    text_oracle_skip_selector: bool = False
+    text_oracle_skip_selector: bool = True
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = True  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
     stop_report_v2: bool = True
