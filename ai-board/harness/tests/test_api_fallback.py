@@ -60,7 +60,7 @@ def test_api_model_overrides_every_role_model_override():
 def test_fallback_picks_api_when_busy_and_vllm_when_idle():
     assert picked(env(), busy(1, 0)) == ['h']
     assert picked(env(), busy(0, 2)) == ['h']
-    assert picked(env(), busy(0, 0)) == ['v']
+    assert picked(env(), busy(0, 0)) == ['v', 'h']
     assert picked(env(), lambda _s: (_ for _ in ()).throw(OSError('down'))) == ['h']
 
 
@@ -221,17 +221,17 @@ def test_verdict_is_reprobed_after_the_ttl():
     from providers.routing import FALLBACK_PROBE_TTL_S
     now, loads = [0.0], [{'running': 0, 'waiting': 0}]
     router = ModelRouter(env(), catalog(), probe=lambda _s: loads[0], clock=lambda: now[0])
-    assert [c['id'] for c in router.candidates('gate1')] == ['v']
+    assert [c['id'] for c in router.candidates('gate1')] == ['v', 'h']
     loads[0] = {'running': 3, 'waiting': 0}
     now[0] = FALLBACK_PROBE_TTL_S / 2
-    assert [c['id'] for c in router.candidates('gate1')] == ['v']
+    assert [c['id'] for c in router.candidates('gate1')] == ['v', 'h']
     now[0] = FALLBACK_PROBE_TTL_S + 1
     assert [c['id'] for c in router.candidates('gate1')] == ['h']
 
 
 def test_vllm_cooldown_mid_run_fails_over_to_api():
     router = ModelRouter(env(), catalog(), probe=busy(0, 0), clock=lambda: 10.0)
-    assert [c['id'] for c in router.candidates('gate3_light')] == ['v']
+    assert [c['id'] for c in router.candidates('gate3_light')] == ['v', 'h']
     router.cooldowns['vllm'] = 70.0
     assert [c['id'] for c in router.candidates('gate3_light')] == ['h']
 
@@ -240,3 +240,13 @@ def test_pinned_suite_verdict_does_not_fail_over_on_cooldown():
     router = ModelRouter(env(AI_BOARD_API_VERDICT='vllm'), catalog(), probe=busy(0, 0), clock=lambda: 10.0)
     router.cooldowns['vllm'] = 70.0
     assert router.candidates('gate3_light') == []
+
+
+def test_pinned_vllm_verdict_has_no_api_backup():
+    assert picked(env(AI_BOARD_API_VERDICT='vllm'), busy(0, 0)) == ['v']
+
+
+def test_local_only_router_drops_the_backup_instead_of_refusing():
+    router = ModelRouter(env(), catalog(), probe=busy(0, 0))
+    router.local_only = True
+    assert [c['id'] for c in router.candidates('gate1')] == ['v']
