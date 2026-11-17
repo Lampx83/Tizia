@@ -1,6 +1,7 @@
 """Limits từ server/ai-board/contract.json: đọc một lần, env chỉ override khi đo."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -61,6 +62,43 @@ def loop(env=None) -> dict:
         "compaction_tokens": spec["compaction_tokens"],
         "observation_tokens": observation_tokens(env),
     }
+
+
+def api_limits(role=None, env=None) -> dict:
+    """Hosted-API caps. Precedence: AI_BOARD_API_MAX_TOKENS_<ROLE> > AI_BOARD_API_MAX_TOKENS > contract; CLI flags set the env."""
+    spec, settings = _parsed()["limits"]["api"], get_settings(env)
+    per_role = getattr(settings, f"api_max_tokens_{role}", None) if role else None
+    rpm = settings.api_rpm
+    return {
+        "max_tokens": per_role or settings.api_max_tokens or spec["max_tokens"].get(role),
+        "context": settings.api_context_tokens or spec["context_window_tokens"],
+        "compaction": spec["compaction_tokens"],
+        "reasoning_extra": spec["reasoning_extra_tokens"],
+        "run_tokens": settings.api_run_tokens or spec["run_tokens"],
+        "rpm": spec["requests_per_minute"] if rpm is None else rpm,
+    }
+
+
+def _positive(text):
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
+
+
+def add_api_args(parser) -> None:
+    parser.add_argument("--api-max-tokens", type=_positive, help="hosted API: max output tokens for every role (AI_BOARD_API_MAX_TOKENS)")
+    parser.add_argument("--api-run-tokens", type=_positive, help="hosted API: per-run token ceiling (AI_BOARD_API_RUN_TOKENS)")
+
+
+def apply_api_args(args) -> None:
+    """CLI beats env: set the env the run reads."""
+    for name, var in (("api_max_tokens", "AI_BOARD_API_MAX_TOKENS"), ("api_run_tokens", "AI_BOARD_API_RUN_TOKENS")):
+        if getattr(args, name, None):
+            os.environ[var] = str(getattr(args, name))
 
 
 def repair_sampling() -> dict:

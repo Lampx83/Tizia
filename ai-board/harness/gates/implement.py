@@ -796,7 +796,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         raw = body.get("response", "")
         if body.get('_route'):
             failed_candidates.add(body['_route']['candidate'])
-            model = routing.catalog['candidates'][body['_route']['candidate']]['model']
+            model = body.get('_model') or routing.catalog['candidates'][body['_route']['candidate']]['model']
         try:
             out = parse_codegen(raw, existing=current is not None)
         except ValueError as e:

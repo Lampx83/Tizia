@@ -12,6 +12,7 @@ import concurrent.futures as futures
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -21,7 +22,7 @@ from pathlib import Path
 from evaluation import eval_corpus
 from evaluation import eval_fast
 from gates import gate3_guards, plan_validate
-from runtime import tool_loop, tool_manifest
+from runtime import limits, tool_loop, tool_manifest
 from runtime.budget import Budget
 from services.context import VARIANT_FILES
 from evaluation import requests_dataset
@@ -111,9 +112,9 @@ def render(rep: dict) -> str:
 
 
 FIXED = ("ref", "dirty", "model", "routing_catalog", "prompt_lock", "skill_lock", "contract_hash", "config_sha256", "tool_manifest", "suite_hash", "pipeline_hash", "requests_dataset_sha256")
-COMPARISON_PINS = FIXED + ("reasoning", "corpus_sha", "seed", "repeats", "modes", "fast_tier", "review", "packs", "budget")
+COMPARISON_PINS = FIXED + ("provider", "reasoning", "corpus_sha", "seed", "repeats", "modes", "fast_tier", "review", "packs", "budget")
 # A run that does not touch request-level data carries no dataset pin; two such runs still compare.
-OPTIONAL_PINS = ("requests_dataset_sha256",)
+OPTIONAL_PINS = ("requests_dataset_sha256", "provider")
 
 
 def requests_dataset_pin(dataset=None) -> dict:
@@ -141,8 +142,8 @@ def integrity(meta: dict, rows: list[dict], current: dict | None = None) -> list
     problems = []
     if current:
         problems += [f"{k} changed during/after the run" for k in FIXED if current.get(k) != meta.get(k)]
-    if any(set(r.get("providers") or []) - {"vllm"} for r in rows):
-        problems.append("a model call left vLLM (failover or legacy route)")
+    if any(set(r.get("providers") or []) - {meta.get("provider", "vllm")} for r in rows):
+        problems.append("a model call left the pinned provider (failover or legacy route)")
     if any(set(r.get("served") or []) - {meta.get("model")} for r in rows):
         problems.append("a different served model id answered")
     infra = sum(bool(r.get("infra_error")) for r in rows)
@@ -186,7 +187,8 @@ _SECRET_PARTS = ("KEY", "SECRET", "TOKEN", "PASS", "URL")
 _ARG_ENV = frozenset({"AI_BOARD_BEST_MATCH", "AI_BOARD_GATE25_ANSWERED", "AI_BOARD_GATE25_FIXES", "AI_BOARD_GATE25_SIM_USER",
                       "AI_BOARD_GATE3_GUARDS", "AI_BOARD_LOOP_MODEL_CALLS", "AI_BOARD_LOOP_TOOL_CALLS", "AI_BOARD_PROMPT_ROLE_SPLIT",
                       "AI_BOARD_REACT_PLAN", "AI_BOARD_RETRIEVAL", "AI_BOARD_SANDBOX_TOOL", "AI_BOARD_SKILL_PAD_CHARS",
-                      "AI_BOARD_SKILL_VARIANT", "AI_BOARD_TOOL_LOOP", "AI_BOARD_PROMPT_TAIL_RESTATE", "AI_BOARD_REWOO_GATE2_READS"})
+                      "AI_BOARD_SKILL_VARIANT", "AI_BOARD_TOOL_LOOP", "AI_BOARD_PROMPT_TAIL_RESTATE", "AI_BOARD_REWOO_GATE2_READS",
+                      "AI_BOARD_API_VERDICT", "AI_BOARD_API_MAX_TOKENS", "AI_BOARD_API_RUN_TOKENS"})
 
 
 def run_shape_suffix(args, env) -> str:
@@ -201,6 +203,7 @@ def run_shape_suffix(args, env) -> str:
 def cmd_run(args, deps=None) -> int:
     from runtime.pipeline import ENV_FILE, ROOT
     from runtime.pipeline import Deps
+    from providers.routing import local_only
     real_run = deps is None
     if args.case_ids and (args.cases or args.kinds):
         print("[suite] --case-ids không dùng chung với --cases/--kinds", file=sys.stderr)
@@ -215,18 +218,26 @@ def cmd_run(args, deps=None) -> int:
         from dotenv import load_dotenv
         load_dotenv(ENV_FILE)
         deps = Deps.real()
+        if args.split != "dev" or args.pack:  # held-out, mixed and pack tasks never reach the hosted API
+            local_only(deps)
         router = getattr(deps.models, "routing", None)
-        for role in ("gate1", "gate25", "gate3_light"):
-            first = router.candidates(role)[:1] if router else []
-            if not first or first[0]["provider"] != "vllm":
-                print(f"[suite] needs AI_BOARD_MODEL_ROUTING=true and a vLLM candidate first for {role}", file=sys.stderr)
+        try:
+            firsts = {role: router.candidates(role)[:1] if router else [] for role in ("gate1", "gate25", "gate3_light")}
+        except RuntimeError as error:
+            print(f"[suite] {error}", file=sys.stderr)
+            return 2
+        provider = (firsts["gate3_light"] or [{}])[0].get("provider")
+        for role, first in firsts.items():
+            if not first or first[0]["provider"] != provider or provider not in ("vllm", "api"):
+                print(f"[suite] needs AI_BOARD_MODEL_ROUTING=true and one vLLM (or DEV-only hosted API) candidate first for {role}", file=sys.stderr)
                 return 2
-        model = router.candidates("gate3_light")[0]["model"]
+        os.environ["AI_BOARD_API_VERDICT"] = "api" if provider == "api" else "vllm"
+        model = firsts["gate3_light"][0]["model"]
         for flag, value in (("reasoning_off", False), ("reasoning_on", True)):  # ablation: one setting per run, recorded in provenance
             for role in filter(None, getattr(args, flag).split(",")):
                 router.catalog.setdefault("reasoning", {})[role] = value
     else:
-        router, model = None, deps.models.gate3_model
+        router, model, provider = None, deps.models.gate3_model, "vllm"
     ablation.apply(args.context_arm)
     guards = ",".join(sorted(g for g in args.guards.split(",") if g))
     bad = set(guards.split(",")) - {""} - set(gate3_guards.FLAGS)
@@ -242,6 +253,7 @@ def cmd_run(args, deps=None) -> int:
     os.environ["AI_BOARD_GATE25_FIXES"] = fixes
     os.environ["AI_BOARD_GATE25_ANSWERED"] = "1" if args.gate25_answered else ""
     os.environ["AI_BOARD_REACT_PLAN"] = "1" if args.react_plan else ""
+    limits.apply_api_args(args)
     os.environ["AI_BOARD_GATE25_SIM_USER"] = "1" if args.gate25_sim_user else ""
     os.environ["AI_BOARD_SANDBOX_TOOL"] = "1" if args.sandbox_tool else ""
     os.environ["AI_BOARD_BEST_MATCH"] = args.best_match
@@ -335,10 +347,11 @@ def cmd_run(args, deps=None) -> int:
             + ("-split" if args.prompt_split else "")
             + ("-tail" if args.prompt_tail_restate else "")
             + ("-rewoo" if args.rewoo_gate2_reads else "")
-            + (f"-cases-{case_meta['sha256'][:12]}" if case_meta else ""))
+            + (f"-cases-{case_meta['sha256'][:12]}" if case_meta else "")
+            + (f"-api-{re.sub(r'[^A-Za-z0-9.]+', '-', model)}" if provider == "api" else ""))
     run_dir = root / "suite" / name
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov,
+    meta = {"seed": args.seed, "split": args.split, "repeats": args.repeats, "modes": modes, "fast_tier": args.fast_tier, "review": args.review, "packs": [_sha(Path(p)) for p in args.pack or []], **prov, **({"provider": "api"} if provider == "api" else {}),
             "corpus_sha": hashlib.sha256(json.dumps(tasks, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
             **dataset_pin,
             **({"case_ids": case_meta} if case_meta else {})}
@@ -549,6 +562,7 @@ def main(argv=None, deps=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--seed", type=int, required=True)
+    limits.add_api_args(run)
     run.add_argument("--split", choices=("dev", "heldout", "all", "none"), default="dev", help="none = only the --pack tasks")
     run.add_argument("--repeats", type=int, default=3)
     run.add_argument("--modes", default="e2e,e2e:approved,gold,e2e:nodia",

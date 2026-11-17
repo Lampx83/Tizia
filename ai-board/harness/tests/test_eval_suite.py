@@ -344,7 +344,7 @@ def test_integrity_flags_failover_foreign_model_and_silent_reasoning():
     meta = {"model": "m", "reasoning": {"gate1": True}, "ref": "a"}
     ok = {"mode": "e2e", "plan": {"attempts": 1}, "providers": ["vllm"], "served": ["m"], "reasoning_chars": 40}
     assert runner.integrity(meta, [ok], {"ref": "a", "model": "m"}) == []
-    assert any("left vLLM" in p for p in runner.integrity(meta, [{**ok, "providers": ["vllm", "ollama"]}]))
+    assert any("left the pinned provider" in p for p in runner.integrity(meta, [{**ok, "providers": ["vllm", "ollama"]}]))
     assert any("different served model" in p for p in runner.integrity(meta, [{**ok, "served": ["other"]}]))
     assert any("no reasoning text" in p for p in runner.integrity(meta, [{**ok, "reasoning_chars": 0}]))
     assert any("ref changed" in p for p in runner.integrity(meta, [ok], {"ref": "b", "model": "m"}))

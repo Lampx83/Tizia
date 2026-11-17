@@ -33,6 +33,7 @@ def cases(path):
 def configured_deps(model):
     from dotenv import load_dotenv
     from runtime.pipeline import Deps, ENV_FILE
+    from providers.routing import local_only
     import runtime.pipeline as pipeline
     import dataclasses
     load_dotenv(ENV_FILE)
@@ -41,7 +42,7 @@ def configured_deps(model):
     # Overrides apply only inside the measured process.
     environ.update(AI_BOARD_TOOL_LOOP='1', AI_BOARD_VERIFIED_LOOP='1', AI_BOARD_LOOP_MODEL_CALLS='40',
                    AI_BOARD_LOOP_TOOL_CALLS='200', AI_BOARD_GATE25_SIM_USER='', AI_BOARD_PROMPT_ROLE_SPLIT='')
-    deps = Deps.real()
+    deps = local_only(Deps.real())
     router = getattr(deps.models, 'routing', None)
     if router is None:
         raise ValueError('reviewed model routing is required')

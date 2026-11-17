@@ -37,6 +37,8 @@ from evaluation.eval_corpus import WORDS, sentence as _sentence  # noqa: E402
 from evaluation.gold import run_case  # noqa: E402
 from evaluation.strata import MAX_DROP  # noqa: E402
 from runtime.pipeline import ROOT, Deps  # noqa: E402
+from providers.routing import local_only  # noqa: E402
+from runtime import limits  # noqa: E402
 from settings import get_settings
 
 DEFAULT_ROOT = ROOT / ".scratch" / "ai-board-eval"
@@ -286,6 +288,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     common.add_argument("--budget-minutes", type=float, help="dừng sạch khi hết ngân sách; chạy lại để tiếp tục")
     common.add_argument("--baseline", help="report.json của run mốc (cùng tier + nguồn) để ra kết luận hồi quy")
     common.add_argument("--model", help="mặc định: model cổng 3 đang cấu hình")
+    limits.add_api_args(common)
     subs = parser.add_subparsers(dest="tier", required=True)
     subs.add_parser("quick", parents=[common], help="fast tier, N case dev lấy mẫu theo seed").add_argument("--cases", type=int, default=8)
     full = subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case")
@@ -300,6 +303,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    limits.apply_api_args(args)
     if getattr(args, "no_model", False):  # lệnh không gọi model: không dựng Deps, không đọc env
         return args.handler(args)
     if args.tier == "corpus":
@@ -314,7 +318,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
         from dotenv import load_dotenv
         from runtime.pipeline import ENV_FILE
         load_dotenv(ENV_FILE)  # như worker; không in giá trị nào
-        deps = Deps.real()
+        deps = local_only(Deps.real())
     if hasattr(args, "handler"):  # lệnh của eval_git (cần model)
         return args.handler(args, deps, source)
     if args.baseline and not Path(args.baseline).is_file():

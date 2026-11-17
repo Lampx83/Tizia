@@ -247,7 +247,8 @@ def model_arms(prs: list[dict], repeats: int, source: str, runner=run_second_att
 
 def _real_deps():
     from runtime.pipeline import Deps
-    return Deps.real()
+    from providers.routing import local_only
+    return local_only(Deps.real())
 
 
 def main(argv: list[str] | None = None) -> int:

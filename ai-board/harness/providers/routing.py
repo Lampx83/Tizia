@@ -11,6 +11,7 @@ from settings import get_settings
 CATALOG = Path(__file__).resolve().parents[3] / 'server' / 'ai-board' / 'model-routing.json'
 ROLES = {'gate1', 'gate25', 'gate3_light', 'gate3_heavy', 'gate4_review', 'classifier', 'embed', 'calibration', 'eval_judge', 'compactor', 'elevation_risk', 'repair_planner'}
 CAPABILITIES = {'json', 'logprobs', 'embedding'}
+GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
 
 
 def _prefix(provider):
@@ -71,7 +72,7 @@ def validate_catalog(catalog):
 
 
 class ModelRouter:
-    def __init__(self, settings, catalog=None, *, clock=time.monotonic):
+    def __init__(self, settings, catalog=None, *, clock=time.monotonic, probe=None):
         if catalog is None:
             try:
                 catalog = json.loads(CATALOG.read_text(encoding='utf8'), object_pairs_hook=_unique_object)
@@ -79,7 +80,41 @@ class ModelRouter:
                 raise ValueError('Cannot read valid model routing catalog') from None
         self.catalog = validate_catalog(catalog)
         self.settings = dict(settings)
+        if not self.settings.get('API_URL') and self.settings.get('BASE_URL'):
+            self.settings['API_URL'] = self.settings['BASE_URL']
         self.clock, self.cooldowns = clock, {}
+        self.local_only, self.api_busy, self._probe = False, None, probe
+
+    def api_model(self):
+        """Hosted model id: API_MODEL, else the provider default. Raise ValueError on unsupported API_MODEL_PROVIDER."""
+        provider = str(self.settings.get('API_MODEL_PROVIDER') or '').strip().lower()
+        if provider not in ('', 'gemini'):
+            raise ValueError('Unsupported API_MODEL_PROVIDER: only gemini is supported')
+        return self.settings.get('API_MODEL') or (GEMINI_DEFAULT_MODEL if provider == 'gemini' else None)
+
+    def _use_api(self):
+        """Fallback verdict, probed once per router: vLLM busy or unreachable means hosted API."""
+        pinned = get_settings(self.settings).api_verdict
+        if pinned:
+            return pinned == 'api'
+        if self.api_busy is None:
+            probe = self._probe
+            if probe is None:
+                from evaluation.suite.reconcile import vllm_inflight as probe
+            try:
+                load = probe(self.settings)
+                self.api_busy = load['running'] + load['waiting'] > 0
+            except Exception:
+                self.api_busy = True
+        return self.api_busy
+
+    def _swap(self, role):
+        """True when AI_BOARD_API_FALLBACK is on, the role lists a hosted candidate, and vLLM is busy."""
+        if not (get_settings(self.settings).api_fallback and self.settings.get('API_KEY')):
+            return False
+        pool = [self.catalog['candidates'][name] for name in self.catalog['roles'].get(role, [])]
+        return (any(item['provider'] == 'api' and item['enabled'] and role in item['approved_roles'] for item in pool)
+                and self._use_api())
 
     @classmethod
     def from_env(cls, settings):
@@ -88,7 +123,8 @@ class ModelRouter:
     def candidates(self, role, *, exclude=()):
         if role not in ROLES:
             raise ValueError(f'Unknown model role: {role}')
-        found = []
+        found, fallback = [], get_settings(self.settings).api_fallback
+        swap = self._swap(role)
         for name in self.catalog['roles'].get(role, []):
             item = self.catalog['candidates'][name]
             provider = item['provider']
@@ -96,9 +132,14 @@ class ModelRouter:
                 continue
             if provider == 'vllm' and role == 'embed':
                 continue  # vLLM classifier passes only via the logprobs + calibration_id locks below.
-            # Hosted API: off unless the catalog switch is on AND an endpoint and key are configured; the candidate itself must be enabled and approved.
-            if provider == 'api' and not (self.catalog['api_enabled'] and self.settings.get('API_KEY')):
+            if provider == 'vllm' and swap:
                 continue
+            # Hosted API: chosen by fallback (flag on) or the catalog switch (flag off), and needs a key; the candidate itself must be enabled and approved.
+            if provider == 'api':
+                if not ((swap if fallback else self.catalog['api_enabled']) and self.settings.get('API_KEY')):
+                    continue
+                if self.local_only:
+                    raise RuntimeError('Hosted API provider refused: evaluation runs must use the local model')
             if not self.settings.get(_prefix(provider) + '_URL') or self.cooldowns.get(provider, 0) > self.clock():
                 continue
             self.endpoint(provider)
@@ -110,7 +151,7 @@ class ModelRouter:
             if role == 'classifier' and item.get('calibration_id') != self.catalog.get('classifier_calibration_id', 'qwen35-4b-v1'):
                 continue
             model = (self.settings.get('GATE3_MODEL_HEAVY') if provider == 'vllm' and role == 'gate3_heavy'
-                     else self.settings.get('API_MODEL') if provider == 'api' else None)
+                     else self.api_model() if provider == 'api' else None)
             found.append({**item, 'model': model or item['model'], 'id': name})
         return found
 
@@ -156,6 +197,9 @@ class ModelRouter:
         self.cooldowns[candidate['provider']] = self.clock() + self.catalog.get('endpoint_cooldown_s', 60)
 
     def evidence(self, role, candidate, reason):
+        if candidate['provider'] == 'api':
+            return {'role': role, 'candidate': candidate['id'], 'provider': 'api', 'model': candidate['model'],
+                    'reason': 'api_fallback' if get_settings(self.settings).api_fallback else reason}
         return {'role': role, 'candidate': candidate['id'], 'provider': candidate['provider'], 'reason': reason}
 
     def client(self, candidate, template):
@@ -180,3 +224,11 @@ class ModelRouter:
         if gate == 3:
             return 'gate3_heavy' if model == models.gate3_model and model != models.gate3_model_light else 'gate3_light'
         return 'gate1'
+
+
+def local_only(deps):
+    """Mark deps' router so no evaluation trial can reach the hosted API; return deps."""
+    router = getattr(deps.models, 'routing', None)
+    if router:
+        router.local_only = True
+    return deps

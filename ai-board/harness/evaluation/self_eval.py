@@ -89,8 +89,9 @@ def _gold_attempt():
     """Gold set cổng 3 (evaluation/gold.py) với model cổng 3 đang cấu hình."""
     from evaluation.gold import CASES, run_case
     from runtime.pipeline import Deps
+    from providers.routing import local_only
 
-    deps = Deps.real()
+    deps = local_only(Deps.real())
 
     def attempt(item: dict, _left: float):
         row = run_case(item["id"], CASES[item["id"]], deps.models.gate3_model, deps)

@@ -211,8 +211,9 @@ def main(argv=None) -> int:
     else:
         from dotenv import load_dotenv
         from runtime.pipeline import ENV_FILE, ROOT, Deps
+        from providers.routing import local_only
         load_dotenv(ENV_FILE)
-        rows = run_model(cases, Deps.real(), args.synth_plan, ROOT)
+        rows = run_model(cases, local_only(Deps.real()), args.synth_plan, ROOT)
     print(table(rows))
     return 0
 
