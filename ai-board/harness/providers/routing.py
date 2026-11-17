@@ -145,9 +145,13 @@ class ModelRouter:
                 continue
             # Hosted API: chosen by fallback (flag on) or the catalog switch (flag off), and needs a key; the candidate itself must be enabled and approved.
             if provider == 'api':
-                if not ((swap if fallback else self.catalog['api_enabled']) and self.settings.get('API_KEY')):
+                # Idle vLLM still gets the API as a backup after it, so a failed vLLM call fails over in the same call.
+                backup = fallback and not swap and not get_settings(self.settings).api_verdict
+                if not (((swap or backup) if fallback else self.catalog['api_enabled']) and self.settings.get('API_KEY')):
                     continue
                 if self.local_only:
+                    if backup:
+                        continue
                     raise RuntimeError('Hosted API provider refused: evaluation runs must use the local model')
             if not self.settings.get(_prefix(provider) + '_URL') or self.cooldowns.get(provider, 0) > self.clock():
                 continue
