@@ -165,11 +165,11 @@ def test_api_run_raises_the_token_ceiling_only_on_api(monkeypatch):
 
 def test_hosted_context_comes_from_the_contract_not_a_server_query():
     client = OllamaClient(base_url=GEMINI_BASE, protocol='vllm', route_label='api', bearer_only=True)
-    assert client.context_window('gemini-2.5-flash') == 65536
+    assert client.context_window('gemini-2.5-flash') == 32768
 
 
 def test_limits_contract_defaults():
-    assert limits.api_limits('gate4_review') == {'max_tokens': 2048, 'context': 65536, 'compaction': 48000,
+    assert limits.api_limits('gate4_review') == {'max_tokens': 2048, 'context': 32768, 'compaction': 24000,
                                                  'reasoning_extra': 2048, 'run_tokens': 400000, 'rpm': 10}
     assert limits.api_limits('gate1')['max_tokens'] == 8192
 
@@ -211,7 +211,8 @@ def prepare(provider):
     return History().prepare('x' * 30000, deps=deps, model='m', role='gate3_heavy', budget=Budget(), manifest=None)
 
 
-def test_compaction_threshold_is_larger_on_api():
+def test_compaction_threshold_on_api_comes_from_the_api_block(monkeypatch):
+    monkeypatch.setattr(limits, 'api_limits', lambda role=None, env=None: {'compaction': 48000})
     assert prepare('api').startswith('x')
     with pytest.raises(CompactionPause):
         prepare('vllm')
