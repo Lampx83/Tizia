@@ -372,7 +372,7 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
     report(check, ok, detail): tường thuật từng phép kiểm cho trace."""
     report = report or (lambda *_: None)
     if done_reason == "length":
-        message = "output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn"
+        message = "model_output_truncated: output bị cắt vì quá dài; chỉ trả các edit cần thiết, test ngắn"
         report("output length", False, message)
         raise ValueError(message)
     if current is not None:

@@ -70,6 +70,15 @@ def test_gives_up_after_the_retry_cap_as_ordinary_with_the_last_snippet(tmp_path
     assert "after_line" in prompts[-1][len(prompts[0]):]  # lần sau cùng gợi ý chèn theo số dòng
 
 
+def test_length_cut_output_is_named_model_output_truncated():
+    try:
+        implement.check_output(dict(GOOD), PAGE, "length")
+    except ValueError as e:
+        assert str(e).startswith("model_output_truncated")
+    else:
+        raise AssertionError("output bị cắt phải bị loại")
+
+
 def test_commonjs_test_is_retried_as_esm():
     cjs = {**GOOD, "test": "const test = require('node:test');\n"}
     try:

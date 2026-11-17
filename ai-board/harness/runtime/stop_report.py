@@ -1,7 +1,8 @@
 """Stop class, tried/blocked render, next-step route, stop metrics. Reporting only; flag AI_BOARD_STOP_REPORT_V2."""
 from settings import get_settings
 
-CLASSES = ("human_review", "needs_clarification", "plan_invalid", "check_failed", "budget", "infra", "model_limit")
+CLASSES = ("human_review", "needs_clarification", "plan_invalid", "check_failed", "budget", "infra", "model_limit",
+           "model_output_truncated")
 PLAN_OUTCOMES = {"plan_unfit", "plan_ungrounded", "plan_target_uncertain", "validator_disagreement", "complexity_gated"}
 
 
@@ -13,6 +14,8 @@ def classify(outcome, reason, gate, failure_class) -> str:
     outcome, reason = outcome or "", reason or ""
     if failure_class == "budget" or outcome == "budget_exhausted" or reason.startswith("budget exhausted"):
         return "budget"
+    if "model_output_truncated" in reason:
+        return "model_output_truncated"
     if (outcome in ("intake_human_review", "intake_reject", "intake_critical", "elevation_required")
             or "privileged_area" in reason or "human review" in reason or "needs_review" in reason):
         return "human_review"
@@ -35,6 +38,7 @@ _NEXT = {
     "budget": ("claude_code_queue", "Hết ngân sách trước khi xong: chuyển hàng chờ Claude Code."),
     "infra": ("retry", "Lỗi hạ tầng tạm thời: thử lại sau."),
     "model_limit": ("claude_code_queue", "Model chưa tự làm được: chuyển hàng chờ Claude Code."),
+    "model_output_truncated": ("claude_code_queue", "Model hết token trước khi trả lời (output bị cắt): chuyển hàng chờ Claude Code."),
 }
 
 
