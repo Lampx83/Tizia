@@ -56,6 +56,7 @@ COPY server/ai-board/guard-lexicon.json /opt/ai-board/server/ai-board/guard-lexi
 COPY server/ai-board/contract.json /opt/ai-board/server/ai-board/contract.json
 COPY server/ai-board/classifier-calibration.json /opt/ai-board/server/ai-board/classifier-calibration.json
 COPY server/ai-board/model-routing.json /opt/ai-board/server/ai-board/model-routing.json
+COPY server/ai-board/redaction-patterns.json /opt/ai-board/server/ai-board/redaction-patterns.json
 COPY scripts/smoke-user-state.sh /opt/ai-board/scripts/smoke-user-state.sh
 COPY ai-board/sandbox-runner/guest/guest-boot.sh /usr/local/bin/guest-boot.sh
 RUN chmod +x /usr/local/bin/guest-boot.sh
@@ -65,6 +66,9 @@ RUN /opt/venv/bin/python -m pip install --no-cache-dir -r /opt/ai-board/ai-board
 RUN ls /usr/share/fonts/opentype/inter > /dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends fonts-inter && fc-cache -f && apt-get clean && find /var/lib/apt/lists -type f -delete)
 EOF
 docker build -t "$registry/gate5:overlay" "$stage"
+# A harness file read at import that the overlay did not copy crashes every Gate 5 run in the guest.
+docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import gates.gate5_guest"' \
+  || { echo "guest harness does not import; add the missing file to guest-inputs.mjs and this overlay" >&2; exit 1; }
 digest=$(docker push "$registry/gate5:overlay" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)
 [ -n "$digest" ] || { echo "push did not report a digest" >&2; exit 1; }
 node "$inputs" pin "$policy" "$digest"
