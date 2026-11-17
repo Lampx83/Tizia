@@ -92,3 +92,20 @@ def test_gate5_keeps_grep_acceptance_gate1_accepted(monkeypatch):
     _flag(monkeypatch, True)
     item = "grep -q 'x' public/a.html"
     assert verify.acceptance_commands({"acceptance": [item, "mô tả"]}) == [item]
+
+
+REJECTED_SHELL_VERIFY = [
+    "grep -q 'Điểm ghi học lượng thẻ.' public/it-sql-playground.html",
+    "grep -q 'version' public/js/engine/cache-helper.js",
+    "grep -q 'Ghi đơn học thẻ tập' public/js/features/quan-ly-truong/trach-hoc.js",
+    "grep -q 'word' public/js/engine/core/text.js",
+    "grep -q 'export async requesterProgress' server/ai-board/services/requester-progress.js",
+]
+
+
+@pytest.mark.parametrize("verify", REJECTED_SHELL_VERIFY)
+def test_default_settings_accept_shell_verify_rejected_in_trials(monkeypatch, verify):
+    monkeypatch.delenv("AI_BOARD_GATE1_UNIFIED_VERIFY")
+    assert brainstorm.is_runnable(verify)
+    plan = _plan(_sub("public/x.html", verify))
+    assert brainstorm.parse_plan(__import__("json").dumps(plan))
