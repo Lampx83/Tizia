@@ -499,6 +499,18 @@ def sandbox_offered(monkeypatch):
     monkeypatch.setattr(tool_loop.sandbox_tool, "offered", lambda *a, **k: True)
 
 
+def test_empty_reply_cut_by_length_reports_model_output_truncated():
+    out, budget, _ = run([{"response": "", "done_reason": "length"}, FINISH])
+    assert out["status"] == "blocked" and out["reason"].startswith("model_output_truncated")
+    assert budget.model_calls == 1 and budget.tool_calls == 0
+
+
+def test_truncation_read_from_metrics_is_reported_too():
+    out, budget, _ = run([{"response": "", "_metrics": {"done_reason": "length"}}, FINISH])
+    assert out["status"] == "blocked" and out["reason"].startswith("model_output_truncated")
+    assert budget.model_calls == 1
+
+
 def run_multi():
     return tool_loop.run_subtask(MULTI, PAGE, deps=Deps([FINISH]), budget=Budget(), model="m", source=".", sha="abc",
                                  check=lambda _out: None)

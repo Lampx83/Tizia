@@ -89,6 +89,15 @@ def test_light_stays_ollama_and_no_key_crosses_redirect():
             assert error.value.code == 302 and len(heavy_calls) == 1 and len(light_calls) == 1
 
 
+def test_vllm_length_without_content_keeps_empty_response_and_done_reason(monkeypatch):
+    def fake_post(self, path, payload, retry=False):
+        return {'choices': [{'message': {'content': None}, 'finish_reason': 'length'}], 'usage': {'completion_tokens': 9}}
+
+    monkeypatch.setattr(OllamaClient, '_post', fake_post)
+    body = OllamaClient(base_url='http://127.0.0.1:8037/v1', protocol='vllm').generate('m', 'prompt')
+    assert body['response'] == '' and body['done_reason'] == 'length'
+
+
 def test_vllm_missing_usage_remains_unknown_and_self_hosted_units_use_wall():
     with gateway(response={'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}]}) as (url, _):
         body = OllamaClient(base_url=url, protocol='vllm').generate('heavy', 'p')
