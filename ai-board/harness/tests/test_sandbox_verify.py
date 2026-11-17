@@ -102,6 +102,15 @@ def test_package_uses_stable_modes_and_owners_so_docker_cache_keys_match(tmp_pat
     assert info["checkout"] == (0o755, 0, 0, 0)
 
 
+def test_unreadable_checkout_file_is_a_named_transient_block(tmp_path, monkeypatch):
+    def deny(*_args):
+        raise PermissionError(13, "Permission denied", "/workspace/checkout/Dockerfile")
+    monkeypatch.setattr(sandbox_verify, "package", deny)
+    out = sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(), checkout_dir=checkout(tmp_path))
+    assert out["blocked"] and out["failure_class"] == "transient"
+    assert out["reason"].startswith("sandbox package:") and "Dockerfile" in out["reason"]
+
+
 def test_package_refuses_a_symlink_in_the_checkout(tmp_path):
     root = checkout(tmp_path)
     try:

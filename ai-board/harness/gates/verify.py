@@ -672,10 +672,12 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 raise RuntimeError("không có generated test để chạy")
             if not test_files:
                 logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
+            stage = "boot"  # copying files into the container is environment, not the candidate
             for test_file in test_files:
                 parent = str(Path("/app", test_file).parent).replace("\\", "/")
                 command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                 command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
+            stage = "ordinary"
             generated_ok = False
             try:
                 if test_files:  # `node --test` with no file would run the whole suite

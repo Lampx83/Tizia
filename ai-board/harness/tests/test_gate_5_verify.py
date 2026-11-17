@@ -186,6 +186,13 @@ def test_gate5_past_its_deadline_ends_with_a_named_transient_reason(tmp_path, mo
     assert out["evidence"]["teardown_confirmed"] is True
 
 
+@pytest.mark.parametrize("action", ["cp"])
+def test_compose_copy_failure_is_environment_not_candidate(tmp_path, action):
+    out = verify.run(state(checkout(tmp_path)), runner=FakeRunner(fail=action))
+    assert out["blocked"] is True
+    assert out["failure_class"] == "transient"
+
+
 def test_up_failure_still_tears_down(tmp_path):
     runner = FakeRunner(fail="up")
     out = verify.run(state(checkout(tmp_path)), runner=runner)
