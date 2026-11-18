@@ -28,6 +28,8 @@ GUEST_INPUTS: dict[str, Input] = {
     "base_sha": Input(), "acceptance": Input(),
     # WHY: None (flag off) is omitted from the guest state, so the shipped key set stays unchanged while the flag is off.
     "checks": Input(derive=lambda state, role: checks.collect(state.get("plan")) if get_settings().plan_checks else None),
+    # WHY: the guest VM gets no AI_BOARD_* env, so the host decides and ships the switch in state.
+    "quoted_checks": Input(derive=lambda state, role: True if get_settings().quoted_checks else None),
     # WHY: the plan is private to the worker; the guest gets only the derived list. surface_tests is role-independent today
     # (path_policy.may_edit ignores role), the role parameter is the seam for when that changes.
     "surface_tests": Input(derive=lambda state, role: levels.surface_tests(state.get("plan")),

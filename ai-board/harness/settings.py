@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
     derived_checks: bool = False  # gate 1: verify/checks của css_color/replace/insert/remove suy từ request bằng code, thay lệnh model viết
+    quoted_checks: bool = False  # gate 5: chữ người dùng trích thành text_present/text_absent theo luật đỏ→xanh; oracle chữ chỉ báo cáo
     file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
     file_header_context: bool = False  # tree/outline hiện dòng header của từng file
 

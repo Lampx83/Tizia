@@ -596,7 +596,14 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if get_settings().plan_checks and state.get("checks_pin") not in (None, gate_checks.pin(state.get("plan"))):
         return {"gate": 5, "blocked": True, "reason": "check của plan đã đổi sau khi lập plan: cần lập lại plan",
                 "evidence": None, "failure_class": STAGE_CLASS["plan"]}
-    registry_on = get_settings().plan_checks and bool(guest_input(state, "checks"))
+    pages = _public_paths(guest_input(state, "diffs") or [])
+    html = [page for page in pages if page.endswith(".html")]
+    # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
+    primary = html[0] if html else _request_page(guest_input(state, "request_detail"))
+    observed_pages = html or ([primary] if primary else [])
+    quoted_on = bool(guest_input(state, "quoted_checks"))
+    quoted = functional.quoted_checks(state, observed_pages) if quoted_on and pages else []
+    registry_on = (get_settings().plan_checks and bool(guest_input(state, "checks"))) or bool(quoted)
     if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
         try:
             server_hsm.register_check_registry(check_registry.REGISTRY.data)
@@ -605,15 +612,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             return {"gate": 5, "blocked": True, "reason": str(error), "evidence": None, "failure_class": error.failure_class}
     project = f"ai-verify-{skill_id[:24]}-{uuid.uuid4().hex[:12]}"
     password = secrets.token_hex(24)
-    pages = _public_paths(guest_input(state, "diffs") or [])
     server_route = not pages and functional.select_fallback(state) == functional.ROUTE_PROBE
     if not pages and not server_route:
         # Nothing the isolated server serves can show the change; a repair cannot fix that, the plan must.
         return {"gate": 5, "blocked": True, "reason": "thay đổi không chạm file public nào để quan sát qua HTTP",
                 "evidence": None, "failure_class": STAGE_CLASS["plan"]}
-    html = [page for page in pages if page.endswith(".html")]
-    # Trang chính: ảnh AFTER bắt buộc (D0). Các trang/khổ/ảnh BEFORE khác là best-effort.
-    primary = html[0] if html else _request_page(guest_input(state, "request_detail"))
     shots: list[dict] = []
     runner_name = "fake" if runner else "docker"  # injected runner = test double, never real evidence
     trace = getattr(deps, "trace", None)
@@ -783,8 +786,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     smoke_ok = False
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
-            checks_on = get_settings().plan_checks
-            check_rows = [{"check": check, "base": None} for check in (guest_input(state, "checks") or [] if checks_on else [])]
+            planned = guest_input(state, "checks") or [] if get_settings().plan_checks else []
+            check_rows = [{"check": check, "base": None} for check in planned + [q for q in quoted if q not in planned]]
             def node_ok(file: str) -> bool:
                 if not (Path(checkout) / file).is_file():
                     return False
@@ -803,7 +806,6 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             http_observed = True
             stage = 'plan'
             owned.check_deadline()
-            observed_pages = html or ([primary] if primary else [])
             probe_kind = "route" if probe_id == functional.ROUTE_PROBE else "browser"
             with _check_span(trace, probe_kind, ",".join(urlsplit(p).path for p in observed_pages)) as probe_span:
                 functional_result = (functional_probe(base, probe_id) if functional_probe
@@ -812,7 +814,12 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if server_route and functional_result.get('probe_id') != functional.ROUTE_PROBE:
                 raise RuntimeError(functional_result.get('note') or functional_result.get('reason') or functional.NO_ORACLE)
-            if not functional_result.get('passed'):
+            text_report_only = quoted_on and probe_id == functional.TEXT_PROBE
+            if text_report_only:
+                functional_result = {**functional_result, 'passed': True, 'oracle_passed': bool(functional_result.get('passed')),
+                                     'report_only': True}
+                logs.append('Oracle chữ chỉ báo cáo; check từ chữ người dùng trích quyết định')
+            elif not functional_result.get('passed'):
                 if oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
@@ -891,6 +898,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 if checks_result["verdict"] == gate_checks.NONE:
                     functional_result = {**functional_result, 'needs_review': True}
                     logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
+            elif text_report_only:
+                functional_result = {**functional_result, 'needs_review': True}
+                logs.append("Không dựng được check từ chữ trích: needs_review, admin xem ảnh trước/sau")
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
             if owned.expired:
