@@ -849,7 +849,9 @@ class _Execution:
         oracle = smoke.get("functional") or {}
         oracle_review = passed and bool(oracle.get("needs_review"))
         manifests = path_policy.manifest_changes(st.get("file") for st in (self.plan or {}).get("subtasks") or [])
-        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical") or bool(manifests))
+        files = next((g["files"] for g in gates if g["gate"] == 4 and g.get("files")), None)
+        outside = (files or {}).get("out_of_plan") or []
+        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical") or bool(manifests) or bool(outside))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
@@ -859,6 +861,7 @@ class _Execution:
                       else "oracle functional fail trong khi acceptance, generated tests và smoke xanh: ") + str(oracle.get("reason"))[:300]
         elif needs_review:
             reason = (f"package manifest changed, human review required: {', '.join(manifests)}" if manifests
+                      else f"files outside the plan, human review required: {', '.join(outside)}" if outside
                       else "risk triage requires human review")
         else:
             reason = last["reason"]
@@ -880,6 +883,7 @@ class _Execution:
             **({"stop_report": stop} if stop else {}),
             **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
+            **({"files": files} if files else {}),
             **({"blocked_candidate": self.blocked_candidate} if self.blocked_candidate and not passed else {}),
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             **progress.verdict_fields(window=self.progress_window),
