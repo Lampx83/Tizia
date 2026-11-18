@@ -211,6 +211,20 @@ class ModelRouter:
     def failed(self, candidate):
         self.cooldowns[candidate['provider']] = self.clock() + self.catalog.get('endpoint_cooldown_s', 60)
 
+    def cooling_wait(self, role, *, exclude=()):
+        """Seconds until the earliest cooled provider of role is a candidate again; None when nothing is cooling."""
+        now = self.clock()
+        cooling = {provider: until for provider, until in self.cooldowns.items() if until > now}
+        if not cooling:
+            return None
+        saved, self.cooldowns = self.cooldowns, {}
+        try:
+            pool = self.candidates(role, exclude=exclude)
+        finally:
+            self.cooldowns = saved
+        waits = [cooling[item['provider']] - now for item in pool if item['provider'] in cooling]
+        return min(waits) if waits else None
+
     def evidence(self, role, candidate, reason):
         if candidate['provider'] == 'api':
             return {'role': role, 'candidate': candidate['id'], 'provider': 'api', 'model': candidate['model'],
