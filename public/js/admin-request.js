@@ -4,7 +4,7 @@
 import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
-import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr } from './ai-board-trace.js';
+import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr, renderSoftMisses } from './ai-board-trace.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
 import { fmt as clockFmt } from './ai-board-clock.js';
@@ -765,6 +765,7 @@ function renderAiBoard(t, messages = []) {
       ${root.lost_worker ? `<div class="meta warn">Worker mất kết nối khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Cần quản trị viên quyết định.</div>` : ''}
       ${renderRunnerTrace(t)}
       ${renderStopReport(t)}
+      ${renderSoftMisses(t)}
       ${renderRepairAgent(t)}
       ${traceLine(t.trace_ref)}
       ${managedLine(root.managed)}

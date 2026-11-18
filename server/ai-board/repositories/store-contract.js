@@ -176,6 +176,7 @@ const CLARIFYING_NOTE = 'Ban điều hành cần trao đổi thêm để làm r�
 // Tác giả request_messages của lượt làm rõ: câu hỏi và bản tóm tắt tách nhau để đếm và để xác nhận.
 export const CLARIFY_AUTHOR = 'Ban điều hành AI · làm rõ';
 export const SPEC_AUTHOR = 'Ban điều hành AI · tóm tắt';
+export const QUALITY_AUTHOR = 'Ban điều hành AI · chất lượng';
 const PR_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/(\d+)$/;
 
 function validateCandidate(value) {
@@ -275,6 +276,25 @@ function cleanRepairAgent(value) {
 }
 
 /** selfRequest: yêu cầu board tự sửa — cổng 5 là eval 2 sha (runner 'eval') thay Docker smoke + HTTP. */
+/** Soft quality misses from the worker: bounded, numbers kept as numbers, malformed rows dropped. */
+function cleanSoftMisses(items) {
+  return items.slice(0, 20).filter((m) => m && typeof m === 'object' && typeof m.check === 'string' && m.check.length <= 40
+    && Number.isFinite(m.value) && Number.isFinite(m.threshold)).map((m) => ({
+    gate: m.gate === 4 ? 4 : 5, check: m.check, value: m.value, threshold: m.threshold,
+    ...(typeof m.page === 'string' ? { page: m.page.slice(0, 200) } : {}),
+    ...(Number.isInteger(m.width) ? { width: m.width } : {}),
+    detail: String(m.detail || '').slice(0, 500),
+  }));
+}
+
+/** Requester-facing note for soft misses of passing gates; '' when none. */
+export function softMissNote(gates) {
+  const misses = (gates || []).flatMap((gate) => gate.soft_misses || []);
+  if (!misses.length) return '';
+  const line = (m) => `${m.check} ${m.value} (ngưỡng ${m.threshold})${m.page ? ` ${m.page} ${m.width}px` : ''}`;
+  return `Lưu ý: ${misses.length} kiểm chất lượng chưa đạt ngưỡng, thay đổi vẫn được gửi kèm cảnh báo: ${misses.map(line).join('; ')}.`.slice(0, 1000);
+}
+
 function validatePrePrVerdict(value, selfRequest = false) {
   if (!value || typeof value !== 'object' || !CONTRACT.verdict_outcomes.includes(value.outcome)) {
     throw new WorkerContractError('invalid pre-PR verdict');
@@ -291,6 +311,10 @@ function validatePrePrVerdict(value, selfRequest = false) {
     previous = gate;
     const clean = { gate, blocked: item.blocked, reason: item.reason ? String(item.reason).slice(0, 1000) : null };
     if (gate === 3 && /^[0-9a-f]{64}$/.test(String(item.tool_manifest))) clean.tool_manifest = item.tool_manifest;
+    if ((gate === 4 || gate === 5) && Array.isArray(item.soft_misses)) {
+      const misses = cleanSoftMisses(item.soft_misses);
+      if (misses.length) clean.soft_misses = misses;
+    }
     if (gate === 4) clean.issues = Array.isArray(item.issues) ? item.issues.slice(0, 20).map((x) => String(x).slice(0, 500)) : [];
     if (gate === 4) clean.checks = Array.isArray(item.checks) ? item.checks.slice(0, 20).map((x) => String(x).slice(0, 40)) : [];
     if ((gate === 4 || gate === 5.5) && ['one_way', 'two_way'].includes(item.change_class)) clean.change_class = item.change_class;
