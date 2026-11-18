@@ -82,7 +82,8 @@ export function splitDockerfile(base, groups, modeLines, changes, links = []) {
     `FROM ${base} AS src`,
     // A symlink as COPY source is followed (and fails when dangling); cp -a keeps it a link, and /bin, /lib64 must
     // exist before any RUN can start a binary.
-    ...(links.length ? ['FROM src AS links', `RUN mkdir /.relayer-links && cp -a --parents ${links.map((l) => `'${l}'`).join(' ')} /.relayer-links/`] : []),
+    // tar keeps links as links; GNU cp --parents fails on a nested link path such as /var/lock
+    ...(links.length ? ['FROM src AS links', `RUN mkdir /.relayer-links && tar -C / -cf - ${links.map((l) => `'${l.replace(/^\/+/, '')}'`).join(' ')} | tar -C /.relayer-links -xpf -`] : []),
     'FROM scratch',
     // COPY --parents keeps each path under its own parents; the parents themselves come out 0755 root, hence the RUN.
     ...groups.map((paths) => `COPY --parents --from=src ${JSON.stringify([...paths, '/'])}`),
@@ -92,7 +93,10 @@ export function splitDockerfile(base, groups, modeLines, changes, links = []) {
   ].join('\n') + '\n';
 }
 
-export function oversizeLayers(historyText, maxBytes = LAYER_LIMITS.maxBytes) {
+// Microsandbox max_total_size per layer; LAYER_LIMITS plans below it because du under-counts the extracted size.
+export const EXTRACT_MAX_BYTES = 10 * GiB;
+
+export function oversizeLayers(historyText, maxBytes = EXTRACT_MAX_BYTES) {
   return historyText.split('\n').filter(Boolean).map(Number).filter((size) => size > maxBytes);
 }
 

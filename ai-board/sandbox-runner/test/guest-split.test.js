@@ -73,17 +73,22 @@ test('dockerfile copies each group as one layer and restores split directory mod
 });
 
 test('unit symlinks are copied as links from a side stage before anything runs', () => {
-  const lines = splitDockerfile('base', [['/usr']], ['755 0 0 /'], [], ['/bin', '/lib64']).trim().split('\n');
+  const lines = splitDockerfile('base', [['/usr']], ['755 0 0 /'], [], ['/bin', '/lib64', '/var/lock']).trim().split('\n');
   assert.deepEqual(lines.slice(0, 6), [
     'FROM base AS src',
     'FROM src AS links',
-    "RUN mkdir /.relayer-links && cp -a --parents '/bin' '/lib64' /.relayer-links/",
+    "RUN mkdir /.relayer-links && tar -C / -cf - 'bin' 'lib64' 'var/lock' | tar -C /.relayer-links -xpf -",
     'FROM scratch',
     'COPY --parents --from=src ["/usr","/"]',
     'COPY --from=links /.relayer-links/ /',
   ]);
   assert.match(lines[6], /^RUN chown/);
   assert.throws(() => splitDockerfile('base', [], [], [], ["/it's"]), /link path/);
+});
+
+test('the pin guard uses the extract limit, not the planning budget: du under-counts a planned 8 GiB group', () => {
+  assert.deepEqual(oversizeLayers('8845373440\n'), []);
+  assert.deepEqual(oversizeLayers('11000000000\n'), [11000000000]);
 });
 
 test('history sizes over the layer budget are reported', () => {

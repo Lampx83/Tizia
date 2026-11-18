@@ -24,6 +24,8 @@ stage=$(mktemp -d "$stage_root/stage.XXXXXX")
 stage_root=$(cd "$stage_root" && pwd -P)
 stage=$(cd "$stage" && pwd -P)
 case "$stage" in "$stage_root"/stage.*) ;; *) echo "unsafe guest staging path" >&2; exit 1 ;; esac
+# Git Bash with MSYS_NO_PATHCONV=1 passes /h/... unconverted; node and docker need the host form.
+host_stage=$(cd "$stage" && { pwd -W 2>/dev/null || pwd -P; })
 trap 'rm -rf "$stage"' EXIT
 
 docker image inspect "$base_ref" > /dev/null 2>&1 || docker pull "$base_ref" > /dev/null
@@ -38,12 +40,12 @@ if node "$layers" flatten "$count" "$max_layers" || [ -n "$oversize" ]; then
   docker run --rm --entrypoint sh "$base_ref" -c 'find / -xdev -type l 2>/dev/null' > "$stage/symlinks.txt"
   top=$(docker run --rm --entrypoint ls "$base_ref" -A /)
   # shellcheck disable=SC2086 # one top-level name per word
-  node "$layers" plan "$stage/symlinks.txt" $top < "$stage/du.txt" > "$stage/plan.json"
-  node "$layers" split-dirs "$stage/plan.json" > "$stage/split-dirs.txt"
-  docker run --rm -v "$stage:/stage:ro" --entrypoint sh "$base_ref" -c 'xargs -d "\n" stat -c "%a %u %g %n" < /stage/split-dirs.txt' > "$stage/modes.txt"
+  node "$layers" plan "$host_stage/symlinks.txt" $top < "$stage/du.txt" > "$stage/plan.json"
+  node "$layers" split-dirs "$host_stage/plan.json" > "$stage/split-dirs.txt"
+  docker run --rm -v "$host_stage:/stage:ro" --entrypoint sh "$base_ref" -c 'xargs -d "\n" stat -c "%a %u %g %n" < /stage/split-dirs.txt' > "$stage/modes.txt"
   mkdir "$stage/relayer"
-  node "$layers" dockerfile "$base_ref" "$stage/plan.json" "$stage/modes.txt" "$stage/changes.txt" > "$stage/relayer/Dockerfile"
-  docker build -q -t "$registry/gate5:flat" "$stage/relayer" > /dev/null
+  node "$layers" dockerfile "$base_ref" "$host_stage/plan.json" "$host_stage/modes.txt" "$host_stage/changes.txt" > "$stage/relayer/Dockerfile"
+  docker build -q -t "$registry/gate5:flat" "$host_stage/relayer" > /dev/null
   flat=$(docker push "$registry/gate5:flat" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)
   [ -n "$flat" ] || { echo "flat push did not report a digest" >&2; exit 1; }
   flat_count=$(docker image inspect "$registry/gate5@$flat" | node "$layers" layers)
@@ -54,7 +56,7 @@ if node "$layers" flatten "$count" "$max_layers" || [ -n "$oversize" ]; then
   overlay_base="$registry/gate5@$flat"
 fi
 
-node "$inputs" stage "$stage"
+node "$inputs" stage "$host_stage"
 cat > "$stage/Dockerfile" <<EOF
 FROM $overlay_base
 RUN rm -rf /opt/ai-board/ai-board/harness
@@ -72,7 +74,7 @@ RUN /opt/venv/bin/python -m pip install --no-cache-dir -r /opt/ai-board/ai-board
 # The pages name Inter first; without it Chromium mixes fallback fonts and Vietnamese diacritics look broken in the shots.
 RUN ls /usr/share/fonts/opentype/inter > /dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends fonts-inter && fc-cache -f && apt-get clean && find /var/lib/apt/lists -type f -delete)
 EOF
-docker build -t "$registry/gate5:overlay" "$stage"
+docker build -t "$registry/gate5:overlay" "$host_stage"
 # A harness file read at import that the overlay did not copy crashes every Gate 5 run in the guest.
 docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import gates.gate5_guest"' \
   || { echo "guest harness does not import; add the missing file to guest-inputs.mjs and this overlay" >&2; exit 1; }
