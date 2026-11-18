@@ -105,6 +105,27 @@ def _retry(call: Callable[[], dict], retry_on: Callable[[SandboxError], bool], *
     raise AssertionError("unreachable")
 
 
+QUEUE_POLL_S, QUEUE_POLL_MAX_S = 5.0, 30.0
+
+
+def _queue_busy(call: Callable[[], dict], *, deadline=None, live: Callable[[], None] | None = None) -> tuple[dict, float]:
+    """call, polling while the runner answers 429 for up to gate5_queue_wait_s. Returns (result, seconds waited)."""
+    budget, waited, delay = get_settings().gate5_queue_wait_s, 0.0, QUEUE_POLL_S
+    while True:
+        try:
+            return call(), waited
+        except SandboxError as error:
+            if error.status != 429 or waited >= budget:
+                raise
+        # a sleep never crosses the Gate 5 deadline: _remaining raises wall_clock_s first
+        wait = min(delay + random.uniform(0, delay / 4), max(budget - waited, 0.0))
+        _sleep(_remaining(deadline, wait))
+        waited += wait
+        delay = min(delay * 2, QUEUE_POLL_MAX_S)
+        if live is not None:
+            live()
+
+
 class SandboxError(Exception):
     """Runner failure: stable code + phase only."""
 
@@ -365,13 +386,18 @@ class SandboxSession:
         self.lease = _Lease(self.client, self.run_id, self.lease_ok, deadline=self.deadline, ready=False)
         self.lease.__enter__()
         try:
-            self.client.create(self.run_id, MANIFEST, **self._limits())
+            _queue_busy(lambda: self.client.create(self.run_id, MANIFEST, **self._limits()), deadline=self.deadline,
+                        live=self._revoked_check)
             self.lease.ready = True
             self.client.upload(self.run_id, package(self.checkout, {}, {}), **self._limits())
         except BaseException:
             self._close()
             raise
         return self
+
+    def _revoked_check(self) -> None:
+        if self.lease.revoked:
+            raise SandboxError("lease_revoked", "lease")
 
     def __exit__(self, exc_type, exc, tb) -> bool:
         self._close()
@@ -494,7 +520,9 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
         with lease:
             live()
-            created = _retry(lambda: client.create(run_id, MANIFEST, **request_limits), lambda error: error.status in (0, 429), deadline=deadline)
+            created, queue_wait = _queue_busy(
+                lambda: _retry(lambda: client.create(run_id, MANIFEST, **request_limits), lambda error: error.status in (0, 429), deadline=deadline),
+                deadline=deadline, live=live)
             created_run = True
             lease.ready = True
             live()
@@ -525,6 +553,8 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
         evidence = result.get("evidence")
         if isinstance(evidence, dict):
             evidence["sandbox"] = {"run_id": run_id, "policy_hash": created.get("policy_hash")}
+            if queue_wait:
+                evidence["sandbox"]["queue_wait_s"] = round(queue_wait, 1)
             state["evidence"] = evidence
         return result
     except SandboxError as error:
