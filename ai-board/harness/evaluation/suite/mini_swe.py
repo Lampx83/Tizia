@@ -176,6 +176,7 @@ class RunnerEnvironment:
 
 def generate(request, client, model_name, *, runtime=None, session_factory=CheckSession):
     import yaml
+    from runtime.tool_loop import IMPLEMENTED
     from runtime.tool_manifest import load
     started = time.monotonic()
     budget = Budget.restore(request['budget']) if request.get('budget') else Budget(max_wall_clock_s=request.get('wall_s', 300))
@@ -183,7 +184,7 @@ def generate(request, client, model_name, *, runtime=None, session_factory=Check
     package, Agent = upstream(runtime)
     config_path = Path(package.__file__).parent / 'config' / 'mini.yaml'
     config = yaml.safe_load(config_path.read_text(encoding='utf-8'))
-    manifest = load(known={'tree', 'outline', 'grep', 'read_file', 'edit_file', 'write_test', 'run_check', 'finish'})
+    manifest = load(known=IMPLEMENTED)  # same tool set as the tool loop, so the manifest hash matches
     session = session_factory(request['source'], request['base_sha'], budget, manifest.hash)
     environment = RunnerEnvironment(session)
     model = NativeModel(client, model_name, budget, config['model'])

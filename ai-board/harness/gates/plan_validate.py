@@ -820,8 +820,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
 
     # Plan 4-6 bước: bước nào cũng phải kiểm chứng được bằng lệnh chạy thật, và depends_on phải có.
     # Lỗi này sửa được (một lượt lập lại plan), nên trả outcome plan_unfit chứ không phải câu hỏi cho người gửi.
-    from gates.brainstorm import form_warnings_on
-    lenient = form_warnings_on() and bool(request.get("plan_repair"))
+    from gates.brainstorm import form_warnings_on, plan_repairing
+    lenient = form_warnings_on() and plan_repairing(request)
     if issues := unfit_issues(plan):
         if not lenient:
             return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
