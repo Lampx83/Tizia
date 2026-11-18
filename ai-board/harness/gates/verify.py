@@ -608,7 +608,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     if not skill_id:
         return {"gate": 5, "blocked": True, "reason": "thiếu skill_id cho Docker verify", "evidence": None,
                 "failure_class": STAGE_CLASS["preflight"]}
-    if get_settings().plan_checks and state.get("checks_pin") not in (None, gate_checks.pin(state.get("plan"))):
+    plan_checks_on = guest_input(state, "checks") is not None  # WHY: guest has no AI_BOARD_* env; the host ships "checks" only when the flag is on
+    if plan_checks_on and state.get("checks_pin") not in (None, gate_checks.pin(state.get("plan"))):
         return {"gate": 5, "blocked": True, "reason": "check của plan đã đổi sau khi lập plan: cần lập lại plan",
                 "evidence": None, "failure_class": STAGE_CLASS["plan"]}
     pages = _public_paths(guest_input(state, "diffs") or [])
@@ -618,7 +619,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     observed_pages = html or ([primary] if primary else [])
     quoted_on = bool(guest_input(state, "quoted_checks"))
     quoted = functional.quoted_checks(state, observed_pages) if quoted_on and pages else []
-    registry_on = (get_settings().plan_checks and bool(guest_input(state, "checks"))) or bool(quoted)
+    registry_on = (plan_checks_on and bool(guest_input(state, "checks"))) or bool(quoted)
     if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
         try:
             server_hsm.register_check_registry(check_registry.REGISTRY.data)
@@ -649,7 +650,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     http_observed = False
     soft = get_settings().soft_quality_checks
     soft_misses: list[dict] = []
-    probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
+    probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages, bool(guest_input(state, "oracle_css_size"))) or functional.select_fallback(state, pages)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
     teardown_confirmed = False
 
@@ -801,7 +802,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     smoke_ok = False
                     raise RuntimeError(f"changed page body does not match checkout: {page}")
                 logs.append(f"Changed page HTTP {status}: {page}")
-            planned = guest_input(state, "checks") or [] if get_settings().plan_checks else []
+            planned = guest_input(state, "checks") or []
             check_rows = [{"check": check, "base": None} for check in planned + [q for q in quoted if q not in planned]]
             def node_ok(file: str) -> bool:
                 if not (Path(checkout) / file).is_file():
