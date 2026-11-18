@@ -25,6 +25,7 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
     smoke = next((g for g in gates if g.get("gate") == 5), {})
     level = risk.get("risk_level") or "?"
     names = CONTRACT["gates"]["names"]
+    soft = [m for g in gates for m in g.get("soft_misses") or []]
     tests = list(dict.fromkeys([*(plan.get("tests") or []),
                                 *(t for step in plan.get("steps") or [] for t in step.get("tests") or [])]))
     lines = [
@@ -45,6 +46,11 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
          if (ev := smoke.get("eval")) else
          f"- Docker smoke: {'đạt' if smoke.get('smoke_passed') else 'không đạt'}; quan sát qua HTTP: "
          f"{'có' if smoke.get('http_observed') else 'không'}."),
+        *(["", "## Cảnh báo chất lượng",
+            "Các kiểm mềm dưới đây chưa đạt ngưỡng sau một lượt sửa; thay đổi vẫn được gửi để người review quyết định.",
+            *(f"- Cổng {m.get('gate')}: {m.get('check')} {m.get('value')} (ngưỡng {m.get('threshold')})"
+              + (f" {m['page']} {m.get('width')}px" if m.get("page") else "") + f" — {safe(m.get('detail'))}"
+              for m in soft)] if soft else []),
         "", "## Kết quả các cổng",
         *(f"- Cổng {g.get('gate')} ({names.get(str(g.get('gate')).removesuffix('.0'), '')}): "
           f"{'chặn — ' + safe(g.get('reason')) if g.get('blocked') else 'qua'}" for g in gates),
@@ -57,6 +63,8 @@ def pr_text(snapshot: dict, plan: dict, tier: str | None, verdict: dict) -> tupl
     labels = ["ai-board", f"ai-board:tier-{tier or 'unknown'}"]
     if request.get("type") == "self":
         labels.append("ai-board:self")  # review_pr.py soát guard theo luật của yêu cầu self
+    if soft:
+        labels.append("ai-board:soft-warnings")
     if level in ("high", "critical"):
         labels.append("ai-board:review-carefully")
     elif tier == "surface":

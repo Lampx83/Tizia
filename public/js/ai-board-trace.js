@@ -268,6 +268,16 @@ export function renderRunnerTrace(trace = {}) {
     return `<div class="g-runner meta" data-run="${esc(run.id)}">${stopped}${kept}</div>`;
   }).filter(Boolean).join('');
 }
+// Admin: soft quality misses per run (check, value vs threshold, page and width); the run still shipped with a warning.
+export function renderSoftMisses(trace = {}) {
+  return (trace.runs || []).map((run) => {
+    const misses = (run.gates || []).flatMap((gate) => evidenceOf(gate).soft_misses || []);
+    if (!misses.length) return '';
+    const rows = misses.map((m) => `<li>Cổng ${esc(m.gate)}: <code>${esc(m.check)}</code> ${esc(m.value)} (ngưỡng ${esc(m.threshold)})`
+      + `${m.page ? ` ${esc(m.page)} ${esc(m.width)}px` : ''} — ${esc(m.detail)}</li>`).join('');
+    return `<div class="g-soft meta" data-run="${esc(run.id)}"><p class="warn">Cảnh báo chất lượng (kiểm mềm dưới ngưỡng)</p><ul>${rows}</ul></div>`;
+  }).filter(Boolean).join('');
+}
 const STOP_ROUTE = { needs_review: 'Cần admin duyệt', claude_code_queue: 'Hàng chờ Claude Code', clarify: 'Cần người yêu cầu làm rõ', retry: 'Thử lại sau' };
 // Admin-only: per-run stop report (tried gates, blocker, next step). Empty unless flag AI_BOARD_STOP_REPORT_V2 stored one.
 export function renderStopReport(trace = {}) {

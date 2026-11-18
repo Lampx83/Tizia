@@ -14,9 +14,9 @@ import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
-  SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
+  QUALITY_AUTHOR, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
   assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
-  validatePrePrVerdict, wallClockLimit,
+  softMissNote, validatePrePrVerdict, wallClockLimit,
 } from './store-contract.js';
 
 export { PlanGuardrailError };
@@ -1886,6 +1886,12 @@ function resumeSummary(journal) {
     let note = verdict.outcome === 'ready_for_pr' ? 'Thay đổi đã qua kiểm tra trước PR.'
       : verdict.outcome === 'needs_review' ? 'Thay đổi cần con người xem xét trước PR.'
         : 'Thay đổi chưa qua kiểm tra trước PR.';
+    const softNote = verdict.outcome === 'blocked' ? '' : softMissNote(verdict.gates);
+    if (softNote) {
+      note = `${note} ${softNote}`;
+      await db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+        VALUES (?, 'ai', ?, ?, NULL, ?)`, [root.source_request_id, QUALITY_AUTHOR, softNote, input.now]);
+    }
     let internalReason = verdict.reason;
     let leaseExpiresAt = null; // non-null chỉ khi transient_retry bật: dời deadline lease để claimTransaction tự cứu
     let replan = false;
