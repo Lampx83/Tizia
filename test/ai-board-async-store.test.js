@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { createAiBoardStore, scaledLimit } from '../server/ai-board/store.js';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { backends } from './support/ai-board-db.js';
+import { CONTRACT as WORKER_CONTRACT } from '../server/ai-board/repositories/store-contract.js';
+// Queue/admission tests run several workers at once; the one-vLLM-lease cap has its own test (ai-board-multi-worker).
+WORKER_CONTRACT.limits.workers.vllm_max = 3;
 
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);

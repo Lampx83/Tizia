@@ -7,6 +7,9 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { attachAiBoardRequestRoutes, attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { CAPABILITY_POLICY_HASH } from '../server/ai-board/policy.js';
+import { CONTRACT as WORKER_CONTRACT } from '../server/ai-board/repositories/store-contract.js';
+// Queue/admission tests run several workers at once; the one-vLLM-lease cap has its own test (ai-board-multi-worker).
+WORKER_CONTRACT.limits.workers.vllm_max = 3;
 
 const KEY = 'fixture-worker-key-32-characters-long';
 

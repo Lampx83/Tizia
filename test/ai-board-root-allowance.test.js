@@ -12,6 +12,9 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardWorkerRoutes } from '../server/ai-board/routes.js';
 import { planOf } from './support/ai-board-scenarios.js';
 import { LIMITS } from '../server/ai-board/repositories/store-contract.js';
+import { CONTRACT as WORKER_CONTRACT } from '../server/ai-board/repositories/store-contract.js';
+// Queue/admission tests run several workers at once; the one-vLLM-lease cap has its own test (ai-board-multi-worker).
+WORKER_CONTRACT.limits.workers.vllm_max = 3;
 
 const SAVED = JSON.stringify([LIMITS.root_work, LIMITS.root_work_scaling]);
 // Limits live in contract.json: tests narrow them in-process, scaling off so the cap is exactly the value set.

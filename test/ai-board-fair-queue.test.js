@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { openBoard } from './support/ai-board-db.js';
 import { LIMITS, scaledLimit } from '../server/ai-board/store.js';
+import { CONTRACT as WORKER_CONTRACT } from '../server/ai-board/repositories/store-contract.js';
+// Queue/admission tests run several workers at once; the one-vLLM-lease cap has its own test (ai-board-multi-worker).
+WORKER_CONTRACT.limits.workers.vllm_max = 3;
 
 async function fixture() {
   const db = await openBoard({ users: [
