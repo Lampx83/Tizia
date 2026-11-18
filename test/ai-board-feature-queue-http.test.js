@@ -6,6 +6,9 @@ import {openBoard} from './support/ai-board-db.js';
 import {createAsyncAiBoardStore} from '../server/ai-board/store-async.js';
 import {attachAiBoardRequestRoutes,attachAiBoardWorkerRoutes} from '../server/ai-board/api/routes.js';
 import {queueLine} from '../public/js/suggestion-fab.js';
+import { CONTRACT as WORKER_CONTRACT } from '../server/ai-board/repositories/store-contract.js';
+// Queue/admission tests run several workers at once; the one-vLLM-lease cap has its own test (ai-board-multi-worker).
+WORKER_CONTRACT.limits.workers.vllm_max = 3;
 
 test('concurrent workers serialize feature revisions and requester sees why a follow-up waits',async()=>{
  const db=await openBoard({users:[[1,'an','An','student','it'],[2,'binh','Bình','student','it']]});
