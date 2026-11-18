@@ -195,6 +195,21 @@ def gate1_probe_client():
     return dataclasses.replace(OllamaClient.from_env(), timeout_s=get_settings().gate1_probe_timeout_s)
 
 
+def _probe_budget(ollama, role: str, budget_cls):
+    """Budget covering every retry attempt call_model may make across the role's candidates."""
+    from runtime.pipeline import MODEL_RETRY_BACKOFF_S, PATIENT_BACKOFF_S, RETRY_AFTER_CAP_S
+    patience = get_settings().provider_patience
+    calls, wait_s = 0, 0.0
+    for candidate in ollama.routing.candidates(role):
+        waits = PATIENT_BACKOFF_S if patience and candidate.get('provider') == 'api' else MODEL_RETRY_BACKOFF_S
+        calls += 1 + len(waits)
+        # Each wait is jittered up to 25% and may be floored by a capped Retry-After.
+        wait_s += sum(max(w * 1.25, RETRY_AFTER_CAP_S) for w in waits)
+    timeout_s = getattr(ollama, 'timeout_s', 45.0) or 45.0
+    return budget_cls(max_model_calls=max(6, calls), max_units=max(600, 100 * calls),
+                      max_wall_clock_s=max(600.0, wait_s + calls * timeout_s))
+
+
 def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl: float = 60.0) -> Callable[[], dict | None]:
     """Generate 1 token on each intake model. None = load được hết, else model_unavailable. Chỉ cache thành công."""
     ok_at: dict[str, float] = {}
@@ -211,7 +226,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
                     # Endpoint đang cooldown sau lỗi trước: probe lúc này chỉ treo thêm hoặc đẩy intake sang 500.
                     return {'status': 'model_unavailable', 'model': role,
                             'error': f'{role}: endpoint đang cooldown, không probe'}
-                budget = Budget(max_model_calls=6, max_units=600, max_wall_clock_s=600.0)
+                budget = _probe_budget(ollama, role, Budget)
                 # Probe failure must not arm the router cooldown, or the backoff retry is refused without probing.
                 cooldowns = dict(ollama.routing.cooldowns)
                 try:
