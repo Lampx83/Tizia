@@ -215,15 +215,38 @@ def _new_covered(before: list[str], after: list[str]) -> list[str]:
     return _new_entries(before, after, lambda entry: entry.split(" dưới ", 1)[0])
 
 
+_LABELS = {"contrast": "chữ tương phản thấp (< 4.5)", "covered": "nút bấm bị phần tử khác đè",
+           "offscreen": "phần tử bị đổi nằm ngoài màn hình", "patch": "khối nền trắng/đen lệch tông trang"}
+
+
+def _new_by_check(before: dict | None, after: dict) -> list[tuple[str, list[str]]]:
+    """[(quality check, new entries)] of the after audit vs before (before None = new page: all new)."""
+    before = before or {}
+    out = [("overflow", ["trang tràn ngang"])] if after.get("overflow") and not before.get("overflow") else []
+    for check, new in (
+            ("contrast", _new_contrast(before.get("contrast", []), after.get("contrast", []))),
+            ("covered", _new_covered(before.get("covered", []), after.get("covered", []))),
+            ("offscreen", [c for c in after.get("offscreen", []) if c not in before.get("offscreen", [])]),
+            ("patch", [c for c in after.get("patch", []) if c not in before.get("patch", [])])):
+        if new:
+            out.append((check, new))
+    return out
+
+
 def regressions(before: dict | None, after: dict) -> list[str]:
     """Lỗi mới của bản sau so với bản trước (before None = trang mới: mọi lỗi đều mới)."""
-    before = before or {}
-    out = ["trang tràn ngang"] if after.get("overflow") and not before.get("overflow") else []
-    for label, new in (
-            ("chữ tương phản thấp (< 4.5)", _new_contrast(before.get("contrast", []), after.get("contrast", []))),
-            ("nút bấm bị phần tử khác đè", _new_covered(before.get("covered", []), after.get("covered", []))),
-            ("phần tử bị đổi nằm ngoài màn hình", [c for c in after.get("offscreen", []) if c not in before.get("offscreen", [])]),
-            ("khối nền trắng/đen lệch tông trang", [c for c in after.get("patch", []) if c not in before.get("patch", [])])):
-        if new:
-            out.append(f"{label}: {'; '.join(new[:3])}" + (f" (+{len(new) - 3})" if len(new) > 3 else ""))
+    return [new[0] if check == "overflow" else
+            f"{_LABELS[check]}: {'; '.join(new[:3])}" + (f" (+{len(new) - 3})" if len(new) > 3 else "")
+            for check, new in _new_by_check(before, after)]
+
+
+def regression_misses(before: dict | None, after: dict) -> list[dict]:
+    """Soft misses {check, value, threshold, detail}: contrast value = lowest new ratio, others = count of new problems."""
+    from runtime import limits
+    table = limits.quality_checks()
+    out = []
+    for check, new in _new_by_check(before, after):
+        ratios = [float(m.group()) for e in new if (m := re.search(r"\d+(?:\.\d+)?$", e))]
+        value = min(ratios) if check == "contrast" and ratios else len(new)
+        out.append({"check": check, "value": value, "threshold": table[check]["threshold"], "detail": "; ".join(new[:3])})
     return out
