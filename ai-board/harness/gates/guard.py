@@ -613,5 +613,24 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     # 1 finding mỗi (check, path) là đủ cho người soát; bỏ trùng giữ thứ tự.
     unique = list({(f["check"], f["detail"]): f for f in findings}.values())
     flags = list({(f["check"], f["detail"]): f for f in flags}.values())
+    unique, soft_misses = split_quality(unique, flags)
     return {"findings": unique, "checks": list(CHECKS), "ui_changed": ui_changed, "flags": flags,
-            "review_required": any(f["severity"] == "high" for f in flags), "visible_text_changed": visible_changed}
+            "review_required": any(f["severity"] == "high" for f in flags), "visible_text_changed": visible_changed,
+            "soft_misses": soft_misses}
+
+
+def split_quality(findings: list[dict], flags: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(blocking findings, soft_misses) by contract quality_checks; flag off = findings unchanged, no soft_misses.
+    A soft finding stops blocking; a hard flag (answer_key) starts blocking; a soft flag is also reported."""
+    from runtime import limits
+    from settings import get_settings
+    if not get_settings().soft_quality_checks:
+        return findings, []
+    table = limits.quality_checks()
+    soft = lambda check: limits.quality_class(check) == "soft"
+    miss = lambda f: {"gate": 4, "check": f["check"], "value": 1, "threshold": table[f["check"]]["threshold"],
+                      "detail": f["detail"]}
+    # other hard flags (quoted injection, topic to review, repeated form) are review signals, not misses
+    hard_flags = [{**f, "failure_class": SEVERITY_CLASS[f["severity"]]} for f in flags if f["check"] == "answer_key"]
+    kept = [f for f in findings if not soft(f["check"])] + hard_flags
+    return kept, [miss(f) for f in findings + flags if soft(f["check"])]

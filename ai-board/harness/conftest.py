@@ -21,7 +21,7 @@ def _fresh_settings():
 
 FLAGS_OFF_IN_TESTS = ("PLAN_REPAIR", "REPAIR_SAME_SESSION", "GATE_FEEDBACK_CAP", "STOP_REPORT_V2", "GATE1_ARBITER",
                       "NO_ORACLE_REVIEW_ANY", "GATE1_UNIFIED_VERIFY",
-                      "TEXT_ORACLE_SKIP_SELECTOR")
+                      "TEXT_ORACLE_SKIP_SELECTOR", "SOFT_QUALITY_CHECKS")
 
 
 @pytest.fixture(autouse=True)
