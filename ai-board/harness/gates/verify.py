@@ -623,6 +623,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     observed_pages = html or ([primary] if primary else [])
     quoted_on = bool(guest_input(state, "quoted_checks"))
     classify_on = bool(guest_input(state, "red_check_classify"))
+    shadow_on = bool(guest_input(state, "legacy_probe_shadow"))
     quoted = functional.quoted_checks(state, observed_pages) if quoted_on and pages else []
     registry_on = (plan_checks_on and bool(guest_input(state, "checks"))) or bool(quoted)
     if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
@@ -659,6 +660,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages, bool(guest_input(state, "oracle_css_size"))) or functional.select_fallback(state, pages)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
     teardown_confirmed = False
+    legacy = shadow = None
 
     with tempfile.TemporaryDirectory(prefix="ai-verify-compose-") as temp:
         override = Path(temp) / "override.yml"
@@ -851,10 +853,12 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if server_route and functional_result.get('probe_id') != functional.ROUTE_PROBE:
                 raise RuntimeError(functional_result.get('note') or functional_result.get('reason') or functional.NO_ORACLE)
-            text_oracle = functional_result if quoted_on and probe_id == functional.TEXT_PROBE else None
+            text_oracle = functional_result if (quoted_on and probe_id == functional.TEXT_PROBE) or (shadow_on and probe_id) else None
             if text_oracle:
+                legacy = {key: text_oracle.get(key) for key in ("probe_id", "passed", "reason")}
                 functional_result = text_report(text_oracle, False)
-                logs.append('Oracle chữ chỉ báo cáo; check từ chữ người dùng trích quyết định')
+                logs.append('Oracle chữ chỉ báo cáo; check từ chữ người dùng trích quyết định' if probe_id == functional.TEXT_PROBE
+                            else f"Probe cũ {probe_id} chạy song song, chỉ báo cáo; check mới quyết định")
             elif not functional_result.get('passed'):
                 if oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
@@ -956,6 +960,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     logs.append("Không dựng được check từ chữ trích: needs_review, admin xem ảnh trước/sau")
             if suspects:
                 functional_result = {**functional_result, "needs_review": True, "check_suspect": suspects}
+            if shadow_on and legacy:
+                proven = None if not check_rows else bool(checks_result) and checks_result["verdict"] == gate_checks.PROOF
+                shadow = {"legacy": legacy, "new": {"verdict": checks_result["verdict"] if checks_result else None, "passed": proven}}
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
             if owned.expired:
@@ -986,6 +993,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 "functional": functional_result, "postgres": {"project": project, "network": f"{project}-net",
                 "data_volume": f"{project}-pg", "disposable": True}, "teardown_confirmed": teardown_confirmed,
                 **({"checks": checks_result} if checks_result else {}),
+                **({"probe_shadow": shadow} if shadow else {}),
                 **({"vision_advisory": advisory} if advisory else {}),
                 **({"check_registry": check_registry.REGISTRY.hash} if registry_on else {})}
     soft_only = bool(soft_misses) and not reason
