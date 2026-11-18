@@ -45,10 +45,26 @@ def test_reset_or_read_timeout_keeps_usage_unknown(monkeypatch):
     assert post(monkeypatch, TimeoutError('read'))['tokens_in'] is None
 
 
-@pytest.mark.parametrize('code', [429, 503, 524])
-def test_error_status_reply_settles_zero_tokens(monkeypatch, code):
-    """An error status carries no usage: settling unknown charged the whole reservation to the root allowance."""
+def http_error(code):
     import io
-    error = urllib.error.HTTPError('https://api.example/v1', code, 'busy', {}, io.BytesIO(b'{}'))
-    metrics = post(monkeypatch, error)
+    return urllib.error.HTTPError('https://api.example/v1', code, 'busy', {}, io.BytesIO(b'{}'))
+
+
+@pytest.mark.parametrize('code', [429, 503])
+def test_rejected_call_settles_zero_tokens_under_patience(monkeypatch, code):
+    """Patient retries send many rejected calls; charging each its whole reservation drained the root allowance."""
+    monkeypatch.setenv('AI_BOARD_PROVIDER_PATIENCE', '1')
+    metrics = post(monkeypatch, http_error(code))
     assert (metrics['tokens_in'], metrics['tokens_out']) == (0, 0)
+
+
+@pytest.mark.parametrize('code', [500, 502, 504, 524])
+def test_error_after_possible_work_keeps_usage_unknown_under_patience(monkeypatch, code):
+    monkeypatch.setenv('AI_BOARD_PROVIDER_PATIENCE', '1')
+    assert post(monkeypatch, http_error(code))['tokens_in'] is None
+
+
+@pytest.mark.parametrize('code', [429, 503, 524])
+def test_error_status_keeps_usage_unknown_by_default(monkeypatch, code):
+    monkeypatch.delenv('AI_BOARD_PROVIDER_PATIENCE', raising=False)
+    assert post(monkeypatch, http_error(code))['tokens_in'] is None
