@@ -125,6 +125,13 @@ def _passed(gates: list[dict], kind: str | None) -> bool:
                                or (smoke["runner"] == "eval" and (smoke.get("eval") or {}).get("accepted"))))
 
 
+def _keep_blocked(gates: list[dict], kind: str | None) -> bool:
+    """Eval flag: an ordinary/plan block at gate 4 or later keeps its branch so the candidate can be graded."""
+    # ponytail: kept branches pile up in the worker repo; eval-only flag, prune ai-board/* branches by hand
+    return (get_settings().keep_blocked_candidate and kind in ("ordinary", "plan")
+            and bool(gates) and gates[-1]["gate"] >= 4 and gates[-1].get("blocked") is True)
+
+
 def _preview_eligible(gates: list[dict], kind: str | None) -> bool:
     gate4 = next((gate for gate in gates if gate["gate"] == 4), {})
     gate5 = next((gate for gate in gates if gate["gate"] == 5), {})
@@ -192,6 +199,7 @@ class _Execution:
         self.shots: list[dict] = []
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
+        self.blocked_candidate: dict | None = None
         self.attempt_checkpoint = None
         self.open = self.lease_lost = False
         self.result: dict | None = None
@@ -513,7 +521,9 @@ class _Execution:
                 except Exception:
                     pass  # optional artifact must never change verdict or prevent cleanup
         self.candidate = candidates.record(state) if _passed(self.gates, self.kind) and not lease_lost else None
-        self.cleanup(state, keep_branch=self.candidate is not None)
+        if self.candidate is None and not lease_lost and _keep_blocked(self.gates, self.kind):
+            self.blocked_candidate = candidates.record(state)
+        self.cleanup(state, keep_branch=self.candidate is not None or self.blocked_candidate is not None)
         if self.candidate and self.should_stop and self.should_stop():
             # The heartbeat can fail while the passing worktree is being removed.
             self.cleanup(state, keep_branch=False)
@@ -870,6 +880,7 @@ class _Execution:
             **({"stop_report": stop} if stop else {}),
             **({"loop_guard": dict(self.halt)} if self.halt.get("reason") else {}),
             "candidate": self.candidate if passed else None,
+            **({"blocked_candidate": self.blocked_candidate} if self.blocked_candidate and not passed else {}),
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             **progress.verdict_fields(window=self.progress_window),
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
