@@ -75,6 +75,10 @@ def _public_gate_result(result: dict) -> dict:
         "gate": result["gate"], "blocked": bool(result.get("blocked")),
         "reason": result.get("reason"),
     }
+    if result["gate"] == 4 and result.get("soft_misses"):
+        out["soft_misses"] = list(result["soft_misses"])
+    elif result["gate"] == 5 and (result.get("evidence") or {}).get("soft_misses"):
+        out["soft_misses"] = list(result["evidence"]["soft_misses"])
     if result["gate"] == 3 and result.get("tool_manifest"):
         out["tool_manifest"] = result["tool_manifest"]
     elif result["gate"] == 4:
@@ -465,6 +469,11 @@ class _Execution:
                 budget.spend("retries")
                 continue
             break
+        if gate == 5 and self._soft_pass(result):
+            result = {**result, "blocked": False, "reason": None, "soft_passed": True}
+        if gate == 5 and self.state is not None:  # gate 4 writes its own entries into state (static_check)
+            misses = (result.get("evidence") or {}).get("soft_misses") or []
+            self.state["soft_misses"] = [m for m in self.state.get("soft_misses") or [] if m.get("gate") != 5] + list(misses)
         self.last_result = result
         public = _public_gate_result(result)
         if gate == 5:
@@ -481,6 +490,12 @@ class _Execution:
             self.kind = result.get("failure_class") or "ordinary"
             return "blocked"
         return "passed"
+
+    def _soft_pass(self, result: dict) -> bool:
+        """Gate 5 blocked only by soft misses, after one soft repair round (or no repair left): ship with the warning."""
+        if not (result.get("blocked") and result.get("soft_only") and get_settings().soft_quality_checks):
+            return False
+        return any(entry.get("soft") for entry in self.repairs) or len(self.repairs) >= repair_cap()
 
     def close_attempt(self) -> None:
         if not self.open:
@@ -529,6 +544,8 @@ class _Execution:
                 return "agent"
             return "done"
         entry = {"gate": last["gate"], "reason": last["reason"]}
+        if (self.last_result or {}).get("soft_only"):
+            entry["soft"] = True
         if feedback_cap.enabled():
             from runtime import repair_class
             scope = {file for step in self.plan.get("steps") or [] for file in step.get("allowed_scope") or []}

@@ -494,6 +494,26 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
     return shots
 
 
+def _soft_miss(check: str, value, detail: str) -> dict:
+    from runtime import limits
+    return {"gate": 5, "check": check, "value": value, "threshold": limits.quality_checks()[check]["threshold"],
+            "detail": detail[:500]}
+
+
+def soft_line(miss: dict) -> str:
+    """One line: check value (threshold) [page width]: detail."""
+    where = f" {miss['page']} {miss['width']}px" if miss.get("page") else ""
+    return f"{miss['check']} {miss['value']} (ngưỡng {miss['threshold']}){where}: {miss['detail']}"
+
+
+def visual_misses(shots: list[dict]) -> list[dict]:
+    """Soft misses of every after shot vs its before shot (same page + width), with page and width."""
+    before = {(s["page"], s["width"]): s["audit"] for s in shots if s["phase"] == "before" and s.get("audit")}
+    return [{**miss, "gate": 5, "page": shot["page"], "width": shot["width"]}
+            for shot in shots if shot["phase"] == "after" and shot.get("audit")
+            for miss in visual.regression_misses(before.get((shot["page"], shot["width"])), shot["audit"])]
+
+
 def visual_regressions(shots: list[dict]) -> list[str]:
     """So ảnh AFTER với BEFORE cùng trang + khổ; chỉ lỗi mới. Không đo được (ảnh không có audit) → bỏ qua."""
     before = {(s["page"], s["width"]): s["audit"] for s in shots if s["phase"] == "before" and s.get("audit")}  # ảnh cận cảnh không có số đo
@@ -609,6 +629,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     checks_result = None
     smoke_ok = False
     http_observed = False
+    soft = get_settings().soft_quality_checks
+    soft_misses: list[dict] = []
     probe_id = functional.ROUTE_PROBE if server_route else functional.select(state) or style.select_style(state, pages) or functional.select_fallback(state, pages)
     functional_result = {'probe_id': probe_id, 'passed': False, 'reason': 'Behavior has not been verified'}
     teardown_confirmed = False
@@ -716,7 +738,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                         stage = 'tooling'
                         raise RuntimeError(f"thiếu công cụ trong container: {tool} (acceptance: {item})") from exc
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
-                    raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
+                    if not soft:
+                        raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
+                    soft_misses.append(_soft_miss("acceptance", 1, f"{item} | {detail}"))
+                    logs.append(f"Feature acceptance failed (soft miss): {item}")
+                    continue
                 logs.append(f"Feature acceptance passed: {item}")
 
             env = os.environ.copy()
@@ -795,6 +821,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Không có oracle hành vi cho yêu cầu này; generated tests, smoke và acceptance của plan đều xanh: '
                                 'needs_review, admin xem xét, không tự đạt: ' + str(functional_result.get('reason')))
+                elif soft and functional_result.get('probe_id') in (functional.TEXT_PROBE, functional.FALLBACK_TEXT_PROBE):
+                    soft_misses.append(_soft_miss("text_oracle", 1, str(functional_result.get('reason'))))
+                    functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'soft_miss': True}
+                    logs.append('Oracle chữ trượt (soft miss): ' + str(functional_result.get('reason')))
                 else:
                     raise RuntimeError(functional_result.get('reason') or 'Independent functional check failed')
             if (probe_id in (functional.ROUTE_PROBE, functional.FALLBACK_TEXT_PROBE, functional.STYLE_PROBE) and functional_result.get('passed')
@@ -832,7 +862,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                                    if s["phase"] == "after" and s["page"] == primary and s["width"] == 1280), None)
                 visual_issues = visual_regressions(shots)
                 logs += [f"Cổng ảnh: {issue}" for issue in visual_issues] or ["Cổng ảnh: không có lỗi hiển thị mới."]
-                if visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
+                if visual_issues and soft:
+                    soft_misses += visual_misses(shots)
+                elif visual_issues:  # bản sau tệ hơn bản trước: sửa được bằng lượt sửa, như test hỏng
                     raise RuntimeError("giao diện tệ hơn bản trước — " + " | ".join(visual_issues))
             if check_rows:  # base phase after screenshots: _restore_base overwrites the candidate files
                 try:
@@ -891,6 +923,11 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 **({"checks": checks_result} if checks_result else {}),
                 **({"vision_advisory": advisory} if advisory else {}),
                 **({"check_registry": check_registry.REGISTRY.hash} if registry_on else {})}
+    soft_only = bool(soft_misses) and not reason
+    if soft_misses:
+        evidence["soft_misses"] = soft_misses
+    if soft_only:  # repairable like a failed test; the worker lets it pass after one soft repair round
+        reason = "kiểm mềm dưới ngưỡng: " + " | ".join(soft_line(m) for m in soft_misses)[:1000]
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
-            "failure_class": failure_class(stage, reason)}
+            "failure_class": "ordinary" if soft_only else failure_class(stage, reason), "soft_only": soft_only}
