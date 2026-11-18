@@ -95,6 +95,21 @@ def no_oracle_review(generated_ok: bool, smoke_ok: bool, result: dict, tests_abs
                 and result.get("reason") == functional.NO_ORACLE)
 
 
+def text_report(oracle: dict, proven: bool) -> dict:
+    """Checks decide, the text oracle only reports. Shape stays inside the server verdict contract: a covered oracle
+    result (pass or review), else the no-oracle review."""
+    probe = oracle.get("probe_id")
+    covered = probe in functional.ORACLES and all((oracle.get("coverage") or {}).get(flag) is True for flag in functional.ORACLES[probe])
+    seen = bool(oracle.get("passed"))
+    out = {**oracle, "passed": True, "oracle_passed": seen, "report_only": True}
+    if covered and proven:
+        return out
+    if covered and seen:
+        return {**out, "needs_review": True}
+    return {**out, "probe_id": None, "reason": functional.NO_ORACLE, "oracle_passed": False, "needs_review": True,
+            "oracle_reason": oracle.get("reason")}
+
+
 def deadline_s() -> float:
     """Wall-clock cap of one gate 5 run: the node cap from the contract."""
     return float(limits.budget()["node_wall_clock_s"])
@@ -814,10 +829,9 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             logs.append('Independent functional check: ' + json.dumps(functional_result, ensure_ascii=False))
             if server_route and functional_result.get('probe_id') != functional.ROUTE_PROBE:
                 raise RuntimeError(functional_result.get('note') or functional_result.get('reason') or functional.NO_ORACLE)
-            text_report_only = quoted_on and probe_id == functional.TEXT_PROBE
-            if text_report_only:
-                functional_result = {**functional_result, 'passed': True, 'oracle_passed': bool(functional_result.get('passed')),
-                                     'report_only': True}
+            text_oracle = functional_result if quoted_on and probe_id == functional.TEXT_PROBE else None
+            if text_oracle:
+                functional_result = text_report(text_oracle, False)
                 logs.append('Oracle chữ chỉ báo cáo; check từ chữ người dùng trích quyết định')
             elif not functional_result.get('passed'):
                 if oracle_defers(state, acceptance, generated_ok, smoke_ok, functional_result):
@@ -898,9 +912,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 if checks_result["verdict"] == gate_checks.NONE:
                     functional_result = {**functional_result, 'needs_review': True}
                     logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
-            elif text_report_only:
-                functional_result = {**functional_result, 'needs_review': True}
-                logs.append("Không dựng được check từ chữ trích: needs_review, admin xem ảnh trước/sau")
+            if text_oracle:
+                functional_result = text_report(text_oracle, bool(checks_result) and checks_result["verdict"] == gate_checks.PROOF)
+                if functional_result.get("needs_review") and not check_rows:
+                    logs.append("Không dựng được check từ chữ trích: needs_review, admin xem ảnh trước/sau")
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
             if owned.expired:

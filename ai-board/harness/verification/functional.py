@@ -116,6 +116,8 @@ def quoted_checks(state, pages):
     if len(pages) != 1 or select(state) != TEXT_PROBE:
         return []
     want = text_expectation(state)
+    # an old text inside the new one ("A" -> "A nhé") can never be absent on a correct candidate
+    want['absent'] = [old for old in want['absent'] if not any(old in new for new in want['present'])]
     made = [{'primitive': kind, 'path': pages[0], 'text': text}
             for kind, key in (('text_present', 'present'), ('text_absent', 'absent'))
             for text in want[key] if not _is_css_selector(text)]

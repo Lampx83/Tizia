@@ -10,7 +10,32 @@ from verification import checks, functional, guest_inputs, sandbox as sandbox_ve
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 
 FLAG = "AI_BOARD_QUOTED_CHECKS"
-ORACLE_FAIL = {"probe_id": functional.TEXT_PROBE, "passed": False, "reason": "Chữ người dùng yêu cầu không hiển thị"}
+# Shapes run_text really returns: a run that observed the page carries coverage, an infra failure does not.
+COVERED = {"coverage": {"rendered_text": True}}
+ORACLE_FAIL = {"probe_id": functional.TEXT_PROBE, "passed": False, "reason": "Chữ người dùng yêu cầu không hiển thị", **COVERED}
+ORACLE_PASS = {"probe_id": functional.TEXT_PROBE, "passed": True, "reason": None, **COVERED}
+ORACLE_INFRA = {"probe_id": functional.TEXT_PROBE, "passed": False, "reason": "browser crashed", "infra": True}
+
+
+def server_accepts(functional_result, outcome):
+    """Mirror of the gate 5 rules in server/ai-board/repositories/store-contract.js for a low-risk run."""
+    probe = functional_result.get("probe_id")
+    coverage = functional_result.get("coverage") or {}
+    covered = functional_result.get("passed") is True and probe in functional.ORACLES and all(
+        coverage.get(flag) is True for flag in functional.ORACLES[probe])
+    oracle_passed = functional_result.get("oracle_passed") is not False
+    review = functional_result.get("needs_review") is True
+    no_oracle = (functional_result.get("passed") is True and not oracle_passed and review and not probe
+                 and functional_result.get("reason") == functional.NO_ORACLE)
+    if not (covered or no_oracle):
+        return False
+    if outcome == "ready_for_pr":
+        return not no_oracle and not review
+    return no_oracle or (covered and review and oracle_passed)
+
+
+def outcome(out):
+    return "needs_review" if out["evidence"]["functional"].get("needs_review") else "ready_for_pr"
 
 
 @pytest.fixture
@@ -63,22 +88,39 @@ def test_replace_red_on_base_green_on_candidate_is_proof_despite_failing_oracle(
     assert out["evidence"]["checks"]["verdict"] == checks.PROOF
     functional_result = out["evidence"]["functional"]
     assert functional_result["report_only"] is True and functional_result["oracle_passed"] is False
-    assert functional_result.get("needs_review") is None
+    assert outcome(out) == "ready_for_pr" and server_accepts(functional_result, "ready_for_pr")
+
+
+def test_proof_with_oracle_infra_failure_is_review_the_server_accepts(tmp_path, flag_on, oracle, served):
+    oracle["value"] = ORACLE_INFRA
+    served.update(base=b"<h1>changed</h1>\n<p>Chu cu</p>\n", candidate=b"<h1>changed</h1>\n<p>Chu moi</p>\n")
+    out = run(tmp_path, "Đổi 'Chu cu' thành 'Chu moi'")
+    assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.PROOF
+    assert outcome(out) == "needs_review" and server_accepts(out["evidence"]["functional"], "needs_review")
+
+
+def test_old_text_inside_new_text_is_not_demanded_absent(tmp_path, flag_on, oracle, served):
+    served.update(base=b"<h1>changed</h1>\n<p>Chao ban</p>\n", candidate=b"<h1>changed</h1>\n<p>Chao ban nhe</p>\n")
+    out = run(tmp_path, "Đổi 'Chao ban' thành 'Chao ban nhe'")
+    assert rows(out) == [{"primitive": "text_present", "path": "/x.html", "text": "Chao ban nhe"}]
+    assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.PROOF
 
 
 def test_red_on_both_blocks_even_when_oracle_passes(tmp_path, flag_on, oracle, served):
-    oracle["value"] = {"probe_id": functional.TEXT_PROBE, "passed": True}
+    oracle["value"] = ORACLE_PASS
     served.update(base=b"<h1>changed</h1>\n", candidate=b"<h1>changed</h1>\n")
     out = run(tmp_path, "Thêm dòng 'Liên hệ: 0123' vào trang")
     assert out["blocked"] is True and "check đỏ trên cả base lẫn candidate" in out["reason"]
     assert out["failure_class"] == verify.STAGE_CLASS["ordinary"]
 
 
-def test_text_already_on_base_is_ignored_so_needs_review(tmp_path, flag_on, oracle, served):
+@pytest.mark.parametrize("answer", [ORACLE_FAIL, ORACLE_PASS])
+def test_text_already_on_base_is_ignored_so_needs_review(tmp_path, flag_on, oracle, served, answer):
+    oracle["value"] = answer
     served.update(base=b"<h1>changed</h1>\nLien he\n", candidate=b"<h1>changed</h1>\nLien he\n")
     out = run(tmp_path, "Thêm 'Lien he' vào trang")
     assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.NONE
-    assert out["evidence"]["functional"]["needs_review"] is True
+    assert outcome(out) == "needs_review" and server_accepts(out["evidence"]["functional"], "needs_review")
 
 
 def test_removal_wording_makes_text_absent_only(tmp_path, flag_on, oracle, served):
@@ -96,16 +138,12 @@ def test_css_selector_quote_never_becomes_a_text_check(tmp_path, flag_on, oracle
     assert out["blocked"] is False
 
 
-def test_two_observed_pages_make_no_check_and_need_review_not_pass(tmp_path, flag_on, oracle, served):
+@pytest.mark.parametrize("answer", [ORACLE_FAIL, ORACLE_PASS, ORACLE_INFRA])
+def test_two_observed_pages_make_no_check_and_need_review_not_pass(tmp_path, flag_on, oracle, served, answer):
+    oracle["value"] = answer
     out = run(tmp_path, "Thêm 'Xin chao' vào trang", files=("public/x.html", "public/y.html"))
     assert out["blocked"] is False and "checks" not in out["evidence"]
-    assert out["evidence"]["functional"]["needs_review"] is True
-
-
-def test_oracle_passing_with_no_check_still_needs_review(tmp_path, flag_on, oracle, served):
-    oracle["value"] = {"probe_id": functional.TEXT_PROBE, "passed": True}
-    out = run(tmp_path, "Thêm 'Xin chao' vào trang", files=("public/x.html", "public/y.html"))
-    assert out["blocked"] is False and out["evidence"]["functional"]["needs_review"] is True
+    assert outcome(out) == "needs_review" and server_accepts(out["evidence"]["functional"], "needs_review")
 
 
 def test_non_text_oracle_gets_no_quoted_checks(tmp_path, flag_on, monkeypatch, served):
