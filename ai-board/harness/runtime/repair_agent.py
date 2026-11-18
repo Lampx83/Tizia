@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 import path_policy
-from runtime import levels, progress
+from runtime import levels, model_json, progress
 from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "repair_agent.md").read_text(encoding="utf-8")
@@ -129,7 +129,7 @@ def parse(raw) -> dict:
     if text.startswith("```"):
         text = text.strip("`").removeprefix("json").strip()
     try:
-        body = json.loads(text)
+        body = model_json.loads(text)
     except ValueError as error:
         raise ProposalError(f"không phải JSON: {error}") from None
     if not isinstance(body, dict):

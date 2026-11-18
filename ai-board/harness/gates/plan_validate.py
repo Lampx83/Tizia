@@ -56,7 +56,7 @@ import path_policy
 from repositories.dbconn import harness_db
 from gates import best_match, evidence, grounding_paths
 from repositories import repo_at_commit
-from runtime import coverage, levels, limits, subtask_files
+from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
 from settings import DEFAULT_GATE25_FIXES, get_settings
 from verification import checks
@@ -138,7 +138,7 @@ def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)', 
 def parse_validation(text: str) -> dict:
     """Parse + validate output validator. Raise ValueError với lý do ngắn nếu sai schema."""
     try:
-        out = json.loads(text)
+        out = model_json.loads(text)
     except (TypeError, ValueError) as e:
         raise ValueError(f"không phải JSON: {e}") from None
     if not isinstance(out, dict) or not isinstance(out.get("clear"), bool):

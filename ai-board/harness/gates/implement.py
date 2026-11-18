@@ -23,7 +23,7 @@ import path_policy
 from gates import change_class, gate3_guards, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
-from runtime import limits, loop_guard, network_request, state_file, subtask_files, tool_loop
+from runtime import limits, loop_guard, model_json, network_request, state_file, subtask_files, tool_loop
 from runtime.budget import BudgetExhausted
 from repositories import server_hsm
 from repositories import memory
@@ -338,7 +338,7 @@ def parse_codegen(text: str, *, existing: bool = False) -> dict:
     """Parse + validate output 1 subtask. File đã có: bắt buộc `edits` (không nhận cả file vì model
     chỉ thấy phần trích); file mới: bắt buộc `code`. Raise ValueError với lý do ngắn nếu sai schema."""
     try:
-        out = json.loads(text)
+        out = model_json.loads(text)
     except (TypeError, ValueError) as e:
         raise ValueError(f"không phải JSON: {e}") from None
     if not isinstance(out, dict):

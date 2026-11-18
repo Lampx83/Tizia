@@ -9,7 +9,7 @@ import json
 import logging
 import re
 
-from runtime import coverage, limits, meter
+from runtime import coverage, limits, meter, model_json
 from runtime.loop_budget import LoopBudget, Stop
 from tools import readonly
 from verification import functional
@@ -48,7 +48,7 @@ def warranted(request: dict, ctx: dict) -> bool:
 def parse_action(text: str) -> tuple[str, dict]:
     """(tool, arguments) từ 1 object JSON. Raise ValueError nếu sai hình dạng."""
     try:
-        call = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip()))
+        call = model_json.loads(text)
     except ValueError as error:
         raise ValueError(f"không phải JSON: {error}") from None
     if not isinstance(call, dict) or not isinstance(call.get("tool"), str):
@@ -98,7 +98,7 @@ REF = re.compile(r"#E(\d+)")
 def _plan_steps(text: str, cap: int) -> list[tuple[str, dict]] | None:
     """(tool, arguments) của từng bước; None khi sai hình dạng, tool không chỉ-đọc, tham số lạ, tham chiếu sai, quá trần."""
     try:
-        plan = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip()))
+        plan = model_json.loads(text)
     except ValueError:
         return None
     steps = plan.get("steps") if isinstance(plan, dict) else None
