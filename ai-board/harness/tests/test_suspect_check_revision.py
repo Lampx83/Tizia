@@ -41,12 +41,13 @@ def replan_on(monkeypatch):
 
 # Plan checks reach the server plan.
 
-def test_canonical_carries_checks_per_file_only_with_plan_checks_on(monkeypatch):
+@pytest.mark.parametrize("missing", FLAGS)
+def test_canonical_carries_checks_per_file_only_with_both_flags_on(monkeypatch, flags, missing):
     old = old_plan(subtask(checks=[CHECK]), subtask(checks=[CHECK, OTHER]), subtask("public/y.html"))
-    monkeypatch.delenv("AI_BOARD_PLAN_CHECKS", raising=False)
+    monkeypatch.delenv(missing)
     off = worker_planner.HarnessPlanner._canonical({"domain": "it"}, old)
     assert all("checks" not in step for step in off["steps"])
-    monkeypatch.setenv("AI_BOARD_PLAN_CHECKS", "1")
+    monkeypatch.setenv(missing, "1")
     on = worker_planner.HarnessPlanner._canonical({"domain": "it"}, old)
     assert [step.get("checks") for step in on["steps"]] == [[CHECK, OTHER], None]
     assert worker_execution._execution_plan(on)["subtasks"][0]["checks"] == [CHECK, OTHER]

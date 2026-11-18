@@ -52,9 +52,17 @@ def test_container_log_not_found_is_not_infra():
     assert replay.branch(trial([], text=text, request="x"))["branch"] == checks.CANDIDATE_WRONG
 
 
+def test_stored_stagnation_stop_without_diffs_is_near_identical_and_bare_records_are_unreplayable():
+    stopped = {"outcome": "blocked", "verdict_reason": "loop stop stagnation: 2 consecutive repairs with similarity 0.991 > 0.98"}
+    assert replay.branch(stopped)["branch"] == replay.NEAR
+    assert replay.branch({"outcome": "blocked", "verdict_reason": "gate 4: SyntaxError"})["branch"] is None
+    assert replay.branch({"verdict_reason": "acceptance: sh: curl: not found"})["branch"] == checks.INFRA
+    assert replay.report([stopped, {"outcome": "blocked"}]).endswith("candidate_wrong=0\nunreplayable: 1")
+
+
 def test_report_counts_every_case_once(tmp_path):
     for name, record in FIXTURES.items():
         (tmp_path / f"B0-r1-{name}.json").write_text(json.dumps(record), encoding="utf-8")
     out = replay.report(replay.load(tmp_path))
     assert "B0-r1-near\tnear_identical" in out
-    assert out.endswith("summary: infra=1 check_suspect=2 near_identical=1 candidate_wrong=1")
+    assert out.endswith("summary: infra=1 check_suspect=2 near_identical=1 candidate_wrong=1\nunreplayable: 0")

@@ -4,7 +4,9 @@ CLI (from ai-board/harness): python -m evaluation.replay_suspect_checks <trial.j
 Record keys read (all optional): case|id, request ({subject, body} or text) | request_detail, full_diff | diff,
 gates (verdict gates; Gate 5 evidence.checks.rows or the 'Check Gate 5: {json}' log line in evidence.text),
 evidence (bare Gate 5 evidence), repair_diffs (per repair round: {file: diff} or diff text),
-repair_state.diff_texts (journal). Precedence when several apply: infra > check_suspect > near_identical > candidate_wrong.
+repair_state.diff_texts (journal), loop_stop | verdict_reason | internal_reason (a stored stagnation stop counts as
+near_identical when no diffs were kept). Precedence: infra > check_suspect > near_identical > candidate_wrong; a record
+with no Gate 5 check rows, no diffs and no stored stop is counted as unreplayable, not as a branch.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from gates.gate5_session import missing_tool  # noqa: E402
+from runtime import loop_guard  # noqa: E402
 from verification import checks  # noqa: E402
 from worker_execution import near_identical  # noqa: E402
 
@@ -71,7 +74,8 @@ def branch(record: dict) -> dict:
     red = [row for row in found if row.get("base") is False and not row.get("candidate")]
     # WHY: the app's own container log can say "not found" without any Gate 5 tool missing
     own_log = str(evidence.get("text") or "").split("Container logs before teardown")[0]
-    tool = missing_tool(f"{gate.get('reason') or ''}\n{own_log}")
+    stop = "\n".join(str(record.get(key) or "") for key in ("loop_stop", "verdict_reason", "internal_reason"))
+    tool = missing_tool(f"{gate.get('reason') or ''}\n{own_log}\n{stop}")
     if any(row.get("class") == INFRA for row in found) or tool:
         return {"branch": INFRA, "why": f"thiếu công cụ {tool}" if tool else "check không chạy được"}
     request, diff = _request(record), str(record.get("full_diff") or record.get("diff") or "")
@@ -82,6 +86,10 @@ def branch(record: dict) -> dict:
     rounds = _rounds(record)
     if len(rounds) >= 2 and (low := near_identical(rounds[-2], rounds[-1])) is not None:
         return {"branch": NEAR, "why": f"similarity {low:.3f}"}
+    if not rounds and loop_guard.REASON_STAGNATION in stop:
+        return {"branch": NEAR, "why": "loop stop stagnation đã lưu"}
+    if not found and not rounds:
+        return {"branch": None, "why": "không có check Gate 5, diff hay loop stop"}
     return {"branch": WRONG, "why": f"{len(red)} check đỏ" if red else "không có check đỏ"}
 
 
@@ -90,7 +98,8 @@ def report(records: list[dict]) -> str:
              for index, record in enumerate(records)]
     lines = [f"{row['case']}\t{row['branch']}\t{row['why']}" for row in table]
     counts = {name: sum(row["branch"] == name for row in table) for name in BRANCHES}
-    return "\n".join([*lines, "", "summary: " + " ".join(f"{k}={v}" for k, v in counts.items())])
+    return "\n".join([*lines, "", "summary: " + " ".join(f"{k}={v}" for k, v in counts.items()),
+                      f"unreplayable: {sum(row['branch'] is None for row in table)}"])
 
 
 if __name__ == "__main__":

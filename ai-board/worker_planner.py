@@ -351,7 +351,8 @@ class HarnessPlanner:
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
-        planned = _checks_by_file(old) if get_settings().plan_checks else {}
+        settings = get_settings()
+        planned = _checks_by_file(old) if settings.plan_checks and settings.red_check_classify else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
