@@ -323,6 +323,12 @@ _INJECTION = [re.compile(p, re.I) for p in (
     r"<\s*script\b", r"javascript\s*:", r"\son[a-z]+\s*=", r"\beval\s*\(", r"new\s+Function\s*\(",
     r"child_process", r"document\.write\s*\(",
 )]
+# Handler kept verbatim from a removed line of the same file: a text edit re-adds the line, not the handler.
+_HANDLER = re.compile(r"""\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+
+
+def _without_kept_handlers(line: str, kept: set[str]) -> str:
+    return _HANDLER.sub(lambda m: "" if m.group().strip() in kept else m.group(), line)
 # prompt_injection trên CHỮ HIỂN THỊ (cổng 4): chỉ mẫu ĐIỀU KHIỂN bộ soát/AI — đổi hướng dẫn, đổi vai,
 # đòi khoá bí mật, đòi nhãn/tự duyệt, mã hoá giấu lệnh. Chữ trang học thường (câu vô nghĩa, tiếng Việt
 # không dấu, ghi chú chỉ nhắc "hệ thống"/"prompt") không khớp. So trên bản fold (bỏ dấu) nên term ASCII
@@ -480,6 +486,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     for path, deleted, added, removed, existing, binary in sections:
         is_test = bool(_TEST_PATH.search(path))
         base_actions = {a for line in removed for a in _FORM_ACTION.findall(line)}
+        kept_handlers = {m.group().strip() for line in removed for m in _HANDLER.finditer(line)}
         ui_changed |= path.startswith("public/")
         if path == ".env" or (path.startswith(".env.") and not path.endswith(".example")):
             add("secret", "critical", f"{path}: không được chạm file env")
@@ -501,9 +508,10 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             if _pii(line, allowed_contacts):
                 add("pii", "medium", f"{path}: dòng thêm có email/SĐT/CCCD")
             if path.startswith("public/") and not _SAFE_SCRIPT.match(line) and not _FEATURE_MODULE.match(line):
-                pattern = next((p for p in _INJECTION if p.search(line)), None)
-                if pattern and pattern is _INJECTION[0] and _INLINE_SCRIPT.match(line) \
-                        and not any(p.search(line) for p in _INJECTION[1:]):
+                probe = _without_kept_handlers(line, kept_handlers)
+                pattern = next((p for p in _INJECTION if p.search(probe)), None)
+                if pattern and pattern is _INJECTION[0] and _INLINE_SCRIPT.match(probe) \
+                        and not any(p.search(probe) for p in _INJECTION[1:]):
                     add("inline_script", "medium", f"{path}:{number}: không dùng <script> inline; đưa code vào public/js/features/<slug>/index.js, HTML chỉ có 1 dòng nạp module",
                         line=number, pattern=pattern.pattern)
                 elif pattern:
