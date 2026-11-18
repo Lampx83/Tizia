@@ -81,3 +81,35 @@ def test_pg_runner_failed_migration_still_drops_database():
     report = db_check.check_migration("CREATE TABLE broken (;", db_check.PgRunner(dsn))
     assert report["status"] == "failed" and report["error"]
     assert _leftover_check_dbs(dsn) == []
+
+
+@pytest.mark.parametrize("sql", [
+    "ALTER TABLE faq_items ADD COLUMN a int, DROP COLUMN question;",
+    "ALTER TABLE faq_items ADD COLUMN a int NOT NULL;",
+    "ALTER TABLE faq_items ALTER COLUMN question SET NOT NULL;",
+    "ALTER TABLE faq_items ADD COLUMN a int; DROP TABLE faq_items",
+    "INSERT INTO faq_items (id, question) VALUES (1, 'x') ON CONFLICT (id) DO UPDATE SET question = 'y';",
+    "DELETE FROM faq_items;",
+    "UPDATE faq_items SET question = 'x' WHERE id = 1;",
+    "DO $$ BEGIN DROP TABLE faq_items; END $$;",
+    "CREATE TABLE copy AS SELECT * FROM faq_items;",
+    "DROP INDEX IF EXISTS faq_idx;",
+])
+def test_sneaky_destructive_sql_is_blocked(sql):
+    assert db_check.violations(sql)
+
+
+@pytest.mark.parametrize("sql", [
+    "ALTER TABLE faq_items ADD COLUMN a int NOT NULL DEFAULT 0;",
+    "ALTER TABLE faq_items ADD COLUMN IF NOT EXISTS a text, ADD COLUMN b int;",
+    "ALTER TABLE faq_items ADD COLUMN a text CHECK (a <> 'not null');",
+    "CREATE UNIQUE INDEX IF NOT EXISTS faq_slug ON faq_items (slug);",
+    "INSERT INTO faq_items (id, question) VALUES (1, 'DROP TABLE x; -- not code');",
+    "INSERT INTO faq_items (id, question) VALUES (2, $q$a; DROP TABLE x$q$);",
+])
+def test_additive_variants_pass(sql):
+    assert db_check.violations(sql) == []
+
+
+def test_semicolon_inside_string_does_not_hide_a_second_statement():
+    assert db_check.violations("INSERT INTO t (a) VALUES ('x;'); DROP TABLE t;")
