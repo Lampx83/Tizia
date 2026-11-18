@@ -18,7 +18,7 @@ const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-V
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
   skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
-const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+const REQUEST_STATUS_LABEL = { pending: 'Chờ duyệt', reviewing: 'Đang làm', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
@@ -28,6 +28,7 @@ const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null,
   elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '',
   net: { pending: [], approved: [], idx: 0, reason: '', msg: '' } };
 let view = null;
+let loadedAt = null;
 
 async function api(path, options = {}) {
   const r = await fetch(path, { credentials:'same-origin', ...options, signal: options.signal ?? AbortSignal.timeout(10000) });
@@ -845,9 +846,15 @@ async function refresh() {
   ]);
   if (!thread.ok) {
     stopLiveTrace();
-    $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
+    const msg = `Không tải được yêu cầu #${REQUEST_ID} (${thread.data?.error || thread.status}).`;
+    if (!view) { showLoadError(msg); return false; }
+    // Keep the loaded screen; a full fetch on the next poll clears the notice.
+    traceEtag = null;
+    ui.traceError = ui.flash = `${msg} Đang hiện dữ liệu tải lúc ${fmt(loadedAt)}.`;
+    render();
     return false;
   }
+  loadedAt = Date.now();
   ui.net.pending = netPending.ok ? (netPending.data.items || []) : [];
   ui.net.approved = netApproved.ok ? (netApproved.data.items || []) : [];
   if (ui.net.idx >= ui.net.pending.length) ui.net.idx = 0;
@@ -996,8 +1003,20 @@ if (window.top !== window) {
 
 installLightbox();
 
-(async () => {
+function showLoadError(text) {
+  $('#app').innerHTML = `<p class="err" role="alert">${esc(text)} <button type="button" class="btn" data-action="reload">Thử lại</button></p>`;
+}
+
+async function boot() {
   if (!REQUEST_ID) { $('#app').innerHTML = '<p class="err">Thiếu id yêu cầu.</p>'; return; }
   try { if (await refresh()) poll.arm(); }
-  catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<p class="err">Lỗi: ${esc(e.message)}</p>`; }
-})();
+  catch (e) { if (e.message !== 'login' && !view) showLoadError(`Lỗi: ${e.message}`); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#app [data-action="reload"]')) return;
+  $('#app').innerHTML = '<p class="meta" role="status">Đang tải yêu cầu…</p>';
+  boot();
+});
+
+boot();

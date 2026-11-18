@@ -431,7 +431,7 @@ async function loadRequests() {
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
   skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
-const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+const REQUEST_STATUS_LABEL = { pending: 'Chờ duyệt', reviewing: 'Đang làm', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
 // Nút Góp ý chèn dòng đầu "[Trang: …] /đường-dẫn" làm ngữ cảnh; cột nội dung chỉ hiện lời người yêu cầu.
