@@ -168,6 +168,11 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
+def plan_repairing(request: dict) -> bool:
+    """True on a plan repair round; the validator learns only this bit, never the planner-only hint."""
+    return bool(request.get("plan_repair"))
+
+
 def form_warnings_on() -> bool:
     return bool(get_settings().form_errors_as_warnings)
 
