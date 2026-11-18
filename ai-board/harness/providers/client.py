@@ -73,6 +73,36 @@ def read_body(response, limit_s: float) -> bytes:
             return b''.join(chunks)
         chunks.append(chunk)
 
+
+def sse_completion(text: str) -> dict:
+    """Chat completion dict from an OpenAI SSE stream: content and tool-call deltas joined, last finish, usage.
+    Raise ValueError when the stream holds no choice."""
+    content, calls, finish, usage, seen = [], {}, None, None, False
+    for line in text.splitlines():
+        data = line[5:].strip() if line.startswith('data:') else ''
+        if not data or data == '[DONE]':
+            continue
+        event = json.loads(data)
+        usage = event.get('usage') or usage
+        for choice in event.get('choices') or []:
+            seen = True
+            delta = choice.get('delta') or {}
+            content.append(delta.get('content') or '')
+            for part in delta.get('tool_calls') or []:
+                call = calls.setdefault(part.get('index', 0), {'id': None, 'type': 'function',
+                                                               'function': {'name': '', 'arguments': ''}})
+                call['id'] = part.get('id') or call['id']
+                fn = part.get('function') or {}
+                call['function']['name'] += fn.get('name') or ''
+                call['function']['arguments'] += fn.get('arguments') or ''
+            finish = choice.get('finish_reason') or finish
+    if not seen:
+        raise ValueError('stream has no choice')
+    message = {'role': 'assistant', 'content': ''.join(content)}
+    if calls:
+        message['tool_calls'] = [calls[i] for i in sorted(calls)]
+    return {'choices': [{'message': message, 'finish_reason': finish}], **({'usage': usage} if usage else {})}
+
 # num_ctx khai tường minh (spec: 1 model nóng, ctx là giới hạn cứng). 8K: prompt ≤ ~4.5K + output ≤ 3K
 # token vừa đủ; bớt ~1.5 GiB KV so với 16K trên GPU dùng chung đã sát trần 75% (42,500 MiB).
 NUM_CTX = 8192
@@ -209,6 +239,8 @@ class OllamaClient:
                                chat_template_kwargs={'enable_thinking': False})
             if hosted:
                 _api_throttle()
+                if get_settings().api_stream:
+                    payload.update(stream=True, stream_options={'include_usage': True})
             body = self._post(self._chat_path(), payload, retry=False)  # Deps owns retries and charges each HTTP attempt.
             try:
                 choice = body['choices'][0]
@@ -377,7 +409,8 @@ class OllamaClient:
                 timeout = self.remaining_s()  # Metadata and durable admission may have consumed the deadline.
                 send = urllib.request.build_opener(_NoRedirect()).open if self.protocol == 'vllm' else urllib.request.urlopen
                 with send(req, timeout=timeout) as resp:
-                    body = json.loads(read_body(resp, timeout).decode("utf-8"))
+                    text = read_body(resp, timeout).decode("utf-8")
+                    body = sse_completion(text) if payload.get('stream') else json.loads(text)
                     return body
             except urllib.error.HTTPError as error:
                 unsent = True  # error status: no completion and no usage, so nothing to charge
