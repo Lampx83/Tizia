@@ -15,6 +15,7 @@ from worker_client import CONTRACT, LeaseLostError, REPO_ROOT
 from runtime import feedback_cap, loop_guard, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
+from verification import checks  # noqa: E402
 import path_policy  # noqa: E402
 
 
@@ -42,9 +43,9 @@ def _execution_plan(plan: dict) -> dict:
         tests = step.get("tests") or []
         if not scope or not tests:
             raise ValueError("plan step requires allowed_scope and tests")
-        checks = dict.fromkeys([*tests, *(step.get("acceptance") or [])])
+        verify = dict.fromkeys([*tests, *(step.get("acceptance") or [])])
         subtasks.append({
-            **step, "file": scope[0], "verify": "; ".join(checks),
+            **step, "file": scope[0], "verify": "; ".join(verify),
             "size": "small" if step.get("risk") == "low" else "large",
         })
     if not subtasks:
@@ -114,6 +115,41 @@ def repair_cap() -> int:
     if not REPAIR_REPLAN.get("enabled"):
         return MAX_REPAIRS
     return max(MAX_REPAIRS, int(REPAIR_REPLAN.get("max_repairs") or 0))
+
+
+# The planner finds this marker in the root's internal_reason (= verdict reason) on the replan lease.
+CHECK_REVISE = "check_suspect_revise:"
+_REVISE_JSON = 700  # verdict reason is cut at 1000 chars server-side, after the stop report prefix
+
+
+def revise_reason(old: list[dict], reason: str) -> str:
+    return f"{CHECK_REVISE} {json.dumps(old, ensure_ascii=False, separators=(',', ':'))} | {reason}"
+
+
+def _norm_diff(text: str) -> str:
+    """Diff without hunk/index headers, whitespace collapsed per line."""
+    return "\n".join(" ".join(line.split()) for line in str(text).splitlines() if not line.startswith(("@@", "index ")))
+
+
+def near_identical(before: dict[str, str], after: dict[str, str]) -> float | None:
+    """Lowest similarity when every subtask diff of two rounds is above the loop-guard threshold, else None."""
+    if not after or before.keys() != after.keys():
+        return None
+    guard = loop_limits()
+    low = min(loop_guard.similarity(_norm_diff(before[file]), _norm_diff(after[file]), guard["similarity_max_chars"])
+              for file in after)
+    return low if low > guard["similarity"] else None
+
+
+def check_rows(result: dict | None) -> list[dict]:
+    return list((((result or {}).get("evidence") or {}).get("checks") or {}).get("rows") or [])
+
+
+def revision_of(plan: dict | None) -> list[dict]:
+    """Check revisions the plan carries: file, reason, replaced checks, the checks now in force."""
+    return [{"file": (step.get("allowed_scope") or [None])[0], "reason": step["check_revision"].get("reason"),
+             "old": list(step["check_revision"].get("old") or []), "new": list(step.get("checks") or [])}
+            for step in (plan or {}).get("steps") or [] if isinstance(step.get("check_revision"), dict)]
 
 
 def _passed(gates: list[dict], kind: str | None) -> bool:
@@ -187,6 +223,7 @@ class _Execution:
         self.round_metrics: list[dict] = []
         self.progress_rounds = self.no_progress = 0
         self.diff_texts: list[str] = []
+        self.repair_diffs: dict | None = None
         self.progress_window = None
         self.agent_attempts = 0
         self.agent_evidence: list[dict] = []
@@ -327,6 +364,7 @@ class _Execution:
             repair_state = state.get("repair_state") or {}
             self.round_metrics = list(repair_state.get("round_metrics") or [])
             self.diff_texts = list(repair_state.get("diff_texts") or [])
+            self.repair_diffs = repair_state.get("repair_diffs")
             self.progress_rounds = int(repair_state.get("progress_rounds") or 0)
             self.no_progress = int(repair_state.get("no_progress") or 0)
             tried = [str(item) for item in repair_state.get("window_tried") or []][:20]
@@ -373,6 +411,7 @@ class _Execution:
                 "no_progress": self.no_progress, "stop_note": self.stop_note, "repair_reason": self.repair_reason,
                 "repair_evidence": self.repair_evidence,
                 "diff_texts": [str(text)[-8000:] for text in self.diff_texts[-3:]],
+                **({"repair_diffs": self.repair_diffs} if self.repair_diffs else {}),
                 "window_tried": list(self.progress_window.tried) if self.progress_window is not None else [],
             },
         }
@@ -493,6 +532,11 @@ class _Execution:
             if not public["blocked"] and public["runner"] != "eval" and not (public.get("functional") or {}).get("passed"):
                 public.update(blocked=True, reason="missing independent functional evidence")
                 result["failure_class"] = "plan"
+            suspects = [row for row in check_rows(result) if row.get("class") == checks.CHECK_SUSPECT]
+            if not public["blocked"] and suspects and self._revise(suspects):
+                public.update(blocked=True, reason=f"{checks.CHECK_SUSPECT}: " + " | ".join(
+                    str(row.get("suspect")) for row in suspects)[:500])
+                result["failure_class"] = "plan"
         self.gates.append(public)
         if public["blocked"]:
             self.kind = result.get("failure_class") or "ordinary"
@@ -547,6 +591,8 @@ class _Execution:
             return "done"
         if self._package_request(last):
             return "done"
+        if self._repeat_suspect(last):
+            return "done"
         if REPAIR_REPLAN.get("enabled") and not self._repair_allowed(last):
             from runtime import repair_agent as agent
             if (agent.applies(last.get("repair_action")) and last.get("repair_class") != "broken_check"
@@ -577,6 +623,44 @@ class _Execution:
         from runtime import repair_session
         self.repair_evidence = repair_session.compact(last.get("evidence"))
         return "repair"
+
+    def _repeat_suspect(self, last: dict) -> bool:
+        """Two consecutive repairs with near-identical diffs while Gate 5 checks stay red: the check is suspect, stop repairing."""
+        if not get_settings().red_check_classify or last.get("gate") != 5:
+            return False
+        cap = loop_limits()["similarity_max_chars"]  # similarity reads no further; keeps the journal entry small
+        now = {str(item.get("file")): str(item.get("diff") or "")[:cap] for item in (self.state or {}).get("diffs") or []}
+        before = self.repair_diffs
+        self.repair_diffs = {"round": len(self.repairs), "diffs": now} if self.repairs else None
+        wrong = [row for row in check_rows(self.last_result) if row.get("class") == checks.CANDIDATE_WRONG]
+        if not wrong or not before or before["round"] != len(self.repairs) - 1:
+            return False
+        low = near_identical(before["diffs"], now)
+        if low is None:
+            return False
+        why = f"hai lượt repair liên tiếp cho diff gần trùng (similarity {low:.3f} > {loop_limits()['similarity']})"
+        for row in wrong:
+            row.update({"class": checks.CHECK_SUSPECT, "suspect": why})
+        if any(row.get("origin") != "plan" for row in wrong):
+            self.stop_note = f"{checks.CHECK_SUSPECT}: {checks.SUSPECT_STOP}: {why}"
+        elif not self._revise(wrong):
+            self.stop_note = f"{checks.CHECK_SUSPECT}: {why}"
+        return True
+
+    def _revise(self, rows: list[dict]) -> bool:
+        """Model-declared suspect checks, no revision yet: end as a plan failure so the server replans once, carrying the reason."""
+        settings = get_settings()
+        if (not (REPAIR_REPLAN.get("enabled") and settings.plan_checks and settings.red_check_classify)
+                or revision_of(self.plan) or any(row.get("origin") != "plan" for row in rows)):
+            return False
+        steps = self.plan.get("steps") or []
+        old = [{"file": next(((step.get("allowed_scope") or [None])[0] for step in steps
+                              if row["check"] in (step.get("checks") or [])), None),
+                "check": row["check"], "reason": str(row.get("suspect") or "")[:200]} for row in rows]
+        if len(json.dumps(old, ensure_ascii=False)) > _REVISE_JSON:
+            return False
+        self.kind, self.stop_note = "plan", revise_reason(old, f"{checks.CHECK_SUSPECT}: thay check một lần qua plan revision")
+        return True
 
     def _project(self):
         """Deps and repo roots at the base sha, read from the checkout (not the host)."""
@@ -851,11 +935,16 @@ class _Execution:
         manifests = path_policy.manifest_changes(st.get("file") for st in (self.plan or {}).get("subtasks") or [])
         files = next((g["files"] for g in gates if g["gate"] == 4 and g.get("files")), None)
         outside = (files or {}).get("out_of_plan") or []
-        needs_review = passed and (oracle_review or last["risk_level"] in ("high", "critical") or bool(manifests) or bool(outside))
+        revised = revision_of(self.plan) if get_settings().red_check_classify else []
+        needs_review = passed and (oracle_review or bool(revised) or last["risk_level"] in ("high", "critical")
+                                   or bool(manifests) or bool(outside))
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
-        if oracle_review:
+        if passed and revised:
+            reason = "check đã thay một lần qua nhánh nghi check, cần người xem: " + "; ".join(
+                f"{item['file']}: {item['reason']}" for item in revised)[:400]
+        elif oracle_review:
             reason = ("needs_review, không có oracle hành vi, generated tests/smoke/acceptance xanh: "
                       if not oracle.get("probe_id")
                       else "oracle functional fail trong khi acceptance, generated tests và smoke xanh: ") + str(oracle.get("reason"))[:300]
@@ -865,10 +954,16 @@ class _Execution:
                       else "risk triage requires human review")
         else:
             reason = last["reason"]
+        if passed and oracle.get("check_suspect"):
+            reason = f"{reason} | {checks.CHECK_SUSPECT}: " + " | ".join(str(item) for item in oracle["check_suspect"])[:400]
         if self.halt.get("reason") and not passed:
             reason = f"loop stop {self.halt['reason']}: {self.halt['detail']} | {reason}"
+        elif self.stop_note and not passed and self.stop_note.startswith(CHECK_REVISE):
+            reason = f"{self.stop_note} | {reason}"
         elif self.stop_note and not passed:
             reason = f"{reason} | repair stop: {self.stop_note}"
+        if revised:
+            self._trace_revision(revised)
         stop = None
         if not passed and (stop_report.enabled() or self.feedback_stop):
             stop = stop_report.build(outcome, reason, last["gate"], kind, [g["gate"] for g in gates])
@@ -888,10 +983,19 @@ class _Execution:
             "budget_used": int(getattr(self.budget, "units", 0)), "gates": gates, "config_sha256": config_sha256(),
             **progress.verdict_fields(window=self.progress_window),
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
+            **({"check_revision": revised} if revised else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }
         return "passed"
+
+    def _trace_revision(self, revised: list[dict]) -> None:
+        trace = getattr(self.deps, "trace", None)
+        if trace is None or not hasattr(trace, "add_span"):
+            return
+        now = int(time.time() * 1000)
+        trace.add_span("plan_revision.checks", {"tizia.check_revision": json.dumps(revised, ensure_ascii=False)[:4000]},
+                       start_ms=now, end_ms=now)
 
 
 
