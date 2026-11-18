@@ -45,3 +45,13 @@ def test_plan_and_codegen_and_repair_use_the_reader(monkeypatch):
         with pytest.raises(Exception):
             parse('{"x": 1}')
     assert len(seen) == 3
+
+
+def test_object_wrapped_in_the_prompt_data_fence_is_extracted():
+    """fe-01 r106: the reply echoed the <<< >>> data fence around the plan."""
+    assert model_json.loads('<<<\n\n{"summary_vi": "x", "subtasks": []}\n>>>\n') == {"summary_vi": "x", "subtasks": []}
+
+
+def test_prose_with_no_object_still_raises():
+    with pytest.raises(ValueError):
+        model_json.loads("<<< không có gì >>>")
