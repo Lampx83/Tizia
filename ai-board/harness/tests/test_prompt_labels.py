@@ -76,3 +76,37 @@ def test_worker_label_drift_fails_closed():
     assert pl.label_mismatch(None, fp_new) == ["missing"]
     assert pl.label_mismatch(fp_old, fp_new) == ["labels"]
     assert pl.label_mismatch(fp_new, fp_new) == []
+
+
+def test_disk_hash_must_match_label_or_lock():
+    lock = _lock(OLD)
+    with pytest.raises(pl.LabelMismatch):
+        pl.check("implement.md", lock=lock, labels={}, disk=NEW)
+    assert pl.check("implement.md", lock=lock, labels={"implement.md": {"production": NEW}}, disk=NEW) == NEW
+    with pytest.raises(pl.LabelMismatch):
+        pl.check("implement.md", lock=lock, labels={"implement.md": {"production": NEW}}, disk=OLD)
+
+
+def test_staging_label_never_blocks_the_worker():
+    labels = {"implement.md": {"production": OLD, "staging": NEW}}
+    assert pl.check_all(lock=_lock(OLD), labels=labels, disk={"implement.md": OLD}) == []
+
+
+def test_check_all_compares_production_to_disk_when_given():
+    labels = {"implement.md": {"production": NEW}}
+    assert pl.check_all(lock=_lock(OLD), labels=labels, disk={"implement.md": NEW}) == []
+    assert pl.check_all(lock=_lock(OLD), labels={}, disk={"implement.md": NEW})[0]["have"] == NEW
+
+
+def test_disk_versions_hash_the_file_bytes(tmp_path):
+    (tmp_path / "a.md").write_bytes("xin chào\n".encode())
+    (tmp_path / "prompts.lock.json").write_text("{}")
+    versions = pl.disk_versions(tmp_path)
+    import hashlib
+    assert versions == {"a.md": {"hash": hashlib.sha256("xin chào\n".encode()).hexdigest(), "content": "xin chào\n"}}
+
+
+def test_fingerprint_is_compact_canonical_json():
+    import hashlib
+    assert pl.fingerprint({"b.md": {"production": NEW}, "a.md": {"staging": OLD}}) == hashlib.sha256(
+        ('{"a.md":{"staging":"%s"},"b.md":{"production":"%s"}}' % (OLD, NEW)).encode()).hexdigest()

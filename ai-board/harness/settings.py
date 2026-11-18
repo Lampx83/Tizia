@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     keep_blocked_candidate: bool = False  # eval: keep the branch of a gate 4+ block and report it as blocked_candidate
     provider_patience: bool = False  # hosted API: longer backoff, Retry-After, wait out the cooldown of an empty pool
     gate5_queue_wait_s: float = Field(default=0, ge=0)  # seconds to poll a busy sandbox runner at create before the busy verdict; 0 = off
+    prompt_labels: bool = False  # worker registers prompt versions, serves them by server label; label/disk drift or a stale label table blocks (transient)
     api_stream: bool = False  # hosted API: stream and join deltas; the proxy joins non-stream chunks with newlines
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = True  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan

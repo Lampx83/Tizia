@@ -73,7 +73,7 @@ const TYPE = { backend:'Backend', frontend:'Giao diện', database:'Cơ sở d�
 const STATUS = { draft:'Bản nháp', approved:'Đã duyệt', disabled:'Đã tắt' };
 const NODE = { plan:'Lập plan', execute:'Viết code', verdict:'Kết luận' };
 const IMPORT_OUTCOME = { imported:'đã nhập', skipped:'bỏ qua (đã có, trùng nội dung)', conflict:'xung đột (khác nội dung, chưa ghi đè)', rejected:'bị từ chối' };
-const lineDiff = (a, b) => {
+export const lineDiff = (a, b) => {
   const x = a.replace(/\n$/, '').split('\n'), y = b.replace(/\n$/, '').split('\n'), t = Array.from({ length:x.length + 1 }, () => new Array(y.length + 1).fill(0));
   for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) t[i][j] = x[i] === y[j] ? t[i+1][j+1] + 1 : Math.max(t[i+1][j], t[i][j+1]);
   const rows = []; let i = 0, j = 0;
