@@ -186,7 +186,7 @@ def _imports(code: str, file: str) -> list[tuple[str, list[str]]]:
     for names, spec in _IMPORT.findall(code or ""):
         resolved = posixpath.normpath(posixpath.join(base, spec))
         inside = _NAMED.search(names or "")
-        wanted = [item.strip().split(" as ")[-1].strip()
+        wanted = [item.strip().split(" as ")[0].strip()  # exported name; the alias is local to the importer
                   for item in (inside.group(1).split(",") if inside else [])]
         found.append((resolved, [name for name in wanted if re.fullmatch(r"[A-Za-z_$][\w$]*", name or "")]))
     return found
