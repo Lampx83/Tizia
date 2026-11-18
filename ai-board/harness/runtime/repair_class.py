@@ -7,6 +7,7 @@ import shlex
 
 from runtime import network_request
 from settings import get_settings
+from verification import checks
 
 REPAIR_CODE, REPLAN, STOP_ADMIN, RETRY = "repair_code", "replan", "stop_admin", "retry"
 _SCOPE = re.compile(r"out of scope|ngoài scope|ScopeViolation|allowed_scope|import cấm", re.I)
@@ -77,6 +78,8 @@ def classify(result: dict, produced: dict[str, dict], scope: set[str], settled=(
         out = ("plan_inconsistent", REPLAN)
     elif failure_class != "ordinary":
         out = ("scope" if failure_class == "critical" else failure_class, STOP_ADMIN)
+    elif reason.startswith(checks.SUSPECT_STOP):
+        out = (checks.CHECK_SUSPECT, STOP_ADMIN)
     elif _SCOPE.search(text):
         out = ("scope", STOP_ADMIN)
     elif "timed out" in reason:

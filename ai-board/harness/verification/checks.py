@@ -4,11 +4,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 
 MAX_CHECKS = 8
 MAX_TEXT = 200
 MAX_PATH = 300
 CODE_FAULT, PROOF, NONE = "broken", "proving", "none"
+CANDIDATE_WRONG, CHECK_SUSPECT, INFRA = "candidate_wrong", "check_suspect", "infra"
+SUSPECT_STOP = "check dựng từ yêu cầu nghi sai, không thay được"
 _PROP = re.compile(r"[a-z-]{1,40}")
 
 
@@ -116,6 +119,41 @@ def passed(check: dict, status: int, body: bytes, dom=None) -> bool:
     if kind == "selector_exists":
         return bool(dom and dom[0])
     return bool(dom and dom[0] and dom[1] == check["value"])  # computed_style
+
+
+def _literal(check: dict) -> str | None:
+    kind = check["primitive"]
+    if kind in ("text_present", "text_absent"):
+        return unicodedata.normalize("NFC", check["text"])
+    if kind in ("computed_style", "api_json"):
+        return unicodedata.normalize("NFC", check["value"]).casefold()
+    if kind == "selector_exists":
+        return unicodedata.normalize("NFC", check["selector"]).lstrip(".#").casefold()
+    return None
+
+
+def suspect(check: dict, request: str, diff: str) -> str | None:
+    """Why a check red on base and candidate is the check's fault, not the code's; None = candidate_wrong.
+    Only harness-checkable facts: malformed check, or the requested value already in the diff."""
+    if issue := problem(check):
+        return f"check sai dạng: {issue}"
+    want = _literal(check)
+    if not want or not request or not diff:
+        return None
+    fold = check["primitive"] not in ("text_present", "text_absent")
+
+    def norm(text: str) -> str:
+        text = unicodedata.normalize("NFC", text)
+        return text.casefold() if fold else text
+    # WHY: the model writes both check and code, so a literal only in the diff (a comment) is no evidence
+    if want not in norm(request):
+        return None
+    lines = diff.splitlines()
+    added = any(want in norm(line[1:]) for line in lines if line.startswith("+") and not line.startswith("+++"))
+    removed = any(want in norm(line[1:]) for line in lines if line.startswith("-") and not line.startswith("---"))
+    if check["primitive"] == "text_absent":
+        return f"diff đã xoá chữ yêu cầu {want!r} nhưng check vẫn đỏ" if removed and not added else None
+    return f"diff đã thêm giá trị yêu cầu {want!r} nhưng check vẫn đỏ" if added else None
 
 
 def classify(rows: list[dict]) -> str:
