@@ -10,7 +10,7 @@ FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-      bash ca-certificates curl git iptables tini
+      bash ca-certificates curl git iptables libatomic1 tini  # libatomic1: Playwright 1.65 driver node links it
 # Static docker/dockerd/containerd/runc + compose and buildx plugins (compose v2: `!override` tags in gate 5).
 COPY --from=docker /usr/local/bin/ /usr/local/bin/
 COPY --from=docker /usr/local/libexec/docker/ /usr/local/libexec/docker/
