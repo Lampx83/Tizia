@@ -830,7 +830,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 try:
                     return _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
                 except (CheckInfra, OSError, subprocess.TimeoutExpired) as exc:
-                    if not classify_on:
+                    if not classify_on or isinstance(exc, urllib.error.HTTPError):  # HTTPError is an OSError: the app answered
                         raise
                     row["class"], stage = gate_checks.INFRA, "tooling"
                     where = f"{row['check']['primitive']} {gate_checks.target(row['check'])}"

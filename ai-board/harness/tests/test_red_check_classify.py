@@ -1,5 +1,6 @@
 """Gate 5 classifies each check red on base and candidate before any repair: candidate_wrong, check_suspect or infra."""
 import subprocess
+import urllib.error
 
 import pytest
 
@@ -167,6 +168,29 @@ def test_check_probe_network_error_is_infra(tmp_path, monkeypatch, both, pages, 
 def flag_off(monkeypatch):
     monkeypatch.setenv("AI_BOARD_PLAN_CHECKS", "1")
     monkeypatch.delenv(FLAG, raising=False)
+
+
+def test_check_probe_http_error_stays_a_candidate_failure(tmp_path, monkeypatch, both, pages, base_mode):
+    calls = []
+
+    def probe(url, *, token=None):
+        calls.append(url)
+        if len(calls) > 1:
+            raise urllib.error.HTTPError(url, 500, "x", {}, None)
+        return 200, PAGE
+    monkeypatch.setattr(verify, "probe_http", probe)
+    out = run(tmp_path, [STYLE])
+    assert out["blocked"] is True and out["failure_class"] == verify.STAGE_CLASS["ordinary"]
+
+
+def test_suspect_stop_spends_no_repair_in_the_loop(monkeypatch):
+    from test_repair_broken_check import _check
+    import worker_execution
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {**worker_execution.REPAIR_REPLAN, "enabled": True})
+    execution, step = _check(f"{checks.SUSPECT_STOP}: text_present /x.html: diff đã thêm")
+    assert step == "done" and execution.repairs == []
+    execution.verdict()
+    assert execution.result["outcome"] == "blocked" and checks.CHECK_SUSPECT in execution.result["reason"]
 
 
 def test_flag_off_keeps_suspect_red_on_both_blocking_as_today(tmp_path, monkeypatch, flag_off, pages, base_mode):
