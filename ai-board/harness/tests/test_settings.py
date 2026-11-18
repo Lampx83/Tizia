@@ -25,6 +25,7 @@ def test_defaults(monkeypatch):
     assert all((s.plan_repair, s.gate_feedback_cap, s.stop_report_v2, s.gate1_arbiter,
                 s.no_oracle_review_any, s.gate1_unified_verify))
     assert s.repair_same_session is False and s.quoted_checks is False and s.red_check_classify is False
+    assert s.legacy_probe_shadow is False
     assert s.sandbox_url is None and s.project == "tizia"
     assert s.backend_contexts_surface is False and s.backend_contexts_surface_list == settings.APPROVED_SURFACE_CONTEXTS
 
