@@ -337,12 +337,17 @@ def summary(cases: list[dict]) -> str:
         f"  {split} {kind} L{level}: {sum(s.values())} ({', '.join(f'{k} {v}' for k, v in sorted(s.items()))})" for (split, kind, level), s in cells.items()])
 
 
-def case_record(case: dict, root: Path, source) -> dict:
-    """Case corpus → bản ghi cho eval_gold.run_case, chạy trên checkout ở base_sha của case."""
+def case_record(case: dict, root: Path, source, behaviour: dict | None = None) -> dict:
+    """Case corpus → bản ghi cho eval_gold.run_case, chạy trên checkout ở base_sha của case.
+    behaviour {id: checks}: verdict chính là check hành vi, so khớp gold thành tín hiệu phụ `secondary` (không vào state của worker)."""
     repo = checkout_at(root, case["base_sha"], source)
     base = None
     if "edits" in case["gold"]:
         base = subprocess.run(["git", "show", f"{case['base_sha']}:{case['file']}"], cwd=repo, check=True, capture_output=True,
                               stdin=subprocess.DEVNULL).stdout.decode("utf-8")
-    return {"subtask": {"title": case["title"], "file": case["file"], "size": "small", "verify": case["verify"]},
-            "detail": case["detail"], "checkout": str(repo), "oracle": lambda html: check(html, base, case)}
+    record = {"subtask": {"title": case["title"], "file": case["file"], "size": "small", "verify": case["verify"]},
+              "detail": case["detail"], "checkout": str(repo), "oracle": lambda html: check(html, base, case)}
+    if items := (behaviour or {}).get(case["id"]):
+        from evaluation import behaviour_oracle
+        record["secondary"], record["oracle"] = record["oracle"], lambda html: behaviour_oracle.verdict(items, case["file"], html)
+    return record

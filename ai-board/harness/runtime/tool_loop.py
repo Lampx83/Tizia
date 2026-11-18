@@ -221,6 +221,11 @@ class ScopeMiss(Forbidden):
     error_kind = "scope"
 
 
+class ScopeTooLarge(Forbidden):
+    """Agent chạm quá trần file: dừng, không cắt diff."""
+    error_kind = "scope_too_large"
+
+
 class NetworkPause(Exception):
     """Network request chưa có quyết định: dừng loop, chờ admin."""
 
@@ -340,7 +345,8 @@ class Workspace:
     """Bản nháp của file đích trong bộ nhớ + test; nguồn là git sha cố định."""
 
     def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None,
-                 extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None, plan_checks: bool = False):
+                 extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None, plan_checks: bool = False,
+                 outside_role: str | None = None):
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.skills = dict(skills or {})
         self.extra_base = dict(extras or {})
@@ -350,6 +356,8 @@ class Workspace:
         self.test_file = self.test = None
         self.stale_reset = None
         self.scope_warned = False
+        self.outside_role = outside_role
+        self.out_of_plan: list[str] = []
         self.checks, self.budget, self.proofs = checks, budget, {}
         self.plan_checks = plan_checks
         self.trace = trace
@@ -418,9 +426,22 @@ class Workspace:
             raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
             raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}")
+        if test and self.outside_role:
+            self._cap({path})
+        if not test and path != self.file and path not in self.extra_content and self.outside_role \
+                and path_policy.outside_plan_ok(path, self.outside_role):
+            self._cap({path})
+            base = tools._show(self.source, self.sha, path)
+            self.extra_base[path], self.extra_content[path] = base, base or ""
+            self.out_of_plan.append(path)
         if not test and path != self.file and path not in self.extra_content:
             raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
         return path
+
+    def _cap(self, adding: set[str]) -> None:
+        touched = {self.file, *self.extra_content, *([self.test_file] if self.test_file else []), *adding}
+        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
+            raise ScopeTooLarge(f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}")
 
     def _fresh(self) -> None:
         bases = {self.file: self.base_hash, **{path: None if base is None else sha_of(base) for path, base in self.extra_base.items()}}
@@ -553,6 +574,7 @@ class Workspace:
         changed = {path: text for path, text in self.extra_content.items() if text != (self.extra_base[path] or "")}
         return {"code": self.content, "test_file": self.test_file, "test": self.test,
                 **({"extra_files": changed} if changed else {}),
+                **({"out_of_plan": [p for p in self.out_of_plan if p in changed]} if self.out_of_plan else {}),
                 **({'verification': self.proofs} if self.checks else {})}
 
 
@@ -860,7 +882,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
-                sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=()) -> dict:
+                sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=(),
+                requester_role: str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -885,7 +908,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                if _SANDBOX_OFFERED.get() else None)
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
-                   extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")))
+                   extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
+                   outside_role=requester_role if get_settings().out_of_plan_files else None)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if extras:
         prompt += MULTI.format(files=", ".join(paths))

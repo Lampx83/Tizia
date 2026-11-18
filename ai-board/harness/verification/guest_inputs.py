@@ -31,6 +31,7 @@ GUEST_INPUTS: dict[str, Input] = {
     # WHY: the guest VM gets no AI_BOARD_* env, so the host decides and ships the switch in state.
     "quoted_checks": Input(derive=lambda state, role: True if get_settings().quoted_checks else None),
     "oracle_css_size": Input(derive=lambda state, role: True if get_settings().oracle_css_size else None),
+    "red_check_classify": Input(derive=lambda state, role: True if get_settings().red_check_classify else None),
     # WHY: the plan is private to the worker; the guest gets only the derived list. surface_tests is role-independent today
     # (path_policy.may_edit ignores role), the role parameter is the seam for when that changes.
     "surface_tests": Input(derive=lambda state, role: levels.surface_tests(state.get("plan")),

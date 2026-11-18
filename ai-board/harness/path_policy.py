@@ -83,6 +83,16 @@ def may_edit(path, role: str = "student") -> bool:
     return normalized is not None and not refused(normalized) and any(p.search(normalized) for p in _ZONE_ALLOWED)
 
 
+OUT_OF_PLAN_CAP = 8
+
+
+def outside_plan_ok(path, role: str = "student") -> bool:
+    """File ngoài plan sửa được: cờ out_of_plan_files bật, vai admin, trong vùng sửa của vai, ngoài vùng cấm."""
+    from settings import get_settings
+    return bool(get_settings().out_of_plan_files and role == ADMIN_ROLE and not denied(path, "write")
+                and not refused(path) and may_edit(path, role))
+
+
 def manifest_changes(paths) -> list[str]:
     """Tên package manifest (package.json, package-lock.json) trong danh sách path, đã chuẩn hoá, sắp xếp."""
     found = {normalize(p) for p in paths}

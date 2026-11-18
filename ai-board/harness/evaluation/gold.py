@@ -91,6 +91,7 @@ def run_case(name: str, case: dict, model: str, base: Deps, after=None, *, budge
     total = lambda key: sum((c["metrics"].get(key) or 0) for c in calls)  # noqa: E731
     multi = "subtasks" in case
     passed = all(files.values()) and not out.get("blocked") and case["oracle"](files if multi else files[subtasks[0]["file"]])
+    secondary = case.get("secondary")
     row = {
         "case": name, "model": model, "gate_passed": not out.get("blocked"), "oracle": passed,
         "last_output": None if passed or not calls else calls[-1]["output"][:1500],
@@ -101,6 +102,7 @@ def run_case(name: str, case: dict, model: str, base: Deps, after=None, *, budge
         "tokens_in": total("tokens_in"), "tokens_out": total("tokens_out"),
         "model_loads": sum((c["metrics"].get("load_ms") or 0) > 500 for c in calls),
         "done_reasons": [c["metrics"].get("done_reason") for c in calls], **extra,
+        **({"gold_match": bool(all(files.values()) and not out.get("blocked") and secondary(files[subtasks[0]["file"]]))} if secondary else {}),
     }
     if True:
         before = implement._existing_files(state["checkout_source"], subtasks)[1]

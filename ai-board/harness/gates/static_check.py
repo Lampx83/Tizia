@@ -283,6 +283,14 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         return base_cache[path]
 
     check_header = get_settings().file_header_check
+    outside_on, role = get_settings().out_of_plan_files, state.get("requester_role") or "student"
+    out_of_plan: set[str] = set()
+    if outside_on:
+        touched = {_posix(p) for d in diffs for p in (d["file"], d.get("test_file"), *(d.get("extra_files") or [])) if p}
+        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
+            reason = f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}"
+            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [reason],
+                    "failure_class": "critical"}
     issues: list[str] = oversize_issues(state) if check_size else []
     needs_careful_review = bool(issues)
     for d in diffs:
@@ -298,6 +306,9 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
 
         extras = [_posix(path) for path in d.get("extra_files") or []]
         stray = [path for path in extras if path not in planned_files]
+        if outside_on:
+            out_of_plan.update(path for path in stray if path_policy.outside_plan_ok(path, role))
+            stray = [path for path in stray if path not in out_of_plan]
         if stray:
             reason = f"file ngoài plan trong diff: {', '.join(stray)}"
             return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
@@ -348,6 +359,17 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                 "issues": [*issues, reason], "failure_class": "ordinary", **report}
 
+    if out_of_plan:
+        uncovered = _uncovered_logic(sorted(out_of_plan), diffs, scratch_repo)
+        if uncovered:
+            state["outside_cover_tries"] = tries = state.get("outside_cover_tries", 0) + 1
+            reason = f"file logic ngoài plan thiếu test phủ: {', '.join(uncovered)}"
+            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                    "issues": [*issues, reason], "failure_class": "ordinary" if tries == 1 else "critical"}
+    if outside_on:
+        report["files"] = {"in_plan": sorted(planned_files & {_posix(d["file"]) for d in diffs}),
+                           "out_of_plan": sorted(out_of_plan)}
+
     advisory: list[str] = []
     if deps is not None and budget is not None and getattr(deps, "models", None) is not None:
         review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
@@ -359,6 +381,17 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     return {"gate": 4, "blocked": False, "reason": None,
             "needs_careful_review": needs_careful_review or bool(advisory),
             "issues": issues, "content_advisory": advisory, **report}
+
+
+def _uncovered_logic(paths: list[str], diffs: list[dict], scratch_repo) -> list[str]:
+    """Out-of-plan logic files (not display-only) that no generated test names."""
+    tests = []
+    for d in diffs:
+        test = d.get("test_file")
+        if test and scratch_repo and (Path(scratch_repo) / test).exists():
+            tests.append((Path(scratch_repo) / test).read_text(encoding="utf-8"))
+    return [p for p in paths if not change_class.display_only([(p, "", "x")])
+            and not any(path_policy.names_scope(text, [p]) for text in tests)]
 
 
 def _base_public_contacts(state: dict) -> set[str]:

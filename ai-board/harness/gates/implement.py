@@ -513,7 +513,7 @@ def restore(state: dict, repo_dir: str | Path | None = None) -> None:
         if not entry:
             continue
         diff_text = _write_and_diff(repo, subtask["file"], entry["code"], entry["test_file"], entry["test"],
-                                    _allowed_extras(subtask, entry))
+                                    _allowed_extras(subtask, entry, state.get("requester_role")))
         diffs.append({
             "title": subtask.get("title"), "file": subtask["file"], "test_file": entry["test_file"],
             "model": entry.get("model"), "diff": diff_text, **_extra_marker(subtask, entry),
@@ -633,21 +633,24 @@ def _progress_entry(out: dict, model: str) -> dict:
     """Phần tối thiểu để dựng lại 1 subtask đã xong mà không gọi model lần nữa."""
     return {"model": model, "test_file": out["test_file"], "code": out["code"], "test": out["test"],
             **({"extra_files": out["extra_files"]} if out.get("extra_files") else {}),
+            **({"out_of_plan": out["out_of_plan"]} if out.get("out_of_plan") else {}),
             **({"verification": out["verification"]} if out.get("verification") else {})}
 
 
-def _allowed_extras(subtask: dict, out: dict) -> dict[str, str]:
-    """Extra files of a proposal, each required to be in the plan-approved list. Raise ValueError otherwise."""
+def _allowed_extras(subtask: dict, out: dict, role: str | None = None) -> dict[str, str]:
+    """Extra files of a proposal, each required to be in the plan-approved list (or the loop's out-of-plan list for role). Raise ValueError otherwise."""
     extras = out.get("extra_files") or {}
     allowed = set(subtask_files.files_of(subtask)[1:])
     for path in extras:
-        if posixpath.normpath(path.replace("\\", "/")) not in allowed:
+        norm = posixpath.normpath(path.replace("\\", "/"))
+        if norm not in allowed and not (norm in (out.get("out_of_plan") or ()) and path_policy.outside_plan_ok(norm, role or "student")):
             raise ValueError(f"file '{path}' ngoài danh sách file của subtask {sorted(allowed)}")
     return extras
 
 
 def _extra_marker(subtask: dict, out: dict) -> dict:
-    return {"extra_files": sorted(out["extra_files"])} if out.get("extra_files") else {}
+    return {"extra_files": sorted(out["extra_files"]),
+            **({"out_of_plan": sorted(out["out_of_plan"])} if out.get("out_of_plan") else {})} if out.get("extra_files") else {}
 
 
 def empty_context_stop(subtask: dict, ctx: dict | None = None) -> dict | None:
@@ -737,7 +740,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             store=_checkpoint_store(state, db_path, proposal_id, child),
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
             contract=contract, repair_evidence=state.get("repair_evidence"),
-            session_from=_earlier_sessions(state, child))
+            session_from=_earlier_sessions(state, child),
+            **({"requester_role": state.get("requester_role")} if get_settings().out_of_plan_files else {}))
         if looped.get("stale_reset") and trace:
             trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
         receipts.extend(looped.get("sandbox_receipts", []))
@@ -955,7 +959,7 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
 
     def write(child: int, subtask: dict, out: dict, model: str) -> None:
         diff_text = _write_and_diff(repo, subtask["file"], out["code"], out["test_file"], out["test"],
-                                    _allowed_extras(subtask, out))
+                                    _allowed_extras(subtask, out, state.get("requester_role")))
         diffs.append({
             "title": subtask["title"], "file": subtask["file"], "test_file": out["test_file"],
             "model": model, "diff": diff_text, **_extra_marker(subtask, out),

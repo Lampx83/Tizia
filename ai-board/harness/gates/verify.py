@@ -544,6 +544,10 @@ class LoginRequired(RuntimeError):
     """The disposable app redirected a protected student page to login."""
 
 
+class CheckInfra(RuntimeError):
+    """A plan check could not run (tool missing, timeout): environment, not the candidate."""
+
+
 def probe_http(url: str, *, token: str | None = None) -> tuple[int, bytes]:
     request = urllib.request.Request(url)
     if token:
@@ -618,6 +622,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     primary = html[0] if html else _request_page(guest_input(state, "request_detail"))
     observed_pages = html or ([primary] if primary else [])
     quoted_on = bool(guest_input(state, "quoted_checks"))
+    classify_on = bool(guest_input(state, "red_check_classify"))
     quoted = functional.quoted_checks(state, observed_pages) if quoted_on and pages else []
     registry_on = (plan_checks_on and bool(guest_input(state, "checks"))) or bool(quoted)
     if registry_on:  # registry lệch phiên bản với bản admin đã duyệt: chặn trước khi chạy check, thử lại được sau duyệt
@@ -646,6 +651,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     stage = "boot"
     screenshot = None
     checks_result = None
+    suspects: list[str] = []
     smoke_ok = False
     http_observed = False
     soft = get_settings().soft_quality_checks
@@ -812,12 +818,27 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 command([*compose, "cp", str(Path(checkout) / file), f"tizia:/app/{file}"])
                 try:
                     command([*compose, "exec", "-T", "tizia", "node", "--test", f"/app/{file}"], timeout=60)
-                except (subprocess.TimeoutExpired, RuntimeError):
+                except (subprocess.TimeoutExpired, RuntimeError) as exc:
+                    if classify_on and not owned.expired and (isinstance(exc, subprocess.TimeoutExpired) or (
+                            tool := missing_tool(getattr(exc, "output", ""), getattr(exc, "returncode", None), "node"))):
+                        raise CheckInfra("timeout" if isinstance(exc, subprocess.TimeoutExpired) else f"thiếu công cụ {tool}") from exc
                     return False
                 return True
+
+            def check_passes(row: dict) -> bool:
+                nonlocal stage
+                try:
+                    return _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
+                except (CheckInfra, OSError, subprocess.TimeoutExpired) as exc:
+                    if not classify_on or isinstance(exc, urllib.error.HTTPError):  # HTTPError is an OSError: the app answered
+                        raise
+                    row["class"], stage = gate_checks.INFRA, "tooling"
+                    where = f"{row['check']['primitive']} {gate_checks.target(row['check'])}"
+                    logs.append(f"Check Gate 5 {gate_checks.INFRA}: {where}: {exc}")
+                    raise RuntimeError(f"check không chạy được (hạ tầng): {where}: {exc}") from exc
             for row in check_rows:  # candidate phase: container still serves the candidate
                 with _check_span(trace, "curl", gate_checks.target(row["check"])) as attrs:
-                    row["candidate"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
+                    row["candidate"] = check_passes(row)
                     attrs["tizia.gate5.check.passed"] = row["candidate"]
             http_observed = True
             stage = 'plan'
@@ -902,14 +923,30 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     if page in restored:  # file mới: base không có trang, đỏ trên base
                         row["base"] = False
                         continue
-                    row["base"] = _check_passes(row["check"], base, http_probe, dom_probe, node_ok)
-                checks_result = {"verdict": gate_checks.classify(check_rows),
-                                 "rows": [{key: row[key] for key in ("check", "base", "candidate")} for row in check_rows]}
+                    row["base"] = check_passes(row)
+                verdict = gate_checks.classify(check_rows)
+                red = [row for row in check_rows if row["base"] is False and not row["candidate"]]
+                if classify_on:
+                    request = f"{guest_input(state, 'request_title') or ''}\n{guest_input(state, 'request_detail') or ''}".strip()
+                    diff = "\n".join(str(item.get("diff") or "") for item in guest_input(state, "full_diff") or [])
+                    for row in red:
+                        why = gate_checks.suspect(row["check"], request, diff)
+                        row.update({"class": gate_checks.CHECK_SUSPECT if why else gate_checks.CANDIDATE_WRONG,
+                                    "origin": "harness" if row["check"] in quoted else "plan", **({"suspect": why} if why else {})})
+                checks_result = {"verdict": verdict,
+                                 "rows": [{key: row[key] for key in ("check", "base", "candidate", "class", "origin", "suspect")
+                                           if key in row} for row in check_rows]}
                 logs.append("Check Gate 5: " + json.dumps(checks_result, ensure_ascii=False))
-                if checks_result["verdict"] == gate_checks.CODE_FAULT:
+                wrong = [row for row in red if row.get("class") != gate_checks.CHECK_SUSPECT]
+                if wrong:
                     raise RuntimeError("check đỏ trên cả base lẫn candidate: " + ", ".join(
-                        f"{row['check']['primitive']} {gate_checks.target(row['check'])}" for row in check_rows
-                        if row["base"] is False and not row["candidate"]))
+                        f"{row['check']['primitive']} {gate_checks.target(row['check'])}" for row in wrong))
+                if fixed := [row for row in red if row["origin"] == "harness"]:
+                    raise RuntimeError(f"{gate_checks.SUSPECT_STOP}: " + " | ".join(
+                        f"{row['check']['primitive']} {gate_checks.target(row['check'])}: {row['suspect']}" for row in fixed))
+                suspects = [row["suspect"] for row in red]
+                if suspects:
+                    logs.append(f"Check Gate 5 {gate_checks.CHECK_SUSPECT}: không sửa code, needs_review: " + " | ".join(suspects))
                 if checks_result["verdict"] == gate_checks.NONE:
                     functional_result = {**functional_result, 'needs_review': True}
                     logs.append("Không có check nào đỏ trên base rồi xanh trên candidate: needs_review, admin xem ảnh trước/sau")
@@ -917,6 +954,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 functional_result = text_report(text_oracle, bool(checks_result) and checks_result["verdict"] == gate_checks.PROOF)
                 if functional_result.get("needs_review") and not check_rows:
                     logs.append("Không dựng được check từ chữ trích: needs_review, admin xem ảnh trước/sau")
+            if suspects:
+                functional_result = {**functional_result, "needs_review": True, "check_suspect": suspects}
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
             reason = (str(exc) or type(exc).__name__).replace(password, "[synthetic credential]")
             if owned.expired:
