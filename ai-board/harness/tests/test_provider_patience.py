@@ -101,3 +101,34 @@ def test_patience_outlasts_a_burst_of_six_errors(monkeypatch, patience):
     slept = []
     assert deps(hosted(), slept).call_model('a', 'p', gate=1, budget=Budget())['_provider'] == 'api'
     assert len(slept) == 6 and sum(slept) >= 120
+
+
+def probe(monkeypatch, models, slept):
+    import functools
+    from runtime import pipeline
+    from worker_planner import model_preflight
+    monkeypatch.setattr(pipeline, 'Deps', functools.partial(Deps, sleep=slept.append))
+    return model_preflight(models)()
+
+
+def test_probe_budget_covers_the_patience_schedule(monkeypatch, patience):
+    from runtime.pipeline import PATIENT_BACKOFF_S
+    mock_gateway(monkeypatch, [error(503)] * len(PATIENT_BACKOFF_S) + [OK])
+    slept = []
+    assert probe(monkeypatch, hosted(), slept) is None
+    assert len(slept) == len(PATIENT_BACKOFF_S)
+
+
+def test_probe_fails_when_the_whole_patience_schedule_is_503(monkeypatch, patience):
+    from runtime.pipeline import PATIENT_BACKOFF_S
+    mock_gateway(monkeypatch, [error(503)] * (len(PATIENT_BACKOFF_S) + 1) + [OK])
+    verdict = probe(monkeypatch, hosted(), [])
+    assert verdict['status'] == 'model_unavailable' and 'HTTP Error 503' in verdict['error']
+    assert 'budget exhausted' not in verdict['error']
+
+
+def test_probe_without_patience_keeps_the_short_schedule(monkeypatch):
+    mock_gateway(monkeypatch, [error(503)] * 3 + [OK])
+    slept = []
+    verdict = probe(monkeypatch, hosted(), slept)
+    assert verdict['status'] == 'model_unavailable' and slept == [2.0, 5.0]
