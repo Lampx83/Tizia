@@ -380,6 +380,7 @@ class OllamaClient:
                     body = json.loads(read_body(resp, timeout).decode("utf-8"))
                     return body
             except urllib.error.HTTPError as error:
+                unsent = True  # error status: no completion and no usage, so nothing to charge
                 if error.code not in RETRY_STATUS or pause is None:
                     raise
             except urllib.error.URLError as error:  # connection refused/reset; a read timeout is TimeoutError, not retried

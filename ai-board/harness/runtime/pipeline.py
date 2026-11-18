@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -86,6 +87,21 @@ _PROMPT_LOCK = meter.prompt_lock()
 # (limits.budget.wall_clock_s, 900s), đủ để vượt qua 1 lần nghẽn thoáng qua.
 # ponytail: hằng số cố định, chỉnh tại đây nếu thực tế cần khác.
 MODEL_RETRY_BACKOFF_S = (2.0, 5.0)
+# Hosted proxy answers 503/429 in bursts of tens of seconds: one short backoff then cooldown ended whole runs.
+PATIENT_BACKOFF_S = (2.0, 5.0, 15.0, 30.0)
+PATIENT_STATUS = {429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529}
+RETRY_AFTER_CAP_S = 60.0
+
+
+def _patient_wait(wait_s: float, error: Exception | None) -> float:
+    """Backoff with up to 25% jitter, floored by a numeric Retry-After (capped)."""
+    wait_s *= 1 + random.random() / 4
+    header = getattr(getattr(error, 'headers', None), 'get', lambda _: None)('Retry-After')
+    try:
+        wait_s = max(wait_s, min(float(header), RETRY_AFTER_CAP_S))
+    except (TypeError, ValueError):
+        pass
+    return wait_s
 
 
 def _retryable_model_error(error: Exception) -> bool:
@@ -283,7 +299,15 @@ class Deps:
         role = router.role(gate, model, self.models, explicit=role, extra=extra)
         prompt, extra, options = _split_call(prompt, role, router, extra, options, format)
         last_error = None
-        for candidate in router.candidates(role, exclude=exclude):
+        from settings import get_settings
+        patience = get_settings().provider_patience
+        pool = router.candidates(role, exclude=exclude)
+        wait = router.cooling_wait(role, exclude=exclude) if patience and not pool else None
+        if wait is not None:
+            self._check_wait(wait)
+            self.sleep(wait)
+            pool = router.candidates(role, exclude=exclude)
+        for candidate in pool:
             if self.model_candidate and role == self.model_role and candidate['id'] != self.model_candidate:
                 continue
             if candidate['id'] not in {item['id'] for item in router.candidates(role, exclude=exclude)}:
@@ -293,10 +317,12 @@ class Deps:
             cand_options = options
             if candidate['provider'] == 'api':
                 cand_options, evidence['limits'] = _api_options(role, router, options, budget)
-            for wait_s in (0.0,) + MODEL_RETRY_BACKOFF_S:
+            patient = patience and candidate['provider'] == 'api'
+            for wait_s in (0.0,) + (PATIENT_BACKOFF_S if patient else MODEL_RETRY_BACKOFF_S):
                 if not budget.tick() or not budget.can_request():
                     raise BudgetExhausted('budget exhausted before routed model call')
                 if wait_s:
+                    wait_s = _patient_wait(wait_s, last_error) if patient else wait_s
                     if getattr(client, 'deadline', None) is not None and wait_s >= client.remaining_s():
                         raise TimeoutError('Model request deadline exceeded')
                     self.sleep(wait_s)
@@ -337,7 +363,8 @@ class Deps:
                     return body
                 if self.stop_on_model_error:
                     raise error
-                retryable = (error.code in {500, 502, 503, 504} if isinstance(error, urllib.error.HTTPError)
+                retryable = (error.code in (PATIENT_STATUS if patient else {500, 502, 503, 504})
+                             if isinstance(error, urllib.error.HTTPError)
                              else _retryable_model_error(error))
                 if not retryable:
                     raise error

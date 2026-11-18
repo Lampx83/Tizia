@@ -43,3 +43,12 @@ def test_call_that_never_connected_settles_zero_tokens(monkeypatch, reason):
 def test_reset_or_read_timeout_keeps_usage_unknown(monkeypatch):
     assert post(monkeypatch, urllib.error.URLError(ConnectionResetError(104, 'reset')))['tokens_in'] is None
     assert post(monkeypatch, TimeoutError('read'))['tokens_in'] is None
+
+
+@pytest.mark.parametrize('code', [429, 503, 524])
+def test_error_status_reply_settles_zero_tokens(monkeypatch, code):
+    """An error status carries no usage: settling unknown charged the whole reservation to the root allowance."""
+    import io
+    error = urllib.error.HTTPError('https://api.example/v1', code, 'busy', {}, io.BytesIO(b'{}'))
+    metrics = post(monkeypatch, error)
+    assert (metrics['tokens_in'], metrics['tokens_out']) == (0, 0)
