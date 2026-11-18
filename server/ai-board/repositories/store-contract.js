@@ -407,10 +407,16 @@ function validatePrePrVerdict(value, selfRequest = false) {
   const candidate = value.candidate == null ? null : validateCandidate(value.candidate);
   if (candidate && value.outcome === 'blocked') throw new WorkerContractError('blocked verdict cannot keep a candidate');
   if (!candidate && value.outcome !== 'blocked') throw new WorkerContractError('passing verdict requires its candidate branch');
+  // Eval flag: a blocked run's kept branch, for grading the candidate; never a PR source.
+  let blockedCandidate = null;
+  if (value.outcome === 'blocked' && value.blocked_candidate != null) {
+    try { blockedCandidate = validateCandidate(value.blocked_candidate); } catch { blockedCandidate = null; }
+  }
   return { outcome: value.outcome, gate_reached: last.gate, reason: value.reason ? String(value.reason).slice(0, 1000) : last.reason,
     budget_used: budgetUsed, failure_class: failureClass,
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
+    ...(blockedCandidate ? { blocked_candidate: blockedCandidate } : {}),
     ...(cleanNetworkReport(value.network_requests) ? { network_requests: cleanNetworkReport(value.network_requests) } : {}),
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),

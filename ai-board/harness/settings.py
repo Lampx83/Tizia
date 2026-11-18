@@ -95,7 +95,8 @@ class Settings(BaseSettings):
     api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = True
-    soft_quality_checks: bool = True  # contract quality_checks: soft miss ships with a warning, hard miss blocks
+    soft_quality_checks: bool = True
+    keep_blocked_candidate: bool = False  # eval: keep the branch of a gate 4+ block and report it as blocked_candidate  # contract quality_checks: soft miss ships with a warning, hard miss blocks
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = True  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
     stop_report_v2: bool = True
