@@ -93,3 +93,11 @@ def test_empty_pool_without_patience_fails_as_before(monkeypatch):
     models.routing.failed(models.routing.first('gate1'))
     with pytest.raises(RuntimeError, match='No reviewed'):
         deps(models, []).call_model('a', 'p', gate=1, budget=Budget())
+
+
+def test_patience_outlasts_a_burst_of_six_errors(monkeypatch, patience):
+    """r105: five 503s in a row over about a minute ended gate 1; the schedule must reach past that."""
+    mock_gateway(monkeypatch, [error(503)] * 6 + [OK])
+    slept = []
+    assert deps(hosted(), slept).call_model('a', 'p', gate=1, budget=Budget())['_provider'] == 'api'
+    assert len(slept) == 6 and sum(slept) >= 120

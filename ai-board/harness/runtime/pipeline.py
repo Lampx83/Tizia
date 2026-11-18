@@ -88,7 +88,7 @@ _PROMPT_LOCK = meter.prompt_lock()
 # ponytail: hằng số cố định, chỉnh tại đây nếu thực tế cần khác.
 MODEL_RETRY_BACKOFF_S = (2.0, 5.0)
 # Hosted proxy answers 503/429 in bursts of tens of seconds: one short backoff then cooldown ended whole runs.
-PATIENT_BACKOFF_S = (2.0, 5.0, 15.0, 30.0)
+PATIENT_BACKOFF_S = (2.0, 5.0, 15.0, 30.0, 60.0, 90.0, 120.0)
 PATIENT_STATUS = {429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529}
 RETRY_AFTER_CAP_S = 60.0
 
