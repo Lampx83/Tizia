@@ -413,3 +413,33 @@ def test_runner_refuses_repo_script_outside_armed_tier(monkeypatch):
         runner_tier(client, "single")(["npm", "test"], {})
     assert client.created == []
     assert json.loads(runner_tier(client, "multi")(["npm", "test"], {}))["rc"] == 0
+
+
+class BusyCreate(FakeClient):
+    def __init__(self, busy):
+        super().__init__()
+        self.busy = busy
+
+    def create(self, run_id, manifest, **kw):
+        if self.busy > 0:
+            self.busy -= 1
+            raise SandboxError("busy", "provision", 429)
+        return super().create(run_id, manifest, **kw)
+
+
+def test_queue_wait_lets_a_tool_call_wait_for_a_busy_runner(monkeypatch):
+    from verification import sandbox as sandbox_verify
+    waited = []
+    monkeypatch.setattr(sandbox_verify, "_sleep", waited.append)
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "900")
+    client = BusyCreate(5)
+    out = json.loads(runner(client)(ALLOWED, {}))
+    assert out["rc"] == 0 and len(waited) > 0 and len(client.created) == 1
+
+
+def test_busy_create_without_queue_wait_still_raises_busy(monkeypatch):
+    from verification import sandbox as sandbox_verify
+    monkeypatch.setattr(sandbox_verify, "_sleep", lambda _s: None)
+    monkeypatch.delenv("AI_BOARD_GATE5_QUEUE_WAIT_S", raising=False)
+    with pytest.raises(sandbox_tool.RunnerBusy):
+        runner(BusyCreate(99))(ALLOWED, {})

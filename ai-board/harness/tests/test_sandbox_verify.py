@@ -3,6 +3,7 @@ import io
 import json
 import tarfile
 import time
+import types
 from pathlib import Path
 
 import pytest
@@ -531,3 +532,41 @@ def test_guest_probe_reads_peak_and_vm_memory_in_use(tmp_path):
 
     result = sandbox_verify.run(state(checkout(tmp_path)), client=Probe())
     assert (result["evidence"]["sandbox"]["peak_kib"], result["evidence"]["sandbox"]["vm_peak_kib"], result["evidence"]["sandbox"]["vm_cpu_peak_cores"], result["evidence"]["sandbox"]["vm_used_end_kib"]) == (1234, 2222222, 0.7, 3000000)
+
+
+def test_queue_wait_off_by_default_keeps_the_busy_verdict(tmp_path, sleeps):
+    client = Flaky(create_status=429, times=99)
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=client)["failure_class"] == "busy"
+    assert client.calls.count("create") == 3
+
+
+def test_queue_wait_polls_a_busy_runner_until_it_frees_and_records_the_wait(tmp_path, sleeps, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "900")
+    client = Flaky(create_status=429, times=7)
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=client)
+    assert result["blocked"] is False and client.calls.count("create") == 8
+    assert 0 < result["evidence"]["sandbox"]["queue_wait_s"] <= sum(sleeps)
+    assert max(sleeps) <= 30.5 and "destroy" in client.calls
+
+
+def test_queue_wait_spent_returns_the_busy_verdict_without_destroying_a_vm(tmp_path, sleeps, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "20")
+    client = Flaky(create_status=429, times=999)
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=client)
+    assert result["blocked"] and result["failure_class"] == "busy" and result["reason"] == "sandbox runner busy"
+    assert 20 <= sum(sleeps) < 20 + 31
+
+
+def test_queue_wait_stops_at_a_non_busy_error(tmp_path, sleeps, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "900")
+    assert sandbox_verify.run(state(checkout(tmp_path)), client=FakeClient(fail="create"))["blocked"] and sleeps == []
+
+
+def test_queue_wait_never_sleeps_past_the_gate_deadline(tmp_path, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(sandbox_verify, "_sleep", lambda s: now.__setitem__(0, now[0] + s))
+    monkeypatch.setattr(sandbox_verify.time, "monotonic", lambda: now[0])
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "900")
+    budget = types.SimpleNamespace(max_wall_clock_s=60, elapsed_s=0)
+    result = sandbox_verify.run(state(checkout(tmp_path)), client=Flaky(create_status=429, times=999), budget=budget)
+    assert result["blocked"] and now[0] <= 1060.0 + 0.1
