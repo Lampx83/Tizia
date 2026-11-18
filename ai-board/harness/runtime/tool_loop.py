@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import limits, meter, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
+from runtime import limits, meter, model_json, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
 from runtime.budget import BudgetExhausted, ChildBudget
 from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
@@ -154,7 +154,7 @@ def thought_of(body: dict) -> str | None:
             args = native[0].get("function", native[0]).get("arguments", {})
             raw = (json.loads(args or "{}") if isinstance(args, str) else args).get("thought")
         else:
-            raw = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", (body.get("response") or "").strip())).get("thought")
+            raw = model_json.loads(body.get("response")).get("thought")
     except (ValueError, AttributeError, IndexError, TypeError):
         return None
     return meter.redact(" ".join(raw.split()))[:THOUGHT_MAX] if isinstance(raw, str) and raw.strip() else None
@@ -282,9 +282,8 @@ def parse_request(body: dict) -> tuple[str, dict]:
         call = native[0].get("function", native[0])
         name, args = call.get("name"), call.get("arguments", {})
     else:
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", (body.get("response") or "").strip())
         try:
-            call = json.loads(text)
+            call = model_json.loads(body.get("response"))
         except ValueError as error:
             raise ToolError(f"không phải JSON: {error}") from None
         if not isinstance(call, dict):

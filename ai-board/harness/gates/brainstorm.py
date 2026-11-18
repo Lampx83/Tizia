@@ -36,7 +36,7 @@ from verification import functional
 import path_policy
 from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
-from runtime import levels, limits, subtask_files
+from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
 from settings import get_settings
 
@@ -185,7 +185,7 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
         warnings.append(message)
 
     try:
-        plan = json.loads(text)
+        plan = model_json.loads(text)
     except (TypeError, ValueError) as e:
         raise ValueError(f"không phải JSON: {e}") from None
     if not isinstance(plan, dict):

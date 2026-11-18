@@ -28,6 +28,7 @@ from pathlib import Path
 
 from security import classifier
 from gates import guard
+from runtime import model_json
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")
 
@@ -105,7 +106,7 @@ def _warns_by_role() -> bool:
 def parse_labels(text: str, allowed=LABELS) -> list[str]:
     """Parse {"labels": [...]} từ model. Raise ValueError nếu không phải JSON/nhãn ngoài tập đóng/rỗng."""
     try:
-        data = json.loads(_THINK.sub("", text or "").strip())
+        data = model_json.loads(text)
     except ValueError as e:
         raise ValueError(f"không phải JSON: {e}") from None
     labels = data.get("labels") if isinstance(data, dict) else None
