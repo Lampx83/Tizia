@@ -93,7 +93,10 @@ export function splitDockerfile(base, groups, modeLines, changes, links = []) {
   ].join('\n') + '\n';
 }
 
-export function oversizeLayers(historyText, maxBytes = LAYER_LIMITS.maxBytes) {
+// Microsandbox max_total_size per layer; LAYER_LIMITS plans below it because du under-counts the extracted size.
+export const EXTRACT_MAX_BYTES = 10 * GiB;
+
+export function oversizeLayers(historyText, maxBytes = EXTRACT_MAX_BYTES) {
   return historyText.split('\n').filter(Boolean).map(Number).filter((size) => size > maxBytes);
 }
 

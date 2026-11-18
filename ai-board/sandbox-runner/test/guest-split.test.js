@@ -86,6 +86,11 @@ test('unit symlinks are copied as links from a side stage before anything runs',
   assert.throws(() => splitDockerfile('base', [], [], [], ["/it's"]), /link path/);
 });
 
+test('the pin guard uses the extract limit, not the planning budget: du under-counts a planned 8 GiB group', () => {
+  assert.deepEqual(oversizeLayers('8845373440\n'), []);
+  assert.deepEqual(oversizeLayers('11000000000\n'), [11000000000]);
+});
+
 test('history sizes over the layer budget are reported', () => {
   assert.deepEqual(oversizeLayers('0\n13100000000\n512\n', 8 * GiB), [13100000000]);
   assert.deepEqual(oversizeLayers('0\n512\n', 8 * GiB), []);
