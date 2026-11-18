@@ -31,6 +31,7 @@ import { createGateProofService } from '../services/gate-proofs.js';
 import { createGateProofRepository } from '../repositories/gate-proofs.js';
 import { createToolManifestStore } from '../repositories/tool-manifests.js';
 import { createCheckRegistryStore } from '../repositories/check-registries.js';
+import { createPromptLabelStore } from '../repositories/prompt-labels.js';
 import { publicContract } from '../hsm/contract.js';
 import { createFeatureLifecycle } from '../services/feature-lifecycle.js';
 import { createFeatureLifecycleRepository } from '../repositories/feature-lifecycle.js';
@@ -459,6 +460,22 @@ export function attachAiBoardRequestRoutes(router, {
     try { res.json(await checkRegistries.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
   });
 
+  // ── Nhãn production/staging của prompt: admin đặt theo diff đã xem, rollback có receipt; sau cờ AI_BOARD_PROMPT_LABELS ──
+  const promptLabels = createPromptLabelStore(store.db);
+  const labelsOn = (_req, res, next) => getSettings().promptLabels ? next() : res.status(404).json({ error: 'prompt_labels_disabled' });
+  route.get('/api/admin/ai-board/prompt-labels', requireAuth, requireAdmin, labelsOn, async (_req, res) => {
+    res.json(await promptLabels.list());
+  });
+  route.get('/api/admin/ai-board/prompt-labels/:name/:hash', requireAuth, requireAdmin, labelsOn, async (req, res) => {
+    try { res.json(await promptLabels.content(req.params.name, req.params.hash)); } catch (error) { folderError(res, error); }
+  });
+  route.post('/api/admin/ai-board/prompt-labels/:name/:label/set', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, async (req, res) => {
+    try { res.json(await promptLabels.setLabel(req.params.name, req.params.label, req.body?.to, req.user.id, { from: req.body?.from, reason: req.body?.reason })); } catch (error) { folderError(res, error); }
+  });
+  route.post('/api/admin/ai-board/prompt-labels/:name/:label/rollback', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, async (req, res) => {
+    try { res.json(await promptLabels.rollback(req.params.name, req.params.label, req.user.id, { reason: req.body?.reason })); } catch (error) { folderError(res, error); }
+  });
+
   // ── Tự chạy lại yêu cầu bị chặn do lỗi hạ tầng thoáng qua (mọi loại yêu cầu, không riêng self) ──
   route.get('/api/admin/ai-board/transient-retry', requireAuth, requireAdmin, async (_req, res) => {
     res.json({ ...(await aux.transientRetryState(createTransientRetryRepository(store.db))), blocked: await aux.listTransientBlocked(createTransientRetryRepository(store.db)) });
@@ -637,6 +654,9 @@ export function attachAiBoardWorkerRoutes(router, {
   }));
   route.post('/api/ai-board/worker/tickets/:id/check-registry', authenticate, handle(async (req,res) => {
     res.json(await hsm.reportCheckRegistry(req.params.id,req.body || {}));
+  }));
+  route.post('/api/ai-board/worker/tickets/:id/prompt-labels', authenticate, (_req, res, next) => getSettings().promptLabels ? next() : res.status(404).json({ error: 'prompt_labels_disabled' }), handle(async (req,res) => {
+    res.json(await hsm.reportPromptLabels(req.params.id,req.body || {}));
   }));
   const gateProofs = createGateProofService(store, createGateProofRepository(store.db));
   route.post('/api/ai-board/worker/tickets/:id/gate-proof/:op', authenticate, handle(async (req,res) => {

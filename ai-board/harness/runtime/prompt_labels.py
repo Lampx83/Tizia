@@ -93,23 +93,41 @@ def rollback(name: str, label: str, actor: str, *, lock: dict, labels_path: Path
                    receipts_path=receipts_path, reason=reason)
 
 
-def check(name: str, *, lock: dict, labels: dict, label: str = "production") -> str | None:
-    """Lock hash for name; raise LabelMismatch if the label is set and points elsewhere."""
-    have, want = lock.get(name), labels.get(name, {}).get(label)
-    if want is not None and want != have:
-        raise LabelMismatch(name, label, want, have)
-    return have
+def check(name: str, *, lock: dict, labels: dict, label: str = "production", disk: str | None = None) -> str | None:
+    """Expected hash of name: label target, else lock. Raise LabelMismatch if the label or disk hash differs from it."""
+    want = labels.get(name, {}).get(label)
+    have = lock.get(name) if disk is None else disk
+    expected = want if want is not None else lock.get(name)
+    if have != expected:
+        raise LabelMismatch(name, label, expected, have)
+    return expected
 
 
-def check_all(*, lock: dict, labels: dict) -> list[dict]:
-    """Every label that does not match the lock; [] when consistent."""
-    return [{"name": name, "label": label, "want": sha, "have": lock.get(name)}
-            for name, by_label in sorted(labels.items()) for label, sha in sorted(by_label.items()) if lock.get(name) != sha]
+def check_all(*, lock: dict, labels: dict, disk: dict[str, str] | None = None) -> list[dict]:
+    """Every production label (and, given disk hashes, every prompt) that disagrees with what is served; [] when consistent."""
+    out = []
+    for name in sorted(set(labels) | set(disk or {})):
+        try:
+            check(name, lock=lock, labels=labels, disk=(disk or {}).get(name))
+        except LabelMismatch as e:
+            out.append({"name": name, "label": "production", "want": e.want, "have": e.have})
+    return out
+
+
+def disk_versions(directory: Path = _DIR) -> dict[str, dict[str, str]]:
+    """{file: {hash, content}} for every prompt file, hash over LF-normalised bytes (the lock stores what git keeps)."""
+    skip = {"prompts.lock.json", LABELS_PATH.name, RECEIPTS_PATH.name}
+    out = {}
+    for path in sorted(Path(directory).iterdir()):
+        if path.is_file() and path.name not in skip:
+            raw = path.read_bytes().replace(b"\r\n", b"\n")
+            out[path.name] = {"hash": hashlib.sha256(raw).hexdigest(), "content": raw.decode("utf-8")}
+    return out
 
 
 def fingerprint(labels: dict) -> str:
     """Stable sha256 of the label table; workers pin it like the other run pins."""
-    return hashlib.sha256(json.dumps(labels, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    return hashlib.sha256(json.dumps(labels, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def label_mismatch(pinned: str | None, current: str) -> list[str]:
