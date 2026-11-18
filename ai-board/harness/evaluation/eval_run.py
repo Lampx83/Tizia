@@ -27,6 +27,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from evaluation import behaviour_oracle  # noqa: E402
 from evaluation import eval_corpus  # noqa: E402
 from evaluation import eval_fast  # noqa: E402
 from evaluation import eval_feature  # noqa: E402
@@ -239,7 +240,9 @@ def build_report(meta: dict, cases: list[dict], rows: list[dict], total: int, cu
             "coverage_gap": {name: eval_fast.gap(sub) for name, sub in subs.items()}} if fast else {}
     return {**meta, "tier_label": "fast tier: không trộn vào ship rate chính thức", "official_ship_rate": None,
             "trials_done": len(rows_all), "trials_total": total, "cut_short": cut_short,
-            "cases": per_case, "groups": groups, **ship, "funnel": funnel, "failure_classes": classes,
+            "cases": per_case, "groups": groups, **ship,
+            **({"gold_match": {"passed": sum(r["gold_match"] for r in rows if "gold_match" in r), "trials": sum("gold_match" in r for r in rows),
+                               "disagreements": behaviour_oracle.disagreements(rows)}} if any("gold_match" in r for r in rows) else {}), "funnel": funnel, "failure_classes": classes,
             "cost": {"gpu_s_per_success": round(sum(r["gpu_s"] for r in rows) / wins, 1) if wins else None,
                      "wall_s_per_success": round(sum(r["wall_s"] for r in rows) / wins, 1) if wins else None},
             "verdict": verdict(groups, baseline, meta, cut_short)}
@@ -271,6 +274,9 @@ def render(rep: dict) -> str:
     lines += [f"độ phủ oracle {name}: đúng gold {g['correct']}, ship {g['shipped']}; đúng nhưng không có oracle {g['correct_no_oracle']}, "
               f"đúng nhưng cổng 4 chặn {g['correct_gate4_blocked']}, đúng nhưng oracle chặn {g['correct_oracle_failed']}, oracle cho qua bản sai {g['false_pass']}"
               for name, g in rep.get("coverage_gap", {}).items()]
+    if g := rep.get("gold_match"):
+        lines.append(f"tín hiệu phụ so khớp gold: {g['passed']}/{g['trials']}; bất đồng với oracle hành vi: "
+                     + (", ".join(f"{d['case']} (hành vi {d['behaviour']}, gold {d['gold_match']})" for d in g["disagreements"]) or "không"))
     v = rep["verdict"]
     lines.append(f"kết luận hồi quy: {v['status'].upper()}" + (f" ({v['reason']})" if v.get("reason") else ""))
     lines += [f"  {name}: mốc {d['baseline']}%, cận trên {d['upper']}%, tụt {d['drop']} điểm" + (f" > {v['max_drop']} → TỪ CHỐI" if d["regressed"] else "")
@@ -293,6 +299,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     subs.add_parser("quick", parents=[common], help="fast tier, N case dev lấy mẫu theo seed").add_argument("--cases", type=int, default=8)
     full = subs.add_parser("full", parents=[common], help="corpus trang thật ~60 case")
     full.add_argument("--cases", type=int, help="chỉ chạy N case mỗi split, lấy mẫu theo seed (mặc định: tất cả)")
+    full.add_argument("--behaviour", help="phiên bản corpus oracle hành vi (corpus/oracle-<v>/): verdict chính; so khớp gold thành tín hiệu phụ")
     full.add_argument("--fast-tier", action="store_true", help="thêm cổng 4 cơ học + oracle sản xuất (app node trên host)")
     full.add_argument("--split", choices=("dev", "heldout", "all"), default="dev", help="held-out chỉ chạy khi chọn rõ")
     subs.add_parser("corpus", parents=[seeded], help="chỉ sinh corpus + manifest, in số case mỗi ô")
@@ -343,7 +350,9 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
     run_dir = root / "runs" / name
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"tier": args.tier, "source": source, "seed": args.seed, "repeats": args.repeats, "model": model, "fast_tier": use_fast, "pins": pins(model, deps),
-            "corpus_sha": hashlib.sha256(json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()}
+            "corpus_sha": hashlib.sha256(json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
+            **({"behaviour": args.behaviour} if getattr(args, "behaviour", None) else {})}
+    behaviour = behaviour_oracle.load(root, args.behaviour) if getattr(args, "behaviour", None) else None
     meta_path = run_dir / "run.json"
     if meta_path.exists() and {k: json.loads(meta_path.read_text(encoding="utf-8")).get(k) for k in meta} != meta:
         print(f"[eval] {run_dir} đã có run khác cấu hình (corpus/repeats/model/cấu hình ghim); đổi seed hoặc --root", file=sys.stderr)
@@ -361,7 +370,7 @@ def main(argv: list[str] | None = None, deps: Deps | None = None, *, clock=time.
                 if args.budget_minutes is not None and clock() - started >= args.budget_minutes * 60:
                     cut_short = True
                     break
-                rec = eval_corpus.case_record(case, root, ROOT)
+                rec = eval_corpus.case_record(case, root, ROOT, behaviour if case["split"] == "dev" else None)
                 row = {**run_case(case["id"], rec, model, deps, fast.hook(rec) if fast else None),
                        **{k: case[k] for k in CELL if k in case}, "tier": SCOPE_TIER, "repeat": repeat}
                 if fast:
