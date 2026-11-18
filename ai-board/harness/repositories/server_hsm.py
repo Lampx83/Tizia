@@ -5,7 +5,7 @@ from contextvars import ContextVar
 _SERVER = ContextVar('gate4_hsm_server', default=None)
 
 # Cần admin duyệt manifest/folder rồi chạy lại: không phải vi phạm ranh giới.
-TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown','folder_not_approved','check_registry_not_approved','check_registry_unknown')
+TRANSIENT_REASONS=('tool_manifest_not_approved','tool_manifest_unknown','folder_not_approved','check_registry_not_approved','check_registry_unknown','prompt_label_mismatch','prompt_labels_mismatch')
 
 class AuthorityError(ValueError):
     def __init__(self,reason):
@@ -46,6 +46,7 @@ class RemoteGate4:
         self.path=f'/api/ai-board/worker/tickets/{ticket_id}/hsm'
         self.identity={'run_id':run_id,'worker_id':worker_id,'lease_token':lease_token,'contract_hash':contract['hash']}
         self.attempt=0
+        self._label_fp=None
 
     def register_tool_manifest(self,manifest):
         from urllib.error import HTTPError
@@ -61,9 +62,27 @@ class RemoteGate4:
         except HTTPError:
             raise AuthorityError('check_registry_unavailable') from None
 
+    def register_prompt_labels(self):
+        """Report disk prompt versions, take the server label table; return its fingerprint. Raise AuthorityError on drift."""
+        from urllib.error import HTTPError
+        from runtime import meter, prompt_labels
+        versions=prompt_labels.disk_versions()
+        try:
+            labels=self.client.post(self.path[:-len('/hsm')]+'/prompt-labels',{**self.identity,'versions':versions}).get('labels',{})
+        except HTTPError:
+            raise AuthorityError('prompt_labels_unavailable') from None
+        if prompt_labels.check_all(lock=meter.prompt_lock(),labels=labels,disk={name:v['hash'] for name,v in versions.items()}):
+            raise AuthorityError('prompt_label_mismatch')
+        return prompt_labels.fingerprint(labels)
+
     def authorize_action(self,action,**extra):
         from urllib.error import HTTPError
         import json
+        from settings import get_settings
+        if get_settings().prompt_labels:
+            if self._label_fp is None:
+                self._label_fp=self.register_prompt_labels()
+            extra={**extra,'prompt_labels':self._label_fp}
         try:
             answer=self.client.post(self.path+'/authority',{**self.identity,'action':action,**extra})
             if not isinstance(answer,dict) or answer.get('authorized') is not True:

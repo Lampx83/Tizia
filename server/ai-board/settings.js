@@ -17,6 +17,7 @@ export function getSettings(env = environment()) {
     ollamaUrl: text(env, 'OLLAMA_URL'),
     vllmUrl: text(env, 'VLLM_URL'),
     modelRouting: truthy(env.AI_BOARD_MODEL_ROUTING),
+    promptLabels: truthy(env.AI_BOARD_PROMPT_LABELS),
     tokenizerFile: text(env, 'AI_BOARD_QWEN_TOKENIZER'),
     workerKey: text(env, 'AI_BOARD_WORKER_KEY'),
     shots: {

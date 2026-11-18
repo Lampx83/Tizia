@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 from settings import get_settings
+from verification import checks
 from verification.guest_inputs import guest_input
 
 
@@ -107,6 +108,20 @@ def text_expectation(state):
     if add:
         return {'present': shown(quotes), 'absent': []}
     return {'present': [], 'absent': quotes} if remove else none
+
+
+def quoted_checks(state, pages):
+    """text_present/text_absent from the requester's quoted words on the observed page; [] unless the text oracle is the oracle."""
+    # ponytail: one page only; a per-path check cannot say "on any of these pages", add a union check if multi-page text cases matter.
+    if len(pages) != 1 or select(state) != TEXT_PROBE:
+        return []
+    want = text_expectation(state)
+    # an old text inside the new one ("A" -> "A nhé") can never be absent on a correct candidate
+    want['absent'] = [old for old in want['absent'] if not any(old in new for new in want['present'])]
+    made = [{'primitive': kind, 'path': pages[0], 'text': text}
+            for kind, key in (('text_present', 'present'), ('text_absent', 'absent'))
+            for text in want[key] if not _is_css_selector(text)]
+    return [check for check in made if checks.problem(check) is None]
 
 
 def behaviour_probe(text):

@@ -216,3 +216,31 @@ def test_node_test_red_on_candidate_without_base_is_needs_review_not_block(tmp_p
                      files={"test/checked.test.js": "// checked\n"})
     assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.NONE
     assert out["evidence"]["checks"]["rows"][0]["candidate"] is False
+
+
+def _guest_state(tmp_path, monkeypatch, flag):
+    from verification import guest_inputs
+    root = make_checkout(tmp_path)
+    worker = make_state(root, visual=True)
+    worker["plan"] = {"subtasks": [{"file": "public/x.html", "checks": [TEXT]}]}
+    worker["base_sha"] = "abc"
+    if flag:
+        monkeypatch.setenv("AI_BOARD_PLAN_CHECKS", "1")
+    else:
+        monkeypatch.delenv("AI_BOARD_PLAN_CHECKS", raising=False)
+    guest = guest_inputs.build(worker)
+    monkeypatch.delenv("AI_BOARD_PLAN_CHECKS", raising=False)
+    return root, guest
+
+
+def test_guest_with_empty_env_still_runs_plan_checks(tmp_path, monkeypatch, pages, base_mode):
+    serve(monkeypatch, base_mode, (200, BASE_PAGE), (200, CANDIDATE))
+    root, guest = _guest_state(tmp_path, monkeypatch, True)
+    assert "plan" not in guest
+    out = verify.run(guest, runner=FakeRunner(), checkout_dir=root)
+    assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.PROOF
+
+
+def test_guest_state_keys_unchanged_with_flags_off(tmp_path, monkeypatch):
+    _, guest = _guest_state(tmp_path, monkeypatch, False)
+    assert "checks" not in guest and "oracle_css_size" not in guest

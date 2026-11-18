@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     repair_diagnose: bool = False
     sandbox_tool: bool = False
     sandbox_repo_scripts: bool = False
+    db_check: bool = False  # migration trial on PG16 inside the microVM before admin applies
     sandbox_repo_scripts_tiers: str = ""  # csv tier names ("multi", "single") that get repo-script argv; "" = none
     skill_select: bool | None = None
     multimodal: bool = False
@@ -98,6 +99,8 @@ class Settings(BaseSettings):
     soft_quality_checks: bool = True  # contract quality_checks: soft miss ships with a warning, hard miss blocks
     keep_blocked_candidate: bool = False  # eval: keep the branch of a gate 4+ block and report it as blocked_candidate
     provider_patience: bool = False  # hosted API: longer backoff, Retry-After, wait out the cooldown of an empty pool
+    gate5_queue_wait_s: float = Field(default=0, ge=0)  # seconds to poll a busy sandbox runner at create before the busy verdict; 0 = off
+    prompt_labels: bool = False  # worker registers prompt versions, serves them by server label; label/disk drift or a stale label table blocks (transient)
     api_stream: bool = False  # hosted API: stream and join deltas; the proxy joins non-stream chunks with newlines
     compile_prose_verify: bool = False
     gate1_unified_verify: bool = True  # gate 1: một định nghĩa verify chạy được (có grep/rg); layer chỉ ép verify ở feature plan
@@ -115,6 +118,7 @@ class Settings(BaseSettings):
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
     derived_checks: bool = False  # gate 1: verify/checks của css_color/replace/insert/remove suy từ request bằng code, thay lệnh model viết
+    quoted_checks: bool = False  # gate 5: chữ người dùng trích thành text_present/text_absent theo luật đỏ→xanh; oracle chữ chỉ báo cáo
     file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
     file_header_context: bool = False  # tree/outline hiện dòng header của từng file
 

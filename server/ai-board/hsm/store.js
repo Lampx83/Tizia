@@ -4,6 +4,7 @@ import { CONTRACT, CONTRACT_HASH, diagram, statePath, publicContract } from './c
 import { CAPABILITY_CATALOG } from '../security/policy.js';
 import { createToolManifestStore, LOOP_TOOLS } from '../repositories/tool-manifests.js';
 import { createCheckRegistryStore } from '../repositories/check-registries.js';
+import { createPromptLabelStore } from '../repositories/prompt-labels.js';
 
 const fail=(code,status=409)=>{throw new WorkerContractError(code,status,code);};
 const view=row=>({...row,path:statePath(row.state),result:JSON.parse(row.result_json || 'null'),result_json:undefined});
@@ -12,6 +13,7 @@ export function createHsmStore(store) {
   const db=store.db;
   const manifests=createToolManifestStore(db);
   const checkRegistries=createCheckRegistryStore(db);
+  const promptLabels=createPromptLabelStore(db);
   async function executionPlan(t,root) {
     const plan=await t.get("SELECT * FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=? AND status='valid'",[root.id,root.plan_hash,root.plan_revision]);
     if (!plan || plan.tier==='core' || plan.capability_policy_hash!==CAPABILITY_CATALOG.hash || root.lease_mode!=='active'
@@ -110,6 +112,7 @@ export function createHsmStore(store) {
       if (!plan) fail('action_not_authorized');
       if (input.tool_manifest!==undefined || LOOP_TOOLS.has(input.action)) await manifests.assertApproved(t,input.tool_manifest);
       if (input.check_registry!==undefined) await checkRegistries.assertApproved(t,input.check_registry);
+      if (input.prompt_labels!==undefined) await promptLabels.assertCurrent(t,input.prompt_labels);
       const remaining=parentRemaining(root);
       if (!Number.isFinite(remaining) || remaining<=0) fail('action_budget_exhausted');
       // Mutating services still fence their own writes atomically.
@@ -124,5 +127,9 @@ export function createHsmStore(store) {
     await store.assertLease(ticketId,input.worker_id,input.lease_token);
     return checkRegistries.report(input.registry,input.worker_id);
   }
-  return {transition,read,readLeased,authorizeAction,reportToolManifest,reportCheckRegistry};
+  async function reportPromptLabels(ticketId,input) {
+    await store.assertLease(ticketId,input.worker_id,input.lease_token);
+    return promptLabels.register(input.versions,input.worker_id);
+  }
+  return {transition,read,readLeased,authorizeAction,reportToolManifest,reportCheckRegistry,reportPromptLabels};
 }

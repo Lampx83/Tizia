@@ -1,43 +1,131 @@
 """Run a board-generated migration on a throwaway PostgreSQL before the admin applies it.
 
 Only additive statements pass the allowlist; anything else is blocked before any DB call.
-The runner never connects to the target DB: it creates dbcheck_<hex>, runs there, drops it.
+PgRunner creates dbcheck_<hex> on a server; SandboxPgRunner runs PostgreSQL inside the microVM.
 """
 from __future__ import annotations
 
 import re
 import secrets
+import tempfile
+from urllib.parse import urlsplit
 
+PROFILE = "db_check"
+IMAGE = "postgres:16-alpine"
+CONTAINER = "dbcheck"
 ALLOWED = (
     re.compile(r"^CREATE TABLE( IF NOT EXISTS)? \S+ \("),
     re.compile(r"^CREATE (UNIQUE )?INDEX( IF NOT EXISTS)? \S+ ON \S+"),
-    re.compile(r"^ALTER TABLE( IF EXISTS)? \S+ ADD (COLUMN|CONSTRAINT) "),
+    re.compile(r"^ALTER TABLE( IF EXISTS)?( ONLY)? \S+ ADD (COLUMN|CONSTRAINT) "),
     re.compile(r"^COMMENT ON (TABLE|COLUMN) "),
     re.compile(r"^INSERT INTO \S+"),
 )
-_COMMENT = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+_DOLLAR = re.compile(r"\$[A-Za-z_]*\$")
+_ALTER = re.compile(r"^ALTER TABLE(?: IF EXISTS)?(?: ONLY)? \S+ (.*)$", re.S)
+_STRING = re.compile(r"'(?:[^']|'')*'")
+
+
+class TargetRefused(ValueError):
+    """DB target outside the sandbox."""
+
+
+class DbCheckUnavailable(RuntimeError):
+    """Guest cannot host PostgreSQL (no image / docker)."""
+
+
+def _split(sql: str, sep: str) -> list[str]:
+    """Split on top-level `sep`; comments dropped, quotes/dollar bodies kept intact (';' only splits outside them, ',' also outside parens)."""
+    out, buf, depth, i, n = [], [], 0, 0, len(sql)
+    while i < n:
+        c = sql[i]
+        if sql.startswith("--", i):
+            i = sql.find("\n", i)
+            i = n if i < 0 else i
+            buf.append(" ")
+            continue
+        if sql.startswith("/*", i):
+            i = sql.find("*/", i + 2)
+            i = n if i < 0 else i + 2
+            buf.append(" ")
+            continue
+        if c in ("'", '"'):
+            j = i + 1
+            while j < n:
+                if sql[j] == c:
+                    if sql[j + 1:j + 2] == c:
+                        j += 2
+                        continue
+                    break
+                j += 1
+            buf.append(sql[i:j + 1])
+            i = j + 1
+            continue
+        if c == "$" and (tag := _DOLLAR.match(sql, i)):
+            j = sql.find(tag.group(), tag.end())
+            j = n if j < 0 else j + len(tag.group())
+            buf.append(sql[i:j])
+            i = j
+            continue
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        if c == sep and (sep == ";" or depth == 0):
+            out.append("".join(buf))
+            buf = []
+        else:
+            buf.append(c)
+        i += 1
+    out.append("".join(buf))
+    return [" ".join(s.split()) for s in out if s.strip()]
 
 
 def _statements(sql: str) -> list[str]:
-    return [" ".join(s.split()) for s in _COMMENT.sub(" ", sql).split(";") if s.strip()]
+    return _split(sql, ";")
+
+
+def _problem(stmt: str) -> str | None:
+    up = stmt.upper()
+    if not any(p.match(up) for p in ALLOWED):
+        return "không additive"
+    code = _STRING.sub("''", up)
+    if up.startswith("INSERT") and re.search(r"\bDO UPDATE\b", code):
+        return "INSERT ... DO UPDATE sửa dữ liệu có sẵn"
+    alter = _ALTER.match(code)
+    if alter:
+        for clause in _split(alter.group(1), ","):
+            if not re.match(r"^ADD (COLUMN|CONSTRAINT) ", clause):
+                return "ALTER TABLE có hành động ngoài ADD COLUMN/CONSTRAINT"
+            if re.search(r"\bNOT NULL\b", clause) and not re.search(r"\bDEFAULT\b", clause) and clause.startswith("ADD COLUMN"):
+                return "ADD COLUMN NOT NULL không có DEFAULT"
+    return None
 
 
 def violations(sql: str) -> list[str]:
     """Statements outside the additive allowlist; [] when the migration is additive."""
     out = []
     for stmt in _statements(sql):
-        if not any(p.match(stmt.upper()) for p in ALLOWED):
-            out.append(f"không additive: {stmt[:120]}")
+        if reason := _problem(stmt):
+            out.append(f"{reason}: {stmt[:120]}")
     return out
 
 
+def assert_sandbox_target(dsn: str) -> None:
+    """Raise TargetRefused unless dsn host is loopback or a unix socket (inside the VM)."""
+    host = urlsplit(dsn).hostname
+    if host not in (None, "", "localhost", "127.0.0.1", "::1"):
+        raise TargetRefused(f"db_check target must be inside the sandbox, got host {host!r}")
+
+
 def check_migration(sql: str, runner, verify_sql: tuple[str, ...] | list[str] = ()) -> dict:
-    """Blocked report if non-additive, else runner result; status passed|failed|blocked."""
+    """Blocked report if non-additive, else runner result; status passed|failed|blocked|db_check_unavailable."""
     found = violations(sql)
     if found:
         return {"status": "blocked", "violations": found, "schema_diff": None, "checks": [], "error": None}
     try:
         result = runner.run(sql, list(verify_sql))
+    except DbCheckUnavailable as error:
+        return {"status": "db_check_unavailable", "violations": [], "schema_diff": None, "checks": [], "error": str(error)[:300]}
     except Exception as error:  # noqa: BLE001 — migration failure is the report, not a crash
         return {"status": "failed", "violations": [], "schema_diff": None, "checks": [], "error": str(error)[:300]}
     checks = result["checks"]
@@ -48,8 +136,12 @@ def check_migration(sql: str, runner, verify_sql: tuple[str, ...] | list[str] = 
 def _snapshot(conn) -> dict:
     cols = conn.execute("SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns "
                         "WHERE table_schema = 'public' ORDER BY 1, 2").fetchall()
+    return _shape(cols)
+
+
+def _shape(rows) -> dict:
     tables: dict[str, dict[str, str]] = {}
-    for table, column, dtype, nullable in cols:
+    for table, column, dtype, nullable in rows:
         tables.setdefault(table, {})[column] = f"{dtype}{'' if nullable == 'YES' else ' not null'}"
     return tables
 
@@ -89,3 +181,94 @@ class PgRunner:
         finally:
             with psycopg.connect(self.admin_dsn, autocommit=True) as admin:
                 admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+_SNAPSHOT_SQL = ("SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns "
+                 "WHERE table_schema = 'public' ORDER BY 1, 2")
+
+
+class SandboxPgRunner:
+    """PostgreSQL 16 container inside the microVM, no network, reached over its own unix socket; removed in finally."""
+
+    def __init__(self, session, timeout: float = 60.0):
+        self.session, self.timeout = session, timeout
+
+    def _docker(self, *argv: str) -> dict:
+        return self.session.exec(["docker", *argv], self.timeout)
+
+    def _psql(self, sql: str, *flags: str) -> dict:
+        return self._docker("exec", CONTAINER, "psql", "-U", "postgres", "-At", "-F", "|", *flags, "-c", sql)
+
+    def _snapshot(self) -> dict:
+        out = self._psql(_SNAPSHOT_SQL)
+        if out["rc"] != 0:
+            raise RuntimeError(f"snapshot failed: {out['stderr'][:200]}")
+        return _shape(tuple(line.split("|")) for line in out["stdout"].splitlines() if line)
+
+    def run(self, sql: str, verify_sql: list[str]) -> dict:
+        if self._docker("image", "inspect", IMAGE)["rc"] != 0:
+            raise DbCheckUnavailable(f"guest has no {IMAGE}")
+        started = self._docker("run", "-d", "--name", CONTAINER, "--network", "none", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", IMAGE)
+        if started["rc"] != 0:
+            raise DbCheckUnavailable(f"docker run failed: {started['stderr'][:200]}")
+        try:
+            ready = self._docker("exec", CONTAINER, "sh", "-c", "until pg_isready -q; do sleep 0.2; done")
+            if ready["rc"] != 0:
+                raise RuntimeError("postgres not ready")
+            before = self._snapshot()
+            applied = self._psql(sql, "-v", "ON_ERROR_STOP=1")
+            if applied["rc"] != 0:
+                raise RuntimeError(applied["stderr"][:300] or "migration failed")
+            after = self._snapshot()
+            checks = []
+            for check in verify_sql:
+                out = self._psql(check)
+                checks.append({"sql": check, "ok": out["rc"] == 0 and out["stdout"].strip() not in ("", "f")})
+            return {"schema_diff": _diff(before, after), "checks": checks}
+        finally:
+            self._docker("rm", "-f", CONTAINER)
+
+
+def run_db_check(sql: str, *, enabled: bool, session_factory, verify_sql=(), test_argv=(), allowed_argv=(),
+                 stage=None) -> dict:
+    """db_check profile: additive check, throwaway PG in a microVM, then related tests in the same VM.
+
+    session_factory(stage_dir) -> SandboxSession-like context manager; stage(stage_dir) fills the checkout.
+    Raise runtime.sandbox_tool.Refused on test argv outside allowed_argv, before any VM. Raise SandboxError
+    cleanup_unconfirmed when teardown is unconfirmed.
+    """
+    from runtime import sandbox_tool
+    from verification.sandbox import SandboxError
+
+    if not enabled:
+        return {"status": "disabled", "profile": PROFILE}
+    for argv in test_argv:
+        sandbox_tool.check_argv(list(argv), allowed_argv)
+    found = violations(sql)
+    if found:
+        return {**check_migration(sql, None), "profile": PROFILE, "tests": []}
+    tests: list[dict] = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="ai-dbcheck-stage-") as root:
+            if stage:
+                stage(root)
+            with session_factory(root) as session:
+                report = check_migration(sql, SandboxPgRunner(session), verify_sql)
+                if report["status"] == "passed":
+                    for argv in test_argv:
+                        tests.append({"argv": list(argv), "rc": session.exec(list(argv), 120.0)["rc"]})
+    except SandboxError as error:
+        if error.code == "cleanup_unconfirmed":
+            raise
+        return {"status": "db_check_unavailable", "profile": PROFILE, "violations": [], "schema_diff": None, "checks": [],
+                "tests": [], "error": error.code}
+    if report["status"] == "passed" and any(t["rc"] != 0 for t in tests):
+        report["status"] = "failed"
+    return {**report, "profile": PROFILE, "tests": tests}
+
+
+def attach_to_job(job: dict, report: dict) -> dict:
+    """Copy of admin data job with db_check evidence; admin remains the one who applies."""
+    keep = ("status", "profile", "violations", "schema_diff", "checks", "tests", "error")
+    evidence = {**(job.get("evidence") or {}), PROFILE: {k: report.get(k) for k in keep}}
+    return {**job, "evidence": evidence, "apply_by": "admin"}
