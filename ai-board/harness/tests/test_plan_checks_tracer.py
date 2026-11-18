@@ -237,7 +237,7 @@ def test_guest_with_empty_env_still_runs_plan_checks(tmp_path, monkeypatch, page
     serve(monkeypatch, base_mode, (200, BASE_PAGE), (200, CANDIDATE))
     root, guest = _guest_state(tmp_path, monkeypatch, True)
     assert "plan" not in guest
-    out = verify.run(guest, runner=FakeRunner())
+    out = verify.run(guest, runner=FakeRunner(), checkout_dir=root)
     assert out["blocked"] is False and out["evidence"]["checks"]["verdict"] == checks.PROOF
 
 
