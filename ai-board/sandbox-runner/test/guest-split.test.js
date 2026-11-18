@@ -73,11 +73,11 @@ test('dockerfile copies each group as one layer and restores split directory mod
 });
 
 test('unit symlinks are copied as links from a side stage before anything runs', () => {
-  const lines = splitDockerfile('base', [['/usr']], ['755 0 0 /'], [], ['/bin', '/lib64']).trim().split('\n');
+  const lines = splitDockerfile('base', [['/usr']], ['755 0 0 /'], [], ['/bin', '/lib64', '/var/lock']).trim().split('\n');
   assert.deepEqual(lines.slice(0, 6), [
     'FROM base AS src',
     'FROM src AS links',
-    "RUN mkdir /.relayer-links && cp -a --parents '/bin' '/lib64' /.relayer-links/",
+    "RUN mkdir /.relayer-links && tar -C / -cf - 'bin' 'lib64' 'var/lock' | tar -C /.relayer-links -xpf -",
     'FROM scratch',
     'COPY --parents --from=src ["/usr","/"]',
     'COPY --from=links /.relayer-links/ /',
