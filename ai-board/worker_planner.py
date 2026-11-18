@@ -153,6 +153,17 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
     return merge_same_file(subtasks)
 
 
+def _checks_by_file(plan: dict) -> dict[str, list[dict]]:
+    """Plan checks per normalised file, read before the same-file merge (it keeps only the first subtask's)."""
+    from verification import checks
+    out: dict[str, list[dict]] = {}
+    for subtask in plan.get("subtasks") or []:
+        if isinstance(subtask, dict) and subtask.get("file"):
+            items = out.setdefault(posixpath.normpath(str(subtask["file"]).replace("\\", "/")), [])
+            items += [item for item in subtask.get("checks") or [] if item not in items]
+    return {file: items[:checks.MAX_CHECKS] for file, items in out.items() if items}
+
+
 def _plan_with_repair(run_plan: Callable[[dict], dict], request: dict, state: dict, budget, stopped: dict | None) -> tuple[dict | None, list[dict]]:
     """Lượt lập lại plan sau lỗi sai luật (LF/106): trả (cổng chặn cuối, các lượt chặn theo thứ tự)."""
     history = [dict(stopped)] if stopped else []
@@ -307,6 +318,7 @@ class HarnessPlanner:
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
+        planned = _checks_by_file(old) if get_settings().plan_checks else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
@@ -335,6 +347,7 @@ class HarnessPlanner:
                 "depends_on": list(depends_on),
                 **({'task_type': subtask['task_type']} if subtask.get('task_type') in
                    {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
+                **({"checks": planned[file]} if planned.get(file) else {}),
             })
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {
