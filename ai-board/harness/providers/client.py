@@ -19,6 +19,7 @@ from settings import get_settings
 
 # Gateway dùng chung thỉnh thoảng trả 5xx (đổi model, thiếu VRAM): thử lại 3 lần, nghỉ 3 s rồi 8 s. Lỗi 4xx và timeout không thử lại.
 RETRY_STATUS = (500, 502, 503, 504)
+REJECTED_STATUS = (429, 503)
 RETRY_PAUSES_S = (3.0, 8.0)
 _sleep = time.sleep
 _api_gate, _api_next = threading.Lock(), [0.0]
@@ -413,7 +414,8 @@ class OllamaClient:
                     body = sse_completion(text) if payload.get('stream') else json.loads(text)
                     return body
             except urllib.error.HTTPError as error:
-                unsent = True  # error status: no completion and no usage, so nothing to charge
+                # 429/503 reject before work; other statuses may follow billed generation, so usage stays unknown.
+                unsent = error.code in REJECTED_STATUS and get_settings().provider_patience
                 if error.code not in RETRY_STATUS or pause is None:
                     raise
             except urllib.error.URLError as error:  # connection refused/reset; a read timeout is TimeoutError, not retried
