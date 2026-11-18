@@ -52,6 +52,16 @@ def oracle_validation() -> dict:
     return dict(_parsed()["evaluation"]["oracle_validation"])
 
 
+def quality_checks() -> dict:
+    """Contract quality_checks: check -> {class hard|soft, metric, threshold}."""
+    return {k: dict(v) for k, v in _parsed()["quality_checks"].items() if not k.startswith("_")}
+
+
+def quality_class(check: str) -> str:
+    """'hard' or 'soft'; unlisted check is hard."""
+    return quality_checks().get(check, {}).get("class", "hard")
+
+
 def loop(env=None) -> dict:
     """Trần vòng lặp tool theo subtask; AI_BOARD_LOOP_MODEL_CALLS / _TOOL_CALLS override.
     Bật progress loop thì trần mềm nâng theo limits.progress: bước còn tiến bộ không bị cắt, còn trần thật là

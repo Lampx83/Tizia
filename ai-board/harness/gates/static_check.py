@@ -394,7 +394,8 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     state["ui_changed"] = scanned["ui_changed"]
     state["guard_flags"] = scanned["flags"]
     state["review_required"] = scanned["review_required"]
-    out = {**out, "checks": scanned["checks"]}
+    state["soft_misses"] = [m for m in state.get("soft_misses") or [] if m.get("gate") != 4] + scanned["soft_misses"]
+    out = {**out, "checks": scanned["checks"], "soft_misses": scanned["soft_misses"]}
     found = scanned["findings"]
     if state.get("catalog") is not None:
         # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
