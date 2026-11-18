@@ -1,8 +1,9 @@
 #!/bin/sh
 # Rebuild the pinned Gate 5 guest after a change to the harness files it bakes in, then pin it.
 # Overlay on the currently pinned image (keeps the warm Docker cache), so no warm tar is needed.
-# Base with more than GUEST_MAX_LAYERS (default 100) layers is flattened first: overlays on ~400 layers fail with "mount options is too long".
-# Flattening needs about 2x the image size free disk.
+# Base with more than GUEST_MAX_LAYERS (default 100) layers, or with a layer over the Microsandbox extract limit, is
+# re-layered first: overlays on ~400 layers fail with "mount options is too long", and one layer above 10 GiB fails
+# "total extracted size exceeded" at sandbox create. Re-layering needs about 2x the image size free disk.
 # Run from anywhere: sh ai-board/sandbox-runner/scripts/rebuild-guest.sh [registry]   (the dev stack must be up)
 # RECREATE_RUNNER=1 also recreates sandbox-runner; default only prints the command.
 set -eu
@@ -29,18 +30,24 @@ docker image inspect "$base_ref" > /dev/null 2>&1 || docker pull "$base_ref" > /
 count=$(docker image inspect "$base_ref" | node "$layers" layers)
 echo "base $base: $count layers (max $max_layers)"
 overlay_base=$base_ref
-if node "$layers" flatten "$count" "$max_layers"; then
-  echo "flattening base to one layer; needs about 2x the image size free disk" >&2
+oversize=$(docker history --human=false --no-trunc --format '{{.Size}}' "$base_ref" | node "$layers" oversize || true)
+if node "$layers" flatten "$count" "$max_layers" || [ -n "$oversize" ]; then
+  echo "re-layering base under the extract limits; needs about 2x the image size free disk" >&2
   docker image inspect "$base_ref" | node "$layers" changes > "$stage/changes.txt"
-  ctr=$(docker create "$base_ref")
-  set --
-  while IFS= read -r line; do set -- "$@" --change "$line"; done < "$stage/changes.txt"
-  docker export "$ctr" | docker import "$@" - "$registry/gate5:flat" > /dev/null
-  docker rm "$ctr" > /dev/null
+  docker run --rm --entrypoint sh "$base_ref" -c 'du -abx / 2>/dev/null' > "$stage/du.txt"
+  docker run --rm --entrypoint sh "$base_ref" -c 'find / -xdev -type l 2>/dev/null' > "$stage/symlinks.txt"
+  top=$(docker run --rm --entrypoint ls "$base_ref" -A /)
+  # shellcheck disable=SC2086 # one top-level name per word
+  node "$layers" plan "$stage/symlinks.txt" $top < "$stage/du.txt" > "$stage/plan.json"
+  node "$layers" split-dirs "$stage/plan.json" > "$stage/split-dirs.txt"
+  docker run --rm -v "$stage:/stage:ro" --entrypoint sh "$base_ref" -c 'xargs -d "\n" stat -c "%a %u %g %n" < /stage/split-dirs.txt' > "$stage/modes.txt"
+  mkdir "$stage/relayer"
+  node "$layers" dockerfile "$base_ref" "$stage/plan.json" "$stage/modes.txt" "$stage/changes.txt" > "$stage/relayer/Dockerfile"
+  docker build -q -t "$registry/gate5:flat" "$stage/relayer" > /dev/null
   flat=$(docker push "$registry/gate5:flat" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)
   [ -n "$flat" ] || { echo "flat push did not report a digest" >&2; exit 1; }
   flat_count=$(docker image inspect "$registry/gate5@$flat" | node "$layers" layers)
-  echo "flattened: $count -> $flat_count layers, digest $flat"
+  echo "re-layered: $count -> $flat_count layers, digest $flat"
   flat_tag=$(node "$layers" tag "$flat")
   docker tag "$registry/gate5:flat" "$registry/gate5:$flat_tag"
   docker push "$registry/gate5:$flat_tag" > /dev/null
@@ -69,6 +76,10 @@ docker build -t "$registry/gate5:overlay" "$stage"
 # A harness file read at import that the overlay did not copy crashes every Gate 5 run in the guest.
 docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import gates.gate5_guest"' \
   || { echo "guest harness does not import; add the missing file to guest-inputs.mjs and this overlay" >&2; exit 1; }
+# A plain docker run accepts layers that Microsandbox refuses at create; never pin one.
+if over=$(docker history --human=false --no-trunc --format '{{.Size}}' "$registry/gate5:overlay" | node "$layers" oversize); then
+  echo "guest has a layer over the Microsandbox extract limit ($over bytes); not pinning" >&2; exit 1
+fi
 digest=$(docker push "$registry/gate5:overlay" | sed -n 's/.*digest: \(sha256:[0-9a-f]*\).*/\1/p' | tail -1)
 [ -n "$digest" ] || { echo "push did not report a digest" >&2; exit 1; }
 node "$inputs" pin "$policy" "$digest"
