@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { WorkerContractError } from './store-contract.js';
+import { parseEvalResult, judgeEval } from '../prompt-promotion.js';
 
 const HASH = /^[0-9a-f]{64}$/;
 const NAME = /^[A-Za-z0-9_.-]{1,80}$/;
@@ -42,8 +43,28 @@ export function createPromptLabelStore(db) {
       return { name, label, from: current, to, changed: true };
     });
   };
+  const requireReceipt = async (name, to, from, adminId) => {
+    if (!await db.get('SELECT 1 AS ok FROM ai_prompt_versions WHERE name=? AND prompt_hash=?', [name, to])) fail('prompt_version_unknown', 404);
+    const row = await db.get('SELECT passed,reasons FROM ai_prompt_eval_receipts WHERE name=? AND prompt_hash=?' + (from ? ' AND baseline_hash=?' : '') + ' ORDER BY id DESC LIMIT 1',
+      from ? [name, to, from] : [name, to]);
+    const reason = !row ? 'no_eval_receipt' : row.passed ? '' : row.reasons;
+    if (!reason) return;
+    await db.run('INSERT INTO ai_prompt_label_refusals(name,label,from_hash,to_hash,actor,reason,created_at) VALUES (?,?,?,?,?,?,?)',
+      [name, 'production', from, to, Number(adminId), reason.slice(0, 500), Date.now()]);
+    throw new WorkerContractError(reason, 409, 'prompt_promotion_refused');
+  };
   return {
     table,
+    /** Stores the eval verdict for (name, version, baseline); a failing result is kept as evidence. */
+    async recordEval(result, adminId) {
+      let r;
+      try { r = parseEvalResult(result); } catch { fail('eval_receipt_invalid', 400); }
+      if (!await db.get('SELECT 1 AS ok FROM ai_prompt_versions WHERE name=? AND prompt_hash=?', [r.name, r.version_hash])) fail('prompt_version_unknown', 404);
+      const verdict = judgeEval(r);
+      const id = await db.insert('INSERT INTO ai_prompt_eval_receipts(name,prompt_hash,baseline_hash,result_json,passed,reasons,recorded_by,created_at) VALUES (?,?,?,?,?,?,?,?)',
+        [r.name, r.version_hash, r.baseline_hash, JSON.stringify(r), verdict.passed ? 1 : 0, verdict.reasons.join(','), Number(adminId), Date.now()]);
+      return { id, ...verdict };
+    },
     /** Worker with a live lease reports the versions on its disk; a (name,hash) pair is stored once and never rewritten. */
     async register(versions, reporter, now = Date.now()) {
       const entries = Object.entries(versions && typeof versions === 'object' ? versions : {});
@@ -71,7 +92,10 @@ export function createPromptLabelStore(db) {
       const versions = (await db.all('SELECT name,prompt_hash,reported_by,created_at FROM ai_prompt_versions ORDER BY name,created_at,prompt_hash'))
         .map((v) => ({ name: v.name, hash: v.prompt_hash, reported_by: v.reported_by, created_at: v.created_at }));
       const receipts = await db.all('SELECT name,label,from_hash,to_hash,kind,actor,reason,created_at FROM ai_prompt_label_receipts ORDER BY id DESC LIMIT 100');
-      return { labels: await table(), versions, receipts };
+      const evals = (await db.all('SELECT id,name,prompt_hash,baseline_hash,passed,reasons,created_at FROM ai_prompt_eval_receipts ORDER BY id DESC LIMIT 100'))
+        .map((e) => ({ ...e, passed: e.passed === 1 }));
+      const refusals = await db.all('SELECT name,label,from_hash,to_hash,reason,created_at FROM ai_prompt_label_refusals ORDER BY id DESC LIMIT 100');
+      return { labels: await table(), versions, receipts, eval_receipts: evals, refusals };
     },
     async content(name, hash) {
       const row = await db.get('SELECT content FROM ai_prompt_versions WHERE name=? AND prompt_hash=?', [String(name), String(hash)]);
@@ -82,6 +106,7 @@ export function createPromptLabelStore(db) {
     async setLabel(name, label, to, adminId, { from, reason } = {}) {
       checkTarget(name, label);
       if (!HASH.test(String(to)) || from === undefined || (from !== null && !HASH.test(String(from)))) fail('prompt_label_invalid', 400);
+      if (label === 'production' && from !== to) await requireReceipt(name, to, from, adminId);
       return change(name, label, to, Number(adminId), 'set', reason, from);
     },
     /** Back to the hash the label held before its latest change; a second rollback undoes the first. */

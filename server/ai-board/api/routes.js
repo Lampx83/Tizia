@@ -469,6 +469,9 @@ export function attachAiBoardRequestRoutes(router, {
   route.get('/api/admin/ai-board/prompt-labels/:name/:hash', requireAuth, requireAdmin, labelsOn, async (req, res) => {
     try { res.json(await promptLabels.content(req.params.name, req.params.hash)); } catch (error) { folderError(res, error); }
   });
+  route.post('/api/admin/ai-board/prompt-labels/eval-receipts', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, async (req, res) => {
+    try { res.json(await promptLabels.recordEval(req.body, req.user.id)); } catch (error) { folderError(res, error); }
+  });
   route.post('/api/admin/ai-board/prompt-labels/:name/:label/set', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, async (req, res) => {
     try { res.json(await promptLabels.setLabel(req.params.name, req.params.label, req.body?.to, req.user.id, { from: req.body?.from, reason: req.body?.reason })); } catch (error) { folderError(res, error); }
   });
