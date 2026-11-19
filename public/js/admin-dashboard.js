@@ -415,8 +415,8 @@ let netPendingByRequest = {};
 
 async function loadRequests() {
   const [r, ai, net] = await Promise.all([
-    // Owner rule: 10 newest suggestions, read from the board DB so request ids match the board pages.
-    api('/api/admin/ai-board/requests?limit=10'),
+    // Every request from the board DB, so request ids match the board pages.
+    api('/api/admin/ai-board/requests?limit=1000'),
     api('/api/admin/ai-board/queue'),
     api('/api/admin/ai-board/network-requests/pending-count'),
   ]);
@@ -735,7 +735,7 @@ function renderRequests() {
     </div>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
-        <th title="Vị trí trong 10 yêu cầu mới nhất · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
+        <th title="Vị trí trong danh sách (mới nhất trước) · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
         <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
@@ -2623,9 +2623,9 @@ async function init() {
   });
   await showTab(startTab);
   // The tab count is the board DB number, fetched as soon as the admin page opens.
-  api('/api/admin/ai-board/requests?limit=10').then(r => {
+  api('/api/admin/ai-board/requests?limit=1').then(r => {
     if (!r.ok) return;
-    updateRequestBadge(Math.min(10, Number(r.data.total) || (r.data.requests || []).length));
+    updateRequestBadge(Number(r.data.total) || (r.data.requests || []).length);
   }).catch(() => {});
 
   // Auto-refresh 60s, im lặng (không nháy), bỏ qua khi đang gõ/mở modal/ẩn tab.
