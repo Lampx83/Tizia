@@ -84,18 +84,48 @@ def request_text(state):
     return text
 
 
-def text_expectation(state):
-    """Words the requester quoted + what should happen to them: {'present': [...], 'absent': [...]}.
-    Empty when the request does not pin the text down (no quotes, no intent verb, add and remove at once)."""
+_PAIR_GAP = re.compile(r'\s*(?:thành|bằng|→|->|to)\s*', re.I)
+_ANCHOR_CUE = re.compile(r'\b(?:sau|dưới|after|below)\s+(?:the\s+)?(?:dòng|câu|chữ|line|text)\s*$', re.I)
+# "Thêm dòng … : <text>": the text after the colon is the literal, to the end of the line, punctuation included
+_COLON_LITERAL = re.compile(r'^[^\S\n]*(?:thêm|chèn|add|insert)\b[^:\n]*?\b(?:dòng|câu|chữ|đoạn|line|text|sentence)\b'
+                            r'[^:\n]*:[^\S\n]*([^\n\'"“”‘’«»]{2,120}?)[^\S\n]*$', re.I | re.M)
+
+
+def _request_raw(state):
     raw = str(guest_input(state, 'request_title') or '') + '\n' + str(guest_input(state, 'request_detail') or '')
-    raw = _PAGE_LINE.sub('', raw)  # the requester's own page, not words they asked for
+    return unicodedata.normalize('NFC', _PAGE_LINE.sub('', raw))  # the requester's own page, not words they asked for
+
+
+def _pairs(raw):
+    """[(old, new)] when every quote sits in a "'old' thành 'new'" pair, else []."""
+    found = list(_QUOTED.finditer(raw))
+    text = lambda m: next(g for g in m.groups() if g)
+    if not found or len(found) % 2 or not all(_PAIR_GAP.fullmatch(raw[a.end():b.start()]) for a, b in zip(found[::2], found[1::2])):
+        return []
+    return list(dict.fromkeys((text(a), text(b)) for a, b in zip(found[::2], found[1::2])))
+
+
+def anchor(state):
+    """Quoted text the request says to insert after/below ('sau dòng X'); None unless exactly one."""
+    raw = _request_raw(state)
+    found = {next(g for g in m.groups() if g) for m in _QUOTED.finditer(raw) if _ANCHOR_CUE.search(raw[max(0, m.start() - 30):m.start()])}
+    return found.pop() if len(found) == 1 else None
+
+
+def text_expectation(state):
+    """Words the requester quoted (or wrote after 'thêm dòng …:') + what should happen to them: {'present': [...], 'absent': [...]}.
+    Empty when the request does not pin the text down (no literal, no intent verb, add and remove at once)."""
+    raw = _request_raw(state)
     quotes = _text_quotes(raw)
     ignored = [t for t, label in _quoted(raw) if not label]
-    words = unicodedata.normalize('NFC', raw.lower())
+    words = raw.lower()
     add, remove, replace = _ADD.search(words), _REMOVE.search(words), _REPLACE.search(words)
     none = {'present': [], 'absent': []}
-    if not quotes or (remove and (add or replace)):
+    if remove and (add or replace):
         return none
+    if not quotes:
+        colon = list(dict.fromkeys(m.group(1) for m in _COLON_LITERAL.finditer(raw)))
+        return {'present': colon, 'absent': []} if add and colon and not _QUOTED.search(raw) else none
     shown = lambda items: [t for t in items if t not in ignored]
     cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
     if cut and not remove:
@@ -103,6 +133,9 @@ def text_expectation(state):
         tail = _text_quotes(raw[cut.end():])
         if head and tail:
             return {'present': shown(head), 'absent': tail}
+    pairs = _pairs(raw) if replace else []
+    if len(pairs) > 1:
+        return {'present': shown([new for _, new in pairs]), 'absent': [old for old, new in pairs if old != new]}
     if replace and len(quotes) >= 2:
         return {'present': shown([quotes[-1]]), 'absent': [quotes[0]] if quotes[0] != quotes[-1] else []}
     if add:
