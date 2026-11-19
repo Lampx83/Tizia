@@ -77,7 +77,9 @@ def spec_conditions(spec, call_model=None):
         return found, "section" if found else "none"
     if call_model is None:
         return [], "none"
-    prompt = PROMPT_PATH.read_text(encoding="utf-8").replace("{spec}", spec)
+    from security import spotlight
+    with spotlight.scope():  # self-contained prompt, also built outside run_gate
+        prompt = spotlight.fence(PROMPT_PATH.read_text(encoding="utf-8")).replace("{spec}", spotlight.scrub(spec))
     return parse_model(call_model(prompt)), "model"
 
 

@@ -21,7 +21,7 @@ from pathlib import Path
 import path_policy
 
 from services import candidate
-from security import classifier
+from security import classifier, spotlight
 from verification import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
@@ -212,7 +212,7 @@ def content_review(state: dict, deps, budget, *, db_path=None, proposal_id: int 
         if trace:
             trace.note("knows", "rendered text",
                        f"{len(parts)} segments from:{', '.join(part.split(']', 1)[0].lstrip('[') for part in parts)}")
-        prompt = CONTENT_PROMPT.format(content="\n".join(parts)[:MAX_CONTENT_CHARS])
+        prompt = spotlight.fence(CONTENT_PROMPT).format(content=spotlight.scrub("\n".join(parts)[:MAX_CONTENT_CHARS]))
         try:
             server_hsm.authorize_action('model')
             body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget,

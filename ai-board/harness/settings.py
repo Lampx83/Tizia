@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
     file_header_context: bool = False  # tree/outline hiện dòng header của từng file
     prompt_guard: Literal["off", "shadow"] = "off"  # Llama Prompt Guard 2 on requester/fetched text: record only, never decides
+    spotlight: bool = False  # nonce in every untrusted-block fence; content cannot close its own block
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None

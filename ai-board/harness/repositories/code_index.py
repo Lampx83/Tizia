@@ -495,10 +495,12 @@ def refresh_notes(changed_files: list[str], deps, budget_files: int = 5, *, budg
         entry = index["files"][file]
         old = index["notes"].get(file)
         diff = git(source, "diff", old_sha, new_sha, "--", file).decode("utf-8", "replace")
-        prompt = NOTE_PROMPT.format(
-            file=file,
-            old_note=json.dumps({k: old[k] for k in ("summary", "anchors")}, ensure_ascii=False) if old else "(chưa có)",
-            diff=diff[:3000] or "(file mới)", outline=outline_text(file, entry)[:2500])
+        from security import spotlight
+        with spotlight.scope():  # self-contained prompt, also built outside run_gate
+            prompt = spotlight.fence(NOTE_PROMPT).format(
+                file=file,
+                old_note=spotlight.scrub(json.dumps({k: old[k] for k in ("summary", "anchors")}, ensure_ascii=False) if old else "(chưa có)"),
+                diff=spotlight.scrub(diff[:3000] or "(file mới)"), outline=spotlight.scrub(outline_text(file, entry)[:2500]))
         note, error = None, None
         for attempt in range(2):
             ask = prompt if attempt == 0 else prompt + f"\n\nPREVIOUS ATTEMPT WRONG: {error}. Use only anchors that appear in the OUTLINE."

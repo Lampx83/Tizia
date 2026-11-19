@@ -31,7 +31,7 @@ from gates import brainstorm, implement, intake_guard, plan_validate, risk_triag
 from providers.client import OllamaClient    # noqa: E402
 from providers import thinking as thinking_policy  # noqa: E402
 from services import prescreen                   # noqa: E402
-from security import prompt_guard                # noqa: E402
+from security import prompt_guard, spotlight     # noqa: E402
 from verification import checks                  # noqa: E402
 from evaluation import self_eval                   # noqa: E402
 from settings import get_settings
@@ -566,7 +566,8 @@ def run_gate(number: float, request: dict, deps: Deps, budget: Budget, state: di
     trace = deps.trace if hasattr(deps.trace, 'open_span') else None
     span = trace.open_span(f"invoke_agent gate {number}", {"gen_ai.operation.name": "invoke_agent", "tizia.gate.id": number}) if trace else None
     try:
-        result = fn(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
+        with spotlight.scope(state=state):
+            result = fn(request, deps, budget, state, db_path=db_path, proposal_id=proposal_id)
     except BaseException as error:
         if span:
             trace.close_span(span, "error", {"tizia.gate.status": "error", "tizia.error.type": type(error).__name__})

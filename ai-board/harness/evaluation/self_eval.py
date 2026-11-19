@@ -174,7 +174,8 @@ def _judge(tasks: list[dict], pairs: dict, plans: dict, deps, left: float) -> di
     trả sai khuôn → skipped. Không raise."""
     from runtime.budget import Budget
 
-    prompt = (HARNESS / "prompts" / JUDGE_PROMPT_NAME).read_text(encoding="utf-8")
+    from security import spotlight
+    prompt = spotlight.fence((HARNESS / "prompts" / JUDGE_PROMPT_NAME).read_text(encoding="utf-8"))
     requests = {t["id"]: t.get("request_text") or "" for t in tasks}
     out = {"pairs": [], "agree": 0, "disagree": 0, "skipped": 0, "gpu_s": 0}
     need = 1  # ponytail: ước phí = lời gọi đắt nhất đã thấy; lời gọi đầu vẫn có thể vượt phần còn lại
@@ -190,7 +191,8 @@ def _judge(tasks: list[dict], pairs: dict, plans: dict, deps, left: float) -> di
         try:
             # ponytail: A luôn là gốc — lệch vị trí của model (nếu có) nằm trong tỉ lệ đồng ý; đổi chỗ khi cần đo lệch
             body = deps.call_model(deps.models.gate3_model,
-                                   prompt.format(request=requests.get(pid, ""), a=sides["base"], b=sides["variant"]),
+                                   prompt.format(request=spotlight.scrub(requests.get(pid, "")), a=spotlight.scrub(sides["base"]),
+                                                 b=spotlight.scrub(sides["variant"])),
                                    gate=5, budget=budget, prompt_name=JUDGE_PROMPT_NAME, format=JUDGE_SCHEMA,
                                    **({'role': 'eval_judge'} if getattr(deps.models, 'routing', None) else {}))
             pick = {"A": "base", "B": "variant", "tie": "tie"}[json.loads(body.get("response", ""))["better"]]

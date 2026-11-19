@@ -26,7 +26,7 @@ import json
 import re
 from pathlib import Path
 
-from security import classifier
+from security import classifier, spotlight
 from gates import guard
 from runtime import model_json
 
@@ -136,7 +136,8 @@ def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id
     """(nhãn LLM, lý do nội bộ). Lỗi/hết budget → (["classifier_error"], lý do) — người gọi coi là human_review."""
     if not budget.tick():
         return ["classifier_error"], "hết budget, không gọi được bộ phân loại"
-    prompt = PROMPT.format(title=_fence(title, MAX_TITLE), detail=_fence(detail, MAX_DETAIL) or "(trống)")
+    prompt = spotlight.fence(PROMPT).format(title=spotlight.scrub(_fence(title, MAX_TITLE)),
+                                            detail=spotlight.scrub(_fence(detail, MAX_DETAIL)) or "(trống)")
     try:
         body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget,
                                db_path=db_path, proposal_id=proposal_id, prompt_name="intake_guard.md",
