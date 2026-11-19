@@ -11,13 +11,12 @@ from conftest import FakeModels, deps_with, plan_with
 
 HARNESS = Path(__file__).resolve().parent.parent
 WORKER = sorted(HARNESS.parent.glob("worker*.py"))
-OFFLINE = {"skill_batch_run.py"}
 
 
 def _sources():
     skip = {"tests", "evaluation"}
     for path in [*HARNESS.rglob("*.py"), *WORKER]:
-        if path.name not in OFFLINE and not skip & set(path.relative_to(HARNESS.parent).parts[1:2]) and "tests" not in path.parts:
+        if not skip & set(path.relative_to(HARNESS.parent).parts[1:2]) and "tests" not in path.parts:
             yield path
 
 

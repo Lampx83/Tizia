@@ -128,6 +128,8 @@ def test_no_scattered_env_reads():
         parts = path.relative_to(AI_BOARD).parts
         if "tests" in parts or "node_modules" in parts or ".venv" in parts or path.name in {"settings.py", "conftest.py"} | BARE_SCRIPTS:
             continue
+        if parts[:3] == ("harness", "evaluation", "pipeline"):
+            continue  # host-side arm tables: AI_BOARD_* keys of the worker env it sets, never this process's env
         for line, name in _env_reads(path):
             offenders.append(f"{path.relative_to(AI_BOARD)}:{line} {name}")
     assert not offenders, "đọc AI_BOARD_* ngoài settings.py: " + ", ".join(offenders)
