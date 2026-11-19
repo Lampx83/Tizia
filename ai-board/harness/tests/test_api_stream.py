@@ -62,7 +62,7 @@ class Raw:
         return data
 
 
-def hosted_call(monkeypatch, reply):
+def hosted_call(monkeypatch, reply, settings=None, extra=None):
     sent = []
 
     def send(request, **_):
@@ -70,9 +70,9 @@ def hosted_call(monkeypatch, reply):
         return Raw(reply)
     monkeypatch.setattr("urllib.request.build_opener", lambda *_: type("Opener", (), {"open": staticmethod(send)}))
     monkeypatch.setattr(client_module, "_api_throttle", lambda: None)
-    routing = ModelRouter(hosted_settings(), api_catalog())
+    routing = ModelRouter(settings or hosted_settings(), api_catalog())
     models = OllamaClient(base_url="http://primary", gate1_model="a", gate3_model="a", gate3_model_light="a", routing=routing)
-    body = Deps(models=models, notify=None, sleep=lambda _: None, trace=Tracer()).call_model("a", "p", gate=1, budget=Budget())
+    body = Deps(models=models, notify=None, sleep=lambda _: None, trace=Tracer()).call_model("a", "p", gate=1, budget=Budget(), extra=extra)
     return sent[0], body
 
 
@@ -88,3 +88,9 @@ def test_flag_off_keeps_the_plain_call(monkeypatch):
     reply = json.dumps({"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}]})
     payload, body = hosted_call(monkeypatch, reply)
     assert payload["stream"] is False and "stream_options" not in payload and body["response"] == "{}"
+
+
+def test_streamed_hosted_qwen_keeps_the_thinking_switch(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_API_STREAM", "1")
+    payload, _ = hosted_call(monkeypatch, STREAM, hosted_settings(API_MODEL="qwen3.5-35b-a3b"), {"thinking": False})
+    assert payload["stream"] is True and payload["chat_template_kwargs"] == {"enable_thinking": False}
