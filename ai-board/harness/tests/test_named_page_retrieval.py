@@ -53,6 +53,13 @@ def test_named_page_with_the_phrases_is_not_overtaken_by_a_shared_file_hint(repo
     assert "chứa nhiều cụm" not in ctx["text"] and ctx["best_match"] is None
 
 
+@pytest.mark.parametrize("name", ["'Ghép Chữ Cái'", "“Ghép Chữ Cái”"])
+def test_quoted_page_name_still_resolves(repo, tmp_path, name):
+    src, _ = repo
+    ctx = _build(src, _back_repo(src), tmp_path, f"Sửa nút ở trang {name} cho đẹp")
+    assert _pages(ctx) == ["public/ghep.html"]
+
+
 def test_more_than_three_pages_with_the_same_name_resolve_nothing(repo, tmp_path):
     src, _ = repo
     same = {f"public/g{i}.html": "<title>Ghép Chữ Cái · Site</title>\n" for i in range(3)}

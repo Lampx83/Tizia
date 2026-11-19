@@ -276,7 +276,8 @@ def _page_names(source: str, commit: str) -> dict[str, list[tuple[str, ...]]]:
 def _named_pages(text: str, source, commit: str) -> list[str]:
     """Trang request gọi bằng tên (<title>/<h1>) ngay sau 'trang'/'page': khớp đầu tên dài nhất, ≤ NAMED_PAGES_MAX trang."""
     norm = unicodedata.normalize("NFC", text or "").casefold()
-    clauses = [tuple(fold(_NAME_END.split(norm[m.end():], 1)[0]).split()) for m in _PAGE_WORD.finditer(norm)]
+    clauses = [tuple(fold(_NAME_END.split(norm[m.end():].lstrip(" '\"‘’“”"), 1)[0]).split())
+               for m in _PAGE_WORD.finditer(norm)]
     if not clauses:
         return []
     try:
