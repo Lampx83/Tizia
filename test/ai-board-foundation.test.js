@@ -169,6 +169,7 @@ test('request list is owner-scoped and status mutation needs admin plus strict C
     const queueData = await queue.json();
     assert.equal(queueData.workers[0].worker_id, 'visible-worker');
     assert.equal(queueData.workers[0].status, 'running');
+    assert.ok(queueData.tickets.every((ticket) => !ticket.card || ['waiting_admin', 'intake_review'].includes(ticket.card.kind)));
   } finally {
     await close();
     db.close();

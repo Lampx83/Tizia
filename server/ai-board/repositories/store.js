@@ -9,6 +9,7 @@ import { registerRelease, assertFeatureNotIsolated } from '../services/releases.
 import { repeatedQuestion } from '../services/clarity-rules.js';
 import { createNetworkRequestRepository } from './network-requests.js';
 import { recordPending as recordPendingNetwork } from '../services/network-requests.js';
+import { narrowScope } from '../services/escalation-card.js';
 import { ROOT_GROUP_LABEL, hitRootGroup, readRootAllowance } from '../services/root-allowance.js';
 import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
@@ -1596,7 +1597,12 @@ function resumeSummary(journal) {
       tier: askPlan ? null : current?.tier ?? null, // tier của plan đang lưu không nói gì về bản worker xin
       goal: chosen.goal, steps: chosen.steps,
     } : null;
-    return buildElevationContext({ request, root, asked, scope: elevationView(root).scope, plan });
+    // Snapshot lúc xin không giữ grounding: chỉ mượn của plan đang lưu khi cùng plan_hash.
+    const sameHash = !askPlan || (current?.plan_hash && current.plan_hash === asked?.detail?.plan_hash);
+    const grounding = sameHash ? parseJson(current?.plan_json)?.grounding?.evidence : null;
+    return { ...buildElevationContext({ request, root, asked, scope: elevationView(root).scope, plan }),
+      grounding: (Array.isArray(grounding) ? grounding : []).slice(0, 8).map((item) => ({
+        file: String(item?.file ?? ''), target: String(item?.target ?? ''), quote: String(item?.quote ?? '').slice(0, 400) })) };
   }
 
   // Trạng thái plan theo cổng: folder chưa duyệt giữ (tier không đổi), core người làm, protected chờ admin, còn lại chạy.
@@ -2601,17 +2607,23 @@ function resumeSummary(journal) {
     reject: 'Quản trị viên không cấp quyền chạm mức bảo vệ/lõi.' };
 
   /** Ghi quyết định cho một root đang chờ; null khi không có gì để quyết. Duyệt thì đưa vé về hàng đợi lập lại. */
-  async function applyElevationDecision(root, { decision, reason, adminUserId }, now) {
+  async function applyElevationDecision(root, { decision, reason, adminUserId, narrowTo = null }, now) {
     if (root.elevation !== 'requested') return null; // chỉ quyết định trên yêu cầu đang chờ
-    const scope = parseJson(root.elevation_scope) || [];
-    if (decision === 'approve' && scope.some((item) => AI_BOARD_SCOPE.test(item.path))) {
+    const requested = parseJson(root.elevation_scope) || [];
+    if (decision === 'approve' && requested.some((item) => AI_BOARD_SCOPE.test(item.path))) {
       throw new WorkerContractError('the AI board cannot be granted its own scope', 409, 'elevation_self_scope_blocked');
     }
+    let scope = requested;
+    if (narrowTo != null) {
+      if (decision !== 'approve') throw new WorkerContractError('only an approval can be narrowed', 422, 'elevation_scope_reject');
+      try { scope = narrowScope(requested, narrowTo); } catch (error) { throw new WorkerContractError(error.message, 422, error.code); }
+    }
+    const narrowed = narrowTo != null;
     const state = decision === 'approve' ? 'approved' : 'rejected';
-    await db.run(`UPDATE ai_tickets SET elevation=?, elevated_by=?, elevated_at=?, elevation_reason=?, updated_at=? WHERE id=?`,
-      [state, adminUserId, now, reason, now, root.id]);
+    await db.run(`UPDATE ai_tickets SET elevation=?, elevation_scope=?, elevated_by=?, elevated_at=?, elevation_reason=?, updated_at=? WHERE id=?`,
+      [state, JSON.stringify(scope), adminUserId, now, reason, now, root.id]);
     await db.run(insertEvent, [root.id, `elevation_${state}`, 'admin', String(adminUserId), `requested->${state}`,
-      ELEVATION_REASON[decision], JSON.stringify({ decision, scope, reason }),
+      ELEVATION_REASON[decision], JSON.stringify({ decision, scope, reason, ...(narrowed ? { narrowed: true, requested_scope: requested } : {}) }),
       `elevation-${state}:${root.id}:${now}:${randomBytes(4).toString('hex')}`, now]);
     await touchAdmin(root.id, Number(adminUserId), `elevation_${decision}`, now);
     if (decision === 'approve') {
@@ -2633,13 +2645,14 @@ function resumeSummary(journal) {
     return note;
   }
 
-  async function decideElevation(requestId, { decision, reason, adminUserId }) {
+  /** `scope` (tuỳ chọn, chỉ khi duyệt) = tập con path đã xin, mức không cao hơn: duyệt hẹp hơn yêu cầu. */
+  async function decideElevation(requestId, { decision, reason, adminUserId, scope = null }) {
     const note = assertElevationDecision({ decision, reason });
     const now = Date.now();
     const applied = await db.tx(async () => {
       const root = await lockedRequestRoot(requestId);
       if (!root) throw new WorkerContractError('request not found', 404, 'request_not_found');
-      return await applyElevationDecision(root, { decision, reason: note, adminUserId: Number(adminUserId) }, now);
+      return await applyElevationDecision(root, { decision, reason: note, adminUserId: Number(adminUserId), narrowTo: scope }, now);
     });
     if (!applied) throw new WorkerContractError('nothing is waiting for an elevation decision', 409, 'elevation_not_pending');
     return applied;

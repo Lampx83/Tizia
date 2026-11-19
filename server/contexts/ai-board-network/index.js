@@ -2,12 +2,13 @@
 // AI Board — hàng đợi yêu cầu mạng (admin duyệt)
 // ============================================================
 // Run cần gói npm / URL ngoài thì dừng ở waiting_admin; admin liệt kê, duyệt, từ chối từng mục.
-// Duyệt hết mục chờ → run về hàng đợi, resume từ checkpoint. Giao diện thẻ nằm ở ticket khác.
+// Duyệt hết mục chờ → run về hàng đợi, resume từ checkpoint.
 // ============================================================
 import { asyncRoutes } from '../../ai-board/async-routes.js';
 import { WorkerContractError } from '../../ai-board/repositories/store-contract.js';
 import { createNetworkRequestRepository } from '../../ai-board/repositories/network-requests.js';
 import { decide, listForRequest, pendingCounts } from '../../ai-board/services/network-requests.js';
+import { networkCard } from '../../ai-board/services/escalation-card.js';
 
 export function attachAiBoardNetwork(router, { db, requireAuth, requireAdmin, requireStrictCsrf, repo = createNetworkRequestRepository(db) }) {
   const route = asyncRoutes(router);
@@ -29,7 +30,7 @@ export function attachAiBoardNetwork(router, { db, requireAuth, requireAdmin, re
   }));
   route.get('/api/admin/ai-board/requests/:id/network-requests', requireAuth, requireAdmin, guarded(async (req, res) => {
     const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : null;
-    res.json({ items: await listForRequest(repo, id(req), status) });
+    res.json({ items: (await listForRequest(repo, id(req), status)).map((item) => ({ ...item, card: networkCard(item) })) });
   }));
   route.post('/api/admin/ai-board/network-requests/:id/approve', requireAuth, requireAdmin, requireStrictCsrf, decideRoute('approved'));
   route.post('/api/admin/ai-board/network-requests/:id/reject', requireAuth, requireAdmin, requireStrictCsrf, decideRoute('rejected'));

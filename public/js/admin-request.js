@@ -9,6 +9,7 @@ import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
+import { escalationCard } from './escalation-card.js?v=escalation1';
 import { createPoll } from './poll.js';
 
 const $ = (s) => document.querySelector(s);
@@ -529,19 +530,16 @@ function renderNetApproval() {
   if (!pending.length) return '';
   const item = pending[Math.min(idx, pending.length - 1)];
   const rows = netMetaRows(item);
+  const buttons = `<label class="meta" style="display:block;width:100%">Lý do từ chối (không bắt buộc)
+      <input data-net-reason maxlength="500" autocomplete="off" value="${esc(reason)}" style="width:100%;max-width:72ch;display:block;margin-top:4px"></label>
+      <button class="btn ok" data-action="net-approve" data-id="${esc(item.id)}">Duyệt</button>
+      <button class="btn danger-outline" data-action="net-reject" data-id="${esc(item.id)}">Từ chối</button>
+      <button class="btn" data-action="net-next">Tiếp</button>`;
   return `<section class="blk" id="net-approval" aria-label="Cần admin đồng ý">
     <h2>Cần admin đồng ý <span class="meta">${Math.min(idx, pending.length - 1) + 1}/${pending.length}</span></h2>
     <div class="line1"><b>${code(netTitle(item))}</b> ${tag('warn', item.kind === 'package' ? 'Gói npm' : 'URL')}</div>
-    ${item.reason ? `<div class="meta">Lý do của model: ${esc(item.reason)}</div>` : ''}
-    ${rows ? `<div class="meta">${rows}</div>` : '<div class="meta">Chưa có metadata cho mục này.</div>'}
-    <div class="net-warn" role="note">${esc(NET_WARNING)}</div>
-    <label class="meta" style="display:block;margin-top:10px">Lý do từ chối (không bắt buộc)
-      <input data-net-reason maxlength="500" autocomplete="off" value="${esc(reason)}" style="width:100%;max-width:72ch;display:block;margin-top:4px"></label>
-    <div class="row">
-      <button class="btn ok" data-action="net-approve" data-id="${esc(item.id)}">Duyệt</button>
-      <button class="btn danger-outline" data-action="net-reject" data-id="${esc(item.id)}">Từ chối</button>
-      <button class="btn" data-action="net-next">Tiếp</button>
-    </div>
+    ${escalationCard(item.card, { tag, extra: { evidence: rows ? `<div class="meta">${rows}</div>` : '<div class="meta">Chưa có metadata cho mục này.</div>',
+      risk: `<div class="net-warn" role="note">${esc(NET_WARNING)}</div>` }, buttons })}
     ${msg ? `<div class="meta" role="status">${esc(msg)}</div>` : ''}
   </section>`;
 }
@@ -653,7 +651,7 @@ async function ensureElevationContext(trace) {
   return true;
 }
 
-// Thẻ duyệt: duyệt cái gì · vì sao · rủi ro · bằng chứng. Duyệt cần lý do admin gõ + xác nhận lần hai.
+// Thẻ duyệt năm dòng: Hành động · Vì sao hỏi · Bằng chứng · Rủi ro · Lựa chọn. Duyệt cần lý do admin gõ + xác nhận lần hai.
 function elevationContextCard(ctx) {
   if (ctx?.error) {
     return `<div class="err">Không tải được ngữ cảnh duyệt: ${esc(ctx.error)}
@@ -665,22 +663,20 @@ function elevationContextCard(ctx) {
   const scope = ctx.elevation?.scope || [];
   const steps = ctx.plan?.steps || [];
   const evidence = ctx.evidence || {};
-  return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
-    <div class="g-caption">Duyệt cái gì</div>
-    <ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+  const action = `<ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
     ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
     : '<div class="meta">Worker không gửi bước kế hoạch. Chỉ có phạm vi path.</div>'}
-    <div class="g-caption">Vì sao</div>
-    <div>${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
-    ${ctx.request?.excerpt ? `<blockquote class="meta" style="white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</blockquote>` : ''}
-    <div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}${ctx.flags?.plan_missing ? ' Không có bước kế hoạch để đối chiếu.' : ''}</div>
-    <div class="g-caption">Rủi ro</div>
-    <div>${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
+    <div class="meta">Duyệt thì kế hoạch được lập lại với đúng quyền này.</div>`;
+  const why = `<div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}</div>`;
+  const modelRisk = `<div>Đánh giá model ${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
     ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'Rủi ro cao. Đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
     ${risk.reasons?.length ? `<ul>${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
-    ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    <div class="g-caption">Bằng chứng</div>
-    <div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>
+    ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
+  const trail = `<div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>`;
+  const narrow = (ctx.card?.options || []).some(option => option.key === 'edit' && option.available)
+    ? '<div class="meta">Sửa rồi duyệt: chọn bớt path / hạ mức ở thẻ quyền trong tab Góp ý của trang quản trị.</div>' : '';
+  return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
+    ${escalationCard(ctx.card, { tag, html: { action }, extra: { why, risk: modelRisk, evidence: trail, options: narrow } })}
   </div>`;
 }
 

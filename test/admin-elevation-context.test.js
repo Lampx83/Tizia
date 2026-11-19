@@ -10,6 +10,8 @@ import { createAsyncAiBoardStore } from '../server/ai-board/store-async.js';
 import { attachAiBoardRequestRoutes } from '../server/ai-board/api/routes.js';
 import { assessElevationRisk, applyRiskFloor, parseElevationRisk } from '../server/ai-board/services/elevation-risk.js';
 import { buildElevationContext, namedInText, normalizePlanSummary } from '../server/ai-board/elevation-context.js';
+import { createCheckRegistryStore } from '../server/ai-board/repositories/check-registries.js';
+import { readFileSync } from 'node:fs';
 
 const USERS = [[1, 'lan', 'Lan', 'student', 'pharmacy'], [9, 'admin', 'Admin', 'admin', null]];
 const CONTENT = 'server/contexts/content/x.js';
@@ -72,6 +74,10 @@ test('context carries the request, scope, plan steps and flags', async () => {
     assert.match(context.request.title, /server\/contexts\/content\/x\.js/);
     assert.equal(context.request.excerpt, 'Đổi lời chào trong dịch vụ nội dung; không đổi schema.');
     assert.equal(context.elevation.reason, 'Cần sửa dịch vụ nội dung dùng chung.');
+    assert.match(context.card.action, /server\/contexts\/content\/x\.js \(bảo vệ\)/);
+    assert.match(context.card.why, /protected/);
+    assert.deepEqual(context.card.options.map((o) => [o.label, o.available]), [['duyệt', true], ['từ chối', true], ['sửa rồi duyệt', false]]);
+    assert.deepEqual(context.grounding, [], 'no plan grounding was sent');
     assert.equal(context.elevation.requested_by.type, 'worker');
     assert.deepEqual(context.elevation.scope.map((row) => row.path), [CONTENT]);
     const row = context.elevation.scope[0];
@@ -166,6 +172,7 @@ test('the batch context returns cheap contexts and the single one needs an admin
     const batch = await (await srv.get(`/api/admin/ai-board/elevation-context?ids=${one.request_id},${two.request_id},4242`)).json();
     assert.deepEqual(Object.keys(batch.contexts).map(Number).sort(), [one.request_id, two.request_id]);
     assert.equal('risk' in batch.contexts[one.request_id], false, 'batch payload stays small: no model call');
+    assert.equal(batch.contexts[one.request_id].card.kind, 'elevation', 'the deterministic card rides along');
     assert.equal((await srv.get('/api/admin/ai-board/requests/4242/elevation-context')).status, 404);
     assert.equal((await student.get(`/api/admin/ai-board/requests/${one.request_id}/elevation-context`)).status, 403);
   } finally { await srv.close(); await student.close(); db.close(); }
@@ -253,4 +260,27 @@ test('the context builder names paths from the request text and keeps plan steps
   });
   assert.equal(context.flags.outside_request, false, 'in-plan is enough even when the title names another page');
   assert.equal(context.elevation.scope[0].in_plan, true);
+});
+
+test('the queue carries a read-only card for a waiting ticket and the registry list carries hash cards', async () => {
+  const { db, store } = await fixture();
+  const srv = await serve(store);
+  try {
+    const { root_ticket_id: rootId } = await newRequest(store, { title: 'Đổi bảng giá', detail: 'Hiện giá mới.' });
+    await db.d.run("UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted', internal_reason='run_budget_exhausted' WHERE id=?", [rootId]);
+    await db.d.run("INSERT INTO ai_ticket_tags(ticket_id, tag) VALUES (?, 'guard:human_review'), (?, 'guard:money')", [rootId, rootId]);
+    const { tickets } = await (await srv.get('/api/admin/ai-board/queue')).json();
+    const card = tickets.find((ticket) => ticket.id === rootId).card;
+    assert.equal(card.kind, 'waiting_admin');
+    assert.match(card.why, /budget_exhausted/);
+    assert.match(card.why, /money/);
+    assert.ok(card.evidence.some((e) => e.source === 'guard:money'));
+
+    const registry = JSON.parse(readFileSync(new URL('../ai-board/harness/verification/check_registry.json', import.meta.url), 'utf8'));
+    await createCheckRegistryStore(db.d).report(registry, 'w1');
+    const { registries } = await (await srv.get('/api/admin/ai-board/check-registries')).json();
+    assert.deepEqual(registries[0].card.options.map((o) => [o.label, o.available]), [['duyệt', true], ['từ chối', false], ['sửa rồi duyệt', false]]);
+    const { manifests } = await (await srv.get('/api/admin/ai-board/tool-manifests')).json();
+    assert.ok(manifests.every((m) => m.card?.kind === 'tool_manifest'));
+  } finally { await srv.close(); db.close(); }
 });
