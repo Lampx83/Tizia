@@ -58,6 +58,7 @@ from gates import best_match, evidence, grounding_paths
 from repositories import repo_at_commit
 from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
+from security import spotlight
 from settings import DEFAULT_GATE25_FIXES, get_settings
 from verification import checks
 
@@ -124,13 +125,14 @@ def build_prompt(request: dict, plan: dict, repo_context: str = '(không có)', 
     `repair`: harness note naming the defect of the previous pass, empty on the first pass."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     template = PROMPT.replace("\nSCHEMA", "\n" + CLARIFY_RULES + "\nSCHEMA", 1) if clarify_rules_on() else PROMPT
-    return context.manual() + template.format(
-        domain=request.get("domain") or "(core)",
-        subject=request.get("subject", ""),
-        body=request.get("body", ""),
-        thread=thread,
-        plan_json=json.dumps(plan, ensure_ascii=False),
-        repo_context=repo_context,
+    scrub = spotlight.scrub
+    return context.manual() + spotlight.fence(template).format(
+        domain=scrub(request.get("domain") or "(core)"),
+        subject=scrub(request.get("subject", "")),
+        body=scrub(request.get("body", "")),
+        thread=scrub(thread),
+        plan_json=scrub(json.dumps(plan, ensure_ascii=False)),
+        repo_context=scrub(repo_context),
         repair=repair or "",
     )
 
@@ -706,8 +708,10 @@ def verified_answer(text: str, question: str, haystacks: list[str]) -> str | Non
 def settled_answer(request: dict, question: str, repo_context: str, files: dict, state: dict, deps, budget, *, db_path=None, proposal_id=None) -> str | None:
     """One extra model call: answer to `question` iff request or source quotes it verbatim."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
-    prompt = context.manual() + ANSWERABLE_PROMPT.format(subject=request.get("subject", ""), body=request.get("body", ""),
-                                                          thread=thread, question=question, repo_context=repo_context)
+    scrub = spotlight.scrub
+    prompt = context.manual() + spotlight.fence(ANSWERABLE_PROMPT).format(
+        subject=scrub(request.get("subject", "")), body=scrub(request.get("body", "")), thread=scrub(thread),
+        question=scrub(question), repo_context=scrub(repo_context))
     schema = {"type": "object", "additionalProperties": False,
               "properties": {"answerable": {"type": "boolean"}, "answer": {"type": "string", "maxLength": 200},
                              "quote": {"type": "string", "maxLength": 320}},

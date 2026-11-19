@@ -38,6 +38,7 @@ from gates import best_match, grounding_paths, react_plan
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
+from security import spotlight
 from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -71,16 +72,17 @@ PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", 
 def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
     """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
-    return context.manual() + PROMPT.format(
-        id=request.get("id"),
-        domain=request.get("domain") or "(core)",
-        type=request.get("type"),
+    scrub = spotlight.scrub
+    return context.manual() + spotlight.fence(PROMPT).format(
+        id=scrub(request.get("id")),
+        domain=scrub(request.get("domain") or "(core)"),
+        type=scrub(request.get("type")),
         votes=request.get("votes", 0),
-        subject=request.get("subject", ""),
-        body=request.get("body", ""),
-        thread=thread,
+        subject=scrub(request.get("subject", "")),
+        body=scrub(request.get("body", "")),
+        thread=scrub(thread),
         surface=", ".join(sorted(surface)),
-        context=context_text or "REPO DATA: (không có)",
+        context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
     )
 
 
@@ -339,7 +341,8 @@ def parse_search_terms(text: str) -> list[str]:
 def ask_search_terms(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> list[str]:
     schema = {"type": "object", "additionalProperties": False, "properties": {"terms": {"type": "array", "maxItems": 4,
               "items": {"type": "string", "maxLength": 60}}}, "required": ["terms"]}
-    prompt = SEARCH_PROMPT.format(subject=request.get("subject", ""), body=re.sub(r"^\s*\[Trang:.*$", "", request.get("body") or "", flags=re.M))
+    prompt = spotlight.fence(SEARCH_PROMPT).format(subject=spotlight.scrub(request.get("subject", "")),
+                                                   body=spotlight.scrub(re.sub(r"^\s*\[Trang:.*$", "", request.get("body") or "", flags=re.M)))
     body = deps.call_model(deps.models.gate1_model, prompt, gate=1, budget=budget, format=schema, db_path=db_path,
                            proposal_id=proposal_id, prompt_name="search_terms.md", options={"num_predict": 256})
     return [] if body.get("done_reason") == "length" else parse_search_terms(body.get("response", ""))

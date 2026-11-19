@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     red_check_classify: bool = False  # gate 5: check đỏ cả base lẫn candidate xếp candidate_wrong/check_suspect/infra trước repair
     file_header_check: bool = False  # gate 4: file mới .js/.mjs/.py/.html phải có header 1 dòng (chặn, sửa được)
     file_header_context: bool = False  # tree/outline hiện dòng header của từng file
+    prompt_guard: Literal["off", "shadow"] = "off"  # Llama Prompt Guard 2 on requester/fetched text: record only, never decides
+    spotlight: bool = False  # nonce in every untrusted-block fence; content cannot close its own block
 
     # trần vòng lặp tool theo subtask (đo có chủ đích); None/<=0 = theo contract.json
     loop_model_calls: int | None = None
@@ -168,6 +170,7 @@ class Settings(BaseSettings):
     package_layer_cap: int = 5
     qwen_tokenizer: Path | None = None
     retrieval_weights: Path | None = None
+    prompt_guard_path: Path | None = None  # local model dir (tokenizer.json, config.json, *.onnx)
 
     gate1_probe_timeout_s: float = 45.0
     reasoning_off: str = ""

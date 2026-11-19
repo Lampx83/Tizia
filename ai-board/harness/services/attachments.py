@@ -8,6 +8,7 @@ from pathlib import Path
 
 from runtime import limits
 from runtime.budget import BudgetExhausted
+from security import spotlight
 from settings import get_settings
 
 CONTRACT = Path(__file__).resolve().parents[2].parent / 'server/ai-board/contract.json'
@@ -178,7 +179,7 @@ def enrich(request: dict, *, models, budget, env=None, uploads_dir: str | None =
     cut = max(0, len(text) - cap)
     if cut:
         text = text[:cap]
-    fenced = f'\n\n{FENCE_OPEN}\n{text}\n{FENCE_CLOSE}' if text else ''
+    fenced = f'\n\n{spotlight.fence(FENCE_OPEN)}\n{spotlight.scrub(text)}\n{spotlight.fence(FENCE_CLOSE)}' if text else ''
     if cut:
         fenced += f'\n[Đã cắt {cut} ký tự nội dung đính kèm; phần này không được đưa vào yêu cầu.]'
     report = {'items': [{'name': i['name'], 'kind': i['kind'], 'status': i['status']} for i in items], 'cut_chars': cut}
