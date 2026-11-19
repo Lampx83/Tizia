@@ -157,8 +157,9 @@ def test_host_replays_guest_check_spans_and_verdict_is_unchanged(tmp_path):
     assert "check_spans" not in with_spans
     assert (with_spans["blocked"], with_spans["reason"], with_spans["failure_class"]) == (
         without["blocked"], without["reason"], without["failure_class"]) == (True, "smoke failed", "ordinary")
-    assert len(trace.spans) == 1
-    span = trace.spans[0]
+    checks = [s for s in trace.spans if not s["name"].startswith(("gate5 setup ", "gate5 teardown"))]
+    assert len(checks) == 1
+    span = checks[0]
     assert span["name"] == "gate5 check browser" and span["status"] == "error"
     assert span["end_ms"] - span["start_ms"] == 40
     assert span["attributes"] == {"tizia.gate5.check.kind": "browser", "tizia.gate5.check.target": "/x.html"}

@@ -460,6 +460,24 @@ def _check_span(trace, kind: str, target: str):
                            status="ok" if passed else "error")
 
 
+GUEST_PHASES = ("gate5 setup config", "gate5 setup build", "gate5 setup app_up", "gate5 setup ready",
+                "gate5 step tests", "gate5 step smoke", "gate5 teardown")
+
+
+@contextmanager
+def _phase_span(trace, name: str):
+    """Span `name` around one Gate 5 setup/teardown phase; error status when it raises."""
+    start, status = int(time.time() * 1000), "ok"
+    try:
+        yield
+    except BaseException:
+        status = "error"
+        raise
+    finally:
+        if trace is not None and hasattr(trace, "add_span"):
+            trace.add_span(name, {}, start_ms=start, end_ms=int(time.time() * 1000), status=status)
+
+
 def _acceptance_target(item: str) -> str:
     """Đường dẫn URL đầu tiên trong lệnh acceptance (không query); không có URL thì 'acceptance'."""
     url = re.search(r"https?://[^\s'\"]+", item)
@@ -674,44 +692,50 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
         owned.deadline = time.monotonic() + deadline_s()
 
         try:
-            config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
-            stage = "config"
-            _validate_config(config, project, password)
+            with _phase_span(trace, "gate5 setup config"):
+                config = json.loads(command([*compose, "config", "--format", "json"]).stdout)
+                stage = "config"
+                _validate_config(config, project, password)
             internal = _internal()
             stage = "boot"
-            command([*compose, "up", "--build", "-d", "--wait", "--wait-timeout", "120"])
-            if internal:
-                # Address from the daemon, not from inside the candidate container.
-                cid = command([*compose, "ps", "-q", "tizia"]).stdout.strip()
-                ip_output = command(["docker", "inspect", "-f",
-                                     "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", cid]).stdout
-                stage = "address"
-                try:
-                    ip = ipaddress.ip_address((ip_output.split() or [""])[0])
-                except ValueError:
-                    ip = None
-                if ip is None or not ip.is_private or ip.is_loopback:
-                    raise RuntimeError(f"Docker trả địa chỉ container không an toàn: {ip_output.strip()!r}")
-                base = f"http://{ip}:8041"
-            else:
-                port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
-                stage = "address"
-                match = re.search(r":(\d+)\s*$", port_output)
-                if not match or int(match.group(1)) == 8041:
-                    raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
-                base = f"http://127.0.0.1:{int(match.group(1))}"
+            # build apart from up: separate spans for image build and start + health wait
+            with _phase_span(trace, "gate5 setup build"):
+                command([*compose, "build"])
+            with _phase_span(trace, "gate5 setup app_up"):
+                command([*compose, "up", "-d", "--no-build", "--wait", "--wait-timeout", "120"])
+            with _phase_span(trace, "gate5 setup ready"):
+                if internal:
+                    # Address from the daemon, not from inside the candidate container.
+                    cid = command([*compose, "ps", "-q", "tizia"]).stdout.strip()
+                    ip_output = command(["docker", "inspect", "-f",
+                                         "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", cid]).stdout
+                    stage = "address"
+                    try:
+                        ip = ipaddress.ip_address((ip_output.split() or [""])[0])
+                    except ValueError:
+                        ip = None
+                    if ip is None or not ip.is_private or ip.is_loopback:
+                        raise RuntimeError(f"Docker trả địa chỉ container không an toàn: {ip_output.strip()!r}")
+                    base = f"http://{ip}:8041"
+                else:
+                    port_output = command([*compose, "port", "tizia", "8041"]).stdout.strip()
+                    stage = "address"
+                    match = re.search(r":(\d+)\s*$", port_output)
+                    if not match or int(match.group(1)) == 8041:
+                        raise RuntimeError(f"Docker trả host port không an toàn: {port_output!r}")
+                    base = f"http://127.0.0.1:{int(match.group(1))}"
 
-            stage = "boot"
-            env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
-            stage = "env"
-            container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
-            leaked = sorted(name for name, value in container_env.items()
-                            if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
-            if container_env.get("DATABASE_URL") != _app_env(password)["DATABASE_URL"]:
-                raise RuntimeError("container DATABASE_URL is not this run disposable PostgreSQL DSN")
-            if leaked:
-                raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
-            logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
+                stage = "boot"
+                env_output = command([*compose, "exec", "-T", "tizia", "env"], log_output=False).stdout
+                stage = "env"
+                container_env = dict(line.split("=", 1) for line in env_output.splitlines() if "=" in line)
+                leaked = sorted(name for name, value in container_env.items()
+                                if value and (name in _REQUIRED_ABSENT or _SECRET_NAME.search(name)))
+                if container_env.get("DATABASE_URL") != _app_env(password)["DATABASE_URL"]:
+                    raise RuntimeError("container DATABASE_URL is not this run disposable PostgreSQL DSN")
+                if leaked:
+                    raise RuntimeError(f"container có biến bí mật: {', '.join(leaked)}")
+                logs.append("Container env: 6 biến ứng dụng cho phép; DATABASE_URL chỉ trỏ PostgreSQL disposable; các key/secret/token đều vắng mặt hoặc rỗng.")
             stage = "ordinary"
 
             test_files = sorted({item.get("test_file") for item in guest_input(state, "diffs") or []
@@ -721,28 +745,29 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 raise RuntimeError("không có generated test để chạy")
             if not test_files:
                 logs.append(f"No generated test (advisory: the harness oracle '{probe_id}' decides)")
-            stage = "boot"  # copying files into the container is environment, not the candidate
-            for test_file in test_files:
-                parent = str(Path("/app", test_file).parent).replace("\\", "/")
-                command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
-                command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
-            stage = "ordinary"
-            generated_ok = False
-            try:
-                if test_files:  # `node --test` with no file would run the whole suite
-                    command([*compose, "exec", "-T", "tizia", "node", "--test",
-                             *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
-            except (subprocess.TimeoutExpired, RuntimeError) as exc:
-                failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
-                if not probe_id:
-                    detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
-                    raise RuntimeError(f"{failure}: {detail}") from exc
-                # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
-                logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
-            else:
-                if test_files:
-                    generated_ok = True
-                    logs.append(f"Generated tests passed: {', '.join(test_files)}")
+            with _phase_span(trace, "gate5 step tests"):
+                stage = "boot"  # copying files into the container is environment, not the candidate
+                for test_file in test_files:
+                    parent = str(Path("/app", test_file).parent).replace("\\", "/")
+                    command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
+                    command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
+                stage = "ordinary"
+                generated_ok = False
+                try:
+                    if test_files:  # `node --test` with no file would run the whole suite
+                        command([*compose, "exec", "-T", "tizia", "node", "--test",
+                                 *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
+                except (subprocess.TimeoutExpired, RuntimeError) as exc:
+                    failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
+                    if not probe_id:
+                        detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                        raise RuntimeError(f"{failure}: {detail}") from exc
+                    # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
+                    logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
+                else:
+                    if test_files:
+                        generated_ok = True
+                        logs.append(f"Generated tests passed: {', '.join(test_files)}")
 
             # Feature acceptance (LF/107): lệnh e2e của plan chạy trong container disposable trước verdict.
             acceptance = acceptance_commands(state)
@@ -775,7 +800,8 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
             env = os.environ.copy()
             env["BASE"] = base
             # Use the harness owner's script, not a possibly modified copy in the proposal checkout.
-            smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
+            with _phase_span(trace, "gate5 step smoke"):
+                smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
             def fixture(stage):
@@ -969,17 +995,18 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 reason, stage = "gate5_deadline: gate 5 exceeded its wall-clock cap", "deadline"
         finally:
             owned.deadline = None
-            try:
-                diagnostic = command([*compose, "logs", "--no-color"], log_output=False)
-                logs.append("Container logs before teardown:\n" + redact((diagnostic.stdout or "").replace(password, "[synthetic credential]"))[-8000:])
-            except (OSError, RuntimeError, subprocess.TimeoutExpired):
-                pass
-            try:
-                owned.down()
-                teardown_confirmed = True
-            except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-                reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
-                stage = "teardown"  # leaked containers are the environment's problem, not the candidate's
+            with _phase_span(trace, "gate5 teardown"):
+                try:
+                    diagnostic = command([*compose, "logs", "--no-color"], log_output=False)
+                    logs.append("Container logs before teardown:\n" + redact((diagnostic.stdout or "").replace(password, "[synthetic credential]"))[-8000:])
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    pass
+                try:
+                    owned.down()
+                    teardown_confirmed = True
+                except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+                    reason = f"{reason or 'verify'}; teardown thất bại: {exc}"
+                    stage = "teardown"  # leaked containers are the environment's problem, not the candidate's
 
     advisory = None
     if get_settings().vision_advisory and not reason and shots:

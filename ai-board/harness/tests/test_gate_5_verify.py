@@ -35,7 +35,7 @@ class FakeRunner:
         if args[0] == "docker" and args[1] in ("container", "volume", "network"):
             return subprocess.CompletedProcess(args, 0, "", "")
         if args[0] == "docker":
-            action = next(x for x in ("config", "up", "port", "exec", "cp", "down", "logs") if x in args)
+            action = next(x for x in ("config", "build", "up", "port", "exec", "cp", "down", "logs") if x in args)
             self.override = Path(args[args.index("-f") + 1]).read_text(encoding="utf-8")
             project = args[args.index("-p") + 1]
             config = json.loads(self.override)
@@ -49,7 +49,7 @@ class FakeRunner:
             if action == "exec" and args[-1] == "env":
                 stdout = self.container_env + "DATABASE_URL=" + config["services"]["tizia"]["environment"]["DATABASE_URL"] + "\n"
             else:
-                stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
+                stdout = {"config": json.dumps(config), "build": "built", "up": "started", "port": "127.0.0.1:49152\n",
                           "exec": "generated tests passed", "cp": "copied", "down": "removed", "logs": "synthetic log"}[action]
         else:
             action = "smoke"
