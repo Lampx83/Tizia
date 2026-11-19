@@ -10,8 +10,10 @@ manual() = prompts/AIBOARD.md (luật repo cho model local, kiểu CLAUDE.md). K
 from __future__ import annotations
 
 import fnmatch
+import html
 import posixpath
 import re
+import unicodedata
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -243,6 +245,52 @@ def _mentioned_files(text: str, source, sha: str) -> list[str]:
     return list(dict.fromkeys(found))[:file_context.WEIGHTS["max_mentioned_files"]]
 
 
+NAMED_PAGES_MAX, NAMED_MIN_TOKENS = 3, 2
+# Trước khi fold: fold("trắng") = "trang", nên chữ "trắng" (màu) không được coi là "trang".
+_PAGE_WORD = re.compile(r"\b(?:trang|page)\b")
+_NAME_END = re.compile(r"[.,;:!?\n'\"‘’“”()\[\]]")
+_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+_H1 = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.S | re.I)
+_TAG = re.compile(r"<[^>]*>")
+_TITLE_SEP = re.compile(r"\s*[·|•:–—]\s*|\s+-\s+")
+
+
+@lru_cache(maxsize=4)
+def _page_names(source: str, commit: str) -> dict[str, list[tuple[str, ...]]]:
+    """{trang .html dưới public/: [token fold của từng đoạn <title> + <h1> đầu]}; đoạn chung > NAMED_PAGES_MAX trang (tên site) bỏ."""
+    names = {}
+    for path, entry in code_index.ui_index(source, commit)["files"].items():
+        if path.endswith(".html"):
+            text = "\n".join(entry["lines"])
+            title, h1 = _TITLE.search(text), _H1.search(text)
+            parts = _TITLE_SEP.split(_TAG.sub(" ", title.group(1))) if title else []
+            parts += [_TAG.sub(" ", h1.group(1))] if h1 else []
+            names[path] = list(dict.fromkeys(core for p in parts if (core := tuple(fold(html.unescape(p)).split()))))
+    shared = {}
+    for cores in names.values():
+        for core in cores:
+            shared[core] = shared.get(core, 0) + 1
+    return {path: [c for c in cores if shared[c] <= NAMED_PAGES_MAX] for path, cores in names.items()}
+
+
+def _named_pages(text: str, source, commit: str) -> list[str]:
+    """Trang request gọi bằng tên (<title>/<h1>) ngay sau 'trang'/'page': khớp đầu tên dài nhất, ≤ NAMED_PAGES_MAX trang."""
+    norm = unicodedata.normalize("NFC", text or "").casefold()
+    clauses = [tuple(fold(_NAME_END.split(norm[m.end():].lstrip(" '\"‘’“”"), 1)[0]).split())
+               for m in _PAGE_WORD.finditer(norm)]
+    if not clauses:
+        return []
+    try:
+        names = _page_names(str(source), commit)
+    except OSError:
+        return []
+    lead = {page: max((len(posixpath.commonprefix([core, words])) for core in cores for words in clauses), default=0)
+            for page, cores in names.items()}
+    top = max(lead.values(), default=0)
+    found = sorted(p for p, n in lead.items() if n == top) if top >= NAMED_MIN_TOKENS else []
+    return found if len(found) <= NAMED_PAGES_MAX else []
+
+
 def _linked_css(source, sha: str, files: list[str]) -> list[str]:
     out = []
     for file in files:
@@ -303,6 +351,11 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             parts.append('ORACLE HINT (advisory, not a requirement): existing renderer ' + ', '.join(known) + '.')
         if not file and request.get("owned_files"):  # L2: file folder sở hữu lên đầu, lấy dàn ý
             targets = list(dict.fromkeys([*request["owned_files"], *targets]))
+        named = [] if file or "[Trang:" in request_text or any(t.endswith(".html") for t in targets) \
+            else _named_pages(request_text, source, commit)
+        if named:
+            targets = list(dict.fromkeys([*targets, *named]))
+            log.append({"tool": "named_page", "params": {}, "chars": 0, "result": ", ".join(named)})
         # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:
         # gate 1 thì đưa module đó lên đầu target (model 8B/14B bỏ qua gợi ý nếu chỉ là 1 dòng dữ liệu).
         pages = [t for t in targets if t.endswith(".html")]
@@ -329,7 +382,8 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                 literal = tools.literal_candidates(source, commit, quoted, pages)
                 log.append({"tool": "literal", "params": {"literals": quoted, "pages": pages}, "chars": 0,
                             "result": f"{len(literal['files'])} candidate files: " + ", ".join(r["file"] for r in literal["files"][:5])})
-        if not (file or known or render or literal.get("files")):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
+        named_hit = any(f in named for f, _, _ in hits)
+        if not (file or known or render or literal.get("files") or named_hit):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
             best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, said, limit=1) if f not in targets]
             log.append({"tool": "matching_files", "params": {"phrases": said[:6]}, "chars": 0,
                         "result": f"{best[0][0]} matches: {'; '.join(best[0][1])[:200]}" if best else "no file matches several phrases"})
