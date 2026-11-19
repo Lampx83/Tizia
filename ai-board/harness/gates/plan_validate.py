@@ -787,6 +787,51 @@ def asks_about_code(question: str | None) -> bool:
     return bool(question and _CODE_QUESTION.search(question))
 
 
+_EITHER = re.compile(r"\s(?:hay|hoặc|or)\s", re.I)
+_TAG_TEXT = re.compile(r"<(\w+)[^>]*>([^<]{2,80})</\1>")
+_POSITION = re.compile(r"\b(sau|trước|trên|dưới|đầu|cuối|after|before|above|below)\b", re.I)
+_OTHER = re.compile(r"\b(?:khác|other)\b", re.I)
+_PAGE_WORD = re.compile(r"\b(?:trang|page)\b", re.I)
+_AFTER_THANH = re.compile(r"thành\s*:\s*([^.!?\n]+)", re.I)
+
+
+def _anchors(text: str) -> list[str]:
+    """Quoted spans and inner text of HTML tags in text."""
+    return [next(g for g in m.groups() if g).strip() for m in _QUOTED.finditer(text)] + [m.group(2).strip() for m in _TAG_TEXT.finditer(text)]
+
+
+def confirms_plan(question: str | None, request: dict, plan: dict) -> bool:
+    """Either/or question whose first option is the plan's single-file reading, stated by a request that gives page and new text."""
+    parts = _EITHER.split((question or "").strip())
+    files = {task["file"] for task in plan.get("subtasks") or []}
+    if len(parts) != 2 or not parts[1].endswith("?") or len(files) != 1:
+        return False
+    first, second = parts
+    fold = lambda s: _squash(s).lower()
+    asked = " ".join(str(request.get(k) or "") for k in ("subject", "body"))
+    carried = fold(" ".join(f"{t.get('title') or ''} {t.get('verify') or ''}" for t in plan["subtasks"]))
+    own = [a for a in _anchors(first) if fold(a) in carried and fold(a) not in fold(second)]
+    words = set(_WORD.findall(asked.lower()))
+
+    def stated(anchor):
+        mine = set(_WORD.findall(anchor.lower()))
+        return fold(anchor) in fold(asked) or bool(mine) and len(mine & words) >= min(2, len(mine))
+
+    texts = _anchors(asked) + [m.group(1).strip() for m in _AFTER_THANH.finditer(asked)]
+    if not own or not all(stated(a) for a in own) or not any(fold(t) in carried for t in texts if t):
+        return False
+    quoted = {fold(t) for t in _anchors(asked)}
+    # A quoted element locates the page only when the question is not itself about the page.
+    if not (_names_page(asked, next(iter(files))) or not _PAGE_WORD.search(question) and any(fold(a) in quoted for a in own)):
+        return False
+    # A position counts only when it points at a plan anchor ("ngay sau tiêu đề 'X'"); "trên trang" is no position.
+    where = {m.group(1).lower() for m in _POSITION.finditer(asked) if any(fold(a) in fold(asked[m.end():m.end() + 40]) for a in own)}
+    elsewhere = {p.lower() for p in _POSITION.findall(second)}
+    generic = bool(_OTHER.search(second)) and not _anchors(second)
+    # The second option must offer nothing the request states: "another one", or a position the request does not take.
+    return generic or bool(elsewhere) and not elsewhere & where and bool(where & {p.lower() for p in _POSITION.findall(first)})
+
+
 def _uncertain(validation: dict) -> bool:
     """The non-thinking validator did not clear the plan: unclear request or no verified grounding."""
     return not validation['clear'] or not validation.get('grounded')
@@ -930,6 +975,10 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if not validation['clear'] and asks_about_code(validation.get('question')):
         state['assumption'] = validation['question']
         judge('code question dropped', True, validation['question'])
+        validation = {**validation, 'clear': True, 'question': None}
+    if not validation['clear'] and not validation.get('reason') and confirms_plan(validation.get('question'), request, plan):
+        state['assumption'] = validation['question']
+        judge('confirmation question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
     if clarify_rules_on() and not validation['clear'] and validation.get('question') and names_edit(request, plan):
         state['assumption'] = validation['question']

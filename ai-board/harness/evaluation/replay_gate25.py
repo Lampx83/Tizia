@@ -92,6 +92,8 @@ def post_filter(question: str | None, request: dict, plan: dict | None, flag_on:
         dropped = "repo_rule"
     elif question and pv.asks_about_code(question):
         dropped = "code_question"
+    elif question and plan and pv.confirms_plan(question, request, plan):
+        dropped = "confirms_plan"
     elif question and flag_on and named:
         dropped = "names_edit"
     return {"question": None if dropped else question, "dropped_by": dropped, "repo_rule": rule, "names_edit": named}
