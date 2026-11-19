@@ -169,8 +169,7 @@ def test_marker_survives_the_stop_report_wrapper(flags):
 def test_no_revision_when_replan_is_off_already_used_or_harness_built(flags, monkeypatch, setup):
     execution = _execution()
     execution.plan = plan_steps(revised={"reason": "r", "old": [OTHER]} if setup == "revised" else None)
-    if setup != "replan_off":
-        monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {**worker_execution.REPAIR_REPLAN, "enabled": True})
+    monkeypatch.setattr(worker_execution, "REPAIR_REPLAN", {**worker_execution.REPAIR_REPLAN, "enabled": setup != "replan_off"})
     assert run_gate5(execution, gate5([{**SUSPECT, "origin": "harness" if setup == "harness" else "plan"}])) == "passed"
     assert execution.kind is None
 

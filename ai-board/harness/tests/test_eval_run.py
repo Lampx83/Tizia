@@ -161,8 +161,8 @@ def expected_end(case):
     quoted = wording({"level": case["level"], "types": case["types"], "spec": case["spec"]}) != PLAIN
     if case["level"] == 3:
         return "gate3"
-    if case["level"] == 4 or any("javascript:" in s.get("line", "") for s in case["spec"]):
-        return "gate4"  # mức 4: script ngoài. Thật: guard.scan chặn cả dòng sửa chữ chứa href="javascript:..." có sẵn (dương tính giả của cổng 4)
+    if case["level"] == 4:
+        return "gate4"  # mức 4: script ngoài
     if not quoted:
         return "no_oracle"
     return "gold" if case["level"] == 2 else "shipped"
