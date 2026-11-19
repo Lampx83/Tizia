@@ -35,7 +35,7 @@ class FakeRunner:
         if args[0] == "docker" and args[1] in ("container", "volume", "network"):
             return subprocess.CompletedProcess(args, 0, "", "")
         if args[0] == "docker":
-            action = next(x for x in ("config", "up", "port", "exec", "cp", "down", "logs") if x in args)
+            action = next(x for x in ("config", "build", "up", "port", "exec", "cp", "down", "logs") if x in args)
             self.override = Path(args[args.index("-f") + 1]).read_text(encoding="utf-8")
             project = args[args.index("-p") + 1]
             config = json.loads(self.override)
@@ -49,7 +49,7 @@ class FakeRunner:
             if action == "exec" and args[-1] == "env":
                 stdout = self.container_env + "DATABASE_URL=" + config["services"]["tizia"]["environment"]["DATABASE_URL"] + "\n"
             else:
-                stdout = {"config": json.dumps(config), "up": "started", "port": "127.0.0.1:49152\n",
+                stdout = {"config": json.dumps(config), "build": "built", "up": "started", "port": "127.0.0.1:49152\n",
                           "exec": "generated tests passed", "cp": "copied", "down": "removed", "logs": "synthetic log"}[action]
         else:
             action = "smoke"
@@ -94,7 +94,7 @@ def test_pass_uses_isolated_compose_smoke_and_down(tmp_path):
     config = json.loads(runner.override)
     assert config['services']['tizia']['ports'] == ['127.0.0.1::8041']
     assert out['evidence']['teardown_confirmed'] is True
-    assert any(args[-2:] == ['down', '-v'] for args, _ in runner.calls)
+    assert any(args[-4:] == ['down', '-v', '--timeout', '0'] for args, _ in runner.calls)
     smoke_args, smoke_kw = next((args, kw) for args, kw in runner.calls if args[0] != "docker")
     assert Path(smoke_args[-1]) == verify.SMOKE_SCRIPT
     assert smoke_kw["env"]["BASE"] == "http://127.0.0.1:49152"
@@ -146,7 +146,7 @@ def test_smoke_failure_still_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["evidence"]["smoke_passed"] is False
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_generated_test_failure_blocks_before_smoke(tmp_path):
@@ -156,7 +156,7 @@ def test_generated_test_failure_blocks_before_smoke(tmp_path):
     assert out["reason"].startswith("generated tests failed")
     assert out["failure_class"] == "ordinary"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
@@ -164,7 +164,7 @@ def test_generated_test_timeout_blocks_and_tears_down(tmp_path):
     out = verify.run(state(checkout(tmp_path)), runner=runner)
     assert out["blocked"] is True
     assert out["reason"].startswith("generated tests timed out")
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_teardown_failure_is_environmental_not_repairable(tmp_path):
@@ -182,7 +182,7 @@ def test_gate5_past_its_deadline_ends_with_a_named_transient_reason(tmp_path, mo
     assert out["reason"].startswith("gate5_deadline")
     assert out["failure_class"] == "transient"
     assert not any(args[0] != "docker" for args, _ in runner.calls)
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
     assert out["evidence"]["teardown_confirmed"] is True
 
 
@@ -199,7 +199,7 @@ def test_up_failure_still_tears_down(tmp_path):
     assert out["blocked"] is True
     assert out["failure_class"] == "transient"
     assert "failed" in out["evidence"]["text"]
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_unsafe_compose_config_blocks_before_up(tmp_path):
@@ -218,7 +218,7 @@ def test_unsafe_compose_config_blocks_before_up(tmp_path):
     assert "không cách ly" in out["reason"]
     assert out["failure_class"] == "critical"
     assert not any("up" in args for args, _ in runner.calls)
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 @pytest.mark.parametrize("service, setting", [
@@ -248,7 +248,7 @@ def test_container_secret_blocks_without_leaking_value_to_evidence(tmp_path):
     assert "OLLAMA_SECKEY" in out["reason"]
     assert out["failure_class"] == "critical"
     assert "do-not-log" not in out["evidence"]["text"]
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypatch):
@@ -272,7 +272,7 @@ def test_html_screenshot_artifact_is_mandatory_for_ui_changes(tmp_path, monkeypa
     assert "screenshot" in out["reason"] and "playwright absent" in out["reason"]
     assert out["failure_class"] == "transient"  # missing browser is the environment, not the candidate
     assert out["evidence"]["screenshot"] is None
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 def test_changed_html_must_return_success_over_http(tmp_path):
@@ -831,7 +831,7 @@ def test_shot_budget_follows_the_number_of_changed_pages(tmp_path):
 def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_path, monkeypatch):
     calls = []
 
-    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=(), browser=None):
         calls.append((url, width, focus is not None))
         path.write_bytes(b"png")
         if focus is not None and (selectors or focus_texts):
@@ -852,7 +852,7 @@ def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_pat
 def test_a_text_edit_without_selectors_still_gets_a_close_up_with_the_right_words_per_phase(tmp_path, monkeypatch):
     asked = []
 
-    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=(), browser=None):
         path.write_bytes(b"png")
         if focus is not None:
             asked.append((width, list(focus_texts)))
@@ -1063,7 +1063,7 @@ def test_teardown_runs_on_an_unexpected_exit_too(tmp_path):
     runner = Interrupted()
     with pytest.raises(KeyboardInterrupt):
         verify.run(state(checkout(tmp_path)), runner=runner)
-    assert any(args[-2:] == ["down", "-v"] for args, _ in runner.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in runner.calls)
 
 
 @pytest.mark.parametrize("network", ["internal", "published"])
@@ -1198,12 +1198,12 @@ def test_server_only_route_probe_keeps_isolation_secret_check_and_teardown(tmp_p
     s = server_only(tmp_path)
     out = verify.run(s, runner=leaky, functional_probe=lambda base, _: functional.run_route(base, s))
     assert out["blocked"] is True and "do-not-log" not in json.dumps(out)
-    assert any(args[-2:] == ["down", "-v"] for args, _ in leaky.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in leaky.calls)
     ok = FakeRunner()
     verify.run(s, runner=ok, functional_probe=lambda base, _: functional.run_route(base, s))
     config = json.loads(ok.override)
     assert config["services"]["tizia"]["ports"] == ["127.0.0.1::8041"]
-    assert any(args[-2:] == ["down", "-v"] for args, _ in ok.calls)
+    assert any(args[-4:] == ["down", "-v", "--timeout", "0"] for args, _ in ok.calls)
 
 
 def test_server_only_route_is_probed_when_the_request_names_a_text_oracle(tmp_path, monkeypatch):

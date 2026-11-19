@@ -105,7 +105,7 @@ def _retry(call: Callable[[], dict], retry_on: Callable[[SandboxError], bool], *
     raise AssertionError("unreachable")
 
 
-QUEUE_POLL_S, QUEUE_POLL_MAX_S = 5.0, 30.0
+QUEUE_POLL_S, QUEUE_POLL_MAX_S = 2.0, 5.0  # a 429 answers at once; a coarse poll only adds idle time
 
 
 def _queue_busy(call: Callable[[], dict], *, deadline=None, live: Callable[[], None] | None = None) -> tuple[dict, float]:
@@ -243,7 +243,8 @@ def _lf_patterns(checkout: Path) -> list[str]:
 def package(checkout: Path, state: dict, base_pages: dict[str, bytes], layer: Path | None = None) -> bytes:
     """tar.gz of filtered checkout + state + base pages (+ layers/<name> when `layer`). Credential env files, .git, caches never leave the worker."""
     buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+    # level 6: ~2x faster than tarfile's default 9 on this checkout, ~1% larger
+    with tarfile.open(fileobj=buffer, mode="w:gz", compresslevel=6) as archive:
         def add_bytes(name: str, data: bytes) -> None:
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(data), 0o644
@@ -458,7 +459,7 @@ def _blocked(reason: str, kind: str = "transient") -> dict:
 
 
 def _replay_check_spans(deps, result, anchor_ms: int) -> None:
-    """Pop guest check_spans (kept out of the verdict); re-add gate 5 check spans to deps.trace at anchor + guest offset."""
+    """Pop guest check_spans (kept out of the verdict); re-add gate 5 check and phase spans to deps.trace at anchor + guest offset."""
     spans = result.pop("check_spans", None) if isinstance(result, dict) else None
     trace = getattr(deps, "trace", None)
     if not isinstance(spans, list) or not hasattr(trace, "add_span"):
@@ -466,7 +467,8 @@ def _replay_check_spans(deps, result, anchor_ms: int) -> None:
     for span in spans:
         attrs = span.get("attributes") if isinstance(span, dict) else None
         offset, duration = (span.get("offset_ms"), span.get("duration_ms")) if isinstance(span, dict) else (None, None)
-        if not (isinstance(attrs, dict) and str(span.get("name", "")).startswith("gate5 check ")
+        name = str(span.get("name", "")) if isinstance(span, dict) else ""
+        if not (isinstance(attrs, dict) and (name.startswith("gate5 check ") or name in verify.GUEST_PHASES)
                 and type(offset) is int and type(duration) is int):
             continue
         attrs = {k: v for k, v in attrs.items() if str(k).startswith("tizia.gate5.check.")}
@@ -492,10 +494,12 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
     deadline = None if budget is None else time.monotonic() + max(0, budget.max_wall_clock_s - budget.elapsed_s)
     request_limits = {} if deadline is None else {"deadline": deadline}
+    trace = getattr(deps, "trace", None)
     try:
         _remaining(deadline, 1)
-        layer = _layer(state, checkout)
-        archive = package(checkout, state, _base_pages(state, checkout), layer)
+        with verify._phase_span(trace, "gate5 setup package"):
+            layer = _layer(state, checkout)
+            archive = package(checkout, state, _base_pages(state, checkout), layer)
         _remaining(deadline, 1)
     except SandboxError as error:
         return _blocked(f"sandbox {error.phase}: {error.code}")
@@ -520,19 +524,23 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
 
         with lease:
             live()
-            created, queue_wait = _queue_busy(
-                lambda: _retry(lambda: client.create(run_id, MANIFEST, **request_limits), lambda error: error.status in (0, 429), deadline=deadline),
-                deadline=deadline, live=live)
+            with verify._phase_span(trace, "gate5 setup create"):
+                created, queue_wait = _queue_busy(
+                    lambda: _retry(lambda: client.create(run_id, MANIFEST, **request_limits), lambda error: error.status in (0, 429), deadline=deadline),
+                    deadline=deadline, live=live)
             created_run = True
             lease.ready = True
             live()
-            client.upload(run_id, archive, **request_limits)
+            with verify._phase_span(trace, "gate5 setup upload"):
+                client.upload(run_id, archive, **request_limits)
             live()
-            client.exec(run_id, ["guest-boot.sh"], timeout=_remaining(deadline, 180), **request_limits)
+            with verify._phase_span(trace, "gate5 setup boot"):
+                client.exec(run_id, ["guest-boot.sh"], timeout=_remaining(deadline, 180), **request_limits)
             live()
             if layer is not None:
-                loaded = client.exec(run_id, ["docker", "load", "-i", f"/workspace/layers/{layer.name}"],
-                                     timeout=_remaining(deadline, 300), **request_limits)
+                with verify._phase_span(trace, "gate5 setup layer"):
+                    loaded = client.exec(run_id, ["docker", "load", "-i", f"/workspace/layers/{layer.name}"],
+                                         timeout=_remaining(deadline, 300), **request_limits)
                 live()
                 if loaded.get("code") != 0 or loaded.get("timed_out"):
                     return _blocked("sandbox dependency layer load failed")
@@ -542,11 +550,12 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
             live()
             if outcome.get("code") != 0 or outcome.get("timed_out") or outcome.get("truncated"):
                 return _blocked("sandbox gate 5 không hoàn tất (exit/timeout/output)")
-            probe = _guest_probe(client, run_id, request_limits)
-            result = json.loads(client.download(run_id, "result", **request_limits))
-            _replay_check_spans(deps, result, anchor_ms)
-            live()
-            shots_archive = client.download(run_id, "shots", **request_limits)
+            with verify._phase_span(trace, "gate5 teardown collect"):
+                probe = _guest_probe(client, run_id, request_limits)
+                result = json.loads(client.download(run_id, "result", **request_limits))
+                _replay_check_spans(deps, result, anchor_ms)
+                live()
+                shots_archive = client.download(run_id, "shots", **request_limits)
             live()  # revoked after the guest finished: the verdict is stale
         result = _localise_screenshots(result, shots_archive)
         live()
@@ -569,7 +578,11 @@ def run(state: dict, deps=None, budget=None, *, client: RunnerClient | None = No
     finally:
         try:
             # busy: no VM was created; a failing destroy would replace the busy verdict with cleanup_unconfirmed
-            destroyed = {"state": "destroyed"} if busy else _retry(lambda: client.destroy(run_id), lambda error: error.status == 0 or error.status >= 500)
+            if busy:
+                destroyed = {"state": "destroyed"}
+            else:
+                with verify._phase_span(trace, "gate5 teardown destroy"):
+                    destroyed = _retry(lambda: client.destroy(run_id), lambda error: error.status == 0 or error.status >= 500)
             if isinstance(destroyed, dict) and destroyed.get("state") not in {"destroyed", "expired", "failed"}:
                 raise SandboxError("cleanup_unconfirmed", "destroy")
             if isinstance(result, dict) and isinstance(result.get("evidence"), dict):
