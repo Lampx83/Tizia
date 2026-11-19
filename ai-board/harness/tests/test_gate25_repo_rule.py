@@ -97,3 +97,12 @@ def test_r203_repo_rule_veto_on_existing_code_does_not_block(monkeypatch, tmp_pa
                          state={"checkout_source": str(tmp_path)})
     assert result["blocked"] is False, result
     assert state["grounding"]["evidence"][0]["quote"] == LINE
+
+
+def test_r203_repo_rule_veto_in_reason_only_does_not_block(monkeypatch, tmp_path):
+    _repo(tmp_path)
+    veto = {**_ask(R203_Q), "grounded": False}
+    result, state = _run(monkeypatch, veto, request={**R203, "grounding_required": True, "complexity_by_server": True},
+                         state={"checkout_source": str(tmp_path)})
+    assert result["blocked"] is False, result
+    assert "public/lesson.html" in state["validator_note"]

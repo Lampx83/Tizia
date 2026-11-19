@@ -912,13 +912,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if stop:
         return stop
     rule_question = not validation['clear'] and asks_repo_rule(validation.get('question'))
-    rule_veto = not validation.get('grounded') and asks_repo_rule((validation.get('objection') or {}).get('claim'))
+    veto = (validation['objection'] or {}).get('claim') if validation.get('objection') else validation.get('reason')
+    rule_veto = not validation.get('grounded') and asks_repo_rule(veto)
     if rule_question or rule_veto:
         # A repo rule is the planner's job: markup the plan adds goes back as a plan fault, markup already in source is not this request's.
         if broken := rule_breaks(plan, files):
             return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {broken[0]}", "outcome": PLAN_UNFIT,
                     "signals": broken, "public_message": "Kế hoạch thêm mã bị quy tắc repo cấm; đang chờ lập lại kế hoạch."}
-        state['assumption'] = validation['question'] if rule_question else validation['objection']['claim']
+        state['assumption'] = validation['question'] if rule_question else veto
         judge('repo rule objection dropped', True, state['assumption'])
         validation = {**validation, **({'clear': True, 'question': None} if rule_question else {}),
                       **({'grounded': True, 'objection': None} if rule_veto else {})}
