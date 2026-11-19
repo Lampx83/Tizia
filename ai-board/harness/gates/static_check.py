@@ -13,9 +13,11 @@ này dùng nhưng file của bước kia không định nghĩa — gates/subtask
 """
 from __future__ import annotations
 
+import html
 import posixpath
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 
 import path_policy
@@ -407,6 +409,88 @@ def _base_public_contacts(state: dict) -> set[str]:
     return guard.contacts_in(out)
 
 
+_TAG_ONLY = re.compile(r"\s*(?:<[^>]*>\s*)*")
+
+
+def _ws(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFC", html.unescape(text)).split())
+
+
+def _hunks(diff_text: str) -> tuple[list[str], list[list[tuple[str, str]]]]:
+    """Non-test paths + [(sign, line)] per hunk; '-' lines kept, the new-file view is the rest."""
+    paths, hunks = [], []
+    for chunk in re.split(r"^(?=diff --git )", diff_text, flags=re.M):
+        path = chunk.splitlines()[0].split(" b/", 1)[-1].strip() if chunk.startswith("diff --git ") else ""
+        if not path or guard._TEST_PATH.search(path):
+            continue
+        paths.append(path)
+        for body in re.split(r"^@@[^\n]*\n", chunk, flags=re.M)[1:]:
+            hunks.append([(line[0], _ws(line[1:])) for line in body.splitlines() if line[:1] in (" ", "+", "-")])
+    return paths, hunks
+
+
+def _existing(checkout, paths: list[str], text: str, added: int) -> bool:
+    """Changed files hold text beyond what the diff adds: a reference the request points at, not new text."""
+    count = 0
+    for path in paths if checkout else ():
+        try:
+            count += _ws((Path(checkout) / path).read_text(encoding="utf-8")).count(text)
+        except (OSError, UnicodeDecodeError):
+            continue
+    return count > added
+
+
+def _segment(line: str, text: str) -> str | None:
+    """Text between tags that holds `text`."""
+    return next((piece.strip() for piece in re.split(r"<[^>]*>", line) if text in piece), None)
+
+
+def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bool:
+    """Added line `at` holds text right after the anchor: same line, or only tag lines between them; hunk start = unknown, passes."""
+    if anchor in view[at][1] and view[at][1].index(anchor) < view[at][1].index(text):
+        return True
+    for _, line in reversed(view[:at]):
+        if anchor in line:
+            return True
+        if not _TAG_ONLY.fullmatch(line):
+            return False
+    return True
+
+
+def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
+    """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
+    checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
+    want = functional.text_expectation(state)
+    anchor = functional.anchor(state)
+    paths, hunks = _hunks(diff_text)
+    new = list(dict.fromkeys(_ws(t) for t in want["present"] if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
+    added = {text: sum(line.count(text) for hunk in hunks for sign, line in hunk if sign == "+") for text in new}
+    new = [text for text in new if not _existing(checkout, paths, text, added[text])]
+    misses = []
+    for text in new:
+        if not added[text]:
+            closest = next((line for hunk in hunks for sign, line in hunk if sign == "+" and text.rstrip(".!?…") in line), None)
+            misses.append(f'chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
+                          + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
+    for old, text in functional._pairs(functional._request_raw(state)) if want["absent"] else []:
+        old, text = _ws(old), _ws(text)
+        for hunk in hunks:
+            before = [seg for sign, line in hunk if sign == "-" and (seg := _segment(line, old)) is not None]
+            after = [seg for sign, line in hunk if sign == "+" and (seg := _segment(line, text)) is not None]
+            expected = {seg.replace(old, text) for seg in before}
+            if before and after and not expected & set(after):
+                misses.append(f'đổi "{old}" thành "{text}": phần tử phải thành "{sorted(expected)[0]}", '
+                              f'đang là "{after[0]}" (không giữ lại phần nào của chữ cũ)')
+    if anchor:
+        anchor = _ws(anchor)
+        for text in new:
+            spots = [(view, i) for hunk in hunks for view in [[row for row in hunk if row[0] != "-"]]
+                     for i, (sign, line) in enumerate(view) if sign == "+" and text in line]
+            if spots and not any(_follows(view, i, text, anchor) for view, i in spots):
+                misses.append(f'chữ "{text}" phải nằm ngay sau phần tử chứa "{anchor}"')
+    return misses
+
+
 def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None = None) -> dict:
     """Cổng 4 đầy đủ cho main.run_gate: lint/node --check rẻ trước; qua thì dựng candidate (diff thật
     base..HEAD) rồi size, guard, catalog, soát nội dung LLM. Mọi finding gộp thành 1 kết quả blocked."""
@@ -430,6 +514,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     state["soft_misses"] = [m for m in state.get("soft_misses") or [] if m.get("gate") != 4] + scanned["soft_misses"]
     out = {**out, "checks": scanned["checks"], "soft_misses": scanned["soft_misses"]}
     found = scanned["findings"]
+    out["checks"] = [*out["checks"], "request_literal"]
+    found = [*found, *({"check": "request_literal", "failure_class": "ordinary", "detail": miss[:300]}
+                       for miss in literal_misses(state, text, state.get("full_checkout")))]
     if state.get("catalog") is not None:
         # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
         out["checks"] = [*out["checks"], "catalog"]
