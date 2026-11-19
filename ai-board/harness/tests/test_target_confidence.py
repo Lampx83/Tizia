@@ -116,3 +116,20 @@ def test_payload_is_capped(monkeypatch, tmp_path):
 def test_plan_without_subtasks_is_low(tmp_path):
     out = target_confidence.assess({"subtasks": []}, {"question": "q"}, tmp_path, "HEAD")
     assert out["level"] == "low" and out["candidates"] == [] and out["reason"]
+
+
+def test_plan_anchor_in_target_file_counts_as_quote(monkeypatch, tmp_path):
+    from gates import plan_validate
+    src = _repo(tmp_path)
+    monkeypatch.setattr(target_confidence.repomap, "related", _related())
+    files = {"public/a.html": f"<h1>{UNIQUE}</h1><p>{SHARED}</p>", "public/b.html": f"<h1>Trang khác</h1><p>{SHARED}</p>"}
+    title = f'Đổi tiêu đề "{UNIQUE}" thành "Lớp học mới"'
+    bare = _plan("public/a.html")
+    bare["subtasks"][0]["title"] = title
+    assert target_confidence.assess(bare, {"question": "q"}, src, "HEAD")["signals"]["rule"] == "no_quote"
+    out = target_confidence.assess(plan_validate.anchor_quoted(bare, files), {"question": "q"}, src, "HEAD")
+    assert out["level"] == "high" and out["signals"]["rule"] == "unique_quote_agrees"
+    elsewhere = _plan("public/b.html")
+    elsewhere["subtasks"][0]["title"] = title
+    out = target_confidence.assess(plan_validate.anchor_quoted(elsewhere, files), {"question": "q"}, src, "HEAD")
+    assert out["level"] == "low" and out["signals"]["rule"] == "no_quote"
