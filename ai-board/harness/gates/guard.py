@@ -323,8 +323,10 @@ _INJECTION = [re.compile(p, re.I) for p in (
     r"<\s*script\b", r"javascript\s*:", r"\son[a-z]+\s*=", r"\beval\s*\(", r"new\s+Function\s*\(",
     r"child_process", r"document\.write\s*\(",
 )]
-# Handler kept verbatim from a removed line of the same file: a text edit re-adds the line, not the handler.
-_HANDLER = re.compile(r"""\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+# Handler/javascript: URL kept verbatim from a removed line of the same file: a text edit re-adds the line, not the attribute.
+_HANDLER = re.compile(
+    r"""\s(?:on[a-z]+|(?:href|src|action|formaction|xlink:href)(?=\s*=\s*["']?\s*javascript\s*:))"""
+    r"""\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
 
 
 def _without_kept_handlers(line: str, kept: set[str]) -> str:
