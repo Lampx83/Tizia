@@ -2004,7 +2004,10 @@ function resumeSummary(journal) {
     if (!KEY.test(idempotencyKey)) throw new WorkerContractError('invalid idempotency key');
     const selfRequest = (await db.get(`SELECT r.type FROM ai_tickets t JOIN requests r ON r.id = t.source_request_id
       WHERE t.id=?`, [Number(ticketId)]))?.type === 'self';
-    const verdict = validatePrePrVerdict(input.verdict, selfRequest);
+    const current = await db.get(`SELECT p.plan_json FROM ai_tickets t JOIN ai_plans p ON p.root_ticket_id = t.id
+      AND p.plan_hash = t.plan_hash AND p.revision = t.plan_revision WHERE t.id=?`, [Number(ticketId)]);
+    const revisedChecks = (parseJson(current?.plan_json)?.steps || []).some((step) => step?.check_revision);
+    const verdict = validatePrePrVerdict(input.verdict, selfRequest, revisedChecks);
     return await submitPrePrVerdictTransaction(Number(ticketId), {
       ...input, idempotencyKey, now: input.now ?? Date.now(),
     }, verdict);

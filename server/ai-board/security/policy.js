@@ -74,6 +74,24 @@ function dataPayload(value, field) {
   return { kind: value.kind, domain: value.domain, layout };
 }
 
+const MAX_CHECKS = 8;
+const MAX_CHECKS_JSON = 6000;
+
+// Primitive rules live in the harness (gate 2.5 and gate 5); here only shape and size of untrusted plan data.
+function planChecks(value, field) {
+  if (!Array.isArray(value) || value.length > MAX_CHECKS
+    || value.some((item) => !item || typeof item !== 'object' || Array.isArray(item))
+    || JSON.stringify(value).length > MAX_CHECKS_JSON) fail('malformed_plan', `${field} must be at most ${MAX_CHECKS} check objects`);
+  return value;
+}
+
+function checkRevision(value, field) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.reason !== 'string') {
+    fail('malformed_plan', `${field} must be {reason, old}`);
+  }
+  return { reason: value.reason.slice(0, 500), old: planChecks(value.old ?? [], `${field}.old`) };
+}
+
 function ordinalList(value, field) {
   if (!Array.isArray(value) || value.some((item) => !Number.isInteger(item))) {
     fail('malformed_plan', `${field} must be an array of step numbers`);
@@ -277,6 +295,9 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       non_goals: stringList(step.non_goals, `steps[${index}].non_goals`, { allowEmpty: true }),
       ...(step.task_type == null ? {} : { task_type: step.task_type }),
       ...(payload ? { payload } : {}),
+      ...(step.checks == null ? {} : { checks: planChecks(step.checks, `steps[${index}].checks`) }),
+      ...(step.check_revision == null ? {}
+        : { check_revision: checkRevision(step.check_revision, `steps[${index}].check_revision`) }),
     };
   });
 

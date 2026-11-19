@@ -370,3 +370,23 @@ test('submitted children carry layer and depends_on', async () => {
   db.close();
 });
 
+
+test('step checks and a check revision survive normalization; absent leaves the plan hash unchanged', () => {
+  const before = validatePlan(plan(), 'pharmacy');
+  const check = { primitive: 'text_present', path: '/pharmacy/flashcards.html', text: 'Thẻ 1' };
+  const input = plan();
+  input.steps[0].checks = [check];
+  input.steps[0].check_revision = { reason: 'diff đã có chữ yêu cầu', old: [{ ...check, text: 'Thẻ cũ' }], extra: 1 };
+  const kept = validatePlan(input, 'pharmacy');
+  assert.deepEqual(kept.plan.steps[0].checks, [check]);
+  assert.deepEqual(kept.plan.steps[0].check_revision, { reason: 'diff đã có chữ yêu cầu', old: [{ ...check, text: 'Thẻ cũ' }] });
+  assert.notEqual(kept.planHash, before.planHash);
+  assert.equal(validatePlan(plan(), 'pharmacy').planHash, before.planHash);
+  assert.equal('checks' in before.plan.steps[0], false);
+  for (const bad of [{ checks: 'x' }, { checks: Array(9).fill(check) }, { checks: [[check]] },
+    { checks: [{ text: 'x'.repeat(7000) }] }, { check_revision: { old: [] } }, { check_revision: { reason: 'x', old: ['x'] } }]) {
+    const broken = plan();
+    Object.assign(broken.steps[0], bad);
+    assert.throws(() => validatePlan(broken, 'pharmacy'), (error) => error.code === 'malformed_plan');
+  }
+});

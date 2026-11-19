@@ -295,7 +295,8 @@ export function softMissNote(gates) {
   return `Lưu ý: ${misses.length} kiểm chất lượng chưa đạt ngưỡng, thay đổi vẫn được gửi kèm cảnh báo: ${misses.map(line).join('; ')}.`.slice(0, 1000);
 }
 
-function validatePrePrVerdict(value, selfRequest = false) {
+/** revisedChecks: the accepted plan replaced a suspect check, so the run is for a human only. */
+function validatePrePrVerdict(value, selfRequest = false, revisedChecks = false) {
   if (!value || typeof value !== 'object' || !CONTRACT.verdict_outcomes.includes(value.outcome)) {
     throw new WorkerContractError('invalid pre-PR verdict');
   }
@@ -338,6 +339,8 @@ function validatePrePrVerdict(value, selfRequest = false) {
           .map(([key, flag]) => [String(key).slice(0, 40), flag === true])),
         observations: Object.fromEntries(Object.entries(item.functional.observations || {}).slice(0, 10)
           .map(([key, text]) => [String(key).slice(0, 80), String(text).slice(0, 1500)])),
+        ...(Array.isArray(item.functional.check_suspect) && item.functional.check_suspect.length
+          ? { check_suspect: item.functional.check_suspect.slice(0, 8).map((why) => String(why).slice(0, 300)) } : {}),
       };
       if (selfRequest && item.eval) clean.eval = cleanEval(item.eval);
     }
@@ -377,13 +380,16 @@ function validatePrePrVerdict(value, selfRequest = false) {
   }
   // Generated test disagreed with a diff-derived oracle: the harness flags it, so it is evidence for a human only.
   const reviewed = covered && functional.needs_review === true && functional.oracle_passed === true;
+  const checkReview = revisedChecks || Boolean(functional.check_suspect);
+  if (value.outcome === 'ready_for_pr' && checkReview)
+    throw new WorkerContractError('a run with a suspect or replaced check cannot pass automatically');
   if (value.outcome === 'ready_for_pr' && noOracle)
     throw new WorkerContractError('a request without a trusted oracle cannot pass automatically');
   if (value.outcome === 'ready_for_pr' && functional.needs_review === true)
     throw new WorkerContractError('a run flagged for review cannot pass automatically');
   if (value.outcome === 'ready_for_pr' && !['low', 'medium'].includes(gate55?.risk_level))
     throw new WorkerContractError('ready verdict requires low or medium risk');
-  if (value.outcome === 'needs_review' && !noOracle && !reviewed && !['high', 'critical'].includes(gate55?.risk_level))
+  if (value.outcome === 'needs_review' && !noOracle && !reviewed && !checkReview && !['high', 'critical'].includes(gate55?.risk_level))
     throw new WorkerContractError('review verdict requires high or critical risk');
   if (value.outcome === 'blocked' && !last.blocked) throw new WorkerContractError('blocked verdict requires a blocked gate');
   const budgetUsed = Number(value.budget_used ?? 0);

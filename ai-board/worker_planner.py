@@ -11,7 +11,7 @@ import urllib.error
 from typing import Callable
 
 from worker_client import CONTRACT, DEFAULT_BUDGET_LIMIT, LIMITS, PLAN_GATES
-from worker_execution import _load_harness, _real_deps, node_span
+from worker_execution import CHECK_REVISE, _load_harness, _real_deps, node_span
 import path_policy  # noqa: E402
 from runtime import coverage, objection_repeat  # noqa: E402
 from settings import get_settings  # noqa: E402
@@ -151,6 +151,50 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
     """Gộp subtask cùng file (một file/subtask) trước khi validate; xem runtime/plan_merge.py."""
     from runtime.plan_merge import merge_same_file
     return merge_same_file(subtasks)
+
+
+def _checks_by_file(plan: dict) -> dict[str, list[dict]]:
+    """Plan checks per normalised file, read before the same-file merge (it keeps only the first subtask's)."""
+    from verification import checks
+    out: dict[str, list[dict]] = {}
+    for subtask in plan.get("subtasks") or []:
+        if isinstance(subtask, dict) and subtask.get("file"):
+            items = out.setdefault(posixpath.normpath(str(subtask["file"]).replace("\\", "/")), [])
+            items += [item for item in subtask.get("checks") or [] if item not in items]
+    return {file: items[:checks.MAX_CHECKS] for file, items in out.items() if items}
+
+
+def revision_request(snapshot: dict) -> list[dict] | None:
+    """Suspect checks the last verdict asked to replace ({file, check, reason}); None without the marker or with a flag off."""
+    settings = get_settings()
+    if not (settings.plan_checks and settings.red_check_classify):
+        return None
+    reason = str((snapshot.get("ticket") or {}).get("internal_reason") or "")
+    at = reason.find(CHECK_REVISE)
+    if at < 0:
+        return None
+    try:
+        old, _ = json.JSONDecoder().raw_decode(reason[at + len(CHECK_REVISE):].lstrip())
+    except ValueError:
+        return None
+    old = [item for item in old if isinstance(item, dict) and isinstance(item.get("check"), dict)] if isinstance(old, list) else []
+    return old or None
+
+
+def revision_note(old: list[dict]) -> str:
+    """Planner hint: which checks Gate 5 judged suspect and the rule the new ones must meet."""
+    lines = "\n".join(f"- {item.get('file')}: {json.dumps(item['check'], ensure_ascii=False)} — {item.get('reason')}" for item in old)
+    return ("[THAY CHECK NGHI SAI — chỉ một lần]\nGate 5 xếp các check sau vào nhánh nghi check (thay đổi có vẻ đã đúng, check sai):\n"
+            f"{lines}\nKhai check mới cho bước đó: phải đỏ trên base và xanh khi thay đổi làm đúng yêu cầu. Không lặp lại check cũ.")
+
+
+def stamp_revision(plan: dict, old: list[dict]) -> None:
+    """Record the replaced checks on the step that owned them (else the first step); plan_hash then pins the record."""
+    steps = [step for step in plan["steps"] if step["allowed_scope"][0] in {item.get("file") for item in old}] or plan["steps"][:1]
+    for step in steps:
+        mine = [item for item in old if item.get("file") == step["allowed_scope"][0]] or old
+        step["check_revision"] = {"reason": "; ".join(dict.fromkeys(str(item.get("reason") or "") for item in mine))[:500],
+                                  "old": [item["check"] for item in mine][:8]}
 
 
 def _plan_with_repair(run_plan: Callable[[dict], dict], request: dict, state: dict, budget, stopped: dict | None) -> tuple[dict | None, list[dict]]:
@@ -307,6 +351,8 @@ class HarnessPlanner:
         old_caps = (["self.config"] if request.get("type") == "self"
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
+        settings = get_settings()
+        planned = _checks_by_file(old) if settings.plan_checks and settings.red_check_classify else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
@@ -335,6 +381,7 @@ class HarnessPlanner:
                 "depends_on": list(depends_on),
                 **({'task_type': subtask['task_type']} if subtask.get('task_type') in
                    {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
+                **({"checks": planned[file]} if planned.get(file) else {}),
             })
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {
@@ -386,6 +433,9 @@ class HarnessPlanner:
 
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
         self.last_skill = None
+        replaced = revision_request(snapshot)
+        if replaced:
+            snapshot = {**snapshot, "plan_repair": "\n\n".join(filter(None, (snapshot.get("plan_repair"), revision_note(replaced))))}
         request = self._request(snapshot)
         if request.get("folder_brief"):
             # Lách guard qua nhiều lượt nhỏ: soát lexicon trên cả bản mô tả gộp của folder.
@@ -468,6 +518,8 @@ class HarnessPlanner:
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
         plan = self._canonical(request, state["plan"], signals, state['catalog'])
+        if replaced:
+            stamp_revision(plan, replaced)
         if state.get('grounding'):
             plan['grounding'] = state['grounding']
         if state.get('assumption'):
