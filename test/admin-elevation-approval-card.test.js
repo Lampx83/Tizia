@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 
 const dashboard = readFileSync(new URL('../public/js/admin-dashboard.js', import.meta.url), 'utf8');
 const detail = readFileSync(new URL('../public/js/admin-request.js', import.meta.url), 'utf8');
+const card = readFileSync(new URL('../public/js/escalation-card.js', import.meta.url), 'utf8');
 
 test('the requests tab loads the approval context on demand, never as part of the list', () => {
   assert.match(dashboard, /api\(`\/api\/admin\/ai-board\/requests\/\$\{id\}\/elevation-context`\)/);
@@ -14,10 +15,12 @@ test('the requests tab loads the approval context on demand, never as part of th
   assert.match(dashboard, /if \(b\.dataset\.act === 'elevation-context'\) return loadElevationContext\(id\)/);
 });
 
-test('the card answers what/why/risk/evidence', () => {
-  for (const heading of ['Duyệt cái gì', 'Vì sao', 'Rủi ro', 'Bằng chứng']) {
-    assert.match(dashboard, new RegExp(`<b>${heading}</b>`), `dashboard card has ${heading}`);
+test('the card renders the five owner rows through the shared renderer', () => {
+  for (const heading of ['Hành động', 'Vì sao hỏi', 'Bằng chứng', 'Rủi ro', 'Lựa chọn']) {
+    assert.match(card, new RegExp(`'${heading}'`), `shared card has ${heading}`);
   }
+  assert.match(card, /<dt><b>\$\{name\}<\/b><\/dt>/);
+  assert.match(dashboard, /escalationCard\(ctx\.card, \{ tag: dashTag, html: \{ action \}, extra: \{ why, risk: modelRisk, evidence: trail \}, buttons \}\)/);
   assert.match(dashboard, /elevationPathTag\(row\)/);
   assert.match(dashboard, /có trong yêu cầu|chỉ có trong kế hoạch|không có trong yêu cầu\/plan/);
   assert.match(dashboard, /Các bước kế hoạch:/);
@@ -26,6 +29,16 @@ test('the card answers what/why/risk/evidence', () => {
   assert.match(dashboard, /evidence\.plan_hash_request/);
   assert.match(dashboard, /evidence\.requested_at/);
   assert.match(dashboard, /<a href="\/admin-request\.html\?id=\$\{r\.id\}" target="_top">mở trace<\/a>/);
+});
+
+test('"Sửa rồi duyệt" sends a narrowed scope for one request only, after the same reason and confirm', () => {
+  assert.match(dashboard, /const canNarrow = \(ctx\) => !!\(ctx\?\.card\?\.options \|\| \[\]\)\.find\(option => option\.key === 'edit' && option\.available\)/);
+  assert.match(dashboard, /data-act="elevate-narrow" data-rid="\$\{r\.id\}"[^>]*>Sửa rồi duyệt</);
+  assert.match(dashboard, /data-elevation-path="\$\{r\.id\}" value="\$\{esc\(row\.path\)\}"/);
+  assert.match(dashboard, /<option value="protected"[^>]*>hạ xuống bảo vệ<\/option>/, 'core can only be lowered');
+  assert.match(dashboard, /if \(b\.dataset\.act === 'elevate-narrow'\) \{[\s\S]{0,400}return decideElevation\(\[id\], 'approve', granted\);/);
+  assert.match(dashboard, /\.\.\.\(narrowed \? \{ scope: narrowed \} : \{\}\)/);
+  assert.match(dashboard, /async function decideElevation\(ids, decision, narrowed = null\)/);
 });
 
 test('high risk shows a strong warning and approval needs a typed reason plus a second confirm', () => {
@@ -59,9 +72,7 @@ test('"Duyệt tất cả" only takes loaded, low/medium, inside-request items',
 test('the request page repeats the card and keeps the same server endpoints', () => {
   assert.match(detail, /api\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevation-context`/, 'single-context call');
   assert.match(detail, /function elevationContextCard\(ctx\)/);
-  for (const heading of ['Duyệt cái gì', 'Vì sao', 'Rủi ro', 'Bằng chứng']) {
-    assert.match(detail, new RegExp(`>${heading}</div>`), `detail card has ${heading}`);
-  }
+  assert.match(detail, /escalationCard\(ctx\.card, \{ tag, html: \{ action \}, extra: \{ why, risk: modelRisk, evidence: trail, options: narrow \} \}\)/);
   assert.match(detail, /id="elevation-reason" data-elevation-reason maxlength="1000" placeholder="Lý do duyệt \(bắt buộc\)"/);
   assert.match(detail, /data-action="elevate" data-decision="approve">Duyệt quyền</);
   assert.match(detail, /if \(approve && reason\.length < 3\)/);
@@ -76,7 +87,9 @@ test('both pages escape every model/worker string before rendering', () => {
   // Scope, reasons, questions, titles and excerpts are untrusted: each goes through esc()/code().
   assert.match(dashboard, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
   assert.match(dashboard, /risk\.questions\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
-  assert.match(dashboard, /esc\(ctx\.request\.excerpt\)/);
-  assert.match(detail, /esc\(ctx\.request\.excerpt\)/);
+  // The request quote now comes from the card evidence; the shared renderer escapes every card string.
+  for (const field of ['card.action', 'card.why', 'e.source', 'e.quote', 'card.risk?.note', 'o.note', 'card.kind']) {
+    assert.ok(card.includes(field.startsWith('card.action') || field.startsWith('card.why') ? `text(${field})` : `escHtml(${field})`), `${field} is escaped`);
+  }
   assert.match(detail, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
 });
