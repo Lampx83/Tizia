@@ -117,3 +117,12 @@ test('pin() rewrites the digest and the hash marker in place, for LF and CRLF po
     pin(file, D1, H1);
   }, /no pinned guest_image/);
 });
+
+test('the warm guest preloads the compose postgres digest and the rebuild refuses a guest without it', () => {
+  const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8');
+  const pinned = /image: (postgres:16-alpine@sha256:[0-9a-f]{64})/.exec(read('docker-compose.yml'))?.[1];
+  assert.ok(pinned, 'docker-compose.yml pins postgres by digest');
+  const warm = read('ai-board/sandbox-runner/scripts/warm-guest.mjs');
+  assert.ok(warm.includes(`docker pull ${pinned}`) && warm.includes(`docker tag ${pinned} postgres:16-alpine`));
+  assert.match(read('ai-board/sandbox-runner/scripts/rebuild-guest.sh'), /grep -qs .*postgres:16-alpine.* \/var\/lib\/docker\/image\/\*\/repositories\.json/);
+});
