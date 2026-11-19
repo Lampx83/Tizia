@@ -88,10 +88,12 @@ def post_filter(question: str | None, request: dict, plan: dict | None, flag_on:
     rule = pv.asks_repo_rule(question)
     named = pv.names_edit(request, plan) if request and plan else None
     dropped = None
-    if question and pv.asks_about_code(question):
+    if rule:
+        dropped = "repo_rule"
+    elif question and pv.asks_about_code(question):
         dropped = "code_question"
-    elif question and flag_on and (rule or named):
-        dropped = "repo_rule" if rule else "names_edit"
+    elif question and flag_on and named:
+        dropped = "names_edit"
     return {"question": None if dropped else question, "dropped_by": dropped, "repo_rule": rule, "names_edit": named}
 
 
