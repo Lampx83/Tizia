@@ -144,6 +144,14 @@ def test_api_route_payload_path_model_and_provenance(monkeypatch):
     assert body['_route']['reason'] == 'api_fallback' and body['_route']['limits']['max_tokens'] == 8192
 
 
+def test_api_route_sends_the_thinking_switch_to_a_hosted_qwen(monkeypatch):
+    calls = gateway(monkeypatch)
+    deps = deps_for(env(API_MODEL='qwen3.5-35b-a3b', GATE1_MODEL='qwen'), busy())
+    deps.call_model('qwen', 'p', gate=1, budget=Budget(), extra={'thinking': False})
+    _, payload = calls[0]
+    assert payload['model'] == 'qwen3.5-35b-a3b' and payload['chat_template_kwargs'] == {'enable_thinking': False}
+
+
 def test_idle_vllm_route_is_untouched(monkeypatch):
     calls = gateway(monkeypatch)
     deps = deps_for(env(), busy(0, 0))
