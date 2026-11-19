@@ -42,9 +42,8 @@ def test_truly_ambiguous_request_still_asks(monkeypatch):
     assert result["outcome"] == "needs_clarification"
 
 
-@pytest.mark.parametrize("request_,question", [(NAMED, ASK["question"]), (VAGUE, RULE_Q)])
-def test_flag_off_keeps_old_behavior(monkeypatch, request_, question):
-    result, _, _ = _run(monkeypatch, request_, question, on=False)
+def test_flag_off_still_asks_named_edit(monkeypatch):
+    result, _, _ = _run(monkeypatch, NAMED, ASK["question"], on=False)
     assert result["outcome"] == "needs_clarification"
 
 

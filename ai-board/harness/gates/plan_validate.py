@@ -631,12 +631,15 @@ def write_clarification(db_path, request: dict, question: str) -> None:
 
 
 def clarify_rules_on() -> bool:
-    """AI_BOARD_PLAN_VALIDATE_CLARIFY_RULES truthy: named edits and repo rules never become student questions."""
+    """AI_BOARD_PLAN_VALIDATE_CLARIFY_RULES truthy: named edits never become student questions."""
     return get_settings().plan_validate_clarify_rules
 
 
 _QUOTED = re.compile(r"[\"“”«»]([^\"“”«»]{2,}?)[\"“”«»]|'([^']{2,}?)'|‘([^’]{2,}?)’")
-_REPO_RULE = re.compile(r"\bonclick\b|inline (?:handler|script|style)|\bCSP\b|\blint\b|luật (?:repo|của repo)|quy tắc (?:repo|của repo)|\bcấm\b", re.I)
+# Code or rule tokens only: a bare "cấm" also starts real behaviour questions ("cấm bấm nút khi ...").
+_REPO_RULE = re.compile(r"\bon[a-z]+\s*=|\bonclick\b|addEventListener|inline (?:handler|script|style)|\bCSP\b|\blint\b"
+                        r"|(?:luật|quy tắc) (?:của )?repo", re.I)
+_RULE_CODE = re.compile(r"""<script\b|javascript:|\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
 
 
 _PAGE_PHRASE = re.compile(r"\b(?:trang|page)\s+(\w+)", re.I)
@@ -667,6 +670,12 @@ def names_edit(request: dict, plan: dict) -> bool:
 def asks_repo_rule(question: str | None) -> bool:
     """Question restates a repo rule (forbidden attribute, lint, CSP): the plan obeys it, the student cannot decide it."""
     return bool(question and _REPO_RULE.search(question))
+
+
+def rule_breaks(plan: dict, files: dict) -> list[str]:
+    """Forbidden markup (handler attribute, script, javascript:) in subtask text that its target file lacks."""
+    return [f"{task['file']}: {m.group()}" for task in plan['subtasks'] for text in (task.get('title'), task.get('verify')) if text
+            for m in _RULE_CODE.finditer(text) if _squash(m.group()).lower() not in _squash(files.get(task['file'], '')).lower()]
 
 
 def answered_on() -> bool:
@@ -902,13 +911,25 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     validation, stop = validate(request)
     if stop:
         return stop
+    rule_question = not validation['clear'] and asks_repo_rule(validation.get('question'))
+    veto = (validation['objection'] or {}).get('claim') if validation.get('objection') else validation.get('reason')
+    rule_veto = not validation.get('grounded') and asks_repo_rule(veto)
+    if rule_question or rule_veto:
+        # A repo rule is the planner's job: markup the plan adds goes back as a plan fault, markup already in source is not this request's.
+        if broken := rule_breaks(plan, files):
+            return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {broken[0]}", "outcome": PLAN_UNFIT,
+                    "signals": broken, "public_message": "Kế hoạch thêm mã bị quy tắc repo cấm; đang chờ lập lại kế hoạch."}
+        state['assumption'] = validation['question'] if rule_question else veto
+        judge('repo rule objection dropped', True, state['assumption'])
+        validation = {**validation, **({'clear': True, 'question': None} if rule_question else {}),
+                      **({'grounded': True, 'objection': None} if rule_veto else {})}
     if not validation['clear'] and asks_about_code(validation.get('question')):
         state['assumption'] = validation['question']
         judge('code question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
-    if clarify_rules_on() and not validation['clear'] and validation.get('question') and (asks_repo_rule(validation['question']) or names_edit(request, plan)):
+    if clarify_rules_on() and not validation['clear'] and validation.get('question') and names_edit(request, plan):
         state['assumption'] = validation['question']
-        judge('named edit or repo rule: question dropped', True, validation['question'])
+        judge('named edit: question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
     anchored = bool(request.get('grounding_required')) and target_anchored(plan, files, request)
     if anchored and not validation['clear'] and validation.get('grounded'):
