@@ -392,16 +392,6 @@ def literal_contradicts(request: dict, best: str | None, files: dict, source, sh
                for lit in file_context.literals(request.get('subject'), request.get('body')))
 
 
-def adds_files(plan: dict, files: dict) -> bool:
-    """Plan có subtask trỏ file chưa tồn tại ở base (feature thêm file) hay không."""
-    return any(task['file'] not in files for task in plan.get('subtasks') or [])
-
-
-def feature_request(request: dict) -> bool:
-    """Yêu cầu loại feature (hoặc server đã xác định là nhiều bước) — chỉ loại này mới thêm file mới."""
-    return request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
-
-
 class Mismatch(ValueError):
     """Grounding sai chứng minh được; `evidence` = {item, target, file, quote, why} cho vết chặn."""
 
@@ -1066,11 +1056,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                     judge('renderer advisory', True, state['renderer_advisory'])
                 else:
                     raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
-            contradicted = literal_contradicts(request, state.get('best_match'), files,
-                                               state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
+            source = state.get('checkout_source') or Path(__file__).resolve().parents[3]
+            added = {task['file'] for task in plan['subtasks'] if task['file'] not in files} if sha else set()
+            if refusal := best_match.new_page_refusal(request, added - set(_named_new_files(plan, files, request)), source, sha):
+                raise ValueError(refusal)
+            contradicted = literal_contradicts(request, state.get('best_match'), files, source, sha)
             if anchored and not contradicted:
                 judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
-            elif adds_files(plan, files) and feature_request(request):
+            elif added and best_match.feature(request):
                 # A feature adds files that do not exist yet: there is no "most quoted file" to edit, so the
                 # best-match is only recorded (the path/layer rules and grounding still apply). An edit request
                 # that points at a file which does not exist still has to name the best-matching file.

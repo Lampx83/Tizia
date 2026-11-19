@@ -138,8 +138,8 @@ def test_located_existing_behavior_cannot_be_replaced_with_a_standalone_page(tmp
         out = plan_validate.run({'subject': title, 'grounding_required': True},
             deps_with(FakeModels(state['plan'], validation={'clear': True, 'grounded': True})), Budget(), state)
         assert out['reason'] == 'plan_ungrounded'
-        # LF/127: the renderer named by the oracle is advisory; the block still comes from grounding (no before/after evidence for a new page).
-        assert 'thiếu hành vi' in out['signals'][0]
+        # The renderer named by the oracle is advisory; the block comes from the edit request adding a page.
+        assert 'không tạo trang mới public/new-page.html' in out['signals'][0]
         path = 'public/js/' + renderer
         state['plan'] = {'subtasks':[{'file':path,'title':title,'verify':'Observe requested behavior','size':'small'}]}
         validation = {'clear':True,'grounded':True,'grounding':[{'target':path,'file':path,

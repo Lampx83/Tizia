@@ -141,6 +141,7 @@ def test_answer_run_unverifiable_objection_is_advisory_not_a_block(monkeypatch):
     case = CASES["replace_text-l3-9b8997"]
     monkeypatch.setenv("AI_BOARD_GATE25_ANSWERED", "1")
     plan = plan_with(["features"])
+    plan = {**plan, "subtasks": plan["subtasks"][:1]}  # an edit request may not add the fixture's page
     models = Scripted(plan, [unclear(case), {"clear": True, "question": None, "grounded": False, "grounding": []}], found(case))
     request = {"id": "x", "subject": case["subject"], "body": case["body"], "grounding_required": True}
     result = plan_validate.run(request, deps_with(models), Budget(), {"plan": plan, "planning_context": case["source"]})
