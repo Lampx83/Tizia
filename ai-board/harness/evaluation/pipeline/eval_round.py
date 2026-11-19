@@ -72,6 +72,7 @@ def main(argv=None) -> int:
     ap.add_argument("--suites", default=",".join(SUITES))
     ap.add_argument("--skip-arm", action="store_true", help="arm/freeze/preflight already done for this pin")
     a = ap.parse_args(argv)
+    _driver().owner_password()  # trials run with check=False: fail here, not after arm/freeze with a 0/0 round
     rounds = DATA / "rounds"
     rounds.mkdir(exist_ok=True)
     log = rounds / f"r{a.repeat}.log"
