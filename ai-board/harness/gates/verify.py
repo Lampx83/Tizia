@@ -14,7 +14,7 @@ import unicodedata
 import uuid
 import secrets
 import urllib.request
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
@@ -353,36 +353,68 @@ def _focus_clip(page, selectors: list[str], texts: list[str], width: int) -> dic
     return {"x": x, "y": y, "width": min(box_w, width), "height": min(box_h, page_height)}
 
 
-def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None,
-                       focus: Path | None = None, focus_texts: list[str] = ()) -> dict:
-    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit.
-    `focus` + (selector hoặc chữ đổi) nhìn thấy được → thêm ảnh cận cảnh quanh phần tử đó (viền cam) ở `focus`; không thấy thì không ghi file."""
-    from playwright.sync_api import sync_playwright
+class _Browsers:
+    """One Playwright + Chromium for a batch of captures, launched on first use; reset() drops a browser after a failed shot."""
 
-    with sync_playwright() as playwright:
-        browser = _launch(playwright)
+    def __init__(self):
+        self.stack, self.playwright, self.browser = ExitStack(), None, None
+
+    def get(self):
+        if self.browser is None or not self.browser.is_connected():
+            from playwright.sync_api import sync_playwright
+
+            if self.playwright is None:
+                self.playwright = self.stack.enter_context(sync_playwright())
+            self.browser = _launch(self.playwright)
+        return self.browser
+
+    def reset(self) -> None:
+        browser, self.browser = self.browser, None
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass  # already dead; the next get() launches a new one
+
+    def close(self) -> None:
+        self.reset()
+        self.stack.close()
+
+
+def capture_screenshot(url: str, path: Path, width: int = 1280, *, selectors: list[str] = (), token: str | None = None,
+                       focus: Path | None = None, focus_texts: list[str] = (), browser: Callable | None = None) -> dict:
+    """Một lần chụp Chromium + đo cổng ảnh trên cùng trang đó, như khách hoặc (có token) như học viên đăng nhập. Trả kết quả visual.audit.
+    `focus` + (selector hoặc chữ đổi) nhìn thấy được → thêm ảnh cận cảnh quanh phần tử đó (viền cam) ở `focus`; không thấy thì không ghi file.
+    `browser`: callable trả Browser dùng chung; mỗi lần chụp vẫn một context mới. Không có thì tự mở và đóng Chromium."""
+    if browser is None:
+        own = _Browsers()
         try:
-            context = browser.new_context(viewport={"width": width, "height": 812 if width < 768 else 800})
-            if token:
-                context.add_cookies([{"name": "tizia_sid", "value": token, "url": url, "httpOnly": True}])
-                context.add_init_script(QUIET_POPUPS_JS)
-            page = context.new_page()
-            response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            check_landing(url, page.url, response.status if response else None)
-            visual.settle(page)
-            height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
-            page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
-            audit = visual.audit(page, list(selectors))
-            clip = _focus_clip(page, list(selectors), list(focus_texts), width) if focus is not None else None
-            if clip:
-                page.evaluate(FOCUS_MARK_JS, True)
-                try:
-                    page.screenshot(path=str(focus), full_page=True, clip=clip)
-                finally:
-                    page.evaluate(FOCUS_MARK_JS, False)
-            return audit
+            return capture_screenshot(url, path, width, selectors=selectors, token=token, focus=focus, focus_texts=focus_texts,
+                                      browser=own.get)
         finally:
-            browser.close()
+            own.close()
+    context = browser().new_context(viewport={"width": width, "height": 812 if width < 768 else 800})
+    try:
+        if token:
+            context.add_cookies([{"name": "tizia_sid", "value": token, "url": url, "httpOnly": True}])
+            context.add_init_script(QUIET_POPUPS_JS)
+        page = context.new_page()
+        response = page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        check_landing(url, page.url, response.status if response else None)
+        visual.settle(page)
+        height = min(max(int(page.evaluate("document.documentElement.scrollHeight") or 1), 1), MAX_SHOT_HEIGHT)
+        page.screenshot(path=str(path), full_page=True, clip={"x": 0, "y": 0, "width": width, "height": height})
+        audit = visual.audit(page, list(selectors))
+        clip = _focus_clip(page, list(selectors), list(focus_texts), width) if focus is not None else None
+        if clip:
+            page.evaluate(FOCUS_MARK_JS, True)
+            try:
+                page.screenshot(path=str(focus), full_page=True, clip=clip)
+            finally:
+                page.evaluate(FOCUS_MARK_JS, False)
+        return audit
+    finally:
+        context.close()
 
 
 def _loader_pages(checkout: Path, assets: list[str], depth: int = 3) -> list[str]:
@@ -491,39 +523,44 @@ def _capture_all(base: str, shot_pages: list[str], primary: str | None, restore:
     Ảnh khác lỗi (trang cần đăng nhập, base hỏng) chỉ ghi log."""
     shot_dir = Path(tempfile.mkdtemp(prefix="ai-verify-shots-"))
     shots: list[dict] = []
-    for phase in ("after", "before"):
-        targets = shot_pages
-        if phase == "before":
-            try:
-                new = restore()
-            except (OSError, RuntimeError) as exc:
-                logs.append(f"Bỏ ảnh BEFORE: {exc}")
-                break
-            if new is None:
-                logs.append("Bỏ ảnh BEFORE: không biết commit base")
-                break
-            targets = [page for page in shot_pages if page.split("?")[0] not in new]
-        for page in targets:
-            for width in _shot_widths(len(shot_pages)):
-                path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
-                phase_texts = list((texts or {}).get(phase) or [])
-                focus = shot_dir / f"{phase}-{len(shots)}-{width}-focus.png" if (selectors or phase_texts) and width == SHOT_WIDTHS[-1] else None
+    browsers = _Browsers()
+    try:
+        for phase in ("after", "before"):
+            targets = shot_pages
+            if phase == "before":
                 try:
-                    with _check_span(trace, "browser", urlsplit(base + page).path):
-                        audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token,
-                                                   **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
-                except Exception as exc:
-                    if phase == "after" and page == primary:
-                        shutil.rmtree(shot_dir, ignore_errors=True)
-                        raise
-                    logs.append(f"Bỏ ảnh {phase} {page} {width}px: {exc}")
-                    continue
-                shots.append({"phase": phase, "page": page, "width": width, "path": str(path),
-                              **({"audit": audit} if isinstance(audit, dict) else {})})
-                logs.append(f"Screenshot {phase} {page} {width}px: {path}")
-                if focus and focus.exists():
-                    shots.append({"phase": phase, "page": page, "width": width, "path": str(focus), "focus": True})
-                    logs.append(f"Screenshot {phase} {page} vùng thay đổi: {focus}")
+                    new = restore()
+                except (OSError, RuntimeError) as exc:
+                    logs.append(f"Bỏ ảnh BEFORE: {exc}")
+                    break
+                if new is None:
+                    logs.append("Bỏ ảnh BEFORE: không biết commit base")
+                    break
+                targets = [page for page in shot_pages if page.split("?")[0] not in new]
+            for page in targets:
+                for width in _shot_widths(len(shot_pages)):
+                    path = shot_dir / f"{phase}-{len(shots)}-{width}.png"
+                    phase_texts = list((texts or {}).get(phase) or [])
+                    focus = shot_dir / f"{phase}-{len(shots)}-{width}-focus.png" if (selectors or phase_texts) and width == SHOT_WIDTHS[-1] else None
+                    try:
+                        with _check_span(trace, "browser", urlsplit(base + page).path):
+                            audit = capture_screenshot(base + page, path, width, selectors=selectors, token=token, browser=browsers.get,
+                                                       **({"focus": focus, "focus_texts": phase_texts} if focus else {}))
+                    except Exception as exc:
+                        browsers.reset()  # a crashed renderer must not fail the shots after it
+                        if phase == "after" and page == primary:
+                            shutil.rmtree(shot_dir, ignore_errors=True)
+                            raise
+                        logs.append(f"Bỏ ảnh {phase} {page} {width}px: {exc}")
+                        continue
+                    shots.append({"phase": phase, "page": page, "width": width, "path": str(path),
+                                  **({"audit": audit} if isinstance(audit, dict) else {})})
+                    logs.append(f"Screenshot {phase} {page} {width}px: {path}")
+                    if focus and focus.exists():
+                        shots.append({"phase": phase, "page": page, "width": width, "path": str(focus), "focus": True})
+                        logs.append(f"Screenshot {phase} {page} vùng thay đổi: {focus}")
+    finally:
+        browsers.close()
     return shots
 
 

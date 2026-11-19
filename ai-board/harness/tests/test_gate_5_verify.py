@@ -831,7 +831,7 @@ def test_shot_budget_follows_the_number_of_changed_pages(tmp_path):
 def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_path, monkeypatch):
     calls = []
 
-    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=(), browser=None):
         calls.append((url, width, focus is not None))
         path.write_bytes(b"png")
         if focus is not None and (selectors or focus_texts):
@@ -852,7 +852,7 @@ def test_focus_shot_is_kept_for_desktop_and_listed_next_to_the_page_shot(tmp_pat
 def test_a_text_edit_without_selectors_still_gets_a_close_up_with_the_right_words_per_phase(tmp_path, monkeypatch):
     asked = []
 
-    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=()):
+    def capture(url, path, width=1280, *, selectors=(), token=None, focus=None, focus_texts=(), browser=None):
         path.write_bytes(b"png")
         if focus is not None:
             asked.append((width, list(focus_texts)))

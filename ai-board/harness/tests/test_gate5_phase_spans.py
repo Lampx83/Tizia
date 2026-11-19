@@ -1,5 +1,7 @@
 """Gate 5 setup/teardown phases emit spans in order on the guest and the host; verdicts unchanged."""
 import json
+import sys
+import types
 from types import SimpleNamespace
 
 import pytest
@@ -154,4 +156,99 @@ def test_busy_runner_is_polled_finely_so_a_freed_runner_is_seen_quickly(tmp_path
     out = sandbox_verify.run(_host_state(checkout(tmp_path)), client=Busy({"gate": 5, "blocked": False, "reason": None,
                                                                              "evidence": {"screenshots": []}}))
     assert out["blocked"] is False
-    assert out["evidence"]["sandbox"]["queue_wait_s"] <= 25
+    assert out["evidence"]["sandbox"]["queue_wait_s"] <= 30  # 5 polls; a 30 s backoff cap waits ~95 s
+
+
+class _FakeBrowser:
+    def __init__(self, log):
+        self.log, self.connected = log, True
+
+    def is_connected(self):
+        return self.connected
+
+    def new_context(self, **_):
+        self.log.append("context")
+        return _FakeContext(self.log)
+
+    def close(self):
+        self.log.append("browser.close")
+        self.connected = False
+
+
+class _FakeContext:
+    def __init__(self, log):
+        self.log = log
+
+    def add_cookies(self, _):
+        pass
+
+    def add_init_script(self, _):
+        pass
+
+    def new_page(self):
+        return _FakePage()
+
+    def close(self):
+        self.log.append("context.close")
+
+
+class _FakePage:
+    url = None
+
+    def goto(self, url, **_):
+        self.url = url
+        return SimpleNamespace(status=200)
+
+    def evaluate(self, *_):
+        return 100
+
+    def screenshot(self, path, **_):
+        open(path, "wb").write(b"png")
+
+
+@pytest.fixture
+def playwright(monkeypatch):
+    log = []
+
+    class Playwright:
+        def __enter__(self):
+            log.append("playwright.start")
+            return self
+
+        def __exit__(self, *_):
+            log.append("playwright.stop")
+
+    module = types.ModuleType("playwright.sync_api")
+    module.sync_playwright = Playwright
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", module)
+    monkeypatch.setattr(verify, "_launch", lambda _p: (log.append("launch"), _FakeBrowser(log))[1])
+    monkeypatch.setattr(verify.visual, "settle", lambda _page: None)
+    monkeypatch.setattr(verify.visual, "audit", lambda *_: {})
+    return log
+
+
+def test_capture_all_launches_one_browser_with_a_fresh_context_per_shot(tmp_path, playwright):
+    shots = verify._capture_all("http://10.0.0.2:8041", ["/a.html", "/b.html"], "/a.html", lambda: set(), [])
+
+    assert len(shots) == 8  # 2 pages x 2 widths x after/before
+    assert playwright.count("playwright.start") == 1 and playwright.count("launch") == 1
+    assert playwright.count("context") == playwright.count("context.close") == 8
+    assert playwright[-2:] == ["browser.close", "playwright.stop"]
+
+
+def test_capture_all_relaunches_after_a_failed_shot(tmp_path, playwright, monkeypatch):
+    real = verify.check_landing
+    calls = []
+
+    def flaky(requested, landed, status):
+        calls.append(requested)
+        if len(calls) == 2:
+            raise RuntimeError("renderer crashed")
+        return real(requested, landed, status)
+
+    monkeypatch.setattr(verify, "check_landing", flaky)
+    logs = []
+    shots = verify._capture_all("http://10.0.0.2:8041", ["/a.html", "/b.html"], "/other.html", lambda: None, logs)
+
+    assert len(shots) == 3 and any("renderer crashed" in line for line in logs)
+    assert playwright.count("launch") == 2 and playwright.count("playwright.start") == 1
