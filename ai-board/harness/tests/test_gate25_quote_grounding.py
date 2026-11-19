@@ -83,3 +83,34 @@ def test_advquote_still_blocks_quote_from_another_file_and_missing_behaviour(mon
     bare = {'grounded': True, 'grounding': [{'target': 'public/a.html', 'file': 'public/a.html', 'quote': 'zzzzzzzz', 'before': 'b', 'after': '', 'verify': 'v'}]}
     with pytest.raises(plan_validate.Mismatch):
         plan_validate.checked_grounding(bare, plan, 'sha', files)
+
+
+# Source lines and plan titles of eval round r204 (3 of 19 blocked as plan_target_uncertain); files cut to the anchor lines.
+HERB = ('<title>Vườn dược liệu 3D | Tizia</title>\n'
+        '  <a href="space.html?b=garden&domain=pharmacy">← Vườn dược liệu</a>\n'
+        '  <span class="title">🌿 Vườn dược liệu 3D</span>\n')
+ADMIN = ('     (campus-iframe / campus-save-btn / campus-reset-btn / campus-dirty-badge). -->\n'
+         '    <span id="campus-dirty-badge" style="display:none;color:#000;font-size:11px">● Chưa lưu</span>\n')
+LOGIN = '  <p class="tag">Đăng nhập để vào vũ trụ giáo dục ảo</p>\n'
+HERB_TITLE = 'Đổi văn bản liên kết #back-link từ "← Vườn dược liệu" thành "Nhớ sao chuỗi mã nút"'
+ADMIN_TITLE = 'Thêm nhãn mới sau #campus-dirty-badge trong public/admin.html'
+LOGIN_TITLE = 'Thêm đoạn văn bản "Pha liều bài hàm xu" sau thẻ <p class="tag"> trong public/login.html'
+DEFAULT = ['quotes', 'ellipsis']
+
+
+def _ground(file, title, quote, files, monkeypatch, fixes=DEFAULT, record_file=None, after='a', verify=None):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', ','.join(fixes))
+    plan = {'subtasks': [{'file': file, 'title': title, 'verify': verify or f"grep -q 'X' {file}"}]}
+    validation = {'grounded': True, 'grounding': [{'target': file, 'file': record_file or file, 'quote': quote,
+                                                   'before': 'b', 'after': after, 'verify': 'v'}]}
+    return plan_validate.checked_grounding(validation, plan, 'sha', files)['evidence'][0]
+
+
+@pytest.mark.parametrize('file, quote, text', [
+    ('public/herb-garden-3d.html', '  <a href=space.html?b=garden&domain=pharmacy>← Vườn dược liệu</a>', HERB),
+    ('public/login.html', '<p class=tag>Đăng nhập để vào vũ trụ giáo dục ảo</p>', LOGIN),
+])
+def test_quote_with_attribute_quotes_dropped_grounds_under_quotes_fix(file, quote, text, monkeypatch):
+    _rejects(file, quote, text, monkeypatch, [])
+    assert _check(file, quote, text, monkeypatch, ['quotes'])['evidence'][0]['quote'] == quote
+

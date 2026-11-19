@@ -331,7 +331,6 @@ def _squash(text: str) -> str:
     return re.sub(r'\s+', '', text)
 
 
-_QUOTE_CHARS = re.compile('["`‘’“”]')
 DEFAULT_FIXES = ",".join(sorted(DEFAULT_GATE25_FIXES))
 
 
@@ -341,9 +340,9 @@ def fixes() -> set[str]:
 
 
 def _fold(text: str) -> str:
-    """_squash plus one quote style when `quotes` fix on: models rewrite "x" as 'x' when they copy HTML."""
+    """_squash without quote marks when `quotes` fix on: models rewrite or drop HTML attribute quotes when they copy it."""
     text = _squash(text)
-    return _QUOTE_CHARS.sub("'", text) if "quotes" in fixes() else text
+    return _GAP_QUOTES.sub('', text) if "quotes" in fixes() else text
 
 
 def _too_short(quote: str) -> bool:
