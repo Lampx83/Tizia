@@ -189,7 +189,7 @@ BOOT_TIMEOUT = 180.0  # dockerd over the warm vfs data dir; same budget as Gate 
 _BOOT = ("guest-boot.sh",)
 _INSPECT = ("docker", "image", "inspect", IMAGE)
 _START = ("docker", "run", "-d", "--name", CONTAINER, "--network", "none", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", IMAGE)
-_READY = ("docker", "exec", CONTAINER, "sh", "-c", "until pg_isready -q; do sleep 0.2; done")
+_READY = ("docker", "exec", CONTAINER, "sh", "-c", "until pg_isready -q -h 127.0.0.1; do sleep 0.2; done")
 _PSQL = ("docker", "exec", CONTAINER, "psql", "-U", "postgres", "-At", "-F", "|")
 _REMOVE = ("docker", "rm", "-f", CONTAINER)
 # None = the SQL after -c, the only token that varies.
@@ -207,7 +207,7 @@ def exec_allowed(argv) -> bool:
 
 
 class SandboxPgRunner:
-    """PostgreSQL 16 container inside the microVM, no network, reached over its own unix socket; removed in finally."""
+    """PostgreSQL 16 container inside the microVM, no network, ready-checked over loopback TCP (the init-time server is socket-only); removed in finally."""
 
     def __init__(self, session, timeout: float = 60.0):
         self.session, self.timeout = session, timeout
