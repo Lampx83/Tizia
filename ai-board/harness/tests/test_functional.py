@@ -105,6 +105,22 @@ def test_text_oracle_passes_only_when_the_page_really_shows_the_quoted_text(site
     assert result['probe_id'] == functional.TEXT_PROBE and result['coverage'] == {'rendered_text': True}
 
 
+def test_text_hidden_until_interaction_counts_as_present_and_is_reported(site):
+    root, _ = site
+    (root / 'hid.html').write_text('<meta charset=utf-8><body><p>Chào</p><div style="display:none"><button>Nộp bài</button></div>'
+                                   '<div hidden><span title="Mẹo ẩn">x</span></div><template>Mẫu thử</template>'
+                                   '<script>var s = "Trong script"</script><style>.a::after{content:"Trong style"}</style>'
+                                   '<noscript>Trong noscript</noscript></body>', encoding='utf-8')
+    result = probe(site, "Thêm 'Nộp bài'", '/hid.html')
+    assert result['passed'] and result['observations']['hidden'] == '["Nộp bài"]'
+    assert probe(site, "Thêm 'Mẹo ẩn'", '/hid.html')['passed']
+    assert 'hidden' not in probe(site, "Thêm 'Chào'", '/hid.html')['observations']
+    for inert in ('Mẫu thử', 'Trong script', 'Trong style', 'Trong noscript'):
+        assert not probe(site, f"Thêm '{inert}'", '/hid.html')['passed']
+    lingering = probe(site, "Bỏ dòng 'Nộp bài'", '/hid.html')                    # absent still looks at visible lines only
+    assert lingering['passed']
+
+
 def test_text_oracle_without_a_page_to_look_at_does_not_pass(site):
     result = probe(site, "Thêm 'Tizia cập nhật'")
     assert not result['passed'] and 'trang' in result['reason']

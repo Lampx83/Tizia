@@ -163,6 +163,17 @@ _SHOWN = r"""() => [document.title, document.body.innerText, ...[...document.que
   .flatMap(e => ['placeholder', 'aria-label', 'title', 'alt'].map(a => e.getAttribute(a) || ''))].join('\n')"""
 
 
+_IN_DOM = r"""() => {
+  const out = [document.title], skip = 'SCRIPT,STYLE,TEMPLATE,NOSCRIPT';
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) if (!n.parentElement.closest(skip)) out.push(n.nodeValue);
+  document.querySelectorAll('[placeholder],[aria-label],[title],[alt]').forEach(e => {
+    if (!e.closest(skip)) for (const a of ['placeholder', 'aria-label', 'title', 'alt']) out.push(e.getAttribute(a) || '');
+  });
+  return out.join('\n');
+}"""
+
+
 def _still_shown(text, lines):
     """A short word counts as shown only when a visible line IS that word (a button label holding it as a word does not);
     a long phrase also counts inside a line."""
@@ -182,7 +193,7 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
     from gates import visual
     from gates.verify import _launch
     present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
-    shown, lines = {}, []
+    shown, in_dom, lines = {}, {}, []
     with sync_playwright() as p:
         browser = _launch(p)
         try:
@@ -192,20 +203,24 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
                 page = context.new_page()
                 page.goto(base + path, wait_until='domcontentloaded', timeout=20000)
                 visual.settle(page)  # judge the page the user ends up with, not the static HTML a script is about to rewrite
-                text = ''
+                text = dom = ''
                 for _ in range(16):  # JS-rendered text can arrive late
                     text = _norm(page.evaluate(_SHOWN))
-                    if all(t in text for t in present):
+                    dom = _norm(page.evaluate(_IN_DOM)) if not all(t in text for t in present) else ''
+                    if all(t in text or t in dom for t in present):
                         break
                     page.wait_for_timeout(500)
-                shown[path] = text
+                shown[path], in_dom[path] = text, dom
                 lines += [_norm(line) for line in page.evaluate('() => document.body.innerText').splitlines() if line.strip()]
         except Exception as error:
             return {**fail(str(error)[:1000]), 'infra': True}
         finally:
             browser.close()
     seen = ' '.join(shown.values())
-    missing = [t for t in expected['present'] if _norm(t) not in seen]
+    unseen = [t for t in expected['present'] if _norm(t) not in seen]
+    dom_seen = ' '.join(in_dom.values())
+    hidden = [t for t in unseen if _norm(t) in dom_seen]
+    missing = [t for t in unseen if t not in hidden]
     lingering = [t for t in expected['absent'] if _still_shown(t, lines)]
     reason = None
     if missing:
@@ -215,6 +230,7 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
     return {'probe_id': probe_id, 'passed': reason is None, 'reason': reason, 'coverage': {'rendered_text': True},
             'observations': {'expected': json.dumps(expected, ensure_ascii=False),
                              **({'missing': json.dumps(missing, ensure_ascii=False)} if missing else {}),
+                             **({'hidden': json.dumps(hidden, ensure_ascii=False)} if hidden else {}),
                              **{f'page {path}': text[:1000] for path, text in shown.items()}}}
 
 
