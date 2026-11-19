@@ -17,7 +17,7 @@ def test_sensitive_request_stops_before_planning_with_a_polite_public_message():
 
 def test_benign_request_goes_on_to_planning():
     models = FakeModels(plan_with(["features"]))
-    out = main.run_gate(1, {"subject": "Thêm nút phát âm", "body": "Thêm nút nghe phát âm tên thuốc"},
+    out = main.run_gate(1, {"subject": "Thêm nút phát âm", "body": "Thêm nút nghe phát âm tên thuốc", "type": "feature"},
                         deps_with(models), Budget(), {})
     assert not out.get("blocked") and len(models.calls) == 2
 
