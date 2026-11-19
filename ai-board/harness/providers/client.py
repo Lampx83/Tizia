@@ -39,6 +39,11 @@ def _api_throttle():
         _sleep(wait)
 
 
+def _takes_thinking_switch(model: str) -> bool:
+    """Hosted model honours chat_template_kwargs.enable_thinking (Qwen chat template)."""
+    return model.lower().startswith('qwen')
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -226,7 +231,7 @@ class OllamaClient:
                 payload['response_format'] = ({'type': 'json_schema', 'json_schema':
                     {'name': 'ai_board', 'schema': format}} if isinstance(format, dict)
                     else {'type': 'json_object'})
-            if extra and 'thinking' in extra and not hosted:  # explicit per-role choice; absent = server default (legacy callers)
+            if extra and 'thinking' in extra and (not hosted or _takes_thinking_switch(model)):  # absent = server default
                 payload['chat_template_kwargs'] = {'enable_thinking': bool(extra['thinking'])}
             if extra and extra.get('tools'):
                 payload['tools'] = extra['tools']

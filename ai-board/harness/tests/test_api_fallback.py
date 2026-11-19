@@ -163,6 +163,34 @@ def test_api_run_raises_the_token_ceiling_only_on_api(monkeypatch):
     assert local.max_tokens == Budget().max_tokens
 
 
+def hosted_payload(monkeypatch, model, extra, route_label='api'):
+    calls = gateway(monkeypatch)
+    monkeypatch.setattr('providers.client._api_throttle', lambda: None)
+    OllamaClient(base_url=GEMINI_BASE, protocol='vllm', route_label=route_label, bearer_only=True,
+                 seckey='k').generate(model, 'p', extra=extra)
+    return calls[0][1]
+
+
+@pytest.mark.parametrize('model', ['qwen3.5-35b-a3b', 'Qwen3.5-35B-A3B'])
+@pytest.mark.parametrize('think', [False, True])
+def test_hosted_qwen_sends_the_per_role_thinking_switch(monkeypatch, model, think):
+    payload = hosted_payload(monkeypatch, model, {'thinking': think})
+    assert payload['chat_template_kwargs'] == {'enable_thinking': think}
+
+
+def test_hosted_non_qwen_omits_the_thinking_switch(monkeypatch):
+    assert 'chat_template_kwargs' not in hosted_payload(monkeypatch, 'gemini-2.5-flash', {'thinking': False})
+
+
+def test_hosted_qwen_without_a_thinking_choice_keeps_the_server_default(monkeypatch):
+    assert 'chat_template_kwargs' not in hosted_payload(monkeypatch, 'qwen3.5-35b-a3b', {})
+
+
+def test_local_vllm_sends_the_switch_for_any_model_name(monkeypatch):
+    payload = hosted_payload(monkeypatch, 'gemma-local', {'thinking': False}, route_label='vllm')
+    assert payload['chat_template_kwargs'] == {'enable_thinking': False}
+
+
 def test_hosted_context_comes_from_the_contract_not_a_server_query():
     client = OllamaClient(base_url=GEMINI_BASE, protocol='vllm', route_label='api', bearer_only=True)
     assert client.context_window('gemini-2.5-flash') == 32768
