@@ -96,7 +96,8 @@ class Compose:
 
     def down(self) -> None:
         """`compose down -v`, then raise if any project container, volume or network survives."""
-        self.command([*self.compose, "down", "-v"])
+        # kill at once: node as PID 1 ignores SIGTERM, so a grace period only waits; volumes go anyway
+        self.command([*self.compose, "down", "-v", "--timeout", "0"])
         remaining = [self.command(["docker", resource, "ls", "--all", "--filter", f"{key}={value}", "--format", "{{.ID}}"], log_output=False).stdout.strip()
                      for resource, key, value in (("container", "label", f"com.docker.compose.project={self.project}"),)]
         remaining += [self.command(["docker", resource, "ls", "--filter", "name=" + self.project, "--format", "{{.Name}}"], log_output=False).stdout.strip()

@@ -56,6 +56,13 @@ def test_build_runs_before_up_and_up_never_rebuilds(tmp_path):
     assert compose[1][compose[1].index("--wait-timeout") + 1] == "120"
 
 
+def test_teardown_kills_instead_of_waiting_for_the_stop_grace(tmp_path):
+    runner = FakeRunner()
+    assert verify.run(state(checkout(tmp_path)), runner=runner)["evidence"]["teardown_confirmed"] is True
+    down = next(args for args, _ in runner.calls if "down" in args)
+    assert down[down.index("down"):] == ["down", "-v", "--timeout", "0"]
+
+
 class _Client:
     def __init__(self, result):
         self.result, self.calls = result, []
