@@ -528,7 +528,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
 
   /** Admin suggestion list from the board DB (the admin UI reads one source of truth, not the web DB). */
   async function listAdminRequests(limit = 10) {
-    const n = Math.min(Math.max(Number(limit) || 10, 1), 50);
+    // ponytail: one page of up to 1000 rows; add offset paging when the board holds more requests.
+    const n = Math.min(Math.max(Number(limit) || 10, 1), 1000);
     const rows = await db.all(`
       SELECT r.id, r.title, r.detail, r.status, r.domain, r.type, r.created_at,
              r.student AS student, u.role AS requester_role,
