@@ -20,6 +20,7 @@ SUITES = {
     "dev-multifile": lambda: "dev-multifile:all",
     "multifile": lambda: "multifile:all",
     "history": lambda: "history:all",
+    "role-neg": lambda: "role-neg:all",
 }
 
 
@@ -47,7 +48,7 @@ def suite_trials(suite: str, repeat: int) -> list[Path]:
 def all_cases() -> dict:
     d = _driver()
     out = {c["id"]: c for c in d.load_cases()}
-    for spec in ("dev-multifile:all", "multifile:all", "history:all"):
+    for spec in ("dev-multifile:all", "multifile:all", "history:all", "role-neg:all"):
         out.update({c["id"]: c for c in d.resolve_cases(spec)})
     return out
 

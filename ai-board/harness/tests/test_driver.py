@@ -324,3 +324,16 @@ def test_case_role_reads_admin_cases_and_defaults_to_student(tmp_path, monkeypat
     assert driver.case_role("x:other") == "student"
     monkeypatch.setattr(driver, "ROLES_FILE", tmp_path / "missing.json")
     assert driver.case_role("x:admin-case") == "student"
+
+
+def test_role_neg_expands_admin_cases_into_student_variants(tmp_path, monkeypatch):
+    from evaluation.pipeline import driver
+    roles = tmp_path / "roles.json"
+    roles.write_text('{"_why": "x", "roles": {"c1": {"role": "admin"}, "c2": {"role": "student"}}}', encoding="utf-8")
+    monkeypatch.setattr(driver, "ROLES_FILE", roles)
+    monkeypatch.setattr(driver, "load_cases", lambda: [{"id": "c1", "title": "t"}, {"id": "c2", "title": "u"}])
+    monkeypatch.setattr(driver, "load_vague_cases", lambda: [])
+    monkeypatch.setattr(driver.hc, "load_cases", lambda: [])
+    out = driver.resolve_cases("role-neg:all")
+    assert [c["id"] for c in out] == ["c1@student"] and out[0]["expect_refusal"] and out[0]["title"] == "t"
+    assert driver.resolve_cases("c1@student")[0]["expect_refusal"]

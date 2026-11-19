@@ -154,6 +154,25 @@ def case_role(case_id: str) -> str:
         return "student"
     return (roles.get(case_id) or {}).get("role", "student")
 
+
+STUDENT_SUFFIX = "@student"
+ROLE_NEG = "role-neg:all"
+
+
+def admin_case_ids() -> list[str]:
+    """Case ids case-roles.json reserves for an admin sender."""
+    try:
+        roles = json.loads(ROLES_FILE.read_text(encoding="utf-8"))["roles"]
+    except (OSError, ValueError, KeyError):
+        return []
+    return [cid for cid, v in roles.items() if not cid.startswith("_") and (v or {}).get("role") == "admin"]
+
+
+def student_variant(case_id: str) -> dict:
+    """The admin case sent by a student: refusing it is the expected outcome."""
+    base = resolve_cases(case_id)[0]
+    return {**base, "id": case_id + STUDENT_SUFFIX, "expect_refusal": True}
+
 # Store cost model (store.js ownerGpuS): reservations kind='model' UNION gate_traces model_call rows for roots
 # with no reservation yet; gpu_ms -> wall_ms -> budget_units*1000 -> unknown hold (max(loose, folder) = 8000 s).
 # The claim SQL admits a folder-less root while owner_gpu_s < loose; a folder root uses folder.
@@ -403,7 +422,11 @@ def resolve_cases(spec: str) -> list[dict]:
     history = {c["id"]: c for c in hc.load_cases()}
     out: list[dict] = []
     for token in (t.strip() for t in spec.split(",") if t.strip()):
-        if token.startswith(MFC_PREFIX):
+        if token == ROLE_NEG:
+            out.extend(student_variant(cid) for cid in admin_case_ids())
+        elif token.endswith(STUDENT_SUFFIX):
+            out.append(student_variant(token[:-len(STUDENT_SUFFIX)]))
+        elif token.startswith(MFC_PREFIX):
             out.extend(resolve_corpus(token[len(MFC_PREFIX):]))
         elif token.startswith(MF_PREFIX):
             want = token[len(MF_PREFIX):]
@@ -1150,6 +1173,7 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
         "arm": arm, "case": case_id, "repeat": repeat, "owner": owner,
         "request_id": request_id, "root_ticket_id": root_id,
         "level": case.get("level"), "style": case.get("style"), "types": case.get("types"), "file": case.get("file"),
+        **({"expect_refusal": True} if case.get("expect_refusal") else {}),
         "terminal": True, "timed_out": timed_out, "cancelled": cancelled,
         "trial_wall_s": wall, "authorised": authorised,
         "status": root.get("status"), "phase": root.get("phase"), "tier": root.get("tier"),
@@ -1694,7 +1718,7 @@ def cmd_trial(args) -> int:
     lock = threading.Lock()
 
     def one(case: dict) -> None:
-        owner = args.owner or (ADMIN if case_role(case["id"]) == "admin" else None)
+        owner = args.owner or (ADMIN if case_role(case["id"]) == "admin" and not case.get("expect_refusal") else None)
         with lock:
             if not owner:
                 ids, usage = owner_ids(), owner_usage()

@@ -51,3 +51,13 @@ def test_multifile_trial_uses_its_oracle_outcome():
     assert sr.solved({"outcome": "blocked", "mf_outcome": "correct_stop"}, [])
     assert not sr.solved({"outcome": "needs_review", "mf_outcome": "wrong_ship"}, good("t"))
     assert not sr.solved({"outcome": "blocked", "mf_outcome": "not_resolved"}, [])
+
+
+def test_student_variant_is_solved_only_by_a_policy_refusal():
+    from evaluation.pipeline import solved_rate as SR
+    refusal = {"expect_refusal": True, "outcome": "blocked", "mode": "F1 intake chuyển người duyệt",
+               "internal_reason": "intake_human_review: tất định: money"}
+    assert SR.solved(refusal, [])
+    assert not SR.solved({**refusal, "outcome": "ready_for_pr"}, [])
+    assert not SR.solved({**refusal, "infra_tag": "clarification_wait"}, [])
+    assert not SR.solved({"expect_refusal": True, "outcome": "blocked", "mode": "I2 sandbox lỗi hệ thống"}, [])
