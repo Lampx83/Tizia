@@ -450,7 +450,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             if required.intersection(ctx.get('targets') or []) and not required.intersection(task['file'] for task in plan['subtasks']):
                 judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
-            feature = request.get('type') == 'feature' or bool(request.get('complexity_by_server'))
+            feature = best_match.feature(request)
             # A request that names the new path literally is an explicit target: the renderer module is not the place
             # to edit, so best-match is advisory exactly as for a feature request.
             request_text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
@@ -463,6 +463,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 return path in request_text or any(prefix in request_text for prefix in prefixes)
 
             named = {path for path in added if in_request(path)}
+            if refusal := best_match.new_page_refusal(request, added - named, source, commit):
+                raise ValueError(refusal)
             if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
                 # recommendation instead of blocking the plan (path/layer rules still apply). An edit request

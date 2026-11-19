@@ -44,6 +44,7 @@ VARIANT_FILES = {  # skill nối thêm khi AI_BOARD_SKILL_VARIANT bật; không 
     "frontend-new-page": SKILLS_DIR / "proposed" / "frontend-new-page" / "SKILL.md",
 }
 _PATH_REF = re.compile(r"[\w./-]*[\w-]\.(?:html|css|js|mjs)\b", re.I)
+_ADDED_TEXT = re.compile(r"(\b(?:th[êe]m|ch[èe]n|add|insert)\b[^:\n]{0,120}:)[^\n]*", re.I)
 RESERVE = file_context.WEIGHTS["tool_min_budget"]
 LOCATE_BUDGET = file_context.WEIGHTS["locate_budget"]
 _SECTION = re.compile(r"^## gate (\d)\s*$", re.M)
@@ -421,7 +422,9 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                             "result": f"{len(literal['files'])} candidate files: " + ", ".join(r["file"] for r in literal["files"][:5])})
         named_hit = any(f in named for f, _, _ in hits)
         if not (file or known or render or literal.get("files") or named_hit):  # chữ người dùng nhắc có thể nằm ở module dùng chung, không ở trang gửi yêu cầu
-            best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, said, limit=1) if f not in targets]
+            # words an add request puts after its colon are not in the repo yet: they cannot locate the target
+            locate = file_context.phrases(*(_ADDED_TEXT.sub(r"\1", request.get(k) or "") for k in ("subject", "body")), thread)
+            best = [(f, grams) for f, _, grams in tools.matching_files(source, commit, locate, limit=1) if f not in targets]
             log.append({"tool": "matching_files", "params": {"phrases": said[:6]}, "chars": 0,
                         "result": f"{best[0][0]} matches: {'; '.join(best[0][1])[:200]}" if best else "no file matches several phrases"})
             if best:

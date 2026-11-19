@@ -56,7 +56,7 @@ def test_gate1_blocks_after_second_bad_plan_and_allows_new_page(repo):
     out = brainstorm.run(COLOUR_REQUEST, deps_with(_SeqModels([bad, bad])), Budget(max_wall_clock_s=999),
                          source=src, sha=sha)
     assert out["blocked"] is True and "khong-co.css" in out["reason"]
-    ok = brainstorm.run(COLOUR_REQUEST, deps_with(_SeqModels([_plan("./public/meo-hoc.html")])),
+    ok = brainstorm.run({**COLOUR_REQUEST, "type": "feature"}, deps_with(_SeqModels([_plan("./public/meo-hoc.html")])),
                         Budget(max_wall_clock_s=999), source=src, sha=sha)
     assert ok["blocked"] is False and ok["plan"]["subtasks"][0]["file"] == "public/meo-hoc.html"
 
