@@ -31,6 +31,7 @@ from gates import brainstorm, implement, intake_guard, plan_validate, risk_triag
 from providers.client import OllamaClient    # noqa: E402
 from providers import thinking as thinking_policy  # noqa: E402
 from services import prescreen                   # noqa: E402
+from security import prompt_guard                # noqa: E402
 from verification import checks                  # noqa: E402
 from evaluation import self_eval                   # noqa: E402
 from settings import get_settings
@@ -477,16 +478,29 @@ def load_inbox(path: str | os.PathLike) -> list[dict]:
 
 def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     """Cổng 1: guardrail yêu cầu (tất định rồi LLM; chỉ leo thang tới người soát) rồi lập plan."""
+    typed_body = str(request.get("body") or "")
     request, attachment_report = attachments.enrich(request, models=deps.models, budget=budget)
     if attachment_report is not None:
         state["attachments"] = attachment_report
     g = intake_guard.run(request.get("subject"), request.get("body"), deps, budget,
                          requester_role=request.get("requester_role"), **trace)
+    guard_score = prompt_guard.shadow({
+        "title": str(request.get("subject") or ""), "body": typed_body,
+        # Fence lines say "instructions"; attachment text never holds <<< (attachments._clean).
+        "attachments": "\n".join(line for line in str(request.get("body") or "")[len(typed_body):].splitlines()
+                                 if not line.startswith("<<<")),
+        "thread": "\n".join(str(m.get("body") or "") for m in request.get("thread") or []
+                            if isinstance(m, dict) and m.get("role") not in ("ai", "admin"))})
+    if guard_score:
+        g = {**g, "prompt_guard": guard_score}  # copy: intake_guard caches the dict it returned
+        if callable(getattr(deps.trace, "note", None)):
+            deps.trace.note("knows", "prompt_guard", f"{guard_score['status']} {guard_score.get('label', '')} "
+                            f"{guard_score.get('score', '')}".strip(), guard_score)
     state["intake"] = g
     if g["verdict"] != "allow":
         return {"gate": 1, "blocked": True, "reason": f"intake_{g['verdict']}: {g['internal_reason']}"[:1000],
                 "outcome": f"intake_{g['verdict']}", "signals": g["labels"],
-                "public_message": g["public_message"]}
+                "public_message": g["public_message"], **({"evidence": {"prompt_guard": guard_score}} if guard_score else {})}
     # Worker clone at origin/<base> when set; else the repo holding the harness.
     out = brainstorm.run(request, deps, budget, source=state.get("checkout_source"), **trace)
     state["plan"] = out.get("plan")
