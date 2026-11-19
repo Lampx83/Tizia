@@ -39,6 +39,7 @@ test('"Sửa rồi duyệt" sends a narrowed scope for one request only, after t
   assert.match(dashboard, /if \(b\.dataset\.act === 'elevate-narrow'\) \{[\s\S]{0,400}return decideElevation\(\[id\], 'approve', granted\);/);
   assert.match(dashboard, /\.\.\.\(narrowed \? \{ scope: narrowed \} : \{\}\)/);
   assert.match(dashboard, /async function decideElevation\(ids, decision, narrowed = null\)/);
+  assert.match(dashboard, /if \(approve && !narrowed && list\.some\(id => narrowedScope\(id\)\)\) \{/, 'plain Duyệt never grants a scope the admin unticked');
 });
 
 test('high risk shows a strong warning and approval needs a typed reason plus a second confirm', () => {
@@ -87,7 +88,7 @@ test('both pages escape every model/worker string before rendering', () => {
   // Scope, reasons, questions, titles and excerpts are untrusted: each goes through esc()/code().
   assert.match(dashboard, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
   assert.match(dashboard, /risk\.questions\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
-  // The request quote now comes from the card evidence; the shared renderer escapes every card string.
+  // The request quote comes from the card evidence; the shared renderer escapes every card string.
   for (const field of ['card.action', 'card.why', 'e.source', 'e.quote', 'card.risk?.note', 'o.note', 'card.kind']) {
     assert.ok(card.includes(field.startsWith('card.action') || field.startsWith('card.why') ? `text(${field})` : `escHtml(${field})`), `${field} is escaped`);
   }

@@ -10,7 +10,7 @@ const text = (s) => `<div style="white-space:pre-wrap">${escHtml(s)}</div>`;
  * `html[row]` thay phần chữ mặc định của dòng, `extra[row]` nối thêm sau; `buttons` = nút thật của trang cho dòng Lựa chọn.
  */
 export function escalationCard(card, { tag, html = {}, extra = {}, buttons = '' } = {}) {
-  if (!card) return '';
+  if (!card) return buttons ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${buttons}</div>` : '';
   const [tone, label] = RISK[card.risk?.level] || RISK.medium;
   const off = (card.options || []).filter((option) => !option.available && option.note);
   const body = {

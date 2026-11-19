@@ -636,6 +636,10 @@ async function decideElevation(ids, decision, narrowed = null) {
     document.querySelector(`[data-elevation-reason="${reasonKey}"]`)?.focus();
     return;
   }
+  // Bỏ chọn path mà bấm Duyệt thường sẽ cấp cả phạm vi xin: chặn, bắt dùng "Sửa rồi duyệt".
+  if (approve && !narrowed && list.some(id => narrowedScope(id))) {
+    return toast('Đã bỏ chọn path hoặc hạ mức: bấm "Sửa rồi duyệt", hoặc chọn lại hết để Duyệt.', 'err');
+  }
   const contexts = list.map(id => elevationCtx(id));
   if (approve && list.length > 1) {
     const missing = list.find((id) => !elevationCtx(id));
