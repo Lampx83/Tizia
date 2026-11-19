@@ -105,7 +105,7 @@ def _retry(call: Callable[[], dict], retry_on: Callable[[SandboxError], bool], *
     raise AssertionError("unreachable")
 
 
-QUEUE_POLL_S, QUEUE_POLL_MAX_S = 5.0, 30.0
+QUEUE_POLL_S, QUEUE_POLL_MAX_S = 2.0, 5.0  # a 429 answers at once; a coarse poll only adds idle time
 
 
 def _queue_busy(call: Callable[[], dict], *, deadline=None, live: Callable[[], None] | None = None) -> tuple[dict, float]:
@@ -243,7 +243,8 @@ def _lf_patterns(checkout: Path) -> list[str]:
 def package(checkout: Path, state: dict, base_pages: dict[str, bytes], layer: Path | None = None) -> bytes:
     """tar.gz of filtered checkout + state + base pages (+ layers/<name> when `layer`). Credential env files, .git, caches never leave the worker."""
     buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+    # level 6: ~2x faster than tarfile's default 9 on this checkout, ~1% larger
+    with tarfile.open(fileobj=buffer, mode="w:gz", compresslevel=6) as archive:
         def add_bytes(name: str, data: bytes) -> None:
             info = tarfile.TarInfo(name)
             info.size, info.mode = len(data), 0o644

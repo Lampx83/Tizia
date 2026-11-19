@@ -134,3 +134,24 @@ def test_host_replays_guest_phase_spans_and_drops_unknown_names(tmp_path):
     assert replayed["gate5 setup build"]["attributes"] == {}
     assert replayed["gate5 teardown"]["status"] == "error"
     assert "gate5 setup anything" not in [s["name"] for s in trace.spans]
+
+
+def test_busy_runner_is_polled_finely_so_a_freed_runner_is_seen_quickly(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_GATE5_QUEUE_WAIT_S", "900")
+    waited = []
+    monkeypatch.setattr(sandbox_verify, "_sleep", waited.append)
+
+    class Busy(_Client):
+        busy = 15
+
+        def create(self, run_id, manifest):
+            self.calls.append("create")
+            if self.busy:
+                self.busy -= 1
+                raise sandbox_verify.SandboxError("busy", "provision", 429)
+            return super().create(run_id, manifest)
+
+    out = sandbox_verify.run(_host_state(checkout(tmp_path)), client=Busy({"gate": 5, "blocked": False, "reason": None,
+                                                                             "evidence": {"screenshots": []}}))
+    assert out["blocked"] is False
+    assert out["evidence"]["sandbox"]["queue_wait_s"] <= 25
