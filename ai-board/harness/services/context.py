@@ -254,6 +254,10 @@ _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
 _H1 = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.S | re.I)
 _TAG = re.compile(r"<[^>]*>")
 _TITLE_SEP = re.compile(r"\s*[·|•:–—]\s*|\s+-\s+")
+_A_LINK = re.compile(r"""<a\b[^>]*\bhref=["']([^"']+\.html)[^"']*["'][^>]*>(.*?)</a>""", re.S | re.I)
+_OBJ = re.compile(r"\{[^{}]*\}")
+_OBJ_HREF = re.compile(r"""\bhref:\s*['"]([^'"]+\.html)[^'"]*['"]""")
+_OBJ_LABEL = re.compile(r"""\blabel:\s*['"]([^'"]+)['"]""")
 
 
 @lru_cache(maxsize=4)
@@ -274,23 +278,55 @@ def _page_names(source: str, commit: str) -> dict[str, list[tuple[str, ...]]]:
     return {path: [c for c in cores if shared[c] <= NAMED_PAGES_MAX] for path, cores in names.items()}
 
 
+@lru_cache(maxsize=4)
+def _page_labels(source: str, commit: str) -> dict[str, list[tuple[str, ...]]]:
+    """{trang .html: [token fold của nhãn link trang khác trỏ tới (<a>, {href, label})]}; nhãn chung > NAMED_PAGES_MAX trang bỏ."""
+    files = code_index.ui_index(source, commit)["files"]
+    labels = {}
+    for owner, entry in files.items():
+        text = "\n".join(entry["lines"])
+        pairs = [(m.group(1), m.group(2)) for m in _A_LINK.finditer(text)]
+        for obj in _OBJ.findall(text):
+            href, label = _OBJ_HREF.search(obj), _OBJ_LABEL.search(obj)
+            pairs += [(href.group(1), label.group(1))] if href and label else []
+        for href, label in pairs:
+            # Link trong module JS tương đối theo trang chạy nó, không theo file .js.
+            target = code_index.resolve(owner, href) or posixpath.normpath("public/" + href)
+            target = target if target in files else posixpath.normpath("public/" + posixpath.basename(href))
+            if target in files and target != owner and (core := tuple(fold(html.unescape(_TAG.sub(" ", label))).split())):
+                labels.setdefault(target, []).append(core)
+    labels = {path: list(dict.fromkeys(cores)) for path, cores in labels.items()}
+    shared = {}
+    for cores in labels.values():
+        for core in cores:
+            shared[core] = shared.get(core, 0) + 1
+    return {path: [c for c in cores if shared[c] <= NAMED_PAGES_MAX] for path, cores in labels.items()}
+
+
+def _lead(names: dict, clauses: list) -> tuple[int, list[str]]:
+    lead = {page: max((len(posixpath.commonprefix([core, words])) for core in cores for words in clauses), default=0)
+            for page, cores in names.items()}
+    top = max(lead.values(), default=0)
+    return top, sorted(p for p, n in lead.items() if n == top)
+
+
 def _named_pages(text: str, source, commit: str) -> list[str]:
-    """Trang request gọi bằng tên (<title>/<h1>) ngay sau 'trang'/'page': khớp đầu tên dài nhất, ≤ NAMED_PAGES_MAX trang."""
+    """Trang request gọi bằng tên ngay sau 'trang'/'page': khớp đầu tên dài nhất với <title>/<h1> (≤ NAMED_PAGES_MAX trang);
+    nhãn link trang khác trỏ tới thắng khi khớp dài hơn hẳn và đúng 1 trang."""
     norm = unicodedata.normalize("NFC", text or "").casefold()
     clauses = [tuple(fold(_NAME_END.split(norm[m.end():].lstrip(" '\"‘’“”"), 1)[0]).split())
                for m in _PAGE_WORD.finditer(norm)]
     if not clauses:
         return []
     try:
-        names = _page_names(str(source), commit)
+        top, found = _lead(_page_names(str(source), commit), clauses)
+        by_label, labelled = _lead(_page_labels(str(source), commit), clauses)
     except OSError:
         return []
-    lead = {page: max((len(posixpath.commonprefix([core, words])) for core in cores for words in clauses), default=0)
-            for page, cores in names.items()}
-    top = max(lead.values(), default=0)
-    found = sorted(p for p, n in lead.items() if n == top) if top >= NAMED_MIN_TOKENS else []
-    return found if len(found) <= NAMED_PAGES_MAX else []
-
+    # Đầu tên chung ("mô phỏng ...") khớp 2 token ở trang khác; nhãn khớp dài hơn cụ thể hơn, hoà thì giữ tiêu đề.
+    if by_label > top and by_label >= NAMED_MIN_TOKENS and len(labelled) == 1:
+        return labelled
+    return found if top >= NAMED_MIN_TOKENS and len(found) <= NAMED_PAGES_MAX else []
 
 def _linked_css(source, sha: str, files: list[str]) -> list[str]:
     out = []

@@ -86,3 +86,31 @@ def test_page_line_or_path_keeps_its_own_scope(repo, tmp_path):
     assert _pages(with_path) == ["public/p1.html"]
     line_only = _build(src, sha, tmp_path, ASK[0], body="[Trang: Trò số 1]", thread=[ASK[1]])
     assert _pages(line_only) == []
+
+
+SIM = "<title>Site · Patient Simulation</title>\n<h1>Patient Simulation</h1>\n<div class=\"stats\">6 ca lâm sàng</div>\n"
+SIM_ASK = ("Thêm dòng mới ngay dưới dòng thống kê số ca lâm sàng: Hàm xu nút tập bảng.",
+           "Trang mô phỏng bệnh nhân có dòng nhỏ cho biết số ca lâm sàng ngay dưới tiêu đề lớn.")
+
+
+def _named(ctx):
+    return [e["result"] for e in ctx["tool_log"] if e["tool"] == "named_page"]
+
+
+@pytest.mark.parametrize("link", ['<a href="sim.html">Mô phỏng bệnh nhân VN</a>',
+                                  "const apps = [{ label: 'Mô phỏng bệnh nhân VN', href: './sim.html' }];"])
+def test_english_titled_page_resolves_by_the_link_label_other_pages_give_it(repo, tmp_path, link):
+    src, _ = repo
+    sha = _commit(src, {"public/sim.html": SIM, "public/home.html": f"<title>Trang chủ · Site</title>\n{link}\n",
+                        "public/other.html": "<title>Mô phỏng đàm phán · Site</title>\n<p>6 ca lâm sàng</p>\n"})
+    ctx = _build(src, sha, tmp_path, SIM_ASK[0], thread=[SIM_ASK[1]])
+    assert ctx["targets"][0] == "public/sim.html" and _named(ctx) == ["public/sim.html"]
+
+
+def test_two_pages_with_the_described_label_resolve_nothing(repo, tmp_path):
+    src, _ = repo
+    links = '<a href="sim.html">Mô phỏng bệnh nhân A</a>\n<a href="sim2.html">Mô phỏng bệnh nhân B</a>\n'
+    sha = _commit(src, {"public/sim.html": SIM, "public/sim2.html": SIM.replace("Patient", "Clinic"),
+                        "public/home.html": f"<title>Trang chủ · Site</title>\n{links}"})
+    ctx = _build(src, sha, tmp_path, SIM_ASK[0], thread=[SIM_ASK[1]])
+    assert _named(ctx) == [] and "public/sim.html" not in ctx["targets"]
