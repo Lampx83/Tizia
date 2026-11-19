@@ -1,9 +1,12 @@
 """An edit request must change the page that exists, not create a new public page; added text never locates the target."""
+import dataclasses
+
 import pytest
 
 import tools
 from conftest import FakeModels, deps_with
-from gates import brainstorm, plan_validate, react_plan
+from gates import best_match, brainstorm, plan_validate, react_plan
+from runtime import meter
 from runtime.budget import Budget
 from services import context
 from test_code_index import _SeqModels, _commit, _git
@@ -92,3 +95,29 @@ def test_text_an_add_request_puts_after_its_colon_does_not_pick_the_best_match(t
     subject = "Thêm dòng mới ngay dưới câu hỏi trong phần đố vui động vật: Công thức nấu canh chua."
     ctx = context.build_context(1, {"subject": subject, "body": subject, "type": "other"}, None, src, "HEAD")
     assert ctx["best_match"] != "public/nha-bep.html"
+
+
+@pytest.mark.parametrize("subject", ["Thêm trang trí cho nút", "Thêm trang bị cho nhân vật", "Tạo trang phục cho pet"])
+def test_page_compounds_are_edits_not_page_requests(subject):
+    assert not best_match.feature({"type": "other", "subject": subject})
+
+
+def test_gate25_flags_but_does_not_block_a_plan_file_without_the_quoted_text(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    _git(src, "init", "-q")
+    _git(src, "config", "user.email", "t@t")
+    _git(src, "config", "user.name", "t")
+    third = "public/gioi-thieu.html"
+    _commit(src, {HOME: f'<a class="back" href="/rung.html">{LITERAL}</a>\n', third: "<h1>Giới thiệu nhà trường</h1>\n"})
+    plan = _plan(third)
+    validation = {"clear": True, "question": None, "grounded": True, "grounding": [
+        {"target": third, "file": third, "quote": "<h1>Giới thiệu nhà trường</h1>", "before": "a", "after": "b", "verify": "c"}]}
+    tracer, batches = meter.Tracer(None), []
+    tracer.begin(2.5, batches.append)
+    deps = dataclasses.replace(deps_with(FakeModels(plan, validation=validation)), trace=tracer)
+    out = plan_validate.run({**EDIT, "grounding_required": True}, deps, Budget(), {"plan": plan, "checkout_source": str(src)})
+    tracer.flush()
+    assert not out["blocked"]
+    flag = {e["check"]: e for e in batches[0][0]["evaluation"]}["quoted text elsewhere"]
+    assert flag["ok"] is False and HOME in flag["detail"]
