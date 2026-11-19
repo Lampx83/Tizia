@@ -312,6 +312,25 @@ def _anchor_lines(text: str, anchors) -> str:
     return '\n'.join(hits[:8])
 
 
+_TAG_SNIPPET = re.compile(r'<[A-Za-z][\w-]*\s[^<>]*=[^<>]*>')
+
+
+def anchor_line(task: dict, text: str) -> str | None:
+    """First line of `text` holding an anchor of the subtask title: quoted span, `#id`/`.class`, tag with attributes."""
+    # Title only: verify holds the after-state text, which may already exist elsewhere in the file.
+    title = str(task.get('title') or '')
+    anchors = [a for a in [*pinned_words({'title': title}), *(tag.lower() for tag in _TAG_SNIPPET.findall(title))]
+               if not _too_short(a)]
+    return next(iter(_anchor_lines(text, anchors).splitlines()), None)
+
+
+def anchor_quoted(plan: dict, files: dict) -> dict:
+    """Plan copy where a subtask without quote carries its title anchor's line from its own file as `quote`."""
+    return {**plan, 'subtasks': [{**task, 'quote': line} if isinstance(task, dict) and not task.get('quote')
+                                 and (line := anchor_line(task, files.get(task.get('file'), ''))) else task
+                                 for task in plan.get('subtasks') or []]}
+
+
 def target_anchored(plan: dict, files: dict, request: dict) -> bool:
     """`targetpresent` fix: each subtask's own file holds one of its anchors, and no quoted request text repeats there (ambiguous)."""
     if 'targetpresent' not in fixes() or not plan.get('subtasks'):
@@ -538,7 +557,12 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
                            file=file, quote=str(quote or '')[:200])
         if (not isinstance(quote, str) or _too_short(quote) or len(quote) > 1200
                 or not _quoted_in(quote, files.get(file, ''))):  # models join source lines: compare content, not layout
-            if 'advquote' in fixes() and all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ('before', 'after', 'verify')):
+            stated = all(isinstance(evidence.get(key), str) and evidence[key].strip() for key in ('before', 'after', 'verify'))
+            if stated and (line := anchor_line(task, files[task['file']])):
+                clean.append({**{key: evidence[key][:1200] for key in ('before', 'after', 'verify')}, 'quote': line[:1200],
+                              'file': task['file'], 'target': task['file']})
+                continue
+            if 'advquote' in fixes() and stated:
                 by_file.get(task['file'], evidence)['unverified'] = True  # target file is verified: a rewritten quote is the validator's flaw, not the plan's
                 clean.append({**{key: str(evidence[key])[:1200] for key in ('before', 'after', 'verify')}, 'quote': '',
                               'file': task['file'], 'target': task['file']})
@@ -1117,7 +1141,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             judge("source grounding", False, str(error))
             # Trích dẫn không khớp: phân biệt "sai file" với "sai trích dẫn" bằng tín hiệu tất định trước khi chặn.
             confidence = target_confidence.assess(
-                plan, {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
+                anchor_quoted(plan, files), {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
             if (confidence['level'] == 'low' and not final_hit(plan, request, state, files)
                     and 'không tìm thấy trích dẫn' in str(error)):
                 judge('target confidence', False, confidence['reason'])

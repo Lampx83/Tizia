@@ -114,3 +114,82 @@ def test_quote_with_attribute_quotes_dropped_grounds_under_quotes_fix(file, quot
     _rejects(file, quote, text, monkeypatch, [])
     assert _check(file, quote, text, monkeypatch, ['quotes'])['evidence'][0]['quote'] == quote
 
+
+@pytest.mark.parametrize('file, title, text, line', [
+    ('public/herb-garden-3d.html', HERB_TITLE, HERB, '<a href="space.html?b=garden&domain=pharmacy">← Vườn dược liệu</a>'),
+    ('public/admin.html', ADMIN_TITLE, ADMIN, ADMIN.splitlines()[1].strip()),
+    ('public/login.html', LOGIN_TITLE, LOGIN, LOGIN.strip()),
+])
+def test_unmatched_quote_grounds_on_plan_anchor_line_of_target_file(file, title, text, line, monkeypatch):
+    garbled = '<span id=...-dirty-badge...>● Chưa l</span>'
+    for fixes in (DEFAULT, []):
+        record = _ground(file, title, garbled, {file: text}, monkeypatch, fixes)
+        assert record == {'quote': line, 'before': 'b', 'after': 'a', 'verify': 'v', 'file': file, 'target': file}
+
+
+def test_anchor_absent_from_target_file_still_blocks(monkeypatch):
+    invented = 'Đổi văn bản liên kết #back-link thành "Nhớ sao chuỗi mã nút"'  # no id="back-link" in the page
+    with pytest.raises(plan_validate.Mismatch, match='không tìm thấy trích dẫn'):
+        _ground('public/herb-garden-3d.html', invented, 'zzzzzzzz', {'public/herb-garden-3d.html': HERB}, monkeypatch)
+
+
+def test_anchor_only_in_another_file_still_blocks(monkeypatch):
+    files = {'public/login.html': LOGIN, 'public/admin.html': ADMIN}
+    with pytest.raises(plan_validate.Mismatch, match='không tìm thấy trích dẫn'):
+        _ground('public/login.html', ADMIN_TITLE, 'zzzzzzzz', files, monkeypatch)
+    with pytest.raises(plan_validate.Mismatch, match='file hiện có'):
+        _ground('public/login.html', ADMIN_TITLE, ADMIN.splitlines()[1], files, monkeypatch, record_file='public/admin.html')
+
+
+def test_anchor_needs_title_behaviour_and_length(monkeypatch):
+    files = {'public/login.html': LOGIN}
+    with pytest.raises(plan_validate.Mismatch):  # after-text already in the file is no location: verify is not an anchor source
+        _ground('public/login.html', 'Thêm đoạn văn bản', 'zzzzzzzz', files, monkeypatch,
+                verify="grep -q 'Đăng nhập để vào vũ trụ' public/login.html")
+    with pytest.raises(plan_validate.Mismatch):
+        _ground('public/login.html', 'Sửa chữ "Đăng" trong <p>', 'zzzzzzzz', files, monkeypatch)
+    with pytest.raises(plan_validate.Mismatch):
+        _ground('public/login.html', LOGIN_TITLE, 'zzzzzzzz', files, monkeypatch, after='')
+
+
+def test_new_file_is_not_grounded_by_an_anchor_elsewhere(monkeypatch):
+    with pytest.raises(ValueError, match='trích dẫn mẫu'):
+        _ground('public/login-2.html', LOGIN_TITLE, 'zzzzzzzz', {'public/login.html': LOGIN}, monkeypatch,
+                record_file='public/login.html')
+
+
+def _run_case(tmp_path, title, quote):
+    import subprocess
+    from conftest import FakeModels, deps_with
+    from runtime.budget import Budget
+    for path, text in {'public/admin.html': ADMIN, 'public/login.html': LOGIN}.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding='utf8')
+    git = ['git', '-C', str(tmp_path), '-c', 'user.name=t', '-c', 'user.email=t@t']
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    subprocess.run([*git, 'add', '.'], check=True)
+    subprocess.run([*git, 'commit', '-qm', 'base'], check=True)
+    plan = {'summary_vi': 'Thêm nhãn "Ghi đơn học thẻ tập" ngay sau nhãn báo chưa lưu trong khung quản lý trường.',
+            'capabilities': [], 'subtasks': [{'title': title, 'file': 'public/admin.html', 'size': 'small', 'depends_on': [],
+                                              'verify': "grep -q 'Ghi đơn học thẻ tập' public/admin.html", 'layer': 'frontend'}]}
+    validation = {'clear': True, 'question': None, 'grounded': True, 'reason': 'ok', 'objection': None, 'grounding': [
+        {'target': 'public/admin.html', 'file': 'public/admin.html', 'quote': quote,
+         'before': 'chỉ có nhãn chưa lưu', 'after': 'có nhãn mới', 'verify': 'grep nhãn mới'}]}
+    request = {'subject': 'Thêm nhãn ghi đơn', 'body': 'ngay sau nhãn chưa lưu', 'grounding_required': True,
+               'complexity_by_server': True}
+    state = {'plan': plan, 'checkout_source': str(tmp_path)}
+    return plan_validate.run(request, deps_with(FakeModels(plan, validation=validation)), Budget(), state), state
+
+
+def test_gate_passes_case_whose_validator_quote_is_garbled_but_plan_anchor_is_real(tmp_path, monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', ','.join(DEFAULT))
+    out, state = _run_case(tmp_path, ADMIN_TITLE, '<span id=...-dirty-badge...>● Chưa l</span>')
+    assert not out['blocked'], out
+    assert state['grounding']['evidence'][0]['quote'] == ADMIN.splitlines()[1].strip()
+
+
+def test_gate_still_blocks_garbled_quote_when_plan_anchor_is_invented(tmp_path, monkeypatch):
+    monkeypatch.setenv('AI_BOARD_GATE25_FIXES', ','.join(DEFAULT))
+    out, _ = _run_case(tmp_path, 'Thêm nhãn mới sau #campus-saved-badge trong public/admin.html',
+                       '<span id=...-dirty-badge...>● Chưa l</span>')
+    assert out['blocked'] and out['reason'] in ('plan_target_uncertain', 'plan_ungrounded')
