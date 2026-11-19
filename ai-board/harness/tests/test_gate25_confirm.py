@@ -1,6 +1,8 @@
 """Gate 2.5 default path: an either/or question whose first option is the plan's own reading, stated by the request, is not asked."""
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from runtime.budget import Budget
@@ -72,6 +74,41 @@ def test_real_ambiguity_still_asks(monkeypatch, request_, task, question):
     result, state, _ = _run(monkeypatch, request_, task, question)
     assert result["outcome"] == "needs_clarification" and result["public_message"] == question
     assert "assumption" not in state
+
+
+@pytest.mark.parametrize("request_, title, question", [
+    ({"subject": "Đổi nút 'Quay lại' thành 'Trở về'", "body": ""}, "Đổi 'Quay lại' thành 'Trở về'",
+     "Bạn muốn đổi nút 'Quay lại' trên trang luật giao thông hay trên trang khác?"),
+    ({"subject": "Thêm nút 'Ôn tập' trên trang luật giao thông", "body": ""}, "Thêm nút 'Ôn tập' trên cùng trang",
+     "Bạn muốn thêm nút 'Ôn tập' ở trên cùng trang hay ở dưới cùng trang?"),
+    ({"subject": "Trang luật giao thông: đổi nút thành 'Xong'", "body": ""}, "Đổi 'OK' thành 'Xong'",
+     "Bạn muốn đổi nút 'OK' hay nút khác?"),
+], ids=["page-unnamed", "position-not-anchored", "short-anchor-unstated"])
+def test_unstated_page_position_or_element_still_asks(monkeypatch, request_, title, question):
+    result, _, _ = _run(monkeypatch, request_, ("public/luat-giao-thong-600.html", title, "v"), question)
+    assert result["outcome"] == "needs_clarification"
+
+
+def test_r203_after_heading_passes_source_grounding(monkeypatch, tmp_path):
+    line = "<h3>📝 Mở quiz</h3>"
+    page = tmp_path / "public" / "teacher-live.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(f'<section>\n  {line}\n  <input id="quiz-q">\n  <button id="quiz-open">Mở</button>\n</section>\n', encoding="utf8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                    "commit", "-qm", "base"], check=True)
+    monkeypatch.setenv("AI_BOARD_GATE25_ANSWERED", "")
+    monkeypatch.delenv("AI_BOARD_GATE25_FIXES", raising=False)
+    plan = _plan(*LIVE_TASK)
+    validation = {"clear": False, "question": LIVE_Q, "grounded": True, "reason": "", "objection": None,
+                  "grounding": [{"target": LIVE_TASK[0], "file": LIVE_TASK[0], "quote": line, "before": "không có tiêu đề mới",
+                                 "after": f"<h3>{NEW2}</h3> ngay sau", "verify": LIVE_TASK[2]}]}
+    state = {"plan": plan, "checkout_source": str(tmp_path)}
+    request = {"id": "x", **LIVE, "grounding_required": True, "complexity_by_server": True}
+    result = plan_validate.run(request, deps_with(Scripted(plan, [validation], {})), Budget(), state)
+    assert result["blocked"] is False, result
+    assert state["assumption"] == LIVE_Q and state["grounding"]["evidence"][0]["quote"] == line
 
 
 def test_plan_on_two_files_still_asks():
