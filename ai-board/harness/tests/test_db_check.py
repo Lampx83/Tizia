@@ -113,3 +113,26 @@ def test_additive_variants_pass(sql):
 
 def test_semicolon_inside_string_does_not_hide_a_second_statement():
     assert db_check.violations("INSERT INTO t (a) VALUES ('x;'); DROP TABLE t;")
+
+
+class _InitRaceSession:
+    """Ready over the socket during initdb; psql fails until the TCP server is up."""
+
+    def __init__(self):
+        self.tcp_ready = False
+
+    def exec(self, argv, timeout):
+        if argv[:3] == ["docker", "exec", db_check.CONTAINER] and argv[3] == "sh":
+            self.tcp_ready = "127.0.0.1" in argv[-1]
+            return {"rc": 0, "stdout": "", "stderr": ""}
+        if "psql" in argv:
+            if not self.tcp_ready:
+                return {"rc": 2, "stdout": "", "stderr": "FATAL: the database system is starting up"}
+            return {"rc": 0, "stdout": "", "stderr": ""}
+        return {"rc": 0, "stdout": "", "stderr": ""}
+
+
+def test_ready_waits_for_final_tcp_server_not_init_socket():
+    runner = db_check.SandboxPgRunner(_InitRaceSession())
+    assert runner.run("CREATE TABLE t (a int);", [])["checks"] == []
+    assert db_check.exec_allowed(db_check._READY)
