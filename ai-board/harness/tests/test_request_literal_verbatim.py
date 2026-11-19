@@ -94,7 +94,8 @@ def test_gate_4_blocks_a_literal_miss_as_repairable(monkeypatch, fake_deps):
     out = main.run_gate(4, {}, replace(fake_deps, verify=None), None, state)
     assert out['blocked'] is True and out['failure_class'] == 'ordinary'
     assert 'request_literal' in out['reason'] and 'Ôn kỹ phần đạo hàm.' in out['reason']
-    assert repair_class.classify(out, {}, set())['action'] == repair_class.REPAIR_CODE
+    fix = repair_class.classify(out, {'public/grades.html': {'test_file': None}}, set())
+    assert fix['action'] == repair_class.REPAIR_CODE and fix['files'] == ['public/grades.html']
 
 
 def test_quoted_text_already_on_the_page_is_a_reference_not_new_text(tmp_path):
@@ -106,3 +107,9 @@ def test_quoted_text_already_on_the_page_is_a_reference_not_new_text(tmp_path):
         text = diff('public/hw.html', ' <ul id="list"></ul>', f'+<p>{added}</p>')
         found = static_check.literal_misses({'request_detail': request}, text, tmp_path)
         assert (found == []) is ok and not any('Bài tập tuần' in miss for miss in found)
+
+
+def test_two_quotes_on_a_plain_add_are_ambiguous_and_never_block():
+    shown = diff('public/search.html', ' <ul id="hits"></ul>', '+<p>Không có kết quả</p>')
+    assert misses("Hiển thị 'Không có kết quả' khi tìm 'xyz123'", shown) == []
+    assert misses("Thêm 'Mục A' và 'Mục B'", diff('public/menu.html', '+<li>Mục A</li>')) == []

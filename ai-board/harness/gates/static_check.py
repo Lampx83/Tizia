@@ -416,17 +416,16 @@ def _ws(text: str) -> str:
     return " ".join(unicodedata.normalize("NFC", html.unescape(text)).split())
 
 
-def _hunks(diff_text: str) -> tuple[list[str], list[list[tuple[str, str]]]]:
-    """Non-test paths + [(sign, line)] per hunk; '-' lines kept, the new-file view is the rest."""
-    paths, hunks = [], []
+def _hunks(diff_text: str) -> list[tuple[str, list[tuple[str, str]]]]:
+    """(path, [(sign, line)]) per hunk of non-test files; '-' lines kept, the new-file view is the rest."""
+    hunks = []
     for chunk in re.split(r"^(?=diff --git )", diff_text, flags=re.M):
         path = chunk.splitlines()[0].split(" b/", 1)[-1].strip() if chunk.startswith("diff --git ") else ""
         if not path or guard._TEST_PATH.search(path):
             continue
-        paths.append(path)
         for body in re.split(r"^@@[^\n]*\n", chunk, flags=re.M)[1:]:
-            hunks.append([(line[0], _ws(line[1:])) for line in body.splitlines() if line[:1] in (" ", "+", "-")])
-    return paths, hunks
+            hunks.append((path, [(line[0], _ws(line[1:])) for line in body.splitlines() if line[:1] in (" ", "+", "-")]))
+    return hunks
 
 
 def _existing(checkout, paths: list[str], text: str, added: int) -> bool:
@@ -462,32 +461,37 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
     want = functional.text_expectation(state)
     anchor = functional.anchor(state)
-    paths, hunks = _hunks(diff_text)
+    raw = functional._request_raw(state)
+    hunks = _hunks(diff_text)
+    paths = list(dict.fromkeys(path for path, _ in hunks))
     new = list(dict.fromkeys(_ws(t) for t in want["present"] if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
-    added = {text: sum(line.count(text) for hunk in hunks for sign, line in hunk if sign == "+") for text in new}
+    added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]
+    if functional.quoted(raw) and not want["absent"] and len(new) > 1:
+        new = []  # a plain add quoting several texts: which one is new is not pinned down
     misses = []
     for text in new:
         if not added[text]:
-            closest = next((line for hunk in hunks for sign, line in hunk if sign == "+" and text.rstrip(".!?…") in line), None)
-            misses.append(f'chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
+            path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
+                                  if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
+            misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
                           + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
-    for old, text in functional._pairs(functional._request_raw(state)) if want["absent"] else []:
+    for old, text in functional._pairs(raw) if want["absent"] else []:
         old, text = _ws(old), _ws(text)
-        for hunk in hunks:
+        for path, hunk in hunks:
             before = [seg for sign, line in hunk if sign == "-" and (seg := _segment(line, old)) is not None]
             after = [seg for sign, line in hunk if sign == "+" and (seg := _segment(line, text)) is not None]
             expected = {seg.replace(old, text) for seg in before}
             if before and after and not expected & set(after):
-                misses.append(f'đổi "{old}" thành "{text}": phần tử phải thành "{sorted(expected)[0]}", '
+                misses.append(f'{path}: đổi "{old}" thành "{text}": phần tử phải thành "{sorted(expected)[0]}", '
                               f'đang là "{after[0]}" (không giữ lại phần nào của chữ cũ)')
     if anchor:
         anchor = _ws(anchor)
         for text in new:
-            spots = [(view, i) for hunk in hunks for view in [[row for row in hunk if row[0] != "-"]]
+            spots = [(path, view, i) for path, hunk in hunks for view in [[row for row in hunk if row[0] != "-"]]
                      for i, (sign, line) in enumerate(view) if sign == "+" and text in line]
-            if spots and not any(_follows(view, i, text, anchor) for view, i in spots):
-                misses.append(f'chữ "{text}" phải nằm ngay sau phần tử chứa "{anchor}"')
+            if spots and not any(_follows(view, i, text, anchor) for _, view, i in spots):
+                misses.append(f'{spots[0][0]}: chữ "{text}" phải nằm ngay sau phần tử chứa "{anchor}"')
     return misses
 
 
