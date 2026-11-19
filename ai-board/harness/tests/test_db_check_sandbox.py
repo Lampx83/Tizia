@@ -108,7 +108,7 @@ def test_target_is_inside_the_sandbox_only():
     session = FakeSession()
     run(session)
     for argv in session.execs:
-        assert argv[0] == "docker"
+        assert argv[0] in ("docker", "guest-boot.sh")
         assert "--network" not in argv or argv[argv.index("--network") + 1] == "none"
         assert not any("://" in token for token in argv)
 
@@ -147,3 +147,53 @@ def test_attach_to_admin_job_keeps_admin_as_applier():
     assert out["evidence"]["db_check"]["schema_diff"]["added_tables"] == ["faq_items"]
     assert out["payload"] == job["payload"] and "db_check" not in job["evidence"]
     assert out["apply_by"] == "admin"
+
+
+def test_guest_dockerd_booted_before_any_docker_call():
+    session = FakeSession()
+    run(session)
+    assert session.execs[0] == ["guest-boot.sh"]
+
+
+def test_failed_guest_boot_is_unavailable_not_missing_image():
+    session = FakeSession({"guest-boot.sh": {"rc": 1}})
+    report = run(session)
+    assert report["status"] == "db_check_unavailable" and "dockerd" in report["error"]
+    assert session.execs == [["guest-boot.sh"]]
+
+
+def test_every_exec_of_a_run_matches_the_db_check_policy():
+    session = FakeSession({"to_regclass": {"stdout": "faq_items\n"}})
+    run(session, verify_sql=["SELECT to_regclass('public.faq_items')"])
+    assert len(session.execs) > 5 and all(db_check.exec_allowed(argv) for argv in session.execs)
+
+
+START = ["docker", "run", "-d", "--name", "dbcheck", "--network", "none", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:16-alpine"]
+PSQL = ["docker", "exec", "dbcheck", "psql", "-U", "postgres", "-At", "-F", "|", "-c", "SELECT 1"]
+
+
+@pytest.mark.parametrize("argv", [
+    [*START[:6], "bridge", *START[7:]],
+    [*START[:6], "host", *START[7:]],
+    [*START[:-1], "postgres:17-alpine"],
+    [*START[:-1], "postgres:latest"],
+    [*START[:-1], "-v", "/:/host", "postgres:16-alpine"],
+    [*START[:-1], "--privileged", "postgres:16-alpine"],
+    [*START[:-1], "-p", "5432:5432", "postgres:16-alpine"],
+    [*START[:4], "other", *START[5:]],
+    ["docker", "pull", "postgres:16-alpine"],
+    ["docker", "exec", "other", *PSQL[3:]],
+    [*PSQL[:-2], "-h", "db.example.com", "-c", "SELECT 1"],
+    ["docker", "exec", "dbcheck", "sh", "-c", "id"],
+    ["docker", "rm", "-f", "other"],
+    ["sh", "-c", "guest-boot.sh"],
+])
+def test_near_variants_of_the_db_check_commands_are_refused(argv):
+    assert not db_check.exec_allowed(argv)
+
+
+def test_runner_refuses_an_argv_outside_the_policy_before_exec():
+    session = FakeSession()
+    with pytest.raises(db_check.ExecRefused):
+        db_check.SandboxPgRunner(session)._exec(["docker", "run", "--network", "host", "postgres:16-alpine"])
+    assert session.execs == []

@@ -78,6 +78,9 @@ docker build -t "$registry/gate5:overlay" "$host_stage"
 # A harness file read at import that the overlay did not copy crashes every Gate 5 run in the guest.
 docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import gates.gate5_guest"' \
   || { echo "guest harness does not import; add the missing file to guest-inputs.mjs and this overlay" >&2; exit 1; }
+# No egress in the guest: Gate 5 compose and db_check start postgres only if warm-guest.mjs baked it in.
+docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'grep -qs "\"postgres:16-alpine\"" /var/lib/docker/image/*/repositories.json' \
+  || { echo "guest has no preloaded postgres:16-alpine; rerun warm-guest.mjs and build-guest.sh" >&2; exit 1; }
 # A plain docker run accepts layers that Microsandbox refuses at create; never pin one.
 if over=$(docker history --human=false --no-trunc --format '{{.Size}}' "$registry/gate5:overlay" | node "$layers" oversize); then
   echo "guest has a layer over the Microsandbox extract limit ($over bytes); not pinning" >&2; exit 1

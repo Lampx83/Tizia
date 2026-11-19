@@ -185,6 +185,25 @@ class PgRunner:
 
 _SNAPSHOT_SQL = ("SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns "
                  "WHERE table_schema = 'public' ORDER BY 1, 2")
+BOOT_TIMEOUT = 180.0  # dockerd over the warm vfs data dir; same budget as Gate 5's boot
+_BOOT = ("guest-boot.sh",)
+_INSPECT = ("docker", "image", "inspect", IMAGE)
+_START = ("docker", "run", "-d", "--name", CONTAINER, "--network", "none", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", IMAGE)
+_READY = ("docker", "exec", CONTAINER, "sh", "-c", "until pg_isready -q; do sleep 0.2; done")
+_PSQL = ("docker", "exec", CONTAINER, "psql", "-U", "postgres", "-At", "-F", "|")
+_REMOVE = ("docker", "rm", "-f", CONTAINER)
+# None = the SQL after -c, the only token that varies.
+EXEC_POLICY = (_BOOT, _INSPECT, _START, _READY, (*_PSQL, "-c", None), (*_PSQL, "-v", "ON_ERROR_STOP=1", "-c", None), _REMOVE)
+
+
+class ExecRefused(ValueError):
+    """Guest argv outside EXEC_POLICY."""
+
+
+def exec_allowed(argv) -> bool:
+    """True if argv matches one EXEC_POLICY entry token for token."""
+    return any(len(p) == len(argv) and all(a == t or (t is None and isinstance(a, str)) for t, a in zip(p, argv))
+               for p in EXEC_POLICY)
 
 
 class SandboxPgRunner:
@@ -193,11 +212,14 @@ class SandboxPgRunner:
     def __init__(self, session, timeout: float = 60.0):
         self.session, self.timeout = session, timeout
 
-    def _docker(self, *argv: str) -> dict:
-        return self.session.exec(["docker", *argv], self.timeout)
+    def _exec(self, argv, timeout: float | None = None) -> dict:
+        """session.exec for EXEC_POLICY argv only. Raise ExecRefused before the guest sees anything else."""
+        if not exec_allowed(argv):
+            raise ExecRefused(f"db_check argv outside policy: {list(argv)[:4]!r}")
+        return self.session.exec(list(argv), timeout or self.timeout)
 
     def _psql(self, sql: str, *flags: str) -> dict:
-        return self._docker("exec", CONTAINER, "psql", "-U", "postgres", "-At", "-F", "|", *flags, "-c", sql)
+        return self._exec([*_PSQL, *flags, "-c", sql])
 
     def _snapshot(self) -> dict:
         out = self._psql(_SNAPSHOT_SQL)
@@ -206,13 +228,15 @@ class SandboxPgRunner:
         return _shape(tuple(line.split("|")) for line in out["stdout"].splitlines() if line)
 
     def run(self, sql: str, verify_sql: list[str]) -> dict:
-        if self._docker("image", "inspect", IMAGE)["rc"] != 0:
+        if self._exec(_BOOT, BOOT_TIMEOUT)["rc"] != 0:
+            raise DbCheckUnavailable("guest dockerd did not start")
+        if self._exec(_INSPECT)["rc"] != 0:
             raise DbCheckUnavailable(f"guest has no {IMAGE}")
-        started = self._docker("run", "-d", "--name", CONTAINER, "--network", "none", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", IMAGE)
+        started = self._exec(_START)
         if started["rc"] != 0:
             raise DbCheckUnavailable(f"docker run failed: {started['stderr'][:200]}")
         try:
-            ready = self._docker("exec", CONTAINER, "sh", "-c", "until pg_isready -q; do sleep 0.2; done")
+            ready = self._exec(_READY)
             if ready["rc"] != 0:
                 raise RuntimeError("postgres not ready")
             before = self._snapshot()
@@ -226,7 +250,7 @@ class SandboxPgRunner:
                 checks.append({"sql": check, "ok": out["rc"] == 0 and out["stdout"].strip() not in ("", "f")})
             return {"schema_diff": _diff(before, after), "checks": checks}
         finally:
-            self._docker("rm", "-f", CONTAINER)
+            self._exec(_REMOVE)
 
 
 def run_db_check(sql: str, *, enabled: bool, session_factory, verify_sql=(), test_argv=(), allowed_argv=(),
