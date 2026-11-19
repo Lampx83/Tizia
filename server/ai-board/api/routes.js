@@ -44,6 +44,7 @@ import { classifierConfigured, environment, getSettings } from '../settings.js';
 import { assessElevationRisk, applyRiskFloor } from '../services/elevation-risk.js';
 import { createNetworkRequestRepository } from '../repositories/network-requests.js';
 import { decisionsForRoot } from '../services/network-requests.js';
+import { elevationCard, manifestCard, registryCard, waitingCard } from '../services/escalation-card.js';
 
 // Không cấu hình model phân loại → không gọi gì (không phân loại).
 const defaultClassifyRequest = (title, detail) => (
@@ -363,8 +364,13 @@ export function attachAiBoardRequestRoutes(router, {
   });
 
   route.get('/api/admin/ai-board/queue', requireAuth, requireAdmin, async (req, res) => {
-    res.json({ tickets: await store.listAdminQueue(req.query.limit), workers: await store.listWorkers(),
-      intake_rejections: await createRequestViewRepository(store).intakeRejections() });
+    const tickets = await store.listAdminQueue(req.query.limit);
+    const flags = await createRequestViewRepository(store).guardFlags(tickets.map((ticket) => ticket.id));
+    res.json({ tickets: tickets.map((ticket) => {
+      const card = waitingCard(ticket, flags.get(ticket.id));
+      return card ? { ...ticket, card } : ticket;
+    }), workers: await store.listWorkers(),
+    intake_rejections: await createRequestViewRepository(store).intakeRejections() });
   });
 
   // One source of truth for the admin suggestion list: the board DB, not the web DB.
@@ -445,7 +451,7 @@ export function attachAiBoardRequestRoutes(router, {
   // ── Phiên bản manifest tool của tool-loop: admin duyệt hoặc thu hồi theo băm ──
   const toolManifests = createToolManifestStore(store.db);
   route.get('/api/admin/ai-board/tool-manifests', requireAuth, requireAdmin, async (_req, res) => {
-    res.json({ manifests: await toolManifests.list() });
+    res.json({ manifests: (await toolManifests.list()).map((m) => ({ ...m, card: manifestCard(m) })) });
   });
   route.post('/api/admin/ai-board/tool-manifests/:hash/:action', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try { res.json(await toolManifests.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
@@ -454,7 +460,7 @@ export function attachAiBoardRequestRoutes(router, {
   // ── Phiên bản registry primitive check của gate 5: admin duyệt hoặc thu hồi theo băm (như tool manifest) ──
   const checkRegistries = createCheckRegistryStore(store.db);
   route.get('/api/admin/ai-board/check-registries', requireAuth, requireAdmin, async (_req, res) => {
-    res.json({ registries: await checkRegistries.list() });
+    res.json({ registries: (await checkRegistries.list()).map((r) => ({ ...r, card: registryCard(r) })) });
   });
   route.post('/api/admin/ai-board/check-registries/:hash/:action', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try { res.json(await checkRegistries.decide(req.params.hash, req.params.action, req.user.id)); } catch (error) { folderError(res, error); }
@@ -546,7 +552,7 @@ export function attachAiBoardRequestRoutes(router, {
             recommendation: 'review', questions: [], source: 'unknown', cached: false }, context.flags);
         }
       }
-      res.json({ ok: true, context: { ...context, risk } });
+      res.json({ ok: true, context: { ...context, risk, card: elevationCard(context, { grounding: context.grounding }) } });
     } catch (error) { folderError(res, error); }
   });
   // Ngữ cảnh cho cả lô (không gọi model): danh sách nhỏ để tab yêu cầu biết trước cờ, chi tiết vẫn theo từng yêu cầu.
@@ -557,7 +563,7 @@ export function attachAiBoardRequestRoutes(router, {
       const contexts = {};
       for (const id of ids) {
         const context = store.elevationContext ? await store.elevationContext(id) : null;
-        if (context) contexts[id] = context;
+        if (context) contexts[id] = { ...context, card: elevationCard(context, { grounding: context.grounding }) };
       }
       res.json({ ok: true, contexts });
     } catch (error) { folderError(res, error); }
@@ -569,12 +575,13 @@ export function attachAiBoardRequestRoutes(router, {
   route.post('/api/admin/ai-board/requests/:id/elevate', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try {
       const result = await store.decideElevation(req.params.id, {
-        decision: req.body?.decision, reason: req.body?.reason, adminUserId: req.user.id,
+        decision: req.body?.decision, reason: req.body?.reason, adminUserId: req.user.id, scope: req.body?.scope ?? null,
       });
       res.json({ ...elevationReply({ approved: result.approved ? 1 : 0, rejected: result.rejected ? 1 : 0, state: result.state }), scope: result.scope });
     } catch (error) { folderError(res, error); }
   });
   route.post('/api/admin/ai-board/requests/:id/elevate-batch', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    if (req.body?.scope != null) return res.status(422).json({ error: 'elevation_scope_batch', message: 'Duyệt hẹp chỉ áp dụng cho từng yêu cầu.' });
     try {
       res.json(elevationReply(await store.decideElevationAll(req.body?.ids, {
         decision: req.body?.decision, reason: req.body?.reason, adminUserId: req.user.id,

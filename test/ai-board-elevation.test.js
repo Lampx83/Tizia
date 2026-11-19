@@ -107,6 +107,44 @@ test('approve requeues the ticket for a fresh plan and writes who/when/what', as
   } finally { db.close(); }
 });
 
+test('a narrowed approval grants only the chosen paths/levels and audits both scopes', async () => {
+  const { db, store } = await fixture();
+  try {
+    const { request_id: id, root_ticket_id: rootId } = await newRequest(store, 'narrow');
+    await store.requestElevation(id, { paths: [CONTENT, 'server/index.js'], levels: ['protected', 'core'], reason: 'Sửa hai chỗ.' });
+    const out = await store.decideElevation(id, { decision: 'approve', reason: 'Chỉ cho dịch vụ nội dung.', adminUserId: 9,
+      scope: [CONTENT] });
+    assert.deepEqual(out.scope, [{ path: CONTENT, level: 'protected' }]);
+    const view = await store.elevationOf(id);
+    assert.deepEqual([view.state, view.max_level, view.scope], ['approved', 'protected', [{ path: CONTENT, level: 'protected' }]]);
+    const detail = JSON.parse((await eventsOf(db, rootId)).find((e) => e.event_type === 'elevation_approved').internal_detail);
+    assert.equal(detail.narrowed, true);
+    assert.deepEqual(detail.requested_scope.map((row) => row.path), [CONTENT, 'server/index.js'].sort());
+    assert.deepEqual(detail.scope, [{ path: CONTENT, level: 'protected' }]);
+    assert.equal(detail.reason, 'Chỉ cho dịch vụ nội dung.');
+    assert.equal((await rootOf(db, rootId)).phase, 'needs_replan');
+  } finally { db.close(); }
+});
+
+test('a narrowed approval cannot widen, raise a level, narrow a rejection or skip the self-scope block', async () => {
+  const { db, store } = await fixture();
+  try {
+    const { request_id: id } = await newRequest(store, 'narrow-bad');
+    await store.requestElevation(id, { paths: [CONTENT], levels: ['protected'], reason: 'Sửa dịch vụ nội dung.' });
+    const decide = (extra) => store.decideElevation(id, { decision: 'approve', reason: 'Đồng ý.', adminUserId: 9, ...extra });
+    await assert.rejects(decide({ scope: ['server/index.js'] }), { status: 422, code: 'elevation_scope_widened' });
+    await assert.rejects(decide({ scope: [{ path: CONTENT, level: 'core' }] }), { status: 422, code: 'elevation_level_raised' });
+    await assert.rejects(decide({ scope: [] }), { status: 422, code: 'elevation_scope_empty' });
+    await assert.rejects(decide({ decision: 'reject', scope: [CONTENT] }), { status: 422, code: 'elevation_scope_reject' });
+    assert.equal((await store.elevationOf(id)).state, 'requested', 'a refused narrowing writes nothing');
+
+    const self = await newRequest(store, 'narrow-self');
+    await store.requestElevation(self.request_id, { paths: ['server/ai-board/x.js', CONTENT], levels: ['protected', 'protected'], reason: 'x' });
+    await assert.rejects(store.decideElevation(self.request_id, { decision: 'approve', reason: 'Bỏ vùng AI Board.', adminUserId: 9, scope: [CONTENT] }),
+      { status: 409, code: 'elevation_self_scope_blocked' });
+  } finally { db.close(); }
+});
+
 test('an approved elevation survives its own replan but a later replan asks again', async () => {
   const { db, store } = await fixture();
   try {
@@ -375,6 +413,8 @@ test('the admin endpoints decide one elevation or a batch and answer 404 for an 
     assert.deepEqual({ ok: single.ok, approved: single.approved, rejected: single.rejected, state: single.state },
       { ok: true, approved: 1, rejected: 0, state: 'approved' });
 
+    assert.equal((await srv.post('/api/admin/ai-board/requests/0/elevate-batch',
+      { ids: [two.request_id], decision: 'approve', reason: 'Duyệt cả lô.', scope: [CONTENT] })).status, 422, 'no narrowing in a batch');
     const batch = await (await srv.post('/api/admin/ai-board/requests/0/elevate-batch',
       { ids: [two.request_id, 4242], decision: 'approve', reason: 'Duyệt cả lô.' })).json();
     assert.equal(batch.error, 'request_not_found', 'an unknown id in the batch writes nothing');

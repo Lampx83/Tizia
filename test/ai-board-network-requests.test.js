@@ -129,7 +129,10 @@ test('admin API lists pending items, approves, rejects, 409 on re-decide, and re
   await recordPending(repo, 50, 5, REPORT, 1);
   const api = await serve(repo);
   try {
-    assert.equal((await api.call('GET', '/api/admin/ai-board/requests/5/network-requests?status=pending')).body.items.length, 2);
+    const listed = (await api.call('GET', '/api/admin/ai-board/requests/5/network-requests?status=pending')).body.items;
+    assert.equal(listed.length, 2);
+    assert.ok(listed.every((item) => item.card?.kind === 'network_request' && item.card.options.map((o) => o.label).join() === 'duyệt,từ chối,sửa rồi duyệt'));
+    assert.equal(listed[0].card.options[2].available, false, 'the worker runs the exact requested call');
     assert.deepEqual((await api.call('GET', '/api/admin/ai-board/network-requests/pending-count')).body, { counts: { 5: 2 }, total: 2 });
     assert.equal((await api.call('POST', '/api/admin/ai-board/network-requests/1/approve')).status, 200);
     const rejected = await api.call('POST', '/api/admin/ai-board/network-requests/2/reject', { reason: 'no' });
