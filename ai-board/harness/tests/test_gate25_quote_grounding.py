@@ -127,6 +127,12 @@ def test_unmatched_quote_grounds_on_plan_anchor_line_of_target_file(file, title,
         assert record == {'quote': line, 'before': 'b', 'after': 'a', 'verify': 'v', 'file': file, 'target': file}
 
 
+@pytest.mark.parametrize('tag', ["<p class='tag'>", '<p class=tag>'])
+def test_tag_anchor_matches_without_its_quote_marks_under_quotes_fix(tag, monkeypatch):
+    title = LOGIN_TITLE.replace('<p class="tag">', tag)
+    assert _ground('public/login.html', title, 'zzzzzzzz', {'public/login.html': LOGIN}, monkeypatch)['quote'] == LOGIN.strip()
+
+
 def test_anchor_absent_from_target_file_still_blocks(monkeypatch):
     invented = 'Đổi văn bản liên kết #back-link thành "Nhớ sao chuỗi mã nút"'  # no id="back-link" in the page
     with pytest.raises(plan_validate.Mismatch, match='không tìm thấy trích dẫn'):

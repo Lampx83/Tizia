@@ -295,7 +295,7 @@ _FILE_SUFFIX = re.compile(r'^\.(html?|css|m?js|json|md|py)$')
 def _anchor_in(anchor: str, text: str) -> bool:
     """Anchor declared in source: quoted phrase as substring; `.name`/`#name` only as a class/id attribute or CSS selector."""
     if not anchor[:1] in '.#':
-        return _squash(anchor).lower() in _squash(text).lower()
+        return _fold(anchor).lower() in _fold(text).lower()
     if _FILE_SUFFIX.match(anchor):
         return False
     name = re.escape(anchor[1:])
