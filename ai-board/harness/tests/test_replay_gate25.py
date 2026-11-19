@@ -29,6 +29,11 @@ def test_ambiguous_request_still_asked():
     assert rg.post_filter("Màu nào?", vague, PLAN, True)["question"] == "Màu nào?"
 
 
+def test_confirmation_question_dropped_on_default_path():
+    from test_gate25_confirm import LUAT, LUAT_Q, LUAT_TASK, _plan
+    assert rg.post_filter(LUAT_Q, LUAT, _plan(*LUAT_TASK), False)["dropped_by"] == "confirms_plan"
+
+
 def test_missing_plan_without_rule_is_not_measurable():
     row = rg.run_offline([_case(plan=None)])[0]
     assert row["result"] == "not_measurable" and row["names_edit"] is None
