@@ -4,8 +4,8 @@ profile: dev
 # vm.memory_mib 1536: measured VM peak 613-625 MiB over 3 kinds (MemTotal-MemAvailable, 0.5 s samples), ~2.5x margin.
 vm: { cpus: 4, memory_mib: 1536, disk_mib: 10240, ttl_s: 1800, lease_s: 120 }
 concurrency: 1
-# guest-inputs: ed87d2e7530ca121e4147c4a04e858d0007dbcad38b6f40f4cc1037717a18c9b
-guest_image: image-registry:5000/gate5@sha256:2a6b5a6f05cc7b19f571594cc40c7d8276079cd54f13f0636951ef646fa05cc1
+# guest-inputs: 48995319d613f1da481d71e15ea9640ecee3e841aefa31639623729060f73d68
+guest_image: image-registry:5000/gate5@sha256:72c2fa84e7856f12ade7e3888d03c683dfa5b2518eb5bf90f52913c24516da14
 network: none
 egress: []
 guest_env: { CI: "1", GATE5_CA_SHA256: "4b386847e6e3fbd65e91086e284957d53d96c17916afc0c12ea8c58f01ac313a" }
