@@ -22,7 +22,7 @@ from pathlib import Path
 
 import path_policy
 
-from services import candidate
+from services import candidate, target_confidence
 from security import classifier, spotlight
 from verification import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
@@ -458,15 +458,19 @@ def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bo
 
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
-    checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
+    checkout = candidate tree; text already in a changed file, or (non-replace) anywhere at base_sha, is a reference."""
     want = functional.text_expectation(state)
     anchor = functional.anchor(state)
     raw = functional._request_raw(state)
+    pairs = functional.replace_pairs(state) if want["absent"] else []
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
-    new = list(dict.fromkeys(_ws(t) for t in want["present"] if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
+    present = [text for _, text in pairs] or want["present"]
+    new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
     added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
-    new = [text for text in new if not _existing(checkout, paths, text, added[text])]
+    base = state.get("base_sha") if checkout and not pairs else None
+    new = [text for text in new if not _existing(checkout, paths, text, added[text])
+           and not (base and target_confidence._grep_files(checkout, base, text))]
     if functional.quoted(raw) and not want["absent"] and len(new) > 1:
         new = []  # a plain add quoting several texts: which one is new is not pinned down
     misses = []
@@ -476,7 +480,7 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
                                   if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
             misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
                           + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
-    for old, text in functional._pairs(raw) if want["absent"] else []:
+    for old, text in pairs:
         old, text = _ws(old), _ws(text)
         for path, hunk in hunks:
             before = [seg for sign, line in hunk if sign == "-" and (seg := _segment(line, old)) is not None]
