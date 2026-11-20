@@ -164,10 +164,13 @@ def _pairs(raw, loose=False):
 _ALL_PAGES = re.compile(r'\b(?:mọi|tất cả(?: các)?|toàn bộ(?: các)?)\s+(?:trang|site|website|nơi|chỗ|chữ)\b(?!\s+khác)'
                         r'|\btrên toàn (?:site|website)\b|\bkhắp nơi\b|\bcả (?:hai|ba|bốn) trang\b|\beverywhere\b'
                         r'|\b(?:every|all)(?: the)? pages\b(?!\s+else)', re.I)
+_COORD_PAGES = re.compile(r'\b(?:trang|page)\b[^.,;\n]{0,40}\s(?:và|lẫn|cùng|and|with)\s+(?:trang|page)\b', re.I)
+
+
 def all_pages(state):
-    """Request asks for the change in several places, in the user's own words: every page or everywhere (named pages are resolved against the repo by the plan gate)."""
+    """Request asks for the change in several places, in the user's own words: every page, everywhere or pages joined by và/and (named pages are resolved against the repo by the plan gate)."""
     raw = _QUOTED.sub(' ', _request_raw(state))
-    return bool(_ALL_PAGES.search(raw))
+    return bool(_ALL_PAGES.search(raw) or _COORD_PAGES.search(raw))
 
 
 def replace_pairs(state):

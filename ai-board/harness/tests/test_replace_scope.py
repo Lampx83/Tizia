@@ -241,7 +241,7 @@ def test_several_places_are_not_one_file(tmp_path):
     assert best_match.old_literal_refusal(_ask(f"Đổi tất cả chữ '{OLD}' thành '{NEW}'"), {HOME, SIBLING}, src, "HEAD") == ""
     assert best_match.old_literal_refusal(NAMED, {HOME, SCRIPT}, src, "HEAD") == ""
     conflict = _ask(NAMED["subject"], "Ở trang vườn hoa, liên kết dẫn tới khu-vuc.html.")
-    assert "chỉ sửa" not in best_match.old_literal_refusal(conflict, {HOME, SIBLING}, src, "HEAD")
+    assert "chỉ sửa " + HOME in best_match.old_literal_refusal(conflict, {HOME, SIBLING}, src, "HEAD")
     assert "chỉ sửa " + SIBLING in best_match.old_literal_refusal(_ask(NAMED["subject"], "[Trang: Khu vực] /khu-vuc.html?tab=2"), {HOME}, src, "HEAD")
 
 
@@ -321,3 +321,29 @@ def test_two_pages_with_a_shared_first_word_are_two_pages_at_both_gates(tmp_path
 def test_gate_4_without_a_tree_does_not_collapse_pages(tmp_path):
     text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
     assert _misses(text) == []
+
+
+def test_coordinated_pages_are_several_even_when_only_one_resolves(tmp_path):
+    src = _repo(tmp_path)
+    both = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + \
+        _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    for body in ("Ở trang chủ và trang vườn hoa.", "Ở trang này và trang vườn hoa, đổi chữ.", "On the page home and page vườn hoa."):
+        request = _ask(NAMED["subject"], body)
+        assert best_match.old_literal_refusal(request, {HOME, SIBLING}, src, "HEAD") == "", body
+        assert _misses(both, request, src) == [], body
+    filler = _ask(NAMED["subject"], "Trang vườn hoa, ở cuối trang, trang có nhiều nút.")
+    assert best_match.old_literal_refusal(filler, {HOME, SIBLING}, src, "HEAD")
+    assert _misses(both, filler, src)
+
+
+def test_link_target_path_is_not_the_requested_page(tmp_path):
+    src = _repo(tmp_path)
+    request = _ask(NAMED["subject"], "Ở trang vườn hoa, liên kết dẫn tới khu-vuc.html.")
+    assert best_match.requested_page(request, [HOME, SIBLING], src, "HEAD") == (HOME, False)
+
+
+def test_gate_4_without_a_readable_tree_does_not_collapse(tmp_path):
+    text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + \
+        _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(text, NAMED, tmp_path) == []
+    assert _misses(text, NAMED, _repo(tmp_path))

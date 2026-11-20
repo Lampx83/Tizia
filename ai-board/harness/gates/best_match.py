@@ -64,6 +64,7 @@ _PAGE_LINE = re.compile(r"^\[Trang: .*\] (/\S+)[ \t]*$", re.M)
 _PAGE_STEM = re.compile(r"\btrang ([a-z0-9]+)\b")
 
 
+_LINK_TARGET = re.compile(r"\b(?:tới|đến|href|to)\b[=:\s\"\']*\S+\.html?\S*", re.I)
 _CLAUSE = re.compile(r"(?=\b(?:trang|page)\b)", re.I)
 
 
@@ -78,7 +79,7 @@ def requested_page(request: dict, homes: list[str], source, sha: str) -> tuple[s
     by_stem = [home for home in homes if re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1])[0] in stems]
     named = [home for clause in _CLAUSE.split(text) for home in context._named_pages(clause, source, sha)]
     by_line = ["public" + re.split(r"[?#]", line.group(1))[0]] if line and not line.group(1).startswith("//") else []
-    hits = [[home for home in homes if home in found] for found in (context._mentioned_files(text, source, sha), named, by_stem)]
+    hits = [[home for home in homes if home in found] for found in (context._mentioned_files(_LINK_TARGET.sub(" ", text), source, sha), named, by_stem)]
     if not any(hits):
         hits = [[home for home in homes if home in by_line]]
     several = functional.all_pages({"request_title": request.get("subject"), "request_detail": _PAGE_LINE.sub("", body)})

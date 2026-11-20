@@ -576,7 +576,12 @@ def _several(state: dict, homes: list[str], checkout) -> bool:
     if functional.all_pages(state) or not checkout:
         return True
     request = {"subject": functional.guest_input(state, "request_title"), "body": functional.guest_input(state, "request_detail")}
-    return best_match.requested_page(request, homes, checkout, state.get("base_sha") or "HEAD")[1]
+    sha = state.get("base_sha") or "HEAD"
+    try:
+        code_index.git(checkout, "rev-parse", "--verify", f"{sha}^{{commit}}")
+    except OSError:
+        return True
+    return best_match.requested_page(request, homes, checkout, sha)[1]
 
 
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
