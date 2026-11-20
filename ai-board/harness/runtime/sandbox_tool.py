@@ -1,4 +1,4 @@
-"""run_in_sandbox cho tool-loop: argv theo allow-list, một microVM mỗi lần gọi. Tắt trừ khi AI_BOARD_SANDBOX_TOOL=1."""
+"""run_in_sandbox cho tool-loop: argv theo allow-list, một microVM mỗi lần gọi (hoặc mỗi subtask khi AI_BOARD_SANDBOX_SUBTASK_VM=1). Tắt trừ khi AI_BOARD_SANDBOX_TOOL=1."""
 from __future__ import annotations
 
 import hashlib
@@ -133,13 +133,14 @@ def _write(drafts: dict[str, str], root: Path) -> None:
 
 
 class Runner:
-    """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
+    """Gọi run_in_sandbox: mỗi attempt một VM, hoặc một VM suốt subtask khi `kept`; ghi receipt cho từng lần exec."""
 
     def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
-                 tier: str | None = None, kept: bool | None = None):
+                 tier: str | None = None, kept: bool | None = None, remaining=None):
         self.kept = get_settings(env).sandbox_subtask_vm if kept is None else kept
-        self._session = self._tmp = self._uploaded = None
-        self._opened = 0.0
+        self.remaining, self.unconfirmed = remaining, None
+        self._session = self._tmp = self._uploaded = self._charged_at = None
+        self._deadline = 0.0
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
         self.cfg = limits.sandbox_tool(env, tier=tier)
@@ -195,7 +196,10 @@ class Runner:
                 outcome = session.exec(argv, self.cfg["exec_timeout_s"])
             except SandboxError as caught:
                 error = caught
+                if caught.code == "lease_lost" and time.monotonic() >= self._deadline:
+                    error = SandboxError("wall_clock_s", caught.phase, caught.status)
             if outcome is not None:
+                self._charge()
                 return self._observe(receipt, outcome, started)
             receipt["run_id"] = receipt["run_id"] or getattr(self._session, "run_id", None)
             try:
@@ -205,7 +209,7 @@ class Runner:
                 self._record(receipt, started)
                 raise
             receipt["error"] = error.code
-            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE \
+            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and time.monotonic() < self._deadline \
                 and (error.status in (0, 429) or error.status >= 500)
             self._record(receipt, started)
             if retry and self.budget is not None and not self.budget.spend("tool_calls"):
@@ -217,22 +221,34 @@ class Runner:
         raise AssertionError("unreachable")
 
     def _open(self, drafts: dict[str, str]) -> SandboxSession:
-        """Live subtask VM: created on first use, later calls upload only edited drafts."""
+        """Live subtask VM: created on first use; edited drafts are re-uploaded, a changed draft path set gets a fresh VM."""
+        if self._session is not None and drafts.keys() != self._uploaded.keys():
+            self._drop()
         if self._session is not None:
             if drafts != self._uploaded:
                 _write(drafts, Path(self._tmp.name))
                 self._sync(self._session)
                 self._uploaded = dict(drafts)
             return self._session
-        self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-")
-        _stage(self.source, self.sha, drafts, Path(self._tmp.name))
-        left = getattr(self.budget, "remaining_s", None)
-        self._opened = time.monotonic()
-        session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok,
-                                 deadline=self._opened + (left() if left else self.cfg["wall_clock_s"]))
-        self._session = session
-        session.__enter__()
+        left = self.remaining() if self.remaining else self.cfg["wall_clock_s"]
+        if left <= 0:
+            raise SandboxError("wall_clock_s", "exec")
+        self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-", ignore_cleanup_errors=True)
+        try:
+            _stage(self.source, self.sha, drafts, Path(self._tmp.name))
+            self._deadline = time.monotonic() + left
+            session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok, deadline=self._deadline)
+            self._session = session
+            session.__enter__()
+        except BaseException:
+            if self._session is not None and self._session.cleanup_pending:
+                self.unconfirmed = self._session.run_id
+            self._session = None
+            self._tmp.cleanup()
+            self._tmp = None
+            raise
         self._uploaded = dict(drafts)
+        self._charged_at = time.monotonic()
         return session
 
     def _sync(self, session: SandboxSession) -> None:
@@ -240,23 +256,35 @@ class Runner:
             raise SandboxError("lease_lost", "lease")
         session.client.upload(session.run_id, package(session.checkout, {}, {}), deadline=session.deadline)
 
+    def _charge(self) -> None:
+        """Bill VM seconds since the last charge to the run ledger and the GPU window; only once the VM is up."""
+        if self._charged_at is None:
+            return
+        now = time.monotonic()
+        seconds, self._charged_at = max(0.0, now - self._charged_at), now
+        if self.budget is not None and hasattr(self.budget, "vm_s"):
+            self.budget.vm_s += seconds
+        if hasattr(self.trace, "add_gpu_s"):
+            self.trace.add_gpu_s(seconds)
+
     def _drop(self) -> None:
         """Destroy the subtask VM and its staging; CleanupUnconfirmed when teardown is not confirmed."""
         session, tmp, self._session, self._tmp, self._uploaded = self._session, self._tmp, None, None, None
         if session is None:
             return
-        pending = session.cleanup_pending
-        if session.lease is not None and not pending:
-            try:
-                session.__exit__(None, None, None)
-            except SandboxError:
-                pass
-            pending = session.cleanup_pending
-        if tmp is not None:
-            tmp.cleanup()
-        if hasattr(self.trace, "add_gpu_s"):
-            self.trace.add_gpu_s(max(0.0, time.monotonic() - self._opened))
-        if pending:
+        try:
+            if session.lease is not None and not session.cleanup_pending:
+                try:
+                    session.__exit__(None, None, None)
+                except SandboxError:
+                    pass
+        finally:
+            if tmp is not None:
+                tmp.cleanup()
+            self._charge()
+            self._charged_at = None
+        if session.cleanup_pending:
+            self.unconfirmed = session.run_id
             raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {session.run_id})")
 
     def close(self) -> None:

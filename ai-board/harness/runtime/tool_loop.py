@@ -887,8 +887,10 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
         for runner in runners:
             try:
                 runner.close()
-            except sandbox_tool.CleanupUnconfirmed as error:
-                vm_unconfirmed = str(error)
+            except Exception:  # noqa: BLE001 - one failing close must not skip the other runners or checks.close()
+                vm_unconfirmed = vm_unconfirmed or getattr(runner, "unconfirmed", None) or "unknown"
+            else:
+                vm_unconfirmed = vm_unconfirmed or runner.unconfirmed
         if checks:
             checks.close()
             if checks.cleanup_pending and hasattr(deps, 'capture'):
@@ -899,7 +901,11 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
         return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical',
                        unknown_outcome={'run_id': checks.run_id})
     if vm_unconfirmed:
-        return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical')
+        if hasattr(deps, 'capture'):
+            deps.capture['sandbox_cleanup_pending'] = True
+        extra = {'unknown_outcome': {'run_id': vm_unconfirmed}}
+        return {**_result('blocked', 'sandbox cleanup requires reconciliation', 'critical', **extra),
+                **({'sandbox_receipts': sandbox_log} if sandbox_log else {})}
     return {**result, 'sandbox_receipts': sandbox_log} if sandbox_log else result
 
 
@@ -934,7 +940,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     if len(paths) > 1 and (checks or (_SANDBOX_OFFERED.get() and not sandbox_tool.tier_armed("multi"))):
         return _result("blocked", "multi-file subtask cannot be combined with verified loop or sandbox", "critical")
     sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
-                                   receipts=sandbox_log, budget=budget,
+                                   receipts=sandbox_log, budget=budget, remaining=loop_budget.remaining_s,
                                    tier="multi" if len(paths) > 1 else "single")
                if _SANDBOX_OFFERED.get() else None)
     if sandbox is not None and sandbox.kept and sandbox_runners is not None:
