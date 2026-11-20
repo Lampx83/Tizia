@@ -7,6 +7,8 @@ import json
 import uuid
 from pathlib import Path
 
+from settings import get_settings
+
 HARNESS = Path(__file__).resolve().parents[1]
 REPO = HARNESS.parents[1]
 VERIFIER_ENTRIES = ("gates/static_check.py", "gates/guard.py", "gates/risk_triage.py", "services/candidate.py",
@@ -102,8 +104,12 @@ def gate4_pins(state: dict, *, plan_hash: str | None, model: str | None, tool_ha
     """Pin của bằng chứng Gate 4: artifact (diff), plan, base, mã verifier, prompt soát nội dung, tool, model, oracle (catalog)."""
     prompt = HARNESS / "prompts" / "content_guard.md"
     artifact = [{key: d.get(key) for key in ("title", "file", "test_file", "diff")} for d in state.get("diffs") or []]  # not the scratch commit sha: it changes with every commit time
+    prompts = prompt.read_bytes() if prompt.exists() else b""
+    if get_settings().intent_review:  # a proof from before the reviewer existed must not stand in for its verdict
+        from gates import intent_review
+        prompts += intent_review.PROMPT.encode("utf-8")
     return {"candidate": digest(artifact), "plan": str(plan_hash or "none"), "base": str(state.get("base_sha") or "none"),
-            "harness": verifier_pin(), "prompt": digest(prompt.read_bytes() if prompt.exists() else b"")[:32],
+            "harness": verifier_pin(), "prompt": digest(prompts)[:32],
             "tool": str(tool_hash)[:32], "model": str(model or "none"), "oracle": digest(state.get("catalog"))[:32]}
 
 
