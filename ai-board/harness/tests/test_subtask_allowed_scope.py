@@ -7,6 +7,7 @@ import tools
 from gates import brainstorm, plan_validate
 from runtime import subtask_files, tool_loop
 from runtime.budget import Budget
+from test_multi_file_subtask_scope import multi_state, source  # noqa: F401
 
 
 @pytest.fixture
@@ -61,12 +62,11 @@ def test_scope_cannot_be_shared_by_two_subtasks(on):
         subtask_files.validate(plan)
 
 
-def test_flag_off_leaves_the_plan_untouched():
-    st = task(allowed_scope=["public/a.html", "public/b.html"], files=["public/b.html"])
-    plan = {"subtasks": [dict(st)]}
+def test_flag_off_drops_both_keys():
+    plan = plan_of(allowed_scope=["public/a.html", "public/b.html"], files=["public/b.html"])
     subtask_files.validate(plan)
-    assert plan["subtasks"][0] == {k: v for k, v in st.items() if k != "files"}
     assert subtask_files.files_of(plan["subtasks"][0]) == ["public/a.html"]
+    assert "files" not in plan["subtasks"][0] and "allowed_scope" not in plan["subtasks"][0]
 
 
 def test_parse_plan_keeps_the_declared_scope(on):
@@ -180,3 +180,58 @@ def test_run_returns_plan_unfit_for_a_bad_scope_set(on, monkeypatch):
     monkeypatch.setattr(levels, "source_reader", lambda *a, **k: reader({"public/a.html"}))
     out = plan_validate.run({"subject": "s", "body": "b"}, deps_with(FakeModels(plan)), Budget(), {"plan": plan})
     assert out["blocked"] and out["outcome"] == plan_validate.PLAN_UNFIT and "public/notes.txt" in out["reason"]
+
+
+# review fixes
+
+def test_planner_is_told_about_allowed_scope_only_when_flag_on(monkeypatch):
+    request = {"id": "1", "type": "feature", "subject": "s", "body": "b"}
+    off = brainstorm.build_prompt(request, frozenset())
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    on_ = brainstorm.build_prompt(request, frozenset())
+    assert "allowed_scope" not in off and "allowed_scope" in on_ and on_.startswith(off.split("REPO DATA")[0][:200])
+
+
+def test_out_of_plan_growth_cannot_add_a_fourth_file(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_OUT_OF_PLAN_FILES", "1")
+    monkeypatch.setenv("AI_BOARD_ADMIN_BACKEND_ZONE", "1")
+    monkeypatch.setattr(tools, "_show", lambda source, sha, path: FILES.get(path, "x\n"))
+    st = declared("public/a.html", "public/b.html", "public/c.html")
+    result = tool_loop.run_subtask(st, FILES["public/a.html"], deps=Deps([edit("public/a.html"), edit("public/d.html"), TEST, FINISH]),
+                                   budget=Budget(), model="m", source=".", sha="abc", check=lambda out: None, requester_role="admin")
+    assert result["status"] == "blocked" and "public/d.html" in result["reason"]
+
+
+def test_candidate_refuses_out_of_plan_file_for_a_declared_scope(on, monkeypatch, tmp_path, source):
+    from services import candidate
+    monkeypatch.setenv("AI_BOARD_OUT_OF_PLAN_FILES", "1")
+    monkeypatch.setenv("AI_BOARD_ADMIN_BACKEND_ZONE", "1")
+    scope = ["public/a.js", "public/b.js"]
+    state = multi_state(tmp_path, {"public/b.js": "// b", "public/c.js": "// c"}, {"allowed_scope": scope})
+    state["requester_role"] = "admin"
+    state["diffs"][0]["out_of_plan"] = ["public/c.js"]
+    with pytest.raises(candidate.ScopeViolation, match="public/c.js"):
+        candidate.create(state, source)
+    del state["plan"]["subtasks"][0]["allowed_scope"]
+    state["plan"]["subtasks"][0]["files"] = ["public/b.js"]
+    candidate.create(state, source)
+
+
+@pytest.mark.parametrize("bad", [r"public\..\x.js", ".", "./", "../x.js", "public/.."])
+def test_shape_rejects_backslash_traversal_and_bare_dot(on, bad):
+    for key in ("allowed_scope", "files"):
+        plan = plan_of(**{key: ["public/a.html", bad] if key == "allowed_scope" else [bad]})
+        with pytest.raises(ValueError):
+            subtask_files.validate(plan)
+
+
+def test_primary_dotfile_scope_stays_in_step_with_check_files(on):
+    raw = json.dumps({"summary_vi": "x", "capabilities": [], "subtasks": [
+        task(file=".well-known/x.html", allowed_scope=[".well-known/x.html", "public/b.html"])]})
+    plan = brainstorm.parse_plan(raw)
+    try:
+        brainstorm.check_files(plan, None, None)
+    except Exception:  # elevation for the odd path is expected; only the normalised scope matters here
+        pass
+    st = plan["subtasks"][0]
+    assert st["file"] in st["allowed_scope"]

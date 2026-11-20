@@ -33,6 +33,11 @@ def files_of(task: dict) -> list[str]:
     return [primary, *_extras(task)] if enabled() else [primary]
 
 
+def declared(task: dict) -> bool:
+    """Flag on and the subtask lists its own allowed_scope."""
+    return enabled() and "allowed_scope" in task
+
+
 def is_multi(task: dict) -> bool:
     return len(files_of(task)) > 1
 
@@ -57,7 +62,8 @@ def _check_shape(index: int, raw, key: str = "files") -> None:
         if not isinstance(item, str) or not item.strip():
             raise ValueError(f"subtask[{index}].{key} phải là mảng chuỗi không rỗng")
         if (PurePosixPath(item).is_absolute() or PureWindowsPath(item).is_absolute()
-                or ".." in re.split(r"[\/]", item) or "\x00" in item):
+                or ".." in re.split(r"[\\/]", item) or "\x00" in item
+                or _norm(item) == "." or _norm(item).startswith("../")):
             raise ValueError(f"subtask[{index}].{key} path không hợp lệ: {item!r}")
 
 
@@ -79,11 +85,12 @@ def _declared_extras(index: int, task: dict) -> list[str] | None:
 
 
 def validate(plan: dict) -> None:
-    """Flag off: drop `files`. Flag on: shape, total <= limit, normalize in place, no file shared by two subtasks. Raise ValueError."""
+    """Flag off: drop `files` and `allowed_scope`. Flag on: shape, total <= limit, normalize in place, no file shared by two subtasks. Raise ValueError."""
     tasks = [task for task in plan.get("subtasks") or [] if isinstance(task, dict)]
     if not enabled():
         for task in tasks:
             task.pop("files", None)
+            task.pop("allowed_scope", None)
         return
     owner: dict[str, int] = {}
     for index, task in enumerate(tasks):

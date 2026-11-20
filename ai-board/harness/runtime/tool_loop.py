@@ -999,7 +999,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
-                   outside_role=requester_role if get_settings().out_of_plan_files else None,
+                   outside_role=requester_role if get_settings().out_of_plan_files and not subtask_files.declared(subtask) else None,
                    constants=constants_of(*(request_text if isinstance(request_text, tuple) else (request_text,)))
                    if get_settings().literal_by_reference else None)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
