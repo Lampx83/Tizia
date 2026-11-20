@@ -93,11 +93,12 @@ class FakeVM(FakeClient):
                 old, new = base.get(path), self.index.get(path)
                 if old == new:
                     continue
+                listed = '"' + path.replace("\t", "\\t") + '"' if "\t" in path else path
                 if new is None:
-                    lines.append(f":{self._mode(old)} 000000 {blob(old)} {ZERO} D\t{path}")
+                    lines.append(f":{self._mode(old)} 000000 {blob(old)} {ZERO} D\t{listed}")
                 else:
                     lines.append(f":{self._mode(old) if old is not None else '000000'} {self._mode(new)} "
-                                 f"{blob(old) if old is not None else ZERO} {blob(new)} {'A' if old is None else 'M'}\t{path}")
+                                 f"{blob(old) if old is not None else ZERO} {blob(new)} {'A' if old is None else 'M'}\t{listed}")
             return self._out("\n".join(lines) + ("\n" if lines else ""))
         if name == "cat-file" and sub[1] == "-e":
             tree, _, path = sub[2].partition(":")
@@ -465,3 +466,47 @@ def test_worktree_flag_without_kept_vm_keeps_the_allow_list_spec(monkeypatch):
     base = sandbox_tool.specs()[sandbox_tool.NAME]
     monkeypatch.setenv(WORKTREE, "1")
     assert sandbox_tool.specs()[sandbox_tool.NAME] == base
+
+
+def test_model_test_file_wins_over_an_earlier_sorting_vm_test_file(on):
+    helper = "test/0-helper.test.js"
+    client = FakeVM(bash=lambda argv, files: write(files, helper, "helper"))
+    ws, runner = prepared(client)
+    ws.run(sandbox_tool.NAME, {"argv": FREE})
+    assert (ws.test_file, ws.test) == (TEST, "t") and helper not in client.files and client.files[TEST] == "t"
+    assert ws.proposal()["test_file"] == TEST
+    runner.close()
+
+
+def test_git_quoting_is_turned_off_for_internal_calls(on):
+    client = FakeVM()
+    runner = make(client)
+    runner(FREE, {})
+    assert all("core.quotePath=false" in a for a in client.git_argv)
+    runner.close()
+
+
+def test_name_git_still_quotes_is_unquoted_and_restored_not_a_hard_fault(on):
+    odd = "public/a\tb.txt"
+    client = FakeVM(bash=lambda argv, files: write(files, odd, "x"))
+    ws, runner = prepared(client)
+    body = json.loads(ws.run(sandbox_tool.NAME, {"argv": FREE}))
+    assert body["restored_to_base"] == [odd] and odd not in client.files
+    assert ws.proposal()["code"] == "<h1>Z</h1>\n"
+    runner.close()
+
+
+@pytest.mark.parametrize("raw,expected", [(r'"a\tb"', "a\tb"), (r'"t\303\252p"', "tệp"), (r'"q\"x\\"', 'q"x' + chr(92)),
+                                          ("plain", None), (r'"bad\q"', None)])
+def test_unquote(raw, expected):
+    assert sandbox_tool._unquote(raw) == expected
+
+
+@pytest.mark.parametrize("value", [b"\x00\x01binary", b"LINK:target"])
+def test_declared_target_that_turns_unusable_goes_back_to_the_model_draft(on, value):
+    client = FakeVM(bash=lambda argv, files: files.update({TARGET: value}))
+    ws, runner = workspace(client)
+    ws.run("edit_file", EDIT)
+    ws.run(sandbox_tool.NAME, {"argv": FREE})
+    assert ws.content == "<h1>Z</h1>\n" and client.files[TARGET] == "<h1>Z</h1>\n"
+    runner.close()
