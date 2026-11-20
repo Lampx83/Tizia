@@ -137,3 +137,11 @@ def test_driver_loads_vague_cases_and_keeps_dev_ids():
     assert got[1]["kind"] == "control"
     assert len(driver.resolve_cases("vague:all")) == 9
     assert driver.resolve_cases(dev_ids[0])[0]["id"] == dev_ids[0]
+
+
+def test_unanswered_question_slot_not_counted():
+    case = next(c for c in CASES if c["id"] == "vague-css_color-l1-37625a")
+    qs = [{"slot": s, "question": "x", "answer": "y"} for s in ("page", "element", "color")]
+    qs.append({"slot": "scope", "question": "x", "answer": None})
+    scored = cl.score_row({"case": case["id"], "outcome": "ready_for_pr", "clarify": {"questions": qs}}, case)
+    assert scored["asked"] is True and scored["slots_asked"] == 3

@@ -111,7 +111,7 @@ def score_row(row: dict, case: dict) -> dict:
     questions = (row.get("clarify") or {}).get("questions") or []
     asked = bool(questions)
     gap_slots = {g["slot"] for g in case.get("gaps", [])}
-    slots_asked = len({q["slot"] for q in questions} & gap_slots)
+    slots_asked = len({q["slot"] for q in questions if q.get("answer") is not None} & gap_slots)
     vague = case["kind"] == "vague"
     shipped = row.get("outcome") in GOAL_OUTCOMES
     ask_correct = asked and slots_asked >= case["expected"]["min_slots_asked"] if vague else not asked
