@@ -3,7 +3,7 @@ import posixpath
 import re
 from pathlib import Path
 
-from gates import gate3_guards, static_check
+from gates import acceptance_structure, gate3_guards, static_check
 from runtime import subtask_files
 from verification import functional
 from verification.guest_inputs import GuestInputMissing
@@ -102,11 +102,16 @@ def crossref_issues(state: dict, text: str) -> list[str]:
 def check(state: dict | None) -> dict:
     """{'passed', 'reason'}: reason empty on pass; model-written tests are not consulted."""
     state = state or {}
+    approved = bool(state.get("approved_checks"))
     try:
         want = functional.text_expectation(state)
         anchor = functional.anchor(state)
     except GuestInputMissing:
-        return _fail(NO_ORACLE)
+        if not approved:
+            return _fail(NO_ORACLE)
+        want, anchor = {"present": [], "absent": []}, None
+    if reason := acceptance_structure.unmet(state):
+        return _fail(reason)
     pairs = functional.replace_pairs(state)
     broken = crossref_issues(state, "".join(str(i.get("diff") or "") for i in state.get("full_diff") or state.get("diffs") or []))
     if broken:
@@ -115,7 +120,7 @@ def check(state: dict | None) -> dict:
     present = [new for _, new in pairs] or [text for text in want["present"] if text != anchor and not functional._is_css_selector(text)]
     absent = [old for old, _ in pairs] or want["absent"]
     diffs = state.get("full_diff") or state.get("diffs") or []
-    if not (present or absent):
+    if not (present or absent) and not approved:
         return _fail(NO_ORACLE)
     if not diffs:
         return _fail("no deterministic check: no diff to inspect")

@@ -15,7 +15,7 @@ SESSION_BLOCK = ("\n\nPLANNING SESSION (what the planner read before writing thi
 
 def violations(text: str, request: dict, source, sha: str | None) -> list[str]:
     """Rule breaks of a plan JSON (gate 1 shape, files, new pages, step checks, requested files); [] when it passes."""
-    from gates import brainstorm, plan_validate
+    from gates import acceptance_structure, brainstorm, plan_validate
     from verification import checks
     role = request.get("requester_role") or "student"
     try:
@@ -36,6 +36,8 @@ def violations(text: str, request: dict, source, sha: str | None) -> list[str]:
     out += plan_validate.unfit_issues(plan)
     if get_settings().plan_checks:
         out += checks.plan_problems(plan)
+        plan = acceptance_structure.apply(plan)
+        out += acceptance_structure.problems(plan, request)
     if missing := coverage.requested_missing(plan, coverage.user_text(request)):
         out.append("request names these but the plan has no step for them: " + ", ".join(missing[:8]))
     if not coverage.has_runnable(plan):

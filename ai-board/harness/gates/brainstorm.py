@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from verification import functional
 import path_policy
-from gates import best_match, grounding_paths, plan_rules, react_plan, subtask_contract
+from gates import acceptance_structure, best_match, grounding_paths, plan_rules, react_plan, subtask_contract
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -83,7 +83,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         thread=scrub(thread),
         surface=", ".join(sorted(surface)),
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
-    )
+    ) + acceptance_structure.prompt_block(request)
 
 
 def infer_layer(file: str, role: str = "student") -> str:
@@ -439,6 +439,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
             if isinstance(plan, dict) and plan.get("subtasks"):
                 plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
+                acceptance_structure.apply(plan)
             judge(stage, True, plan.get("summary_vi", ""))
             if form_warnings:
                 judge(stage, True, "form warnings: " + "; ".join(form_warnings)[:600])
@@ -454,6 +455,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             if missing:
                 raise levels.ElevationRequired(missing, plan)
             grounding_paths.check_references(plan, source, commit, request)
+            if broken := acceptance_structure.problems(plan, request):
+                raise ValueError(broken[0])
             judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
