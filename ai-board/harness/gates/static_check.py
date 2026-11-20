@@ -458,27 +458,60 @@ def _pieces(line: str, text: str) -> list[str]:
     return found or ([line] if text in line else [])
 
 
-def _replacement_misses(pairs: list[tuple[str, str]], hunks) -> tuple[list[str], set[str]]:
+_ATTR = re.compile(r"=\s*(?:\"([^\"]*)\"|'([^']*)')")
+
+
+def _segments(line: str) -> set[str]:
+    """What one line can show: the whole line, each text between tags, each attribute value."""
+    values = [v for pair in _ATTR.findall(line) for v in pair]
+    return {seg.strip() for seg in [line, *re.split(r"<[^>]*>", line), *values] if seg.strip()}
+
+
+def _replacement_misses(pairs: list[tuple[str, str]], hunks, every_page: bool) -> tuple[list[str], set[str]]:
     """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same hunk.
+    Several files holding the old text = one miss unless the request asks for every page.
     Returns (misses, new texts judged this way); a pair whose old text no hunk removes is left to the plain presence check."""
     misses, judged = [], set()
     for old, text in pairs:
         old, text = _ws(old), _ws(text)
+        found: dict[str, list[str]] = {}
         for path, hunk in hunks:
             before = [seg for sign, line in hunk if sign == "-" for seg in _pieces(line, old)]
             if not before:
                 continue
             judged.add(text)
-            added = Counter(seg.strip() for sign, line in hunk if sign == "+" for seg in {line, *re.split(r"<[^>]*>", line)} if seg.strip())
+            found.setdefault(path, [])
+            added = Counter(seg for sign, line in hunk if sign == "+" for seg in _segments(line))
             for seg in before:
                 want = seg.replace(old, text)
                 if added[want]:
                     added[want] -= 1
-                else:
-                    near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
-                    misses.append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
-                                  + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
+                    continue
+                near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
+                found[path].append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
+                                   + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
+        touched = list(found)
+        if len(touched) > 1 and not every_page:
+            keep = [path for path in touched if not found[path]]
+            misses.append(f'đổi "{old}" thành "{text}" chỉ ở MỘT file yêu cầu chỉ tới, diff đang sửa {len(touched)} file ({", ".join(touched)}): '
+                          + (f"giữ {keep[0]}, hoàn tác các file khác" if keep else
+                             f"giữ đúng một file (sửa thành đúng chữ mới), hoàn tác các file khác; {next(m for p in touched for m in found[p])}"))
+        else:
+            misses += [m for path in touched for m in found[path]]
     return misses, judged
+
+
+def _colon_misses(texts: list[str], hunks) -> list[str]:
+    """Unquoted 'thành: X': a hunk that removes something must add a segment or attribute value equal to X; X elsewhere does not count."""
+    misses = []
+    for text in map(_ws, texts):
+        if any(any(sign == "-" for sign, _ in hunk) and any(text in _segments(line) for sign, line in hunk if sign == "+") for _, hunk in hunks):
+            continue
+        path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
+                              if sign == "+" and text.rstrip(".!?…") in line), (", ".join(dict.fromkeys(p for p, _ in hunks)), None))
+        misses.append(f'{path}: chữ yêu cầu "{text}" phải là đúng nguyên văn một phần tử trong dòng thêm thay cho chữ cũ (từng ký tự, cả dấu câu)'
+                      + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
+    return misses
 
 
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
@@ -488,12 +521,14 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     anchor = functional.anchor(state)
     raw = functional._request_raw(state)
     pairs = functional.replace_pairs(state) if want["absent"] else []
+    colon = [_ws(t) for t in functional.colon_replace(state)]
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
-    misses, judged = _replacement_misses(pairs, hunks)
+    misses, judged = _replacement_misses(pairs, hunks, functional.all_pages(state))
+    misses += _colon_misses(colon, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
-    new = [text for text in new if text not in judged]
+    new = [text for text in new if text not in judged and text not in colon]
     added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
     # Only the changed files count: text that sits on another page still has to be added where the request asks.
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]

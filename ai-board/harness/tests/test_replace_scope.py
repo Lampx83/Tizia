@@ -115,7 +115,7 @@ def test_unquoted_literal_after_thanh_colon_is_read_with_its_period():
 
 def test_literal_in_title_alone_and_in_detail_alone():
     assert _want(COLON_TITLE)["present"] == ["Bảng tập mới nhất."]
-    assert _want("Đổi tiêu đề", COLON_BODY)["present"] == ["Bảng tập mới nhất."]
+    assert _want("Đổi tiêu đề", COLON_BODY)["present"] == []
 
 
 def test_colon_without_a_replace_verb_or_a_target_clause_is_ignored():
@@ -132,3 +132,76 @@ def test_gate_4_flags_the_colon_literal_shipped_without_its_period():
     bad = _diff("public/m.html", "-<h1>Chợ bài giảng</h1>", "+<h1>Bảng tập mới nhất</h1>")
     assert static_check.literal_misses(state, bad)
     assert static_check.literal_misses(state, bad.replace("nhất</h1>", "nhất.</h1>")) == []
+
+
+def test_all_pages_escape_needs_an_explicit_page_phrase(tmp_path):
+    src = _repo(tmp_path)
+    keep = _ask(f"Đổi chữ liên kết '{OLD}' thành '{NEW}'", "Trang vườn hoa, tab 'Tất cả' và các trang khác giữ nguyên nhé. Mới thôi.")
+    assert best_match.old_literal_refusal(keep, {HOME, SIBLING}, src, "HEAD")
+    assert best_match.old_literal_refusal(_ask(f"Đổi chữ '{OLD}' thành '{NEW}' ở mọi trang"), {HOME, SIBLING}, src, "HEAD") == ""
+    assert best_match.old_literal_refusal(_ask(f"Đổi chữ '{OLD}' thành '{NEW}' trên tất cả các trang"), {HOME, SIBLING}, src, "HEAD") == ""
+
+
+def test_user_words_outrank_the_page_line_and_folded_words_name_no_page(tmp_path):
+    src = _repo(tmp_path)
+    body = "[Trang: Khu vực] /khu-vuc.html\nTrang vườn hoa có hai liên kết."
+    assert "chỉ sửa " + HOME in best_match.old_literal_refusal(_ask(NAMED["subject"], body), {SIBLING}, src, "HEAD")
+    for body in ("Trang chủ có liên kết này", "Nền trắng có liên kết này"):
+        assert "chọn đúng một" in best_match.old_literal_refusal(_ask(NAMED["subject"], body), {SIBLING, HOME}, src, "HEAD")
+
+
+def test_gate_4_judges_several_homes_with_one_miss():
+    text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + \
+        _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    found = _misses(text)
+    assert len(found) == 1 and "hoàn tác" in found[0] and HOME in found[0] and SIBLING in found[0]
+    assert len(_misses(text, EVERYWHERE)) == 0
+
+
+PAIR_FAR = _ask(f"Đổi chữ '{OLD}' trên trang vườn hoa thành '{NEW}'")
+
+
+def test_pair_with_words_before_thanh_is_still_a_pair():
+    kept = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">→ {NEW}</a>')
+    assert _misses(kept, PAIR_FAR)
+    assert _misses(_diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>'), PAIR_FAR) == []
+
+
+def _colon(title, body=""):
+    return _want(title, body)["present"]
+
+
+def test_colon_replace_needs_an_added_segment_equal_to_the_literal(tmp_path):
+    req = _ask(COLON_TITLE, COLON_BODY)
+    old = "-<h1>Chợ bài giảng</h1>"
+    good = _diff("public/m.html", old, "+<h1>Bảng tập mới nhất.</h1>")
+    assert _misses(good, req) == []
+    for added in ("<h1>📚 Bảng tập mới nhất.</h1>", "<h1>Bảng tập mới nhất. Mới!</h1>", "<h1>Bảng tập mới nhất</h1>\n+<!-- Bảng tập mới nhất. -->"):
+        assert _misses(_diff("public/m.html", old, "+" + added), req), added
+    page = tmp_path / "public"
+    page.mkdir()
+    (page / "m.html").write_text("<h1>Bảng tập mới nhất</h1>\n<p>Bảng tập mới nhất.</p>\n", encoding="utf-8")
+    assert static_check.literal_misses({"request_title": req["subject"], "request_detail": req["body"]},
+                                       _diff("public/m.html", old, "+<h1>Bảng tập mới nhất</h1>"), tmp_path)
+    assert _misses(_diff("public/m.html", old, '+<a title="Bảng tập mới nhất.">x</a>'), req) == []
+
+
+def test_colon_reader_returns_nothing_when_unsure():
+    none = []
+    assert _colon("Đổi tiêu đề thành: Bảng tập mới nhất nha.") == ["Bảng tập mới nhất"]
+    assert _colon("Đổi tiêu đề thành: Bảng tập mới nhất.", "Đổi thành: Bảng tập mới nhất nhé, cảm ơn.") == ["Bảng tập mới nhất."]
+    assert _colon("Đổi tiêu đề", "Đổi thành: Bảng mới. cảm ơn nha") == ["Bảng mới."]
+    assert _colon("Đổi nút thành chữ khác, lưu ý: không đổi màu nút") == none
+    assert _colon("Đổi nút bằng link: https://tizia.vn/khoa-hoc.") == none
+    assert _colon("Đổi nút thành: https://tizia.vn/khoa-hoc.") == none
+    assert _colon("Đổi nút thành: xanh lá #16a34a") == none
+    assert _colon("Đổi màu nút thành: xanh lá") == none
+    assert _colon("Đổi chữ thành: Học ngay! Miễn phí.") == none
+    assert _colon("Đổi tiêu đề trang thành: Ôn tập Hóa 10. Còn nút thì để nguyên.") == none
+    assert _colon("Đổi tiêu đề", "Đổi thành: Học ngay. Miễn phí cho mọi người.") == none
+    assert _colon("Đổi tiêu đề", "Đổi thành: Bảng mới nhất. Mấy chỗ khác giữ nguyên nha.") == none
+
+
+def test_colon_reader_reads_every_pair_in_a_sentence():
+    assert _colon("Đổi tiêu đề thành: A1. Và đổi nút thành: B2.") == ["A1.", "B2."]
+    assert _colon("Đổi tiêu đề", "Đổi tiêu đề thành: A1 và nút thành: B2") == []

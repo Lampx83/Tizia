@@ -59,18 +59,19 @@ def new_page_refusal(request: dict, added, source, sha: str | None) -> str:
 
 
 _PAGE_LINE = re.compile(r"^\[Trang: .*\] (/\S+)[ \t]*$", re.M)
-_WORD_AFTER_PAGE = re.compile(r"\b(?:trang|page) (\w+)")
-_EVERYWHERE = re.compile(r"\b(?:moi|tat ca|toan bo|khap|cac trang|every|all)\b")
+_PAGE_STEM = re.compile(r"\btrang ([a-z0-9]+)\b")
 
 
 def _requested_page(request: dict, homes: list[str], source, sha: str) -> str | None:
-    """The one home the request points at: its [Trang: ...] line, a page it names by title/link/path, or a page word matching one home's file name."""
-    text = "\n".join(str(request.get(key) or "") for key in ("subject", "body"))
-    line = _PAGE_LINE.search(str(request.get("body") or ""))
+    """The one home the request points at. The user's own words come first (a path, a page named by title or link label,
+    'trang <first word of a file name>'); the [Trang: ...] line the feedback button adds is the last resort."""
+    body = str(request.get("body") or "")
+    line = _PAGE_LINE.search(body)
+    text = "\n".join((str(request.get("subject") or ""), _PAGE_LINE.sub("", body)))
+    stems = [m.group(1) for m in _PAGE_STEM.finditer(text.casefold())]
+    by_stem = [home for home in homes if re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1])[0] in stems]
     by_line = ["public" + line.group(1)] if line and not line.group(1).startswith("//") else []
-    word = [home for home in homes
-            if any(m.group(1) in re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1].lower()) for m in _WORD_AFTER_PAGE.finditer(file_context.fold(text)))]
-    for found in (by_line, context._named_pages(text, source, sha), context._mentioned_files(text, source, sha), word):
+    for found in (context._mentioned_files(text, source, sha), context._named_pages(text, source, sha), by_stem, by_line):
         pages = [home for home in homes if home in found]
         if len(pages) == 1:
             return pages[0]
@@ -82,7 +83,7 @@ def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
     when the request names one element; '' = allowed."""
     if not sha or feature(request):
         return ""
-    everywhere = _EVERYWHERE.search(file_context.fold(functional._QUOTED.sub(" ", f"{request.get('subject') or ''} {request.get('body') or ''}")))
+    everywhere = functional.all_pages({"request_title": request.get("subject"), "request_detail": request.get("body")})
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
         homes = target_confidence._grep_files(source, sha, old)
         if not homes:
