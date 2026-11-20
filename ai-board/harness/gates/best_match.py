@@ -20,6 +20,11 @@ def mode() -> str:
     return ADVISORY if get_settings().best_match == ADVISORY else ""
 
 
+def objections_advisory() -> bool:
+    """Flag: grounding objections go to the coder as advice instead of blocking."""
+    return bool(get_settings().plan_objections_advisory)
+
+
 def enforce(best_match, plan_files, message: str, judge, *, contradicted: bool = False) -> None:
     """Raise ValueError(message) if plan misses best_match; advisory mode records mismatch via judge instead unless contradicted."""
     if not best_match or best_match in plan_files:

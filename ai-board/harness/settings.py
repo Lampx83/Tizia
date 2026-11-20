@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     admin_requester_trust: bool = False  # gate 1: người gửi role admin (server xác thực) không bị chặn privileged_area
     intake_labels_by_role: bool = False  # cần thêm admin_requester_trust: admin chỉ được cảnh báo nhãn money/off_topic
     form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
+    plan_objections_advisory: bool = False  # cổng 1/2.5: phản đối grounding (best_match, file chứa chữ cũ, trang mới, trích dẫn) thành góp ý cho bước code; path/scope/budget/intake vẫn chặn
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, trần 8 file, tối đa needs_review; file logic cần test phủ
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way

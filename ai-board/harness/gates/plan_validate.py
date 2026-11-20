@@ -54,7 +54,7 @@ from services import context
 from services import file_context
 import path_policy
 from repositories.dbconn import harness_db
-from gates import best_match, evidence, grounding_paths
+from gates import best_match, evidence, grounding_paths, subtask_contract
 from repositories import repo_at_commit
 from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
@@ -878,6 +878,13 @@ def objection_advisory(validation: dict, files: dict) -> str | None:
     return f"grounded=false không có trích dẫn kiểm chứng được, cổng 2.5 không chặn: {str(validation.get('reason') or '')[:200]}"
 
 
+def observe(state: dict, judge, kind: str, text: str, evidence=None) -> None:
+    """Record a plan objection as advice for the coder: state list, tagged form warning, trace line."""
+    state.setdefault('plan_objections', []).append({'kind': kind, 'text': text, 'evidence': evidence})
+    state.setdefault('form_warnings', []).append(f'{subtask_contract.OBJECTION_TAG}: {text}')
+    judge(subtask_contract.OBJECTION_TAG, True, f'{kind}: {text}', evidence)
+
+
 def _brief(validation: dict) -> dict:
     return {'clear': validation['clear'], 'grounded': bool(validation.get('grounded')), 'reason': str(validation.get('reason') or '')[:200],
             'question': str(validation.get('question') or '')[:200]}
@@ -1063,6 +1070,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         judge('validator objection', False, note)
         validation = {**validation, 'grounded': True}
 
+    advisory = best_match.objections_advisory()
     if request.get('grounding_required'):
         validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
         try:
@@ -1077,14 +1085,21 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 if _named_new_files(plan, files, request):
                     state['renderer_advisory'] = 'plan adds requested new files; renderer constraint is advisory'
                     judge('renderer advisory', True, state['renderer_advisory'])
+                elif advisory:
+                    observe(state, judge, 'plan_ungrounded', 'plan không sửa module đang render nội dung người dùng yêu cầu')
                 else:
                     raise ValueError('plan không sửa module đang render nội dung người dùng yêu cầu')
             source = state.get('checkout_source') or Path(__file__).resolve().parents[3]
             added = {task['file'] for task in plan['subtasks'] if task['file'] not in files} if sha else set()
+            def refuse(refusal: str) -> None:
+                if not advisory:
+                    raise ValueError(refusal)
+                observe(state, judge, 'plan_ungrounded', refusal)
+
             if refusal := best_match.new_page_refusal(request, added - set(_named_new_files(plan, files, request)), source, sha):
-                raise ValueError(refusal)
+                refuse(refusal)
             if refusal := best_match.old_literal_refusal(request, targets, source, sha):
-                raise ValueError(refusal)
+                refuse(refusal)
             planned = [files.get(task['file'], '') for task in plan['subtasks']]
             # trace only: an insert request quotes new text, which may already sit in another file
             if elsewhere := [f"'{lit}' có ở {', '.join(paths[:3])}" for lit, paths in best_match.literal_homes(request, source, sha).items()
@@ -1105,10 +1120,13 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                                        f"plan không sửa file khớp nhiều cụm người dùng viết nhất: {state.get('best_match')}", judge,
                                        contradicted=contradicted)
                 except ValueError as miss:
-                    if not lenient:
+                    if advisory:
+                        refuse(str(miss))
+                    elif not lenient:
                         raise
-                    state.setdefault("form_warnings", []).append(str(miss))
-                    judge("form warning", True, str(miss))
+                    else:
+                        state.setdefault("form_warnings", []).append(str(miss))
+                        judge("form warning", True, str(miss))
             # Only the validator's own grounding verdict is retried: every harness rule above blocks on its own evidence.
             attempts = 0
             while True:
@@ -1142,8 +1160,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             # Trích dẫn không khớp: phân biệt "sai file" với "sai trích dẫn" bằng tín hiệu tất định trước khi chặn.
             confidence = target_confidence.assess(
                 anchor_quoted(plan, files), {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
-            if (confidence['level'] == 'low' and not final_hit(plan, request, state, files)
-                    and 'không tìm thấy trích dẫn' in str(error)):
+            uncertain = (confidence['level'] == 'low' and not final_hit(plan, request, state, files)
+                         and 'không tìm thấy trích dẫn' in str(error))
+            if advisory:
+                evidence_ = getattr(error, 'evidence', None) or {'why': str(error)}
+                observe(state, judge, 'plan_target_uncertain' if uncertain else 'plan_ungrounded',
+                        '; '.join(filter(None, [confidence['reason'] if uncertain else '', str(error)])), evidence_)
+                state['grounding'] = {'sha': sha, 'evidence': []}
+            elif uncertain:
                 judge('target confidence', False, confidence['reason'])
                 # Khám phá chỉ thêm bằng chứng cho admin; plan vẫn bị chặn, không tự chấp nhận file model chọn.
                 explored = (explore_target(request, plan, state, deps, budget,
@@ -1158,10 +1182,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                         'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
                         'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
                         **({'explored': explored} if explored else {})}
-            return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
-                    'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
-                    'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
-                    **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
+            if not advisory:
+                return {'gate': 2.5, 'blocked': True, 'reason': 'plan_ungrounded', 'outcome': 'plan_ungrounded',
+                        'signals': [str(error)], 'evidence': getattr(error, 'evidence', None) or {'why': str(error)},
+                        'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
+                        **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
 
     signals = complexity_signals(plan, frozenset(item["path"] for item in needs) | levels.surface_files(plan, reader))
     if request.get("complexity_by_server"):
