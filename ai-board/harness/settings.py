@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     sandbox_tool: bool = False
     sandbox_repo_scripts: bool = False
     sandbox_subtask_vm: bool = False  # run_in_sandbox keeps one VM per subtask, destroyed at subtask end; needs sandbox_tool
+    sandbox_vm_worktree: bool = False  # worktree in the subtask VM is the source of truth, final diff read from git there; needs sandbox_subtask_vm
     db_check: bool = False  # migration trial on PG16 inside the microVM before admin applies
     sandbox_repo_scripts_tiers: str = ""  # csv tier names ("multi", "single") that get repo-script argv; "" = none
     skill_select: bool | None = None

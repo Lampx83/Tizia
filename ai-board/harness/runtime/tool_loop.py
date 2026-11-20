@@ -342,6 +342,14 @@ def validate(name: str, args: dict) -> None:
                 raise ToolError(f"{name}.{key} phải là mảng {'chuỗi' if item == 'string' else 'object'}")
 
 
+def _with_restored(out: str, paths: list[str]) -> str:
+    try:
+        body = json.loads(out)
+    except ValueError:
+        return out
+    return json.dumps({**body, "restored_to_base": paths}, ensure_ascii=False) if isinstance(body, dict) else out
+
+
 def _clean_path(path: str) -> str:
     if PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute() or ".." in re.split(r"[\\/]", path):
         raise PathDenied(f"path không được phép: {path!r}")
@@ -373,6 +381,8 @@ class Workspace:
         self.plan_checks = plan_checks
         self.trace = trace
         self.sandbox = sandbox
+        self.vm_faults: list[Exception] = []
+        self.vm_restore: list[str] = []
         self.call_id = None
 
     def _read(self, path: str) -> str:
@@ -557,13 +567,81 @@ class Workspace:
     def _sandbox(self, args: dict) -> str:
         if self.sandbox is None:
             raise ToolError(f'{sandbox_tool.NAME} chưa có runner')
-        drafts = {self.file: self.content, **({self.test_file: self.test} if self.test_file else {})}
+        drafts = self._drafts()
         try:
-            return self.sandbox(args['argv'], drafts, self.call_id)
+            out = self.sandbox(args['argv'], drafts, self.call_id)
+            if self._vm() and (restored := self._follow_vm(drafts)):
+                out = _with_restored(out, restored)
+            return out
         except sandbox_tool.Refused as error:
             raise Forbidden(str(error)) from None
         except sandbox_tool.CleanupUnconfirmed as error:
             raise Forbidden(f"{error}; subtask stopped, VM teardown not confirmed") from None
+
+    def _vm(self) -> bool:
+        return bool(getattr(self.sandbox, "worktree", False))
+
+    def _drafts(self) -> dict[str, str]:
+        drafts = {self.file: self.content, **({self.test_file: self.test} if self.test_file else {})}
+        return {**drafts, **self.extra_content} if self._vm() else drafts
+
+    def _follow_vm(self, drafts: dict[str, str]) -> list[str]:
+        """Adopt the VM diff after an exec; returns the out-of-scope paths put back to base."""
+        try:
+            snapshot = self.sandbox.changes(drafts)
+            if snapshot is None:
+                return []
+            self._adopt(*snapshot)
+            return self._restore_vm()
+        except SandboxError:
+            return []  # a broken VM surfaces at finish, where the diff is read again
+
+    def _restore_vm(self) -> list[str]:
+        paths, self.vm_restore = self.vm_restore, []
+        if paths:
+            self.sandbox.restore(paths, self._drafts())
+        return paths
+
+    def _adopt(self, changed: dict[str, str], rejected: list[tuple[str, str]]) -> None:
+        """Drafts become what git in the VM holds. Path-policy faults wait for finish; out-of-scope paths are queued for restore to base."""
+        self.vm_faults = [PathDenied(f"path không hợp lệ từ VM: {path!r}") for path, kind in rejected if kind == "path"]
+        self.vm_restore = [path for path, kind in rejected if kind != "path"]
+        kept = {path for path, kind in rejected if kind != "path"}
+        tests = []
+        for path in sorted(changed, key=lambda p: (p != self.test_file, p)):
+            is_test = path != self.file and path not in self.extra_content and path.startswith(("test/", "tests/"))
+            try:
+                self._check_scope(path, test=is_test)
+            except ScopeMiss:
+                self.vm_restore.append(path)
+                continue
+            except Forbidden as error:
+                self.vm_faults.append(error)
+                continue
+            if is_test:
+                tests.append(path)
+        keep_tests = 0 if self.test_file in kept else 1
+        self.vm_restore.extend(tests[keep_tests:])
+        tests = tests[:keep_tests]
+        if self.file not in kept:
+            self.content = changed.get(self.file, self.base or "")
+        for path, base in self.extra_base.items():
+            if path not in kept:
+                self.extra_content[path] = changed.get(path, base or "")
+        if tests:
+            self.test_file, self.test = tests[0], changed[tests[0]]
+        elif self.test_file and self.test_file not in changed and self.test_file not in kept:
+            self.test_file = self.test = None
+
+    def _vm_settle(self) -> None:
+        """Finish: push pending drafts, read the final diff from git in the VM, restore out-of-scope paths, refuse path-policy faults."""
+        try:
+            self._adopt(*self.sandbox.settle(self._drafts()))
+            self._restore_vm()
+        except SandboxError as error:
+            raise sandbox_tool.VMUnavailable(error.code, error.status) from None
+        if self.vm_faults:
+            raise self.vm_faults[0]
 
     def _candidates(self, edits: list, message: str) -> str:
         """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
@@ -587,6 +665,8 @@ class Workspace:
         return (bool(self.test_file) or not self.test_required()) and not (self.content == self.base or (self.base is None and not self.content))
 
     def proposal(self) -> dict:
+        if self._vm():
+            self._vm_settle()
         if self.content == self.base or (self.base is None and not self.content):
             raise ValueError("chưa có thay đổi nào ở file đích")
         if not self.test_file and self.test_required():
@@ -1193,6 +1273,12 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                     store.save_ledger(budget.snapshot())
                 _tool_span(deps, name, n, child, "finish_ok", "", started_ms, cid, model_call, thought=thought)
                 return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
+            except BudgetExhausted as error:
+                return _result("paused", str(error), "budget", steps=steps)
+            except sandbox_tool.VMUnavailable as error:
+                return _result("blocked", str(error), error.failure_class, steps=steps)
+            except sandbox_tool.CleanupUnconfirmed as error:
+                return _result("blocked", f"{error}; subtask stopped, VM teardown not confirmed", "critical", steps=steps)
             except Forbidden as error:
                 return _result('blocked', str(error), 'critical', steps=steps)
             except (ValueError, ToolError) as error:
