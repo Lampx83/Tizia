@@ -425,6 +425,8 @@ class HttpWorker:
         if self.planner and not executing:
             from repositories import plan_session
             plan_session.put(planned.get("plan_hash"), getattr(self.planner, "last_session", None))
+            approved = getattr(self.planner, "last_approved", None) or {}
+            plan_session.put_approved(planned.get("plan_hash"), approved.get("checks"), approved.get("pin"))
         if self.planner:
             verdict = None
             preview_artifact = None

@@ -396,6 +396,7 @@ class HarnessPlanner:
             "steps": steps,
         }
 
+    last_approved = None  # {'checks','pin'} the requester approved in the last run (plan_checks); worker stores it locally by plan_hash
     last_session = None  # lịch sử phiên lập plan của lần gọi gần nhất (cờ session_plan_execute); worker lưu cục bộ theo plan_hash
     last_skill = None  # skill cổng 1 của lần gọi gần nhất: worker gửi kèm verdict cùng lease
 
@@ -433,7 +434,7 @@ class HarnessPlanner:
         return PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", detail)
 
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
-        self.last_skill = self.last_session = None
+        self.last_skill = self.last_session = self.last_approved = None
         replaced = revision_request(snapshot)
         if replaced:
             snapshot = {**snapshot, "plan_repair": "\n\n".join(filter(None, (snapshot.get("plan_repair"), revision_note(replaced))))}
@@ -520,6 +521,8 @@ class HarnessPlanner:
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
         plan = self._canonical(request, state["plan"], signals, state['catalog'])
         self.last_session = state.get("plan_session")
+        self.last_approved = ({"checks": state["approved_checks"], "pin": state.get("approved_pin")}
+                              if state.get("approved_checks") else None)
         if replaced:
             stamp_revision(plan, replaced)
         if state.get('grounding'):

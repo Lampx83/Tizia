@@ -203,7 +203,7 @@ class _Execution:
 
     def __init__(self, plan: dict, *, ticket_id: int, checkout_source, deps, budget, run_gate, cleanup, catalog,
                  request_detail, memory_path, should_stop, candidate_opts, request_type, eval_tasks, preview_capture,
-                 checkpoint, plan_hash, journal_hook=None, resume=None, policy_hash=None, resume_node=None, plan_session=None):
+                 checkpoint, plan_hash, journal_hook=None, resume=None, policy_hash=None, resume_node=None, plan_session=None, approved=None):
         self.plan, self.ticket_id, self.checkout_source = plan, ticket_id, checkout_source
         self.deps, self.budget, self.run_gate, self.cleanup = deps, budget, run_gate, cleanup
         self.catalog, self.request_detail, self.memory_path = catalog, request_detail, memory_path
@@ -211,6 +211,7 @@ class _Execution:
         self.eval_tasks, self.preview_capture, self.checkpoint, self.plan_hash = eval_tasks, preview_capture, checkpoint, plan_hash
         self.journal_hook = journal_hook
         self.plan_session = plan_session
+        self.approved = approved
         self.resume = resume or []
         self.resume_node = resume_node
         self.resume_seed: dict | None = None
@@ -465,6 +466,8 @@ class _Execution:
             state["checkpoint"] = self.attempt_checkpoint
         if self.plan_session:
             state["plan_session"] = self.plan_session
+        if self.approved:
+            state["approved_checks"], state["approved_pin"] = self.approved["checks"], self.approved["pin"]
         state["should_stop"] = self.should_stop  # sandbox Gate 5 renews its VM lease only while this is false
         state.update(self.candidate_opts or {})  # folder: branch_name + branch_restore cho candidate.create
         if self.memory_path:
@@ -1177,6 +1180,7 @@ def execute_pre_pr(plan: dict, *, ticket_id: int, checkout_source, deps, budget,
     if not reverify:
         from repositories import plan_session
         extra["plan_session"] = plan_session.get(plan_hash)
+        extra["approved"] = plan_session.get_approved(plan_hash)
     execution = (_Reverification if reverify else _Execution)(
         plan, ticket_id=ticket_id, checkout_source=checkout_source, deps=deps, budget=budget, run_gate=run_gate, cleanup=cleanup,
         catalog=catalog, request_detail=request_detail, memory_path=memory_path, should_stop=should_stop,

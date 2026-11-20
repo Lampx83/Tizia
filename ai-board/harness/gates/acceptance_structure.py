@@ -1,6 +1,7 @@
 """Feature acceptance as fixed structure: harness derives the browser check and the Vietnamese sentence the requester approves."""
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 
@@ -167,7 +168,8 @@ def unmet(state: dict) -> str | None:
     approved_checks = state.get("approved_checks")
     if not approved_checks:
         return None
-    if state.get("approved_pin") != checks.pin(state.get("plan")):
+    key = lambda items: sorted(json.dumps(item, sort_keys=True) for item in items)
+    if state.get("approved_pin") != checks.pin({"subtasks": [{"checks": approved_checks}]}) or key(approved_checks) != key(checks.collect(state.get("plan"))):
         return "approved checks changed after approval"
     rows = ((state.get("evidence") or {}).get("checks") or {}).get("rows") or []
     for check in approved_checks:
