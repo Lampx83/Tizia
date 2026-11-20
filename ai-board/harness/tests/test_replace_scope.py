@@ -55,7 +55,8 @@ def test_without_a_page_hint_the_model_picks_one_and_justifies(tmp_path):
     src = _repo(tmp_path)
     none_edited = best_match.old_literal_refusal(VAGUE, {"public/other.html"}, src, "HEAD")
     assert "chọn đúng một" in none_edited and "lý do" in none_edited and "không đổi file khác" in none_edited
-    assert best_match.old_literal_refusal(VAGUE, {SIBLING, SCRIPT}, src, "HEAD")
+    assert best_match.old_literal_refusal(VAGUE, {HOME, SIBLING}, src, "HEAD")
+    assert best_match.old_literal_refusal(VAGUE, {SIBLING, SCRIPT}, src, "HEAD") == ""
     assert best_match.old_literal_refusal(VAGUE, {SIBLING}, src, "HEAD") == ""
 
 
@@ -188,9 +189,9 @@ def test_colon_replace_needs_an_added_segment_equal_to_the_literal(tmp_path):
 
 def test_colon_reader_returns_nothing_when_unsure():
     none = []
-    assert _colon("Đổi tiêu đề thành: Bảng tập mới nhất nha.") == ["Bảng tập mới nhất"]
+    assert _colon("Đổi tiêu đề thành: Bảng tập mới nhất nha.") == none
     assert _colon("Đổi tiêu đề thành: Bảng tập mới nhất.", "Đổi thành: Bảng tập mới nhất nhé, cảm ơn.") == ["Bảng tập mới nhất."]
-    assert _colon("Đổi tiêu đề", "Đổi thành: Bảng mới. cảm ơn nha") == ["Bảng mới."]
+    assert _colon("Đổi tiêu đề", "Đổi thành: Bảng mới. cảm ơn nha") == none
     assert _colon("Đổi nút thành chữ khác, lưu ý: không đổi màu nút") == none
     assert _colon("Đổi nút bằng link: https://tizia.vn/khoa-hoc.") == none
     assert _colon("Đổi nút thành: https://tizia.vn/khoa-hoc.") == none
@@ -200,6 +201,61 @@ def test_colon_reader_returns_nothing_when_unsure():
     assert _colon("Đổi tiêu đề trang thành: Ôn tập Hóa 10. Còn nút thì để nguyên.") == none
     assert _colon("Đổi tiêu đề", "Đổi thành: Học ngay. Miễn phí cho mọi người.") == none
     assert _colon("Đổi tiêu đề", "Đổi thành: Bảng mới nhất. Mấy chỗ khác giữ nguyên nha.") == none
+
+
+def test_real_words_that_look_like_particles_are_kept():
+    for lit in ("Gửi đi", "Bắt đầu đi!", "Học cùng bạn với"):
+        assert _colon(f"Đổi chữ nút thành: {lit}") == [lit]
+    for lit in ("Cố lên nhé!", "Xin cảm ơn!", "Vâng ạ"):
+        assert _colon(f"Đổi chữ nút thành: {lit}") == []
+    assert _colon("Đổi chữ nhãn độ khó thành: Khó vừa.") == ["Khó vừa."]
+    assert _colon("Đổi chữ nút nền tảng thành: Bắt đầu.") == ["Bắt đầu."]
+    assert _colon("Đổi màu chữ thành: Xanh lá") == []
+
+
+def test_colon_literal_in_js_and_json_counts():
+    req = _ask(COLON_TITLE)
+    for old, new in (("-  {label: 'Chợ'},", "+  {label: 'Bảng tập mới nhất.'},"), ('-  "title": "Chợ",', '+  "title": "Bảng tập mới nhất.",'),
+                     ("-  html = `<h1>Chợ</h1>`;", "+  html = `<h1>Bảng tập mới nhất.</h1>`;")):
+        assert _misses(_diff("public/js/a.js", old, new), req) == [], new
+
+
+def test_keep_as_is_quote_is_not_a_pair():
+    body = "Trang pet có hai liên kết, cái '🌲 Rừng Chữ' đổi thành 'Ôn bài mỗi ngày.', cái '← Tizia' để nguyên ạ."
+    state = {"request_title": "Đổi chữ liên kết thứ hai trên trang pet", "request_detail": body}
+    assert functional.replace_pairs(state) == [(OLD, NEW)]
+    ok = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert static_check.literal_misses(state, ok) == []
+    odd = {"request_title": "Đổi chữ liên kết thứ hai trên trang pet", "request_detail": f"Cái '{OLD}' và cái '← Tizia' đổi thành chữ mới."}
+    assert functional.replace_pairs(odd) == []
+
+
+def test_several_places_are_not_one_file(tmp_path):
+    src = _repo(tmp_path)
+    for body in ("Ở trang vườn hoa và trang khu vực.", "Trên cả hai trang.", "Ở mọi nơi nhé.", "Everywhere please."):
+        assert best_match.old_literal_refusal(_ask(NAMED["subject"], body), {HOME, SIBLING}, src, "HEAD") == "", body
+    assert best_match.old_literal_refusal(_ask(f"Đổi tất cả chữ '{OLD}' thành '{NEW}'"), {HOME, SIBLING}, src, "HEAD") == ""
+    assert best_match.old_literal_refusal(NAMED, {HOME, SCRIPT}, src, "HEAD") == ""
+    conflict = _ask(NAMED["subject"], "Ở trang vườn hoa, liên kết dẫn tới khu-vuc.html.")
+    assert "chỉ sửa" not in best_match.old_literal_refusal(conflict, {HOME, SIBLING}, src, "HEAD")
+    assert "chỉ sửa " + SIBLING in best_match.old_literal_refusal(_ask(NAMED["subject"], "[Trang: Khu vực] /khu-vuc.html?tab=2"), {HOME}, src, "HEAD")
+
+
+def test_gate_4_leaves_multi_place_requests_alone():
+    text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(text, _ask(NAMED["subject"], "Ở trang vườn hoa và trang khu vực.")) == []
+    js = _diff(SCRIPT, f"-const MENU = [{{label: '{OLD}'}}];", f"+const MENU = [{{label: '{NEW}'}}];")
+    assert _misses(_diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + js) == []
+
+
+def test_attribute_replacement_ignores_other_attributes_and_reindents():
+    request = _ask(f"Đổi '{OLD}' thành '{NEW}'")
+    img = _diff(HOME, f'-<img alt="{OLD}" src=a.png>', f'+<img alt="{NEW}" src=a.png loading="lazy">')
+    assert _misses(img, request) == []
+    sibling = _diff(HOME, f"-    {LINK.strip()}", f"+  {LINK.strip()}", f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(sibling, request) == []
+    far = _diff(HOME, f"-{LINK.strip()}", "+<p>x</p>") + "@@ -40,2 +40,2 @@\n" + f'+<a class="back" href="/rung.html">{NEW}</a>\n'
+    assert _misses(far, request) == []
 
 
 def test_colon_reader_reads_every_pair_in_a_sentence():

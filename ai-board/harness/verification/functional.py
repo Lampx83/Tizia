@@ -84,7 +84,8 @@ def request_text(state):
     return text
 
 
-_PAIR_GAP = re.compile(r'\s*(?:thành|bằng|→|->|to)\s*', re.I)
+_PAIR_GAP = re.compile(r'\s*(?:(?:đổi|thay|chuyển)\s+)?(?:thành|bằng|→|->|to)\s*', re.I)
+_PAIR_CUE = re.compile(r'\b(?:thành|bằng|to)\b|→|->', re.I)
 _ANCHOR_CUE = re.compile(r'\b(?:sau|dưới|after|below)\s+(?:the\s+)?(?:dòng|câu|chữ|line|text)\s*$', re.I)
 # "Thêm dòng … : <text>": the text after the colon is the literal, to the end of the line, punctuation included
 _COLON_LITERAL = re.compile(r'^[^\S\n]*(?:thêm|chèn|add|insert)\b[^:\n]*?\b(?:dòng|câu|chữ|đoạn|line|text|sentence)\b'
@@ -94,18 +95,10 @@ _CUE = r'\b(?:đổi|thay|rename|change|replace)\b([^\n:]*?)\b(?:thành|bằng|t
 _REPLACE_COLON = re.compile(_CUE + r'([^\n]+)', re.I)
 _NEXT_CUE = re.compile(r'(?<=[.!?…])\s+(?:và\s+)?\b(?:đổi|thay|rename|change|replace)\b[^\n:]*?\b(?:thành|bằng|to|into)\s*:', re.I)
 _ANY_CUE = re.compile(r'\b(?:thành|bằng|to|into)\s*:', re.I)
-_STYLE_WORDS = re.compile(r'màu|color|colour|cỡ|size|kích thước|font|nền|background|chiều|độ ', re.I)
+_STYLE_WORDS = re.compile(r'màu|colou?r|cỡ chữ|font|kích thước chữ|background|font-size', re.I)
 _STYLE_VALUE = re.compile(r'#[0-9a-f]{3,8}\b|\b\d+(?:\.\d+)?\s?(?:px|rem|em|pt|%)|://|\bwww\.', re.I)
-_PARTICLE = re.compile(r'[\s,]+(?:nha|nhé|nhe|nhá|ạ|với|đi|cảm ơn|cám ơn|thanks|please)[\s.!…]*$', re.I)
+_PARTICLE = re.compile(r'(?:^|[\s,])(?:nha|nhé|nhe|nhá|ạ|cảm ơn|cám ơn|thanks|please)[\s.!…]*$', re.I)
 _BOUNDARY = re.compile(r'[.!?…]+\s+(?=[A-ZÀ-Ỹ])')
-
-
-def _clean_literal(text):
-    """Literal without trailing politeness particles; a particle also swallows the sentence's own final period."""
-    text = text.strip()
-    while (m := _PARTICLE.search(text)):
-        text = text[:m.start()].rstrip()
-    return text
 
 
 def _line_literals(line):
@@ -118,8 +111,8 @@ def _line_literals(line):
         nxt = _NEXT_CUE.search(rest)
         piece = rest[:nxt.start()] if nxt else rest
         pos = m.start(2) + len(piece)
-        lit = _clean_literal(piece)
-        if not 2 <= len(lit) <= 120 or _ANY_CUE.search(lit) or _STYLE_VALUE.search(lit):
+        lit = piece.strip()
+        if not 2 <= len(lit) <= 120 or _ANY_CUE.search(lit) or _STYLE_VALUE.search(lit) or _PARTICLE.search(lit):
             return None
         found.append((lit, bool(_BOUNDARY.search(lit))))
     return found
@@ -168,13 +161,16 @@ def _pairs(raw, loose=False):
     return list(dict.fromkeys((text(a), text(b)) for a, b in zip(found[::2], found[1::2])))
 
 
-_ALL_PAGES = re.compile(r'\b(?:mọi|tất cả(?: các)?|toàn bộ(?: các)?)\s+(?:trang|site|website)\b(?!\s+khác)'
-                        r'|\btrên toàn (?:site|website)\b|\b(?:every|all)(?: the)? pages\b(?!\s+else)', re.I)
+_ALL_PAGES = re.compile(r'\b(?:mọi|tất cả(?: các)?|toàn bộ(?: các)?)\s+(?:trang|site|website|nơi|chỗ|chữ)\b(?!\s+khác)'
+                        r'|\btrên toàn (?:site|website)\b|\bkhắp nơi\b|\bcả (?:hai|ba|bốn) trang\b|\beverywhere\b'
+                        r'|\b(?:every|all)(?: the)? pages\b(?!\s+else)', re.I)
+_PAGE_MENTION = re.compile(r'\b(?:trang|page)\s+(?!khác\b|else\b)\S', re.I)
 
 
 def all_pages(state):
-    """Request asks for the change on every page, in the user's own words (quoted text and 'other pages stay' excluded)."""
-    return bool(_ALL_PAGES.search(_QUOTED.sub(' ', _request_raw(state))))
+    """Request asks for the change in several places, in the user's own words: every page, everywhere, or two named pages."""
+    raw = _QUOTED.sub(' ', _request_raw(state))
+    return bool(_ALL_PAGES.search(raw)) or len(_PAGE_MENTION.findall(raw)) > 1
 
 
 def replace_pairs(state):
@@ -186,8 +182,15 @@ def replace_pairs(state):
     found = _pairs(raw, loose=True)
     if found:
         return found
-    want = text_expectation(state)
-    return [(want['absent'][0], want['present'][0])] if len(want['absent']) == 1 and len(want['present']) == 1 else []
+    text = lambda m: next(g for g in m.groups() if g)
+    quotes = list(_QUOTED.finditer(raw))
+    if len({text(m) for m in quotes}) != 2:
+        return []
+    a = quotes[0]
+    b = next((m for m in quotes if text(m) != text(a)), None)
+    if b is None or not _PAIR_CUE.search(raw[a.end():b.start()]) or _PAIR_CUE.search(raw[:a.start()]):
+        return []
+    return [(text(a), text(b))]
 
 
 def anchor(state):

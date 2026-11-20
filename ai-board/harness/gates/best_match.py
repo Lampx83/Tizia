@@ -62,35 +62,40 @@ _PAGE_LINE = re.compile(r"^\[Trang: .*\] (/\S+)[ \t]*$", re.M)
 _PAGE_STEM = re.compile(r"\btrang ([a-z0-9]+)\b")
 
 
-def _requested_page(request: dict, homes: list[str], source, sha: str) -> str | None:
-    """The one home the request points at. The user's own words come first (a path, a page named by title or link label,
-    'trang <first word of a file name>'); the [Trang: ...] line the feedback button adds is the last resort."""
+def _requested_page(request: dict, homes: list[str], source, sha: str) -> tuple[str | None, bool]:
+    """(the one home the request points at, request names several homes). The user's own words come first (a path, a page
+    named by title or link label, 'trang <first word of a file name>'); the [Trang: ...] line the feedback button adds is
+    the last resort. A signal matching several homes, or signals disagreeing, resolve no page."""
     body = str(request.get("body") or "")
     line = _PAGE_LINE.search(body)
     text = "\n".join((str(request.get("subject") or ""), _PAGE_LINE.sub("", body)))
     stems = [m.group(1) for m in _PAGE_STEM.finditer(text.casefold())]
     by_stem = [home for home in homes if re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1])[0] in stems]
-    by_line = ["public" + line.group(1)] if line and not line.group(1).startswith("//") else []
-    for found in (context._mentioned_files(text, source, sha), context._named_pages(text, source, sha), by_stem, by_line):
-        pages = [home for home in homes if home in found]
-        if len(pages) == 1:
-            return pages[0]
-    return None
+    by_line = ["public" + re.split(r"[?#]", line.group(1))[0]] if line and not line.group(1).startswith("//") else []
+    signals = [context._mentioned_files(text, source, sha), context._named_pages(text, source, sha), by_stem]
+    hits = [[home for home in homes if home in found] for found in signals]
+    if not any(hits):
+        hits = [[home for home in homes if home in by_line]]
+    several = functional.all_pages({"request_title": request.get("subject"), "request_detail": _PAGE_LINE.sub("", body)})
+    if any(len(pages) > 1 for pages in hits):
+        return None, True
+    resolved = {pages[0] for pages in hits if pages}
+    return (resolved.pop() if len(resolved) == 1 else None), several
 
 
 def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
-    """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several homes
-    when the request names one element; '' = allowed."""
+    """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several pages
+    when the request names one element; '' = allowed. Scripts are not pages: a page and its own script may both change."""
     if not sha or feature(request):
         return ""
-    everywhere = functional.all_pages({"request_title": request.get("subject"), "request_detail": request.get("body")})
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
         homes = target_confidence._grep_files(source, sha, old)
         if not homes:
             continue
         edited = set(homes) & set(targets)
-        page = _requested_page(request, homes, source, sha) if len(homes) > 1 else None
-        if edited and (len(homes) == 1 or everywhere or (len(edited) == 1 and page in (None, *edited))):
+        page, several = _requested_page(request, homes, source, sha) if len(homes) > 1 else (None, False)
+        pages = {home for home in edited if _PAGE.match(home)}
+        if edited and (len(homes) == 1 or several or len(pages) <= 1 and (page is None or pages == {page})):
             continue
         where = f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}"
         if len(homes) == 1:
