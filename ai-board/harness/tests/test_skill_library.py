@@ -113,3 +113,13 @@ def test_all_variants_together_select_one_per_class(monkeypatch):
     monkeypatch.setenv('AI_BOARD_SKILL_VARIANT', ','.join(LIBRARY))
     for name, (_, role, ctx, _, _) in LIBRARY.items():
         assert [s.name for s in default_skills.select(role, ctx) if s.name in default_skills.VARIANTS] == [name]
+
+
+def test_reviewer_fix_keeps_default_review_and_gets_no_unified_variant(monkeypatch):
+    from gates import reviewer_fix
+    monkeypatch.setenv('AI_BOARD_SKILL_VARIANT', 'review-unified,review-two-axes')
+    verdict = [s.name for s in default_skills.review_selection()]
+    assert 'review-unified' in verdict and 'default-review' not in verdict
+    fix = [s.name for s in default_skills.review_selection(fixing=True)]
+    assert 'default-review' in fix and 'review-unified' not in fix and 'review-two-axes' in fix
+    assert 'review_selection(fixing=True)' in open(reviewer_fix.__file__, encoding='utf-8').read()

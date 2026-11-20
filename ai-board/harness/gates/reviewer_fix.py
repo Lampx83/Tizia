@@ -58,7 +58,7 @@ def run(state: dict, deps, budget, findings: list[dict], *, db_path=None, propos
         return {'applied': False, 'reason': 'budget exhausted'}
     try:
         server_hsm.authorize_action('model')
-        selected = default_skills.review_selection()
+        selected = default_skills.review_selection(fixing=True)
         system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(selected) + default_skills.review_axes_block(selected)
         routing = getattr(deps.models, 'routing', None)
         role_extra, role_options = prompt_roles.call_params('gate4_review', routing, structured=True)

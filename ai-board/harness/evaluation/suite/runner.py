@@ -264,7 +264,7 @@ def cmd_run(args, deps=None) -> int:
         print(f"[suite] --skill-variant must be distinct names from {', '.join(VARIANT_FILES)}", file=sys.stderr)
         return 2
     if any(v.endswith("-unified") for v in variant) and not args.prompt_split:
-        print("[suite] *-unified skill variants reach gate 1/3 prompts only in split mode; add --prompt-split", file=sys.stderr)
+        print("[suite] *-unified skill variants (review-unified included) need --prompt-split so every gate 1/3/4 call carries them", file=sys.stderr)
         return 2
     os.environ["AI_BOARD_SKILL_VARIANT"] = ",".join(variant)
     os.environ["AI_BOARD_SKILL_PAD_CHARS"] = str(args.skill_pad_chars or "")

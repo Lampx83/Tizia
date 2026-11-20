@@ -120,10 +120,10 @@ def select(role, context=None):
     return select_report(role, context)[0]
 
 
-def review_selection():
+def review_selection(fixing=False):
     """gate 4 skills: node pick when AI_BOARD_SKILL_SELECT is on, else legacy select."""
     from services import skill_plan
-    return skill_plan.build('gate4_review', {}).skills if skill_plan.enabled() else select('gate4_review', {})
+    return skill_plan.build('gate4_review', {'fixing': fixing}).skills if skill_plan.enabled() else select('gate4_review', {'fixing': fixing})
 
 
 def select_report(role, context=None):
@@ -173,7 +173,7 @@ def select_report(role, context=None):
                 continue
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
-    variants = variant_candidates(role, task)
+    variants = variant_candidates(role, task, bool(context.get('fixing')))
     if any(c.name == f'{task}-unified' for c in variants):
         candidates = [c for c in candidates if c.name != task_skill.name]  # unified variant is the task-type rule set, not an add-on
     candidates += variants
@@ -191,12 +191,12 @@ def system_text(skills):
     return '\n\n'.join(_render(s.name, s.version, s.body) for s in skills if s.source == 'default')
 
 
-def variant_candidates(role, task=None):
+def variant_candidates(role, task=None, fixing=False):
     """Biến thể thử nghiệm (AI_BOARD_SKILL_VARIANT) qua node chọn; không tính cap, không đè skill khác."""
     if task == 'skill-authoring':
         return []
     review = role == 'gate4_review'
-    names = list(get_settings().skill_variant)
+    names = [n for n in get_settings().skill_variant if not (fixing and n.endswith('-unified'))]  # fix call keeps its edit-shaped default
     skills = [s for s in (parse(VARIANTS[n].read_bytes().decode('utf-8')) for n in names if n in VARIANTS)
               if review == ('review' in s.task_type) and (review or task in s.task_type or 'all' in s.task_type)]
     return [skill_selection.Candidate(s.name, 3, 'experiment variant (AI_BOARD_SKILL_VARIANT)', s.token_bound,
