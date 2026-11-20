@@ -1,0 +1,1188 @@
+{
+ "set": "tuning",
+ "expected_cases": 20,
+ "cases": {
+  "mf-t-fe-01-appeal-counter": {
+   "group": "frontend",
+   "request_vi": "Trang kháng nghị cần bộ đếm ký tự cho ô lý do. Trong public/appeal.html thêm phần tử id reason-count ngay sau ô lý do, trong public/js/appeal.js cập nhật nội dung phần tử đó theo dạng độ-dài/1000 mỗi khi người dùng gõ ở ô lý do. Không đổi phần còn lại.",
+   "files": [
+    "public/appeal.html",
+    "public/js/appeal.js"
+   ],
+   "literals": [
+    {
+     "file": "public/appeal.html",
+     "text": "id=\"reason-count\""
+    },
+    {
+     "file": "public/js/appeal.js",
+     "text": "$('reason').oninput"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/js/appeal.js",
+     "text": "$('appeal').onsubmit = async (e) =>"
+    },
+    {
+     "file": "public/appeal.html",
+     "text": "id=\"reason\""
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/js/appeal.js",
+     "use": "$('reason-count')",
+     "def_file": "public/appeal.html",
+     "def": "id=\"reason-count\""
+    }
+   ],
+   "fix": {
+    "public/appeal.html": [
+     [
+      "<textarea id=\"reason\" required minlength=\"10\" maxlength=\"1000\"></textarea></label>",
+      "<textarea id=\"reason\" required minlength=\"10\" maxlength=\"1000\"></textarea></label>\n        <span id=\"reason-count\" class=\"muted\">0/1000</span>"
+     ]
+    ],
+    "public/js/appeal.js": [
+     [
+      "$('appeal').onsubmit = async (e) => {",
+      "$('reason').oninput = () => { $('reason-count').textContent = `${$('reason').value.length}/1000`; };\n\n$('appeal').onsubmit = async (e) => {"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-02-shots-loading-text": {
+   "group": "frontend",
+   "request_vi": "Đổi chữ trạng thái đang tải của trang ảnh nháp từ \"Đang tải ảnh…\" thành \"Đang tải danh sách ảnh…\" ở cả public/admin-shots.html (nội dung ban đầu của #app) và public/js/admin-shots.js (lúc gọi load). Không đổi thông báo lỗi.",
+   "files": [
+    "public/admin-shots.html",
+    "public/js/admin-shots.js"
+   ],
+   "literals": [
+    {
+     "file": "public/admin-shots.html",
+     "text": "Đang tải danh sách ảnh…"
+    },
+    {
+     "file": "public/js/admin-shots.js",
+     "text": "Đang tải danh sách ảnh…"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/admin-shots.html",
+     "text": "Đang tải ảnh…"
+    },
+    {
+     "file": "public/js/admin-shots.js",
+     "text": "Đang tải ảnh…"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/js/admin-shots.js",
+     "text": "Không tải được ảnh (mã ${r.status})"
+    }
+   ],
+   "fix": {
+    "public/admin-shots.html": [
+     [
+      "<div id=\"app\"><p class=\"meta\" role=\"status\">Đang tải ảnh…</p></div>",
+      "<div id=\"app\"><p class=\"meta\" role=\"status\">Đang tải danh sách ảnh…</p></div>"
+     ]
+    ],
+    "public/js/admin-shots.js": [
+     [
+      "app.innerHTML = '<p class=\"meta\" role=\"status\">Đang tải ảnh…</p>';",
+      "app.innerHTML = '<p class=\"meta\" role=\"status\">Đang tải danh sách ảnh…</p>';"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-03-grants-pending-label": {
+   "group": "frontend",
+   "request_vi": "Trang quyền cộng tác gọi trạng thái chờ là \"Chờ duyệt\" nhưng tiêu đề mục là \"Yêu cầu mở rộng\". Đổi nhãn trạng thái pending trong public/js/ai-board-grants.js thành \"Chờ admin duyệt\" và tiêu đề mục trong public/ai-board-grants.html thành \"Yêu cầu chờ admin duyệt\".",
+   "files": [
+    "public/ai-board-grants.html",
+    "public/js/ai-board-grants.js"
+   ],
+   "literals": [
+    {
+     "file": "public/ai-board-grants.html",
+     "text": "<h2>Yêu cầu chờ admin duyệt</h2>"
+    },
+    {
+     "file": "public/js/ai-board-grants.js",
+     "text": "pending: 'Chờ admin duyệt'"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/ai-board-grants.html",
+     "text": "Yêu cầu mở rộng"
+    },
+    {
+     "file": "public/js/ai-board-grants.js",
+     "text": "pending: 'Chờ duyệt'"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/ai-board-grants.html",
+     "text": "id=\"reviews\""
+    },
+    {
+     "file": "public/js/ai-board-grants.js",
+     "text": "approved: 'Đã duyệt'"
+    }
+   ],
+   "fix": {
+    "public/ai-board-grants.html": [
+     [
+      "<h2>Yêu cầu mở rộng</h2>",
+      "<h2>Yêu cầu chờ admin duyệt</h2>"
+     ]
+    ],
+    "public/js/ai-board-grants.js": [
+     [
+      "pending: 'Chờ duyệt'",
+      "pending: 'Chờ admin duyệt'"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-04-parent-unranked-label": {
+   "group": "frontend",
+   "request_vi": "Nhãn khi con chưa có hạng liên đoàn đang là \"Chưa xếp hạng\" ở cả public/parent/dashboard.html và public/parent/report.html. Đổi cả hai thành \"Chưa có hạng\", không đổi chỗ khác.",
+   "files": [
+    "public/parent/dashboard.html",
+    "public/parent/report.html"
+   ],
+   "literals": [
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "'Chưa có hạng'"
+    },
+    {
+     "file": "public/parent/report.html",
+     "text": "'Chưa có hạng'"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "Chưa xếp hạng"
+    },
+    {
+     "file": "public/parent/report.html",
+     "text": "Chưa xếp hạng"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "TIER_LABEL[lg.tier]"
+    },
+    {
+     "file": "public/parent/report.html",
+     "text": "R.league?.tier?.label"
+    }
+   ],
+   "fix": {
+    "public/parent/dashboard.html": [
+     [
+      "'Chưa xếp hạng'",
+      "'Chưa có hạng'"
+     ]
+    ],
+    "public/parent/report.html": [
+     [
+      "'Chưa xếp hạng'",
+      "'Chưa có hạng'"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-05-pricing-year-free-months": {
+   "group": "frontend",
+   "request_vi": "Dòng ghi chú giá năm trong public/pricing.html có số \"2 tháng\" viết cứng. Xuất hằng số YEAR_FREE_MONTHS = 2 từ public/js/plans.js, import nó trong public/pricing.html và dùng trong chuỗi \"tiết kiệm ... tháng\".",
+   "files": [
+    "public/js/plans.js",
+    "public/pricing.html"
+   ],
+   "literals": [
+    {
+     "file": "public/js/plans.js",
+     "text": "export const YEAR_FREE_MONTHS = 2;"
+    },
+    {
+     "file": "public/pricing.html",
+     "text": "tiết kiệm ${YEAR_FREE_MONTHS} tháng"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/pricing.html",
+     "text": "· tiết kiệm 2 tháng"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/pricing.html",
+     "text": "fmtVnd(perMo)"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/pricing.html",
+     "use": "${YEAR_FREE_MONTHS}",
+     "def_file": "public/js/plans.js",
+     "def": "export const YEAR_FREE_MONTHS = 2"
+    }
+   ],
+   "fix": {
+    "public/js/plans.js": [
+     [
+      "/** Format giá: 79000 → \"79.000đ\". */",
+      "/** Số tháng miễn phí khi trả theo năm. */\nexport const YEAR_FREE_MONTHS = 2;\n\n/** Format giá: 79000 → \"79.000đ\". */"
+     ]
+    ],
+    "public/pricing.html": [
+     [
+      "import { USER_PLANS, PLAN_BADGES, fmtVnd, effectivePlanId } from './js/plans.js';",
+      "import { USER_PLANS, PLAN_BADGES, fmtVnd, effectivePlanId, YEAR_FREE_MONTHS } from './js/plans.js';"
+     ],
+     [
+      "· tiết kiệm 2 tháng",
+      "· tiết kiệm ${YEAR_FREE_MONTHS} tháng"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-06-sso-divider-text": {
+   "group": "frontend",
+   "request_vi": "Chữ ngăn cách trước các nút SSO là \"hoặc tiếp tục với\" cho cả hai trang. Thêm tham số dividerText (mặc định giữ chữ cũ) cho renderSso trong public/js/sso.js, rồi public/login.html truyền \"hoặc đăng nhập bằng\" và public/register.html truyền \"hoặc đăng ký bằng\".",
+   "files": [
+    "public/js/sso.js",
+    "public/login.html",
+    "public/register.html"
+   ],
+   "literals": [
+    {
+     "file": "public/login.html",
+     "text": "dividerText: 'hoặc đăng nhập bằng'"
+    },
+    {
+     "file": "public/register.html",
+     "text": "dividerText: 'hoặc đăng ký bằng'"
+    },
+    {
+     "file": "public/js/sso.js",
+     "text": "<div class=\"sso-divider\">${dividerText}</div>"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/js/sso.js",
+     "text": "<div class=\"sso-divider\">hoặc tiếp tục với</div>"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/js/sso.js",
+     "text": "dividerText = 'hoặc tiếp tục với'"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/login.html",
+     "use": "dividerText:",
+     "def_file": "public/js/sso.js",
+     "def": "dividerText\\s*="
+    },
+    {
+     "use_file": "public/register.html",
+     "use": "dividerText:",
+     "def_file": "public/js/sso.js",
+     "def": "dividerText\\s*="
+    }
+   ],
+   "fix": {
+    "public/js/sso.js": [
+     [
+      "export async function renderSso({ blockId = 'sso-block', returnQuery = '' } = {}) {",
+      "export async function renderSso({ blockId = 'sso-block', returnQuery = '', dividerText = 'hoặc tiếp tục với' } = {}) {"
+     ],
+     [
+      "const divider = `<div class=\"sso-divider\">hoặc tiếp tục với</div>`;",
+      "const divider = `<div class=\"sso-divider\">${dividerText}</div>`;"
+     ]
+    ],
+    "public/login.html": [
+     [
+      "renderSso({ returnQuery: rq });",
+      "renderSso({ returnQuery: rq, dividerText: 'hoặc đăng nhập bằng' });"
+     ]
+    ],
+    "public/register.html": [
+     [
+      "renderSso({ returnQuery: rq });",
+      "renderSso({ returnQuery: rq, dividerText: 'hoặc đăng ký bằng' });"
+     ]
+    ]
+   }
+  },
+  "mf-t-fe-07-parent-report-link": {
+   "group": "frontend",
+   "request_vi": "Trang theo dõi của phụ huynh chưa có đường vào báo cáo tuần. Thêm liên kết \"📄 Báo cáo tuần →\" tới /parent/report.html cạnh nút về trang chủ trong public/parent/dashboard.html, và đổi nút quay lại trong public/parent/report.html thành \"← Dashboard phụ huynh\" (vẫn trỏ /parent/dashboard.html).",
+   "files": [
+    "public/parent/dashboard.html",
+    "public/parent/report.html"
+   ],
+   "literals": [
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "href=\"/parent/report.html\">📄 Báo cáo tuần →</a>"
+    },
+    {
+     "file": "public/parent/report.html",
+     "text": "← Dashboard phụ huynh</a>"
+    }
+   ],
+   "gone": [
+    {
+     "file": "public/parent/report.html",
+     "text": "← Dashboard</a>"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/parent/report.html",
+     "text": "href=\"/parent/dashboard.html\""
+    },
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "href=\"/index.html\">← Trang chủ</a>"
+    }
+   ],
+   "fix": {
+    "public/parent/dashboard.html": [
+     [
+      "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>",
+      "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>\n  <a class=\"back\" href=\"/parent/report.html\">📄 Báo cáo tuần →</a>"
+     ]
+    ],
+    "public/parent/report.html": [
+     [
+      "← Dashboard</a>",
+      "← Dashboard phụ huynh</a>"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-01-plus-ai-quota": {
+   "group": "frontend_backend",
+   "request_vi": "Hạn mức AI mỗi ngày của gói Plus đổi từ 50 lên 60 lượt. Sửa server/contexts/billing/user-plans.js, public/js/plans.js (bản sao phía trình duyệt) và dòng tính năng trong public/pricing.html cho khớp. Không đổi gói khác.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "public/js/plans.js",
+    "public/pricing.html"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 60,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 60,"
+    },
+    {
+     "file": "public/pricing.html",
+     "text": "'60 lượt AI gợi ý cơ bản/ngày'"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 50,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 50,"
+    },
+    {
+     "file": "public/pricing.html",
+     "text": "'50 lượt AI gợi ý cơ bản/ngày'"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 300,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 300,"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "ai_calls_day: 50,",
+      "ai_calls_day: 60,"
+     ]
+    ],
+    "public/js/plans.js": [
+     [
+      "ai_calls_day: 50,",
+      "ai_calls_day: 60,"
+     ]
+    ],
+    "public/pricing.html": [
+     [
+      "'50 lượt AI gợi ý cơ bản/ngày'",
+      "'60 lượt AI gợi ý cơ bản/ngày'"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-02-free-ai-quota": {
+   "group": "frontend_backend",
+   "request_vi": "Hạn mức AI mỗi ngày của gói Miễn phí đổi từ 20 lên 30 lượt. Sửa server/contexts/billing/user-plans.js, public/js/plans.js (bản sao phía trình duyệt) và dòng tính năng trong public/pricing.html cho khớp. Không đổi gói khác.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "public/js/plans.js",
+    "public/pricing.html"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 30,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 30,"
+    },
+    {
+     "file": "public/pricing.html",
+     "text": "'30 lượt AI/ngày'"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 20,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 20,"
+    },
+    {
+     "file": "public/pricing.html",
+     "text": "'20 lượt AI/ngày'"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "ai_calls_day: 50,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "ai_calls_day: 50,"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "ai_calls_day: 20,",
+      "ai_calls_day: 30,"
+     ]
+    ],
+    "public/js/plans.js": [
+     [
+      "ai_calls_day: 20,",
+      "ai_calls_day: 30,"
+     ]
+    ],
+    "public/pricing.html": [
+     [
+      "'20 lượt AI/ngày'",
+      "'30 lượt AI/ngày'"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-03-plus-price": {
+   "group": "frontend_backend",
+   "request_vi": "Giá gói Plus tăng lên 89.000đ/tháng và 890.000đ/năm. Sửa cả server/contexts/billing/user-plans.js (nguồn tính tiền) và public/js/plans.js (bản sao hiển thị), chỉ gói Plus.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "public/js/plans.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "price_month_vnd: 89_000,"
+    },
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "price_year_vnd: 890_000,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "price_month_vnd: 89_000,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "price_year_vnd: 890_000,"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "price_month_vnd: 79_000"
+    },
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "price_year_vnd: 790_000"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "price_month_vnd: 79_000"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "price_year_vnd: 790_000"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "price_month_vnd: 149_000,"
+    },
+    {
+     "file": "public/js/plans.js",
+     "text": "price_month_vnd: 149_000,"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "price_month_vnd: 79_000,",
+      "price_month_vnd: 89_000,"
+     ],
+     [
+      "price_year_vnd: 790_000,",
+      "price_year_vnd: 890_000,"
+     ]
+    ],
+    "public/js/plans.js": [
+     [
+      "price_month_vnd: 79_000,",
+      "price_month_vnd: 89_000,"
+     ],
+     [
+      "price_year_vnd: 790_000,",
+      "price_year_vnd: 890_000,"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-04-pet-nickname-length": {
+   "group": "frontend_backend",
+   "request_vi": "Biệt danh pet giới hạn 24 ký tự ở server nhưng client không cắt trước. Hạ giới hạn xuống 20 ký tự trong server/contexts/engagement/pet.js và cắt tên còn 20 ký tự (sau trim) trước khi gửi trong public/js/pet-widget.js.",
+   "files": [
+    "server/contexts/engagement/pet.js",
+    "public/js/pet-widget.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/engagement/pet.js",
+     "text": ".trim().slice(0, 20);"
+    },
+    {
+     "file": "public/js/pet-widget.js",
+     "text": "nickname: name.trim().slice(0, 20)"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/engagement/pet.js",
+     "text": ".trim().slice(0, 24);"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/engagement/pet.js",
+     "text": "'/api/pet/nickname'"
+    },
+    {
+     "file": "public/js/pet-widget.js",
+     "text": "'/api/pet/nickname'"
+    }
+   ],
+   "fix": {
+    "server/contexts/engagement/pet.js": [
+     [
+      ".trim().slice(0, 24);",
+      ".trim().slice(0, 20);"
+     ]
+    ],
+    "public/js/pet-widget.js": [
+     [
+      "body: JSON.stringify({ nickname: name }), credentials",
+      "body: JSON.stringify({ nickname: name.trim().slice(0, 20) }), credentials"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-05-parent-children-count": {
+   "group": "frontend_backend",
+   "request_vi": "API /api/parent/dashboard cần trả thêm children_count (số con), và public/parent/dashboard.html hiển thị dòng \"Đang theo dõi N con\" phía trên lưới thẻ con dùng giá trị đó. Sửa server/contexts/engagement/parent.js và public/parent/dashboard.html.",
+   "files": [
+    "server/contexts/engagement/parent.js",
+    "public/parent/dashboard.html"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "text": "children_count: items.length"
+    },
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "Đang theo dõi ${d.children_count} con"
+    }
+   ],
+   "keep": [
+    {
+     "file": "public/parent/dashboard.html",
+     "text": "renderChild(c)"
+    },
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "text": "children: items"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/parent/dashboard.html",
+     "use": "d.children_count",
+     "def_file": "server/contexts/engagement/parent.js",
+     "def": "children_count:"
+    }
+   ],
+   "fix": {
+    "server/contexts/engagement/parent.js": [
+     [
+      "res.json({ ok: true, parent: { id: req.user.id, display_name: req.user.display_name }, children: items });",
+      "res.json({ ok: true, parent: { id: req.user.id, display_name: req.user.display_name }, children: items, children_count: items.length });"
+     ]
+    ],
+    "public/parent/dashboard.html": [
+     [
+      "let html = '<div class=\"children-grid\">';",
+      "let html = `<p class=\"child-count\">Đang theo dõi ${d.children_count} con</p><div class=\"children-grid\">`;"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-06-srs-accuracy": {
+   "group": "frontend_backend",
+   "request_vi": "Màn thống kê SRS cần thêm tỉ lệ đúng. /api/srs/stats trong server/contexts/srs/index.js trả thêm accuracy_pct (trung bình last_correct x 100, làm tròn) và public/srs.html thêm thẻ \"Tỉ lệ đúng\" hiển thị giá trị đó sau thẻ EF TB.",
+   "files": [
+    "server/contexts/srs/index.js",
+    "public/srs.html"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/srs/index.js",
+     "text": "ROUND(AVG(last_correct) * 100) AS accuracy_pct"
+    },
+    {
+     "file": "public/srs.html",
+     "text": "<div class=\"l\">Tỉ lệ đúng</div>"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/srs/index.js",
+     "text": "AVG(ease) AS avg_ease"
+    },
+    {
+     "file": "public/srs.html",
+     "text": "<div class=\"l\">EF TB</div>"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/srs.html",
+     "use": "s.accuracy_pct",
+     "def_file": "server/contexts/srs/index.js",
+     "def": "AS accuracy_pct"
+    }
+   ],
+   "fix": {
+    "server/contexts/srs/index.js": [
+     [
+      "AVG(ease) AS avg_ease",
+      "AVG(ease) AS avg_ease,\n             ROUND(AVG(last_correct) * 100) AS accuracy_pct"
+     ]
+    ],
+    "public/srs.html": [
+     [
+      "<div class=\"l\">EF TB</div></div>",
+      "<div class=\"l\">EF TB</div></div>\n      <div class=\"stat-card\"><div class=\"v\">${s.accuracy_pct ?? 0}%</div><div class=\"l\">Tỉ lệ đúng</div></div>"
+     ]
+    ]
+   }
+  },
+  "mf-t-fb-07-shots-page-size": {
+   "group": "frontend_backend",
+   "request_vi": "Trang ảnh nháp cần biết cỡ trang. listShotGroups trong server/contexts/ai-board-shots/index.js trả thêm page_size (giá trị PAGE_SIZE) ở mọi nhánh trả về, và public/js/admin-shots.js hiển thị \"· N/trang\" cạnh tổng số yêu cầu có ảnh.",
+   "files": [
+    "server/contexts/ai-board-shots/index.js",
+    "public/js/admin-shots.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/ai-board-shots/index.js",
+     "text": "total, page_size: PAGE_SIZE, groups: ids.map"
+    },
+    {
+     "file": "public/js/admin-shots.js",
+     "text": "${size}/trang"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/ai-board-shots/index.js",
+     "text": "export const PAGE_SIZE = 10"
+    },
+    {
+     "file": "public/js/admin-shots.js",
+     "text": "data-page="
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "public/js/admin-shots.js",
+     "use": "page_size: size",
+     "def_file": "server/contexts/ai-board-shots/index.js",
+     "def": "page_size: PAGE_SIZE"
+    }
+   ],
+   "fix": {
+    "server/contexts/ai-board-shots/index.js": [
+     [
+      "return { page: current, pages, total, groups: [] };",
+      "return { page: current, pages, total, page_size: PAGE_SIZE, groups: [] };"
+     ],
+     [
+      "return { page: current, pages, total, groups: ids.map",
+      "return { page: current, pages, total, page_size: PAGE_SIZE, groups: ids.map"
+     ]
+    ],
+    "public/js/admin-shots.js": [
+     [
+      "function render({ page: current, pages, total, groups }) {",
+      "function render({ page: current, pages, total, page_size: size, groups }) {"
+     ],
+     [
+      "${total} yêu cầu có ảnh</span>",
+      "${total} yêu cầu có ảnh · ${size}/trang</span>"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-01-plan-name-auth-billing": {
+   "group": "backend",
+   "request_vi": "Biểu thức USER_PLANS[id]?.name || id lặp ở nhiều context. Thêm hàm xuất planName(planId) vào server/contexts/billing/user-plans.js (id lạ trả lại id), rồi dùng nó cho thông báo plan_required trong server/contexts/identity/auth.js và thông báo chia sẻ gói trong server/contexts/billing/index.js.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "server/contexts/identity/auth.js",
+    "server/contexts/billing/index.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/identity/auth.js",
+     "text": "${planName(minPlan)}"
+    },
+    {
+     "file": "server/contexts/billing/index.js",
+     "text": "${planName(meEff)}"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/identity/auth.js",
+     "text": "USER_PLANS[minPlan]?.name"
+    },
+    {
+     "file": "server/contexts/billing/index.js",
+     "text": "USER_PLANS_B2C[meEff]?.name"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "server/contexts/identity/auth.js",
+     "use": "planName(minPlan)",
+     "def_file": "server/contexts/billing/user-plans.js",
+     "def": "export function planName\\("
+    },
+    {
+     "use_file": "server/contexts/billing/index.js",
+     "use": "planName(meEff)",
+     "def_file": "server/contexts/billing/user-plans.js",
+     "def": "export function planName\\("
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "def": "export function planName\\(planId\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "/** Quota AI mỗi ngày theo plan (cho ai-quota module map vào perUserPerHour). */",
+      "/** Tên hiển thị của plan; id lạ trả lại chính id. */\nexport function planName(planId) {\n  return USER_PLANS[planId]?.name || planId;\n}\n\n/** Quota AI mỗi ngày theo plan (cho ai-quota module map vào perUserPerHour). */"
+     ]
+    ],
+    "server/contexts/identity/auth.js": [
+     [
+      "import { effectivePlan, effectivePlanWithFamily, meetsPlan, USER_PLANS } from '../billing/user-plans.js';",
+      "import { effectivePlan, effectivePlanWithFamily, meetsPlan, USER_PLANS, planName } from '../billing/user-plans.js';"
+     ],
+     [
+      "${USER_PLANS[minPlan]?.name || minPlan}",
+      "${planName(minPlan)}"
+     ]
+    ],
+    "server/contexts/billing/index.js": [
+     [
+      "import { USER_PLANS as USER_PLANS_B2C } from './user-plans.js';",
+      "import { USER_PLANS as USER_PLANS_B2C, planName } from './user-plans.js';"
+     ],
+     [
+      "${USER_PLANS_B2C[meEff]?.name || meEff}",
+      "${planName(meEff)}"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-02-payment-plan-label": {
+   "group": "backend",
+   "request_vi": "Mô tả đơn nâng cấp trong server/contexts/payment/index.js tự tra tên plan bằng USER_PLANS[...]?.name. Thêm hàm xuất planName(planId) vào server/contexts/billing/user-plans.js (id lạ trả lại id) và dùng nó ở đó; biến cục bộ đổi tên thành planLabel.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "server/contexts/payment/index.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/payment/index.js",
+     "text": "const planLabel = planName(planReq);"
+    },
+    {
+     "file": "server/contexts/payment/index.js",
+     "text": "Tizia ${planLabel} —"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/payment/index.js",
+     "text": "const planName = USER_PLANS"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "server/contexts/payment/index.js",
+     "use": "planName(planReq)",
+     "def_file": "server/contexts/billing/user-plans.js",
+     "def": "export function planName\\("
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "def": "export function planName\\(planId\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "/** Quota AI mỗi ngày theo plan (cho ai-quota module map vào perUserPerHour). */",
+      "/** Tên hiển thị của plan; id lạ trả lại chính id. */\nexport function planName(planId) {\n  return USER_PLANS[planId]?.name || planId;\n}\n\n/** Quota AI mỗi ngày theo plan (cho ai-quota module map vào perUserPerHour). */"
+     ]
+    ],
+    "server/contexts/payment/index.js": [
+     [
+      "import { VALID_USER_PLANS, priceFor, expiresAtFor, USER_PLANS } from '../billing/user-plans.js';",
+      "import { VALID_USER_PLANS, priceFor, expiresAtFor, USER_PLANS, planName } from '../billing/user-plans.js';"
+     ],
+     [
+      "const planName = USER_PLANS[planReq]?.name || planReq;",
+      "const planLabel = planName(planReq);"
+     ],
+     [
+      "description = `Tizia ${planName} —",
+      "description = `Tizia ${planLabel} —"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-03-overall-mastery-shared": {
+   "group": "backend",
+   "request_vi": "Báo cáo tuần và dashboard phụ huynh cùng chép công thức mastery tổng. Xuất hàm overallMasteryPct(tree) từ server/contexts/engagement/parent.js (trung bình mastery_pct của competency có skill đã đạt, 0 nếu chưa có) và để server/contexts/parent-report/index.js import và dùng nó thay cho khối tính tay; dashboard cũng dùng hàm này.",
+   "files": [
+    "server/contexts/engagement/parent.js",
+    "server/contexts/parent-report/index.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/parent-report/index.js",
+     "text": "import { overallMasteryPct } from '../engagement/parent.js';"
+    },
+    {
+     "file": "server/contexts/parent-report/index.js",
+     "text": "overallMasteryPct(tree)"
+    },
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "text": "overallMasteryPct(tree)"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/parent-report/index.js",
+     "text": "hasEarned"
+    },
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "text": "hasEarned"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/parent-report/index.js",
+     "text": "new_this_week: newThisWeek"
+    },
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "text": "overall_mastery_pct: overallMastery"
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/engagement/parent.js",
+     "def": "export function overallMasteryPct\\(tree\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/engagement/parent.js": [
+     [
+      "async function summarizeChild(child) {",
+      "/** Trung bình mastery_pct của competency có skill đã đạt; 0 nếu chưa có. */\nexport function overallMasteryPct(tree) {\n  const earned = tree.filter(t => t.earned_skills.length > 0);\n  return earned.length > 0\n    ? Math.round(earned.reduce((s, t) => s + (t.mastery_pct || 0), 0) / earned.length)\n    : 0;\n}\n\nasync function summarizeChild(child) {"
+     ],
+     [
+      "    const hasEarned = tree.filter(t => t.earned_skills.length > 0);\n    const overallMastery = hasEarned.length > 0\n      ? Math.round(hasEarned.reduce((s, t) => s + (t.mastery_pct || 0), 0) / hasEarned.length)\n      : 0;",
+      "    const overallMastery = overallMasteryPct(tree);"
+     ]
+    ],
+    "server/contexts/parent-report/index.js": [
+     [
+      "import { getLeagueBoardForUser } from '../engagement/league.js';",
+      "import { getLeagueBoardForUser } from '../engagement/league.js';\nimport { overallMasteryPct } from '../engagement/parent.js';"
+     ],
+     [
+      "    const hasEarned = tree.filter(t => t.earned_skills.length > 0);\n    const overallMastery = hasEarned.length > 0\n      ? Math.round(hasEarned.reduce((s, t) => s + (t.mastery_pct || 0), 0) / hasEarned.length)\n      : 0;",
+      "    const overallMastery = overallMasteryPct(tree);"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-04-ledger-revenue": {
+   "group": "backend",
+   "request_vi": "Đối soát tự đảo dấu số dư tài khoản revenue. Thêm hàm xuất getRevenue() vào server/contexts/payment/ledger.js (doanh thu ghi sổ, số dương) và để server/contexts/payment/reconcile.js import và dùng nó thay cho -await getBalance(`revenue`).",
+   "files": [
+    "server/contexts/payment/ledger.js",
+    "server/contexts/payment/reconcile.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/payment/reconcile.js",
+     "text": "const revenueLedger = await getRevenue();"
+    },
+    {
+     "file": "server/contexts/payment/reconcile.js",
+     "text": "import { recordRefund, getRevenue } from './ledger.js';"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/payment/reconcile.js",
+     "text": "getBalance"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/payment/reconcile.js",
+     "text": "export async function reconcile()"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "server/contexts/payment/reconcile.js",
+     "use": "await getRevenue()",
+     "def_file": "server/contexts/payment/ledger.js",
+     "def": "export async function getRevenue\\("
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/payment/ledger.js",
+     "def": "export async function getRevenue\\(\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/payment/ledger.js": [
+     [
+      "export async function getAllBalances() {",
+      "/** Doanh thu ghi sổ (VND, dương). */\nexport async function getRevenue() {\n  return -await getBalance('revenue');\n}\n\nexport async function getAllBalances() {"
+     ]
+    ],
+    "server/contexts/payment/reconcile.js": [
+     [
+      "import { recordRefund, getBalance } from './ledger.js';",
+      "import { recordRefund, getRevenue } from './ledger.js';"
+     ],
+     [
+      "const revenueLedger = -await getBalance(`revenue`); // revenue là credit (âm) → đảo dấu",
+      "const revenueLedger = await getRevenue();"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-05-content-collection-keys": {
+   "group": "backend",
+   "request_vi": "Thêm hàm đọc collectionKeys(collection) vào server/contexts/content/index.js (mảng item_key đang active, sắp theo ord rồi item_key), khai báo nó trong 'provides' của plugin, và đưa vào bề mặt content của server/contexts/capabilities.js cạnh getCollection và collectionCount.",
+   "files": [
+    "server/contexts/content/index.js",
+    "server/contexts/capabilities.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/capabilities.js",
+     "text": "content: { getCollection, collectionCount, collectionKeys },"
+    },
+    {
+     "file": "server/contexts/content/index.js",
+     "text": "'content.collectionKeys'"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/content/index.js",
+     "text": "export async function getCollection(collection)"
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "server/contexts/capabilities.js",
+     "use": "collectionKeys }",
+     "def_file": "server/contexts/content/index.js",
+     "def": "export async function collectionKeys\\("
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/content/index.js",
+     "def": "export async function collectionKeys\\(collection\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/content/index.js": [
+     [
+      "export async function attachContent(router) {",
+      "const keysCollStmt = db.prepare(`SELECT item_key FROM content_datasets WHERE collection = ? AND active = 1 ORDER BY ord, item_key`);\n\nexport async function collectionKeys(collection) {\n  return (await keysCollStmt.all(collection)).map(r => r.item_key);\n}\n\nexport async function attachContent(router) {"
+     ],
+     [
+      "'content.collectionCount', '/api/content/*'",
+      "'content.collectionCount', 'content.collectionKeys', '/api/content/*'"
+     ]
+    ],
+    "server/contexts/capabilities.js": [
+     [
+      "import { getCollection, collectionCount } from './content/index.js';",
+      "import { getCollection, collectionCount, collectionKeys } from './content/index.js';"
+     ],
+     [
+      "content: { getCollection, collectionCount },",
+      "content: { getCollection, collectionCount, collectionKeys },"
+     ]
+    ]
+   }
+  },
+  "mf-t-be-06-payment-cycle-normalizer": {
+   "group": "backend",
+   "request_vi": "Chu kỳ thanh toán đang được chuẩn hoá tại chỗ trong server/contexts/payment/index.js. Thêm hàm xuất normalizeCycle(cycle) vào server/contexts/billing/user-plans.js (trả 'year' nếu đúng 'year', còn lại 'month') và dùng nó khi đọc req.body.cycle.",
+   "files": [
+    "server/contexts/billing/user-plans.js",
+    "server/contexts/payment/index.js"
+   ],
+   "literals": [
+    {
+     "file": "server/contexts/payment/index.js",
+     "text": "const cycle = normalizeCycle(req.body?.cycle);"
+    }
+   ],
+   "gone": [
+    {
+     "file": "server/contexts/payment/index.js",
+     "text": "['month', 'year'].includes(req.body?.cycle)"
+    }
+   ],
+   "keep": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "text": "export function priceFor("
+    }
+   ],
+   "refs": [
+    {
+     "use_file": "server/contexts/payment/index.js",
+     "use": "normalizeCycle(req.body?.cycle)",
+     "def_file": "server/contexts/billing/user-plans.js",
+     "def": "export function normalizeCycle\\("
+    }
+   ],
+   "defined": [
+    {
+     "file": "server/contexts/billing/user-plans.js",
+     "def": "export function normalizeCycle\\(cycle\\)"
+    }
+   ],
+   "fix": {
+    "server/contexts/billing/user-plans.js": [
+     [
+      "/** Tính amount VNĐ cho 1 đơn upgrade. cycle='month'|'year'. */",
+      "/** Chu kỳ hợp lệ: 'year' hoặc 'month' mặc định. */\nexport function normalizeCycle(cycle) {\n  return cycle === 'year' ? 'year' : 'month';\n}\n\n/** Tính amount VNĐ cho 1 đơn upgrade. cycle='month'|'year'. */"
+     ]
+    ],
+    "server/contexts/payment/index.js": [
+     [
+      "import { VALID_USER_PLANS, priceFor, expiresAtFor, USER_PLANS } from '../billing/user-plans.js';",
+      "import { VALID_USER_PLANS, priceFor, expiresAtFor, USER_PLANS, normalizeCycle } from '../billing/user-plans.js';"
+     ],
+     [
+      "const cycle = ['month', 'year'].includes(req.body?.cycle) ? req.body.cycle : 'month';",
+      "const cycle = normalizeCycle(req.body?.cycle);"
+     ]
+    ]
+   }
+  }
+ }
+}
