@@ -337,3 +337,11 @@ def test_role_neg_expands_admin_cases_into_student_variants(tmp_path, monkeypatc
     out = driver.resolve_cases("role-neg:all")
     assert [c["id"] for c in out] == ["c1@student"] and out[0]["expect_refusal"] and out[0]["title"] == "t"
     assert driver.resolve_cases("c1@student")[0]["expect_refusal"]
+
+
+def test_model_seed_is_fixed_per_case_across_rounds(monkeypatch):
+    monkeypatch.delenv("AB_MODEL_SEED", raising=False)
+    assert driver.model_seed("replace_text-l1-x") is None
+    monkeypatch.setenv("AB_MODEL_SEED", "7")
+    a, b = driver.model_seed("replace_text-l1-x"), driver.model_seed("css_color-l1-y")
+    assert isinstance(a, int) and a != b and driver.model_seed("replace_text-l1-x") == a

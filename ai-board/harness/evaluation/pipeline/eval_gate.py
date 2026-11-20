@@ -33,6 +33,11 @@ def key(r) -> tuple:
     return (r["case"], r["repeat"], r.get("seed"))
 
 
+def pair_key(trial: dict) -> tuple:
+    """(case, model seed) a trial pairs on across rounds."""
+    return (trial.get("case"), trial.get("model_seed", trial.get("seed")))
+
+
 def slice_of(case: dict) -> dict:
     return {"types": sorted(case.get("types") or []), "level": case.get("level"), "tier": case.get("tier"),
             "attack": criteria.is_attack(case)}
@@ -45,7 +50,7 @@ def enrich(rows, trial_dir, cases: dict) -> list[dict]:
         if r["trial"] not in seeds:
             p = Path(trial_dir) / f"{r['trial']}.json"
             t = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-            seeds[r["trial"]] = t.get("model_seed", t.get("seed"))
+            seeds[r["trial"]] = pair_key(t)[1] if t else r.get("seed")
         out.append({**r, "seed": seeds[r["trial"]], **(slice_of(cases[r["case"]]) if r["case"] in cases else {})})
     return out
 

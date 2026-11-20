@@ -581,6 +581,15 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def model_seed(case_id: str) -> int | None:
+    """Per-case seed from AB_MODEL_SEED; None when unset."""
+    run = os.environ.get("AB_MODEL_SEED")
+    if not run:
+        return None
+    # no round number in it: rounds must pair on (case, seed) in eval_gate
+    return int.from_bytes(hashlib.sha256(f"{int(run)}/{case_id}".encode()).digest()[:4], "big") & 0x7FFFFFFF
+
+
 def current_pin() -> str:
     """Worktree HEAD the worker image was built from; every trial records it so pins never mix."""
     try:
@@ -1170,7 +1179,7 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
                                                   [r.get("created_at") for r in data.get("runs") or []])
     return {
         "pin": current_pin(),
-        "arm": arm, "case": case_id, "repeat": repeat, "owner": owner,
+        "arm": arm, "case": case_id, "repeat": repeat, "owner": owner, "model_seed": model_seed(case_id),
         "request_id": request_id, "root_ticket_id": root_id,
         "level": case.get("level"), "style": case.get("style"), "types": case.get("types"), "file": case.get("file"),
         **({"expect_refusal": True} if case.get("expect_refusal") else {}),
