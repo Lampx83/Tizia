@@ -103,12 +103,24 @@ def _line(step: dict) -> str:
     return f"- bước {step['n']} [{step['layer']}] {step['file']}{tail}"
 
 
+OBJECTION_TAG = "plan objection (advisory)"
+
+
 def warnings_block(warnings) -> str:
-    """Cảnh báo hình thức của plan thành ghi chú cho bước code; '' khi không có."""
+    """Cảnh báo hình thức + góp ý phản đối của plan thành ghi chú cho bước code; '' khi không có."""
     if not warnings:
         return ""
-    return ("\n\nPLAN NOTES (form warnings from planning, not blocking; check them before relying on the plan):\n"
-            + "\n".join(f"- {str(w)[:200]}" for w in list(warnings)[:5]))
+    prefix = OBJECTION_TAG + ": "
+    notes = [str(w) for w in warnings if not str(w).startswith(prefix)]
+    objections = [str(w)[len(prefix):] for w in warnings if str(w).startswith(prefix)]
+    out = ""
+    if notes:
+        out += ("\n\nPLAN NOTES (form warnings from planning, not blocking; check them before relying on the plan):\n"
+                + "\n".join(f"- {w[:200]}" for w in notes[:5]))
+    if objections:
+        out += ("\n\nPLAN OBJECTIONS (advice from the plan checker, not blocking; check each against the source before relying on the plan):\n"
+                + "\n".join(f"- {w[:300]}" for w in objections[:5]))
+    return out
 
 
 def block(plan: dict) -> str:

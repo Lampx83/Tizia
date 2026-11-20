@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from verification import functional
 import path_policy
-from gates import best_match, grounding_paths, react_plan
+from gates import best_match, grounding_paths, react_plan, subtask_contract
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -463,10 +463,18 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 return path in request_text or any(prefix in request_text for prefix in prefixes)
 
             named = {path for path in added if in_request(path)}
+            advisory = best_match.objections_advisory()
+
+            def objection(message: str) -> None:
+                if not advisory:
+                    raise ValueError(message)
+                form_warnings.append(f"{subtask_contract.OBJECTION_TAG}: {message}")
+                judge(stage, True, f"{subtask_contract.OBJECTION_TAG}: {message}")
+
             if refusal := best_match.new_page_refusal(request, added - named, source, commit):
-                raise ValueError(refusal)
+                objection(refusal)
             if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit):
-                raise ValueError(refusal)
+                objection(refusal)
             if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
                 # recommendation instead of blocking the plan (path/layer rules still apply). An edit request
@@ -478,10 +486,13 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                     best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
                                        f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
                 except ValueError as miss:
-                    if not lenient:
+                    if advisory:
+                        objection(str(miss))
+                    elif not lenient:
                         raise
-                    form_warnings.append(str(miss))
-                    judge(stage, True, f"form warning: {miss}")
+                    else:
+                        form_warnings.append(str(miss))
+                        judge(stage, True, f"form warning: {miss}")
             judge(stage, True, f"best-match file: {ctx.get('best_match') or '(none)'}")
         except levels.ElevationRequired as e:
             judge(stage, False, str(e))
