@@ -1,6 +1,6 @@
 // Drop guest images the dev policy no longer pins: the runner's cached copies (msb image rm) and the registry's old
 // manifests (then blob garbage collection). Every pin change leaves a 3+ GiB image behind in each place otherwise.
-//   node scripts/gc-guest-images.mjs [--dry-run]   (dev stack up; containers tizia-sandbox-runner, tizia-image-registry)
+//   node scripts/gc-guest-images.mjs [--dry-run]   (dev stack up: aiboard-* from docker-compose.dev.ai.yml or tizia-*)
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,6 +18,14 @@ export function staleGuestRefs(lsOutput, pinned) {
   requirePinned(pinned);
   return lsOutput.split('\n').map((line) => line.trim().split(/\s+/)[0])
     .filter((ref) => GUEST_REF.test(ref) && GUEST_REF.exec(ref)[1] !== pinned);
+}
+
+/** `docker ps` names + candidate names -> first candidate that is running. Throw if none runs. */
+export function runningContainer(psOutput, candidates) {
+  const running = new Set(psOutput.split('\n').map((line) => line.trim()));
+  const found = candidates.find((name) => running.has(name));
+  if (!found) throw new Error(`none of ${candidates.join(', ')} is running`);
+  return found;
 }
 
 /** Digests a manifest list / OCI index points at (platform image, attestation); a plain image manifest has none. */
@@ -39,13 +47,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const policy = fs.readFileSync(path.join(root, 'ai-board/sandbox-runner/sandbox-policy.dev.yaml'), 'utf8');
   const pinned = /^guest_image: .*@(sha256:[0-9a-f]{64})\r?$/m.exec(policy)?.[1];
   const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
-  const runner = 'tizia-sandbox-runner';
+  const ps = docker('ps', '--format', '{{.Names}}');
+  const runner = runningContainer(ps, ['aiboard-sandbox-runner', 'tizia-sandbox-runner']);
   const msb = '/app/node_modules/.bin/msb';
   for (const ref of staleGuestRefs(docker('exec', runner, msb, 'image', 'ls'), pinned)) {
     console.log(`${dry ? 'would remove' : 'remove'} cached ${ref}`);
     if (!dry) docker('exec', runner, msb, 'image', 'rm', ref);
   }
-  const registry = 'tizia-image-registry';
+  const registry = runningContainer(ps, ['aiboard-registry', 'tizia-image-registry']);
   const revisions = '/var/lib/registry/docker/registry/v2/repositories/gate5/_manifests/revisions/sha256';
   const hex = docker('exec', registry, 'ls', revisions).split(/\s+/).filter(Boolean);
   const accept = 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json';
