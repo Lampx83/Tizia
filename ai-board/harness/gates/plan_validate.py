@@ -54,7 +54,7 @@ from services import context
 from services import file_context
 import path_policy
 from repositories.dbconn import harness_db
-from gates import best_match, evidence, grounding_paths, subtask_contract
+from gates import acceptance_structure, best_match, evidence, grounding_paths, subtask_contract
 from repositories import repo_at_commit
 from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
@@ -907,7 +907,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                     "public_message": "Kế hoạch chia quá nhiều bước mà bước nào cũng phải kiểm chứng bằng lệnh chạy được; "
                                       "đang chờ quản trị viên xem lại."}
         state.setdefault("form_warnings", []).extend(issues)
-    if get_settings().plan_checks and (issues := checks.plan_problems(plan)):
+    if get_settings().plan_checks and (issues := checks.plan_problems(plan) + acceptance_structure.problems(plan, request)):
         return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
                 "signals": issues,
                 "public_message": "Kế hoạch khai kiểm chứng không hợp lệ; đang chờ lập lại kế hoạch."}
@@ -1188,6 +1188,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                         'public_message': 'Kế hoạch cần quản trị viên kiểm tra vì chưa xác định đúng phần cần thay đổi.',
                         **({'retry': state['validator_retry']} if state.get('validator_retry') else {})}
 
+    if hold := acceptance_structure.stop(request, plan, state, limit=clarify_limit(),
+                                         write=(lambda req, text: write_clarification(db_path, req, text)) if db_path is not None else None):
+        return hold
     signals = complexity_signals(plan, frozenset(item["path"] for item in needs) | levels.surface_files(plan, reader))
     if request.get("complexity_by_server"):
         # HTTP worker không có DB: server quyết qua tier (risk high → protected → admin cho phép plan).
