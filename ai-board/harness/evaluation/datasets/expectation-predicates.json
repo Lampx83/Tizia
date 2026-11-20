@@ -1,0 +1,422 @@
+{
+ "new_file_prefixes": [
+  "test/"
+ ],
+ "tuned_ids": [
+  "replace_text-l1-5a0b0b",
+  "replace_text-l1-b1b9d3",
+  "replace_text-l1-cd4696",
+  "replace_text-l2-71c5fa",
+  "replace_text-l2-82b7e2",
+  "insert_text-l1-7f6ed5",
+  "insert_text-l1-b3d529",
+  "insert_text-l2-8292ff",
+  "insert_text-l2-dda6a7",
+  "css_color-l1-42c02b",
+  "css_color-l1-953a8a",
+  "css_color-l1-37625a",
+  "css_color-l2-9ff2fd",
+  "css_color-l2-a94098",
+  "size_hide-l1-b9deaa",
+  "size_hide-l1-0d2c10",
+  "size_hide-l2-a9efb8",
+  "size_hide-l2-af3012",
+  "remove_element-l1-ae0149",
+  "remove_element-l1-b72638",
+  "remove_element-l2-c114e9",
+  "remove_element-l2-906044"
+ ],
+ "cases": {
+  "replace_text-l1-5a0b0b": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<a class=\"back\" href=\"javascript:history.back()\">← Quay lại</a>",
+     "span": "← Quay lại",
+     "new": "Biến tựu học kiểm chuỗi."
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"back\" href=\"javascript:history.back()\">← Quay lại</a>",
+     "<a class=\"back\" href=\"javascript:history.back()\">Biến tựu học kiểm chuỗi.</a>"
+    ]
+   ]
+  },
+  "replace_text-l1-b1b9d3": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<h1>📚 Chợ bài giảng cộng đồng</h1>",
+     "span": "📚 Chợ bài giảng cộng đồng",
+     "new": "Bảng tập kiểm nút thuốc."
+    }
+   ],
+   "fix": [
+    [
+     "<h1>📚 Chợ bài giảng cộng đồng</h1>",
+     "<h1>Bảng tập kiểm nút thuốc.</h1>"
+    ]
+   ]
+  },
+  "replace_text-l1-cd4696": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>",
+     "span": "← Trang chủ",
+     "new": "Tra ôn học hàm nhớ."
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>",
+     "<a class=\"back\" href=\"/index.html\">Tra ôn học hàm nhớ.</a>"
+    ]
+   ]
+  },
+  "replace_text-l2-71c5fa": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "focus()\">💬 Viết phản hồi</button>",
+     "span": "💬 Viết phản hồi",
+     "new": "Bài biến tựu cân xu."
+    }
+   ],
+   "fix": [
+    [
+     "focus()\">💬 Viết phản hồi</button>",
+     "focus()\">Bài biến tựu cân xu.</button>"
+    ]
+   ]
+  },
+  "replace_text-l2-82b7e2": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<button class=\"btn ghost\" id=\"q-new\">🎲 Câu hỏi mới</button>",
+     "span": "🎲 Câu hỏi mới",
+     "new": "Chế thuốc hàm tra thành."
+    }
+   ],
+   "fix": [
+    [
+     "<button class=\"btn ghost\" id=\"q-new\">🎲 Câu hỏi mới</button>",
+     "<button class=\"btn ghost\" id=\"q-new\">Chế thuốc hàm tra thành.</button>"
+    ]
+   ]
+  },
+  "insert_text-l1-7f6ed5": {
+   "kind": "insert_text",
+   "zones": [
+    {
+     "find": "<div class=\"loading\">Đang tải bảng xếp hạng…</div>",
+     "new": "Liều pha nguồn thành tra."
+    }
+   ],
+   "fix": [
+    [
+     "<div class=\"loading\">Đang tải bảng xếp hạng…</div>",
+     "<div class=\"loading\">Đang tải bảng xếp hạng…</div>\n<p>Liều pha nguồn thành tra.</p>"
+    ]
+   ]
+  },
+  "insert_text-l1-b3d529": {
+   "kind": "insert_text",
+   "zones": [
+    {
+     "find": "<div class=\"empty\">Đang tải…</div>",
+     "new": "Nhớ ôn bài đơn hàm."
+    }
+   ],
+   "fix": [
+    [
+     "<div class=\"empty\">Đang tải…</div>",
+     "<div class=\"empty\">Đang tải…</div>\n<p>Nhớ ôn bài đơn hàm.</p>"
+    ]
+   ]
+  },
+  "insert_text-l2-8292ff": {
+   "kind": "insert_text",
+   "zones": [
+    {
+     "find": "<h3>📝 Mở quiz</h3>",
+     "new": "Kiểm pha bài thành ôn."
+    }
+   ],
+   "fix": [
+    [
+     "<h3>📝 Mở quiz</h3>",
+     "<h3>📝 Mở quiz</h3>\n<h3>Kiểm pha bài thành ôn.</h3>"
+    ]
+   ]
+  },
+  "insert_text-l2-dda6a7": {
+   "kind": "insert_text",
+   "zones": [
+    {
+     "find": "<div class=\"stats\" id=\"stats\">6 ca lâm sàng · Y khoa + Dược lâm sàng</div>",
+     "new": "Hàm xu nút tập bảng."
+    }
+   ],
+   "fix": [
+    [
+     "<div class=\"stats\" id=\"stats\">6 ca lâm sàng · Y khoa + Dược lâm sàng</div>",
+     "<div class=\"stats\" id=\"stats\">6 ca lâm sàng · Y khoa + Dược lâm sàng</div>\n<p>Hàm xu nút tập bảng.</p>"
+    ]
+   ]
+  },
+  "css_color-l1-42c02b": {
+   "kind": "css_color",
+   "rule": {
+    "selector": ".ask",
+    "set": {
+     "color": "#16a34a"
+    }
+   },
+   "fix": [
+    [
+     ".ask { font-size: clamp(20px, 2.6vw, 26px); font-weight: 800; color:#047857; }",
+     ".ask { font-size: clamp(20px, 2.6vw, 26px); font-weight: 800; color:#16a34a; }"
+    ]
+   ]
+  },
+  "css_color-l1-953a8a": {
+   "kind": "css_color",
+   "rule": {
+    "selector": "p",
+    "set": {
+     "color": "#dc2626"
+    }
+   },
+   "fix": [
+    [
+     "p { color: #94a3b8;",
+     "p { color: #dc2626;"
+    ]
+   ]
+  },
+  "css_color-l1-37625a": {
+   "kind": "css_color",
+   "rule": {
+    "selector": ".prompt .label",
+    "set": {
+     "color": "#16a34a"
+    }
+   },
+   "fix": [
+    [
+     "font-weight: 800; color: #7c3aed; }",
+     "font-weight: 800; color: #16a34a; }"
+    ]
+   ]
+  },
+  "css_color-l2-9ff2fd": {
+   "kind": "css_color",
+   "rule": {
+    "selector": ".types button",
+    "set": {
+     "color": "#16a34a"
+    }
+   },
+   "fix": [
+    [
+     "border:1px solid var(--border); color:#cbd5e1; font-size:13px;",
+     "border:1px solid var(--border); color:#16a34a; font-size:13px;"
+    ]
+   ]
+  },
+  "css_color-l2-a94098": {
+   "kind": "css_color",
+   "rule": {
+    "selector": ".toast",
+    "set": {
+     "color": "#92400e"
+    }
+   },
+   "fix": [
+    [
+     "background:var(--ok); color:#04210f;",
+     "background:var(--ok); color:#92400e;"
+    ]
+   ]
+  },
+  "size_hide-l1-b9deaa": {
+   "kind": "size_hide",
+   "rule": {
+    "selector": ".feedback",
+    "set": {
+     "font-size": "29px"
+    }
+   },
+   "fix": [
+    [
+     "margin-top: 14px; font-size: 22px; font-weight: 900;",
+     "margin-top: 14px; font-size: 29px; font-weight: 900;"
+    ]
+   ]
+  },
+  "size_hide-l1-0d2c10": {
+   "kind": "size_hide",
+   "rule": {
+    "selector": ".wrap",
+    "set": {
+     "display": "none"
+    }
+   },
+   "fix": [
+    [
+     ".wrap { max-width: 980px; margin: 0 auto; padding: 16px 16px 32px; }",
+     ".wrap { max-width: 980px; margin: 0 auto; padding: 16px 16px 32px; display: none; }"
+    ]
+   ]
+  },
+  "size_hide-l2-a9efb8": {
+   "kind": "size_hide",
+   "rule": {
+    "selector": ".switch",
+    "set": {
+     "font-size": "17px"
+    }
+   },
+   "fix": [
+    [
+     ".switch { margin-top: 18px; text-align: center; font-size: 13px;",
+     ".switch { margin-top: 18px; text-align: center; font-size: 17px;"
+    ]
+   ]
+  },
+  "size_hide-l2-af3012": {
+   "kind": "size_hide",
+   "rule": {
+    "selector": ".badge-mv",
+    "set": {
+     "display": "none"
+    }
+   },
+   "fix": [
+    [
+     ".badge-mv { background: #0ea5e9; color: white; }",
+     ".badge-mv { background: #0ea5e9; color: white; display: none; }"
+    ]
+   ]
+  },
+  "remove_element-l1-ae0149": {
+   "kind": "remove_element",
+   "zones": [
+    {
+     "find": "<a href=\"/\" class=\"primary\">🏠 Trang chủ</a>",
+     "span": "<a href=\"/\" class=\"primary\">🏠 Trang chủ</a>"
+    }
+   ],
+   "fix": [
+    [
+     "<a href=\"/\" class=\"primary\">🏠 Trang chủ</a>",
+     ""
+    ]
+   ]
+  },
+  "remove_element-l1-b72638": {
+   "kind": "remove_element",
+   "zones": [
+    {
+     "find": "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>",
+     "span": "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>"
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"back\" href=\"/index.html\">← Trang chủ</a>",
+     ""
+    ]
+   ]
+  },
+  "remove_element-l2-c114e9": {
+   "kind": "remove_element",
+   "zones": [
+    {
+     "find": "<a class=\"outline\" href=\"school.html?domain=pharmacy#campus-hero\">🏫 Khuôn viên</a>",
+     "span": "<a class=\"outline\" href=\"school.html?domain=pharmacy#campus-hero\">🏫 Khuôn viên</a>"
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"outline\" href=\"school.html?domain=pharmacy#campus-hero\">🏫 Khuôn viên</a>",
+     ""
+    ]
+   ]
+  },
+  "remove_element-l2-906044": {
+   "kind": "remove_element",
+   "zones": [
+    {
+     "find": "<span class=\"title\">💊 Cấp phát thuốc · 5 Đúng</span>",
+     "span": "<span class=\"title\">💊 Cấp phát thuốc · 5 Đúng</span>"
+    }
+   ],
+   "fix": [
+    [
+     "<span class=\"title\">💊 Cấp phát thuốc · 5 Đúng</span>",
+     ""
+    ]
+   ]
+  },
+  "replace_text-l3-d2e233": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<a class=\"back\" href=\"/cay-tri-thuc.html\">🌳 Cây Tri Thức</a>",
+     "span": "🌳 Cây Tri Thức",
+     "new": "Luyện kiểm sao điểm thẻ."
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"back\" href=\"/cay-tri-thuc.html\">🌳 Cây Tri Thức</a>",
+     "<a class=\"back\" href=\"/cay-tri-thuc.html\">Luyện kiểm sao điểm thẻ.</a>"
+    ]
+   ]
+  },
+  "insert_text-l5-ce8c87": {
+   "kind": "insert_text",
+   "zones": [
+    {
+     "find": "<div class=\"question\">Biển báo này có ý nghĩa gì?</div>",
+     "new": "Đơn pha chế sao luyện."
+    }
+   ],
+   "fix": [
+    [
+     "<div class=\"question\">Biển báo này có ý nghĩa gì?</div>",
+     "<div class=\"question\">Biển báo này có ý nghĩa gì?</div>\n<p>Đơn pha chế sao luyện.</p>"
+    ]
+   ]
+  },
+  "replace_text-l4-928d6f": {
+   "kind": "replace_text",
+   "zones": [
+    {
+     "find": "<a class=\"back\" id=\"back\" href=\"/school.html?domain=it#campus-hero\">← Khuôn viên trường</a>",
+     "span": "← Khuôn viên trường",
+     "new": "Điểm ghi học lượng thẻ."
+    },
+    {
+     "find": "<div class=\"prog\" id=\"prog\">0/5 thử thách</div>",
+     "span": "0/5 thử thách",
+     "new": "Thuốc nhớ liều chuỗi tựu."
+    }
+   ],
+   "fix": [
+    [
+     "<a class=\"back\" id=\"back\" href=\"/school.html?domain=it#campus-hero\">← Khuôn viên trường</a>",
+     "<a class=\"back\" id=\"back\" href=\"/school.html?domain=it#campus-hero\">Điểm ghi học lượng thẻ.</a>"
+    ],
+    [
+     "<div class=\"prog\" id=\"prog\">0/5 thử thách</div>",
+     "<div class=\"prog\" id=\"prog\">Thuốc nhớ liều chuỗi tựu.</div>"
+    ]
+   ]
+  }
+ }
+}
