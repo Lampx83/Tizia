@@ -130,10 +130,10 @@ def report(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def load_rows(trial_dir: Path, cases_path: Path, attack_path: Path) -> list[dict]:
+def load_rows(trial_dir: Path, cases_path: Path, attack_path: Path, paths=None) -> list[dict]:
     cases = {c["id"]: c for p in (cases_path, attack_path) for c in json.loads(p.read_text(encoding="utf-8"))}
     rows = []
-    for path in sorted(trial_dir.glob("*.json")):
+    for path in sorted(trial_dir.glob("*.json")) if paths is None else paths:
         trial = json.loads(path.read_text(encoding="utf-8"))
         trial["_stem"] = path.stem
         art = {}
