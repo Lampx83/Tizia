@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     vision_advisory: bool = False
     verified_loop: bool = False
     context_compaction: bool = False
+    compaction_expand: bool = False  # expand(step) tool; needs context_compaction
     tool_native: bool = False
     literal_by_reference: bool = False
     react_schema: bool = False
