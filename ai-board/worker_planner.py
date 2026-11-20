@@ -396,6 +396,7 @@ class HarnessPlanner:
             "steps": steps,
         }
 
+    last_session = None  # lịch sử phiên lập plan của lần gọi gần nhất (cờ session_plan_execute); worker lưu cục bộ theo plan_hash
     last_skill = None  # skill cổng 1 của lần gọi gần nhất: worker gửi kèm verdict cùng lease
 
     def _ask_elevation(self, ticket_id, payload: dict, plan=None) -> dict | None:
@@ -432,7 +433,7 @@ class HarnessPlanner:
         return PlanBlockedError(f"gate {gate} blocked: {result.get('reason')}", detail)
 
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
-        self.last_skill = None
+        self.last_skill = self.last_session = None
         replaced = revision_request(snapshot)
         if replaced:
             snapshot = {**snapshot, "plan_repair": "\n\n".join(filter(None, (snapshot.get("plan_repair"), revision_note(replaced))))}
@@ -518,6 +519,7 @@ class HarnessPlanner:
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
         plan = self._canonical(request, state["plan"], signals, state['catalog'])
+        self.last_session = state.get("plan_session")
         if replaced:
             stamp_revision(plan, replaced)
         if state.get('grounding'):

@@ -422,6 +422,9 @@ class HttpWorker:
                     "idempotency_key": f"{prefix}:release-blocked",
                 })
                 raise
+        if self.planner and not executing:
+            from repositories import plan_session
+            plan_session.put(planned.get("plan_hash"), getattr(self.planner, "last_session", None))
         if self.planner:
             verdict = None
             preview_artifact = None
