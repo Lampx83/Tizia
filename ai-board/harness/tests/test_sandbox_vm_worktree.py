@@ -496,7 +496,7 @@ def test_name_git_still_quotes_is_unquoted_and_restored_not_a_hard_fault(on):
     runner.close()
 
 
-@pytest.mark.parametrize("raw,expected", [(r'"a\tb"', "a\tb"), (r'"t\303\252p"', "tệp"), (r'"q\"x\\"', 'q"x' + chr(92)),
+@pytest.mark.parametrize("raw,expected", [(r'"a\tb"', "a\tb"), (r'"t\303\252p"', "têp"), (r'"q\"x\\"', 'q"x' + chr(92)),
                                           ("plain", None), (r'"bad\q"', None)])
 def test_unquote(raw, expected):
     assert sandbox_tool._unquote(raw) == expected
