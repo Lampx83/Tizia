@@ -740,7 +740,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             store=_checkpoint_store(state, db_path, proposal_id, child),
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
             contract=contract, repair_evidence=state.get("repair_evidence"),
-            session_from=_earlier_sessions(state, child),
+            session_from=_earlier_sessions(state, child), request_text=(state.get("request_title"), state.get("request_detail")),
             **({"requester_role": state.get("requester_role")} if get_settings().out_of_plan_files else {}))
         if looped.get("stale_reset") and trace:
             trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")

@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     verified_loop: bool = False
     context_compaction: bool = False
     tool_native: bool = False
+    literal_by_reference: bool = False
     react_schema: bool = False
     thinking_budget: bool = False
     multi_file_subtask: bool = False
