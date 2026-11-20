@@ -123,3 +123,8 @@ def test_import_error_is_an_error_and_an_errored_baseline_names_no_flip(world):
     assert outs[0]["blocked"] is None and "AttributeError" in outs[0]["error"] and outs[1]["blocked"] is True
     s = A._summary(job, seq, outs, 1)
     assert s["status"] == "baseline_error" and s["first_flip"] is None
+
+
+def test_round_flags_come_from_trials_before_arms_jsonl(world):
+    assert A.round_flags([{"flags": {"AI_BOARD_A": "2"}}], world["shas"]["base"][:8], world["data"], "B0") == {"AI_BOARD_A": "2"}
+    assert A.round_flags([{"flags": None}], world["shas"]["base"][:8], world["data"], "B0") == {"AI_BOARD_A": "0"}

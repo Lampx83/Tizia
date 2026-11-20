@@ -345,3 +345,21 @@ def test_model_seed_is_fixed_per_case_across_rounds(monkeypatch):
     monkeypatch.setenv("AB_MODEL_SEED", "7")
     a, b = driver.model_seed("replace_text-l1-x"), driver.model_seed("css_color-l1-y")
     assert isinstance(a, int) and a != b and driver.model_seed("replace_text-l1-x") == a
+
+
+def test_worker_flags_keep_flags_and_model_route_but_never_secrets():
+    env = {"AI_BOARD_TOOL_LOOP": "1", "AI_BOARD_API_KEY": "k", "AI_BOARD_GATE_TOKEN_CAP": "9", "API_MODEL": "qwen",
+           "API_MODEL_PROVIDER": "vllm", "API_KEY": "sk-x", "OLLAMA_SECKEY": "s", "VLLM_URL": "http://vllm:8000/v1",
+           "API_URL": "https://u:p@host/v1", "OLLAMA_URL": "http://h/?token=abc", "DB_PASSWORD": "p", "PATH": "/bin"}
+    assert driver.worker_flags(env) == {"AI_BOARD_TOOL_LOOP": "1", "API_MODEL": "qwen", "API_MODEL_PROVIDER": "vllm",
+                                        "VLLM_URL": "http://vllm:8000/v1"}
+
+
+def test_trial_flags_read_the_worker_env_and_fail_soft(monkeypatch):
+    monkeypatch.setattr(driver, "BACKEND", "psql")
+    monkeypatch.setattr(driver, "worker_env", lambda name="aiboard-worker": {"AI_BOARD_X": "1", "API_KEY": "s"})
+    assert driver.trial_flags() == {"AI_BOARD_X": "1"}
+    monkeypatch.setattr(driver, "worker_env", lambda name="aiboard-worker": (_ for _ in ()).throw(OSError("no docker")))
+    assert driver.trial_flags() is None
+    monkeypatch.setattr(driver, "BACKEND", "http")
+    assert driver.trial_flags() is None

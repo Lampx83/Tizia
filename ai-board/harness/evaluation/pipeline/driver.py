@@ -687,6 +687,27 @@ def worker_env(name: str = "aiboard-worker") -> dict:
     return dict(item.split("=", 1) for item in items if "=" in item)
 
 
+ROUTE_KEYS = ("API_MODEL", "API_MODEL_PROVIDER", "OLLAMA_MODEL", "API_URL", "OLLAMA_URL", "VLLM_URL")
+SECRET_NAME = re.compile(r"(?:^|_)(?:API_?KEY|KEY|SECKEY|SECRET|PASSWORD|PASSWD|PASS|TOKEN|CREDENTIALS?|AUTH)(?:$|_)")
+SECRET_VALUE = re.compile(r"://[^/\s]*@|[?&][^=&]*(?:key|token|secret|pass|auth|sig)[^=&]*=|^(?:sk-|ghp_|Bearer )", re.I)
+
+
+def worker_flags(env: dict) -> dict:
+    """AI_BOARD_* flags and model route keys of a worker env, minus anything named or shaped like a secret."""
+    return {k: v for k, v in sorted(env.items()) if (k.startswith("AI_BOARD_") or k in ROUTE_KEYS)
+            and not SECRET_NAME.search(k) and not SECRET_VALUE.search(str(v))}
+
+
+def trial_flags() -> dict | None:
+    """Effective flags of the local worker; None when the worker is remote or docker is unreachable."""
+    if BACKEND == "http":
+        return None
+    try:
+        return worker_flags(worker_env())
+    except Exception:
+        return None
+
+
 def worker_state(name: str = "aiboard-worker") -> str:
     return sh_text(["docker", "inspect", name, "--format", "{{.State.Status}}"])
 
@@ -1179,7 +1200,7 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
                                                   [r.get("created_at") for r in data.get("runs") or []])
     return {
         "pin": current_pin(),
-        "arm": arm, "case": case_id, "repeat": repeat, "owner": owner, "model_seed": model_seed(case_id),
+        "arm": arm, "case": case_id, "repeat": repeat, "owner": owner, "model_seed": model_seed(case_id), "flags": trial_flags(),
         "request_id": request_id, "root_ticket_id": root_id,
         "level": case.get("level"), "style": case.get("style"), "types": case.get("types"), "file": case.get("file"),
         **({"expect_refusal": True} if case.get("expect_refusal") else {}),
