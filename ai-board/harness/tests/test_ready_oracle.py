@@ -140,3 +140,95 @@ def test_replace_needs_the_old_text_removed_even_with_extra_quotes():
     out = ready_oracle.check(titled(wrong))
     assert not out["passed"] and "🌲 Rừng" in out["reason"]
     assert ready_oracle.check(titled(right))["passed"]
+
+
+# Multifile: scope and cross-references in the candidate tree.
+
+def tree(tmp_path, files):
+    for name, body in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    return str(tmp_path)
+
+
+def multi(tmp_path, files, changes, request=REQUEST, planned=None):
+    """changes: {path: (added_lines, is_new)}; tree holds `files` (the candidate, changes included)."""
+    text = ""
+    for path, (added, is_new) in changes.items():
+        head = f"diff --git a/{path} b/{path}\n" + ("new file mode 100644\n--- /dev/null\n" if is_new else f"--- a/{path}\n")
+        text += head + f"+++ b/{path}\n@@ -0,0 +1,{len(added)} @@\n" + "".join(f"+{line}\n" for line in added)
+    return {"request_title": "", "request_detail": request, "skill_id": "s", "full_checkout": tree(tmp_path, files),
+            "full_diff": [{"diff": text}], "diffs": [{"file": p, "diff": text} for p in changes],
+            "plan": {"subtasks": [{"file": p} for p in (planned or changes)]}}
+
+
+LITERAL = "<p>Hẹn gặp lại bạn</p>"
+
+
+def test_link_to_missing_page_fails_and_real_page_passes(tmp_path):
+    page = '<a href="about.html">x</a>'
+    red = multi(tmp_path, {"public/index.html": LITERAL + page}, {"public/index.html": ([LITERAL, page], False)})
+    out = ready_oracle.check(red)
+    assert not out["passed"] and "about.html" in out["reason"]
+    green = multi(tmp_path, {"public/index.html": LITERAL + page, "public/about.html": "x"}, {"public/index.html": ([LITERAL, page], False)})
+    assert ready_oracle.check(green)["passed"]
+
+
+def test_root_relative_link_resolves_under_public_and_external_is_ignored(tmp_path):
+    lines = [LITERAL, '<a href="/about.html">x</a>', '<a href="https://example.com/z.html">y</a>']
+    s = multi(tmp_path, {"public/index.html": "".join(lines), "public/about.html": "x"}, {"public/index.html": (lines, False)})
+    assert ready_oracle.check(s)["passed"]
+
+
+def test_called_js_function_must_be_defined(tmp_path):
+    handler = '<button onclick="openMenu()">m</button>'
+    red = multi(tmp_path, {"public/index.html": LITERAL + handler}, {"public/index.html": ([LITERAL, handler], False)})
+    out = ready_oracle.check(red)
+    assert not out["passed"] and "openMenu" in out["reason"]
+    script = "<script>function openMenu() {}</script>"
+    green = multi(tmp_path, {"public/index.html": LITERAL + handler + script}, {"public/index.html": ([LITERAL, handler, script], False)})
+    assert ready_oracle.check(green)["passed"]
+
+
+def test_function_defined_in_a_loaded_script_counts(tmp_path):
+    lines = [LITERAL, '<script src="js/menu.js"></script>', '<button onclick="openMenu()">m</button>']
+    files = {"public/index.html": "".join(lines), "public/js/menu.js": "function openMenu() {}"}
+    assert ready_oracle.check(multi(tmp_path, files, {"public/index.html": (lines, False)}))["passed"]
+
+
+def test_js_element_id_must_exist_in_the_page_that_loads_it(tmp_path):
+    js = ["document.getElementById('menu-box').hidden = false;"]
+    page = '<p>Hẹn gặp lại bạn</p><script src="app.js"></script>'
+    red = multi(tmp_path, {"public/index.html": page, "public/app.js": js[0]},
+                {"public/app.js": (js, False), "public/index.html": ([LITERAL], False)})
+    out = ready_oracle.check(red)
+    assert not out["passed"] and "menu-box" in out["reason"]
+    green = multi(tmp_path, {"public/index.html": page + '<div id="menu-box"></div>', "public/app.js": js[0]},
+                  {"public/app.js": (js, False), "public/index.html": ([LITERAL], False)})
+    assert ready_oracle.check(green)["passed"]
+
+
+def test_new_page_needs_an_entry_point_when_the_request_asks_for_a_link(tmp_path):
+    request = "Thêm trang mới có dòng 'Hẹn gặp lại bạn' và liên kết từ trang chủ"
+    changes = {"public/new.html": ([LITERAL], True), "public/index.html": (["<p>home</p>"], False)}
+    red = multi(tmp_path, {"public/new.html": LITERAL, "public/index.html": "<p>home</p>"}, changes, request=request)
+    out = ready_oracle.check(red)
+    assert not out["passed"] and "new.html" in out["reason"]
+    link = '<a href="new.html">n</a>'
+    changes["public/index.html"] = ([link], False)
+    green = multi(tmp_path, {"public/new.html": LITERAL, "public/index.html": link}, changes, request=request)
+    assert ready_oracle.check(green)["passed"]
+
+
+def test_new_page_without_a_link_request_needs_no_entry_point(tmp_path):
+    s = multi(tmp_path, {"public/new.html": LITERAL}, {"public/new.html": ([LITERAL], True)})
+    assert ready_oracle.check(s)["passed"]
+
+
+def test_multifile_literal_in_only_one_changed_file_and_all_planned_passes(tmp_path):
+    files = {"public/index.html": LITERAL, "public/b.html": "<p>b</p>"}
+    s = multi(tmp_path, files, {"public/index.html": ([LITERAL], False), "public/b.html": (["<p>b</p>"], False)})
+    assert ready_oracle.check(s)["passed"]
+    s["plan"]["subtasks"] = [{"file": "public/index.html"}]
+    out = ready_oracle.check(s)
+    assert not out["passed"] and "public/b.html" in out["reason"]
