@@ -210,14 +210,12 @@ def test_unified_skills_in_repo_pass_check():
 
 
 @pytest.mark.parametrize('sentence,expected', [
-    ('Viết test cho hành vi giỏ hàng vừa thay đổi.', True),
-    ('Chạy test sau khi sửa hành vi bộ lọc.', True),
-    ('Add a unit test for the discount fix.', True),
-    ('Đọc kết quả test cũ rồi xóa fixture.', False),
+    ('Please write tests for the changed behavior of the cart.', True),
+    ('I need to run tests after I changed how the filter behaves.', True),
     ('Just read the existing test output and remove the fixtures.', False),
-    ('Đổi màu nền trang chủ.', False),
+    ('Change the page background colour.', False),
 ])
-def test_router_folds_vietnamese_and_respects_exclusion(sentence, expected):
+def test_router_lint_helper_matches_trigger_and_respects_exclusion(sentence, expected):
     assert skill_format.routes(sentence, TEXT) is expected
 
 
@@ -262,3 +260,38 @@ def test_order_is_look_steps_done():
 def test_context_style_folder_skill_is_reported_as_not_admin_format():
     folder = (default_skills.ROOT / 'add-html-section' / 'SKILL.md').read_text(encoding='utf-8')
     assert skill_format.check(folder)[0].startswith('not a valid admin-format skill')
+
+
+@pytest.mark.parametrize('rule', ['Mark "pass" or "fail".', "Report 'not run' when skipped.", 'Report "not run" when skipped.',
+                                  'Call the `test` target.', 'Copy the sibling page layout.', 'Keep the current page and the same page.'])
+def test_generic_quotes_and_pages_pass(rule):
+    assert skill_format.check(with_body(GOOD.replace('1. Reproduce.', f'1. {rule}'))) == []
+
+
+@pytest.mark.parametrize('rule', ['Say "pass" or "Sign in".', 'Say "Sign in" or "pass".', 'Run `npm test`.'])
+def test_quote_scan_pairs_left_to_right_and_still_rejects_specific_strings(rule):
+    assert any('specific' in e for e in skill_format.check(with_body(GOOD.replace('1. Reproduce.', f'1. {rule}'))))
+
+
+def test_description_carries_no_routing_phrases():
+    assert 'viết test' not in TEXT and 'unit test' not in TEXT
+
+
+@pytest.mark.parametrize('compare', ['x', {'request_id': 9}, [{'request_id': 9, 'with': 1, 'without': 0}], [3],
+                                     [{'request_id': 5, 'role': 'source'}, {'request_id': 9, 'role': 'compare', 'with': 1, 'without': 0}]])
+def test_retro_compare_must_be_list_of_compare_dicts(monkeypatch, compare):
+    server, models = run([1], monkeypatch, True, compare)
+    assert models.calls == [] and server.calls[-1][1]['error'] == 'insufficient_evidence'
+
+
+def test_smoke_checks_when_original_is_unified_and_rewrite_is_not(monkeypatch):
+    from services import skill_rewrite
+    monkeypatch.setenv('AI_BOARD_UNIFIED_SKILL_FORMAT', '1')
+    job = {'version': 1, 'task_types': ['test'], 'original_text': TEXT}
+    plain = TEXT.split('---\n', 2)
+    flat = '---\n' + plain[1] + '---\n1. just steps.\n'
+    out = skill_rewrite.smoke(None, None, '', flat, job)
+    assert out[0]['kind'] == 'format' and not out[0]['ok']
+    assert skill_rewrite.smoke(None, None, '', 'garbage', job)[0]['kind'] == 'format'
+    monkeypatch.delenv('AI_BOARD_UNIFIED_SKILL_FORMAT')
+    assert skill_rewrite.smoke(None, None, '', 'garbage', job) == []

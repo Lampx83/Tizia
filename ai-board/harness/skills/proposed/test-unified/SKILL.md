@@ -1,6 +1,6 @@
 ---
 name: test-unified
-description: "Test-step rules: reproduce the failure, derive expected results from the request, report observed results. Use when a step writes or runs tests for changed behavior (add a unit test, viết test, chạy test, kiểm thử hành vi thay đổi), not when it only reads existing test output or removes fixtures (đọc kết quả test cũ, xóa fixture)."
+description: "Test-step rules: reproduce the failure, derive expected results from the request, report observed results. Use when a step writes or runs tests for changed behavior, not when it only reads existing test output or removes fixtures."
 metadata:
   task_type: "test"
   source: "admin"
