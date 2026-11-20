@@ -497,7 +497,7 @@ class HttpWorker:
                 except Exception:
                     preview_result = {"state": "unavailable"}  # serving verdict/candidate remain unchanged
             pr_problem = None
-            if self.open_prs and verdict and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
+            if self.open_prs and verdict and verdict.get("candidate") and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
                 pr_problem = self._open_pr(ticket_id, lease, prefix, snapshot, run, plan, planned.get("tier"), verdict)
             pr_blocked = bool(pr_problem) and pr_problem.startswith("path_denied")
             self._release(ticket_id, {
