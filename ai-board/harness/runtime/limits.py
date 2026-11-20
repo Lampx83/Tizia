@@ -201,6 +201,12 @@ def budget(env=None) -> dict:
     return out
 
 
+def prompt_cap_chars(name: str) -> int:
+    """Contract limits.prompt_caps `<name>_tokens` -> chars."""
+    spec = _parsed()["limits"]["prompt_caps"]
+    return spec[f"{name}_tokens"] * spec["chars_per_token"]
+
+
 def thread_chars() -> int:
     return _parsed()["limits"]["context"]["thread_chars"]
 

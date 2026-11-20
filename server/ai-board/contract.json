@@ -225,6 +225,10 @@
     },
     "gpu_s_per_user_day": { "loose": 8000, "folder": 8000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
     "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" },
+    "prompt_caps": {
+      "_why": "Per-input prompt caps in tokens; chars = tokens x chars_per_token. Cut a model input only, never a security scan.",
+      "chars_per_token": 4, "intake_detail_tokens": 500, "static_content_tokens": 875, "snippet_tokens": 375
+    },
     "attachments": {
       "_why": "Request attachments (ticket 87). Flag AI_BOARD_MULTIMODAL off by default; text cut at max_chars total, cut shown to requester.",
       "flag": "AI_BOARD_MULTIMODAL", "default_enabled": false,

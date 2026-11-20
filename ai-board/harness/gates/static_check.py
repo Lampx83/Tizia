@@ -28,7 +28,7 @@ from verification import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings
-from runtime import levels, subtask_files
+from runtime import levels, limits, subtask_files
 from runtime.budget import BudgetExhausted
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
@@ -37,7 +37,7 @@ CONTENT_LABELS = tuple(x for x in intake_guard.LABELS
 # prompt_injection trên chữ hiển thị do guard.scan quyết định (tất định); nhãn cùng tên của model chỉ là
 # tín hiệu cho người soát — model từng gán nhãn này cho câu vô nghĩa/ghi chú giao diện (đo 2026-11-04).
 ADVISORY_LABELS = ("prompt_injection",)
-MAX_CONTENT_CHARS = 3500  # prompt ~1.2k token + chữ tiếng Việt, vừa num_ctx 8192
+MAX_CONTENT_CHARS = limits.prompt_cap_chars("static_content")
 
 # ponytail: hằng số ước lượng dòng/size, không đo thật từ template — đủ cho
 # ngưỡng "vượt xa" (2x). Cần chính xác hơn thì hiệu chuẩn qua gold set.
