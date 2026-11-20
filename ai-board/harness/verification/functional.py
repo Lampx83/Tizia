@@ -164,14 +164,10 @@ def _pairs(raw, loose=False):
 _ALL_PAGES = re.compile(r'\b(?:mọi|tất cả(?: các)?|toàn bộ(?: các)?)\s+(?:trang|site|website|nơi|chỗ|chữ)\b(?!\s+khác)'
                         r'|\btrên toàn (?:site|website)\b|\bkhắp nơi\b|\bcả (?:hai|ba|bốn) trang\b|\beverywhere\b'
                         r'|\b(?:every|all)(?: the)? pages\b(?!\s+else)', re.I)
-# "trang <name>": the name's first word; home/generic words ("trang chủ", "trang trí", "trang khác") name no page
-_PAGE_MENTION = re.compile(r'\b(?:trang|page)\s+(?!(?:chủ|trí|khác|này|đó|nào|đầu|chính|nhà|web|else|home)\b)(\w+)', re.I)
-
-
 def all_pages(state):
-    """Request asks for the change in several places, in the user's own words: every page, everywhere, or two differently named pages."""
+    """Request asks for the change in several places, in the user's own words: every page or everywhere (named pages are resolved against the repo by the plan gate)."""
     raw = _QUOTED.sub(' ', _request_raw(state))
-    return bool(_ALL_PAGES.search(raw)) or len({name.casefold() for name in _PAGE_MENTION.findall(raw)}) > 1
+    return bool(_ALL_PAGES.search(raw))
 
 
 def replace_pairs(state):

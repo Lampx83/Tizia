@@ -9,6 +9,7 @@ pytestmark = pytest.mark.usefixtures('high_target_confidence')
 
 OLD, NEW = "🌲 Rừng Chữ", "Ôn bài mỗi ngày."
 HOME, SIBLING, SCRIPT = "public/vuon-hoa.html", "public/khu-vuc.html", "public/js/menu.js"
+LESSON, EXERCISE = "public/bai-giang.html", "public/bai-tap.html"
 LINK = f'<a class="back" href="/rung.html">{OLD}</a>\n'
 
 
@@ -20,6 +21,8 @@ def _repo(tmp_path):
     _git(src, "config", "user.name", "t")
     _commit(src, {HOME: f'<title>Vườn hoa</title>\n<h1>Vườn hoa</h1>\n<script src="/js/menu.js"></script>\n{LINK}',
                   SIBLING: f"<title>Khu vực</title>\n<h1>Khu vực</h1>\n{LINK}",
+                  LESSON: f"<title>Bài giảng</title>\n<h1>Bài giảng</h1>\n{LINK}",
+                  EXERCISE: f"<title>Bài tập</title>\n<h1>Bài tập</h1>\n{LINK}",
                   SCRIPT: f"const MENU = [{{label: '{OLD}'}}];\n"})
     return src
 
@@ -69,8 +72,8 @@ def _diff(path, *hunk):
     return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1,9 +1,9 @@\n" + "".join(f"{line}\n" for line in hunk)
 
 
-def _misses(text, request=NAMED):
-    return static_check.literal_misses({"request_title": request["subject"], "request_detail": request["body"]}, text)
+def _misses(text, request=NAMED, checkout=None):
+    return static_check.literal_misses({"request_title": request["subject"], "request_detail": request["body"]}, text, checkout)
 
 
 def test_new_literal_elsewhere_in_the_diff_does_not_stand_in_for_the_replacement():
@@ -152,10 +155,10 @@ def test_user_words_outrank_the_page_line_and_folded_words_name_no_page(tmp_path
         assert "chọn đúng một" in best_match.old_literal_refusal(_ask(NAMED["subject"], body), {SIBLING, HOME}, src, "HEAD")
 
 
-def test_gate_4_judges_several_homes_with_one_miss():
+def test_gate_4_judges_several_homes_with_one_miss(tmp_path):
     text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + \
         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
-    found = _misses(text)
+    found = _misses(text, NAMED, _repo(tmp_path))
     assert len(found) == 1 and "hoàn tác" in found[0] and HOME in found[0] and SIBLING in found[0]
     assert len(_misses(text, EVERYWHERE)) == 0
 
@@ -242,9 +245,9 @@ def test_several_places_are_not_one_file(tmp_path):
     assert "chỉ sửa " + SIBLING in best_match.old_literal_refusal(_ask(NAMED["subject"], "[Trang: Khu vực] /khu-vuc.html?tab=2"), {HOME}, src, "HEAD")
 
 
-def test_gate_4_leaves_multi_place_requests_alone():
+def test_gate_4_leaves_multi_place_requests_alone(tmp_path):
     text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
-    assert _misses(text, _ask(NAMED["subject"], "Ở trang vườn hoa và trang khu vực.")) == []
+    assert _misses(text, _ask(NAMED["subject"], "Ở trang vườn hoa và trang khu vực."), _repo(tmp_path)) == []
     js = _diff(SCRIPT, f"-const MENU = [{{label: '{OLD}'}}];", f"+const MENU = [{{label: '{NEW}'}}];")
     assert _misses(_diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') + js) == []
 
@@ -276,9 +279,9 @@ def test_page_named_twice_is_one_page(tmp_path):
     twice = _ask(NAMED["subject"], "Ở trang vườn hoa, em muốn đổi chữ liên kết của trang vườn hoa đó.")
     assert "chỉ sửa " + HOME in best_match.old_literal_refusal(twice, {HOME, SIBLING}, src, "HEAD")
     assert not functional.all_pages({"request_title": "Đổi chữ trang pet", "request_detail": "Ở trang Pet tuần, quay lại trang chủ, trang trí thêm."})
-    assert functional.all_pages({"request_title": "Đổi chữ", "request_detail": "Ở trang vườn hoa và trang khu vực."})
+    assert best_match.requested_page(_ask("Đổi chữ", "Ở trang vườn hoa và trang khu vực."), [HOME, SIBLING], src, "HEAD")[1]
     both = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
-    assert _misses(both, twice)
+    assert _misses(both, twice, src)
 
 
 def test_gate_4_pairs_inside_the_hunk_and_rejects_head_only_matches():
@@ -291,3 +294,30 @@ def test_gate_4_pairs_inside_the_hunk_and_rejects_head_only_matches():
     assert _misses(bad, colon)
     moved = _diff(HOME, f"-{LINK.strip()}", "+<p>x</p>") + "@@ -40,1 +40,1 @@\n" + f'+<a class="back" href="/rung.html">{NEW}</a>\n'
     assert _misses(moved, request) == []
+
+
+FILLER = ("Ở cuối trang, trang có nhiều nút.", "Không phải trang cá nhân.", "Trang thứ hai nhé, rồi trang tiếp theo.",
+          "Trang bị thêm nút mới.", "(trang có ảnh hoa)")
+
+
+def test_filler_after_trang_does_not_name_a_second_page(tmp_path):
+    src = _repo(tmp_path)
+    for filler in FILLER:
+        request = _ask(NAMED["subject"], f"Trang vườn hoa có hai liên kết. {filler}")
+        assert best_match.requested_page(request, [HOME, SIBLING, LESSON], src, "HEAD") == (HOME, False), filler
+        assert "chỉ sửa " + HOME in best_match.old_literal_refusal(request, {HOME, SIBLING}, src, "HEAD"), filler
+
+
+def test_two_pages_with_a_shared_first_word_are_two_pages_at_both_gates(tmp_path):
+    src = _repo(tmp_path)
+    request = _ask(NAMED["subject"], "Ở trang bài giảng và trang bài tập, đổi chữ liên kết.")
+    assert best_match.requested_page(request, [LESSON, EXERCISE, HOME], src, "HEAD")[1] is True
+    assert best_match.old_literal_refusal(request, {LESSON, EXERCISE}, src, "HEAD") == ""
+    text = _diff(LESSON, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(EXERCISE, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(text, request, src) == []
+    assert _misses(text, _ask(NAMED["subject"], "Ở trang bài giảng, đổi chữ liên kết. Trang có nhiều nút."), src)
+
+
+def test_gate_4_without_a_tree_does_not_collapse_pages(tmp_path):
+    text = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(text) == []

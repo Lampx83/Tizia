@@ -26,7 +26,7 @@ import path_policy
 from services import candidate
 from security import classifier, spotlight
 from verification import functional
-from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
+from gates import adversarial_review, best_match, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings
 from runtime import levels, limits, subtask_files
@@ -506,7 +506,7 @@ def _loads(checkout, page: str, script: str) -> bool:
     return script in code_index.parse(page, text)["links"]["js"]
 
 
-def _replacement_misses(pairs: list[tuple[str, str]], hunks, every_page: bool, checkout=None) -> tuple[list[str], set[str]]:
+def _replacement_misses(pairs: list[tuple[str, str]], hunks, several, checkout=None) -> tuple[list[str], set[str]]:
     """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same hunk
     (head-only lines only count when the removed element was one); failing that, the identical element with only the text
     changed in another hunk of the file. A removed line that comes back unchanged (reindent) is not a target.
@@ -546,7 +546,7 @@ def _replacement_misses(pairs: list[tuple[str, str]], hunks, every_page: bool, c
                                            + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
         pages = [path for path in found if _page_path(path)]
         units = pages + [path for path in found if not _page_path(path) and not any(_loads(checkout, page, path) for page in pages)]
-        if len(units) > 1 and not every_page:
+        if len(units) > 1 and not several(units):
             keep = [path for path in units if not found[path]]
             misses.append(f'đổi "{old}" thành "{text}" chỉ ở MỘT trang yêu cầu chỉ tới, diff đang sửa {len(units)} file ({", ".join(units)}): '
                           + (f"giữ {keep[0]}, hoàn tác các file khác" if keep else
@@ -571,6 +571,14 @@ def _colon_misses(texts: list[str], hunks) -> list[str]:
     return misses
 
 
+def _several(state: dict, homes: list[str], checkout) -> bool:
+    """Request names several places, by the plan gate's resolver on the candidate tree; undecidable without a tree counts as yes."""
+    if functional.all_pages(state) or not checkout:
+        return True
+    request = {"subject": functional.guest_input(state, "request_title"), "body": functional.guest_input(state, "request_detail")}
+    return best_match.requested_page(request, homes, checkout, state.get("base_sha") or "HEAD")[1]
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -581,7 +589,7 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     colon = [_ws(t) for t in functional.colon_replace(state)]
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
-    misses, judged = _replacement_misses(pairs, hunks, functional.all_pages(state), checkout)
+    misses, judged = _replacement_misses(pairs, hunks, lambda homes: _several(state, homes, checkout), checkout)
     misses += _colon_misses(colon, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
