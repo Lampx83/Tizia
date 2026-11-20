@@ -54,7 +54,7 @@ def all_cases() -> dict:
 
 
 def round_view(grades: Path, repeat: int, stems: set[str], out: Path) -> int:
-    """Grade rows of this round as arm r<repeat>, repeat 0, so two rounds pair by case in eval_gate."""
+    """Grade rows of this round as arm r<repeat>, repeat 0, so two rounds pair by (case, model seed) in eval_gate."""
     n = 0
     with open(out, "a", encoding="utf-8") as fh:
         for line in grades.read_text(encoding="utf-8").splitlines():
@@ -89,8 +89,6 @@ def main(argv=None) -> int:
     run([PY, "-m", "evaluation.pipeline.criterion_grade", "--out", str(rounds / "grades.jsonl"), "--md", str(rounds / f"r{a.repeat}-criteria.md")],
         log, check=False)
     summary = {"repeat": a.repeat, "wall_s": round(time.time() - t0), "suites": {}}
-    empty = rounds / "no-trials"
-    empty.mkdir(exist_ok=True)
     from evaluation.pipeline import solved_rate as SR
     grades = rounds / "grades.jsonl"
     rows = [r for x in grades.read_text(encoding="utf-8").splitlines() if x.strip()
@@ -111,9 +109,9 @@ def main(argv=None) -> int:
             if round_view(rounds / "grades.jsonl", a.prev, prev, view) and round_view(rounds / "grades.jsonl", a.repeat, stems, view):
                 man = rounds / f"gate-r{a.prev}-r{a.repeat}.manifest.json"
                 run([PY, "-m", "evaluation.pipeline.eval_gate", "manifest", str(view), "--arms", f"r{a.prev},r{a.repeat}", "--out", str(man),
-                     "--trials", str(empty)], log, check=False)
+                     "--trials", str(DATA / "trials")], log, check=False)
                 gate = run([PY, "-m", "evaluation.pipeline.eval_gate", "gate", str(view), "--base", f"r{a.prev}", "--cand", f"r{a.repeat}",
-                            "--manifest", str(man), "--trials", str(empty)], log, check=False)
+                            "--manifest", str(man), "--trials", str(DATA / "trials")], log, check=False)
         summary["suites"][suite] = {"trials": len(stems), "cases_solved": s.get("cases_solved"),
                                     "unsolved": s.get("unsolved_cases"), "gate_exit": gate}
     (rounds / f"r{a.repeat}.json").write_text(json.dumps(summary, indent=1, ensure_ascii=False), encoding="utf-8")

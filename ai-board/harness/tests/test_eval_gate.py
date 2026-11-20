@@ -1,3 +1,4 @@
+import json
 from evaluation.pipeline import criteria
 from evaluation.pipeline import criterion_stats as S
 from evaluation.pipeline import eval_gate as G
@@ -142,3 +143,16 @@ def test_threshold_criteria_quality_gate_changed_refused():
         m[key] = "0" * 64
         assert word in refuse(base, m)
     assert "gate" in refuse(base, gate_params={"noise_floor": {"x": 99.0}})
+
+
+def test_rounds_pair_on_case_and_seed_not_repeat():
+    base = mk("r204", "x", [True] * 12, reps=(0,), seed=11)
+    assert G.gate(base, mk("r205", "x", [True] * 12, reps=(0,), seed=11))["overall"] == "pass"
+    res = G.gate(base, mk("r205", "x", [True] * 12, reps=(0,), seed=12))
+    assert len(res["unpaired"]["base_only"]) == 12 and res["overall"] == "inconclusive"
+
+
+def test_enrich_reads_model_seed_from_trial_and_pair_key(tmp_path):
+    (tmp_path / "B0-r205-c0.json").write_text(json.dumps({"case": "c0", "model_seed": 99}), encoding="utf-8")
+    rows = G.enrich([{"trial": "B0-r205-c0", "case": "c0"}], tmp_path, {})
+    assert rows[0]["seed"] == 99 and G.pair_key({"case": "c0", "model_seed": 99}) == ("c0", 99)
