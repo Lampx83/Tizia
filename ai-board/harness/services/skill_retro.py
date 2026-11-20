@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from runtime import meter
 from runtime.budget import Budget, BudgetExhausted
 from services import default_skills
+from settings import get_settings
 from services.skill_rewrite import REWRITE_SCHEMA as _BASE, call, smoke, system_prompt
 
 CLAIM = '/api/ai-board/worker/skill-retro/claim'
@@ -29,6 +30,11 @@ def run_step(client, deps, *, worker_id):
     skill = retro['skill']
     bound = retro.get('bound') or {'model_calls': 4, 'tokens': 40000}
     budget = Budget(max_model_calls=min(int(bound['model_calls']), 4), max_tokens=int(bound['tokens']))
+    if 'unified-format' in get_settings().skill_variant and len({r['request_id'] for r in retro['runs']}) < 2:
+        report_error = {'worker_id': worker_id, 'proposal_id': retro['proposal_id'], 'claim_token': retro['claim_token'],
+                        'model': deps.models.gate3_model, 'raw_response': None, 'text': None, 'evaluation': {'kinds': []},
+                        'error': 'insufficient_evidence', 'usage': {'model_calls': 0, 'tokens': 0}}
+        return {'status': 'reported', 'proposal_id': retro['proposal_id'], 'server': client.post(REPORT, report_error)}
     system = system_prompt()
     block = default_skills.admin_text(SimpleNamespace(name=skill['name'], version=skill.get('version_id', 1), body=skill['text']))
     report = {'worker_id': worker_id, 'proposal_id': retro['proposal_id'], 'claim_token': retro['claim_token'],
