@@ -64,6 +64,16 @@ INVALID_CALL = "invalid_request"
 TOOL_DOC = "\n\nTOOL DOC {name} (schema, then one valid call):\n{schema}\n{call}"
 
 
+CONSTANT = re.compile(r"\{\{(LIT_\d+)\}\}")
+CONSTANTS = ("\nThe requester's quoted strings are named constants. In edit_file `insert`/`replace`, write {{NAME}} and the harness inserts the "
+             "exact text; do not retype them:\n{listing}\n")
+
+
+def constants_of(text: str | None) -> dict[str, str]:
+    """Requester literals -> {LIT_n: verbatim text}."""
+    return {f"LIT_{n}": lit for n, lit in enumerate(file_context.literals(text), 1)}
+
+
 def _tool_doc(name: str) -> str:
     """Schema + manifest example of one tool, for the observation after a repeated invalid call."""
     spec = _specs()[name]
@@ -346,7 +356,8 @@ class Workspace:
 
     def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None,
                  extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None, plan_checks: bool = False,
-                 outside_role: str | None = None):
+                 outside_role: str | None = None, constants: dict[str, str] | None = None):
+        self.constants = constants
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.skills = dict(skills or {})
         self.extra_base = dict(extras or {})
@@ -443,6 +454,15 @@ class Workspace:
         if len(touched) > path_policy.OUT_OF_PLAN_CAP:
             raise ScopeTooLarge(f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}")
 
+    def _expand(self, edits: list) -> list:
+        """Replace {{LIT_n}} in insert/replace with the constant; unknown name -> ToolError."""
+        def sub(match):
+            if match[1] not in self.constants:
+                raise ToolError(f"unknown constant {match[1]}; known: {', '.join(self.constants) or 'none'}")
+            return self.constants[match[1]]
+        return [{**e, **{k: CONSTANT.sub(sub, e[k]) for k in ("insert", "replace") if isinstance(e.get(k), str)}}
+                if isinstance(e, dict) else e for e in edits]
+
     def _fresh(self) -> None:
         bases = {self.file: self.base_hash, **{path: None if base is None else sha_of(base) for path, base in self.extra_base.items()}}
         for path, expected in bases.items():
@@ -513,6 +533,8 @@ class Workspace:
         if name == "edit_file":
             path = self._check_scope(args["file"])
             self._fresh()
+            if self.constants is not None:
+                args = {**args, "edits": self._expand(args["edits"])}
             try:
                 if path == self.file:
                     self.content = file_context.apply_edits(self.content, args["edits"], filename=self.file)
@@ -883,7 +905,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
                 sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=(),
-                requester_role: str | None = None) -> dict:
+                requester_role: str | None = None, request_text: str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -909,7 +931,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
-                   outside_role=requester_role if get_settings().out_of_plan_files else None)
+                   outside_role=requester_role if get_settings().out_of_plan_files else None,
+                   constants=constants_of(request_text) if get_settings().literal_by_reference else None)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if extras:
         prompt += MULTI.format(files=", ".join(paths))
@@ -922,6 +945,9 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     if contract:
         prompt += CONTRACT.format(contract=contract)
         pins = {**(pins or {}), "contract": sha_of(contract)}
+    if ws.constants:
+        prompt += CONSTANTS.format(listing="\n".join(f"{{{{{name}}}}} = {lit!r}" for name, lit in ws.constants.items()))
+        pins = {**(pins or {}), "constants": sha_of(json.dumps(ws.constants, ensure_ascii=False, sort_keys=True))}
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
     feedback, prior = None, None
