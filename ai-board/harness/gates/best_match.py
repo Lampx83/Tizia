@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import re
 
+import tools
+from repositories import code_index
 from services import context, file_context, target_confidence
 from settings import get_settings
 from verification import functional
@@ -83,9 +85,16 @@ def _requested_page(request: dict, homes: list[str], source, sha: str) -> tuple[
     return (resolved.pop() if len(resolved) == 1 else None), several
 
 
+def _loads(source, sha: str, page: str, script: str) -> bool:
+    """The page's own script links (code_index) include `script`."""
+    text = tools._show(source, sha, page)
+    links = code_index.parse(page, text)["links"]["js"] if text else []
+    return script in links
+
+
 def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
     """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several pages
-    when the request names one element; '' = allowed. Scripts are not pages: a page and its own script may both change."""
+    when the request names one element; '' = allowed. A page and a script it loads may both change; any other script is another home."""
     if not sha or feature(request):
         return ""
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
@@ -95,7 +104,8 @@ def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
         edited = set(homes) & set(targets)
         page, several = _requested_page(request, homes, source, sha) if len(homes) > 1 else (None, False)
         pages = {home for home in edited if _PAGE.match(home)}
-        if edited and (len(homes) == 1 or several or len(pages) <= 1 and (page is None or pages == {page})):
+        units = pages | {home for home in edited - pages if not any(_loads(source, sha, p, home) for p in pages)}
+        if edited and (len(homes) == 1 or several or len(units) <= 1 and (page is None or pages == {page})):
             continue
         where = f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}"
         if len(homes) == 1:

@@ -18,7 +18,7 @@ def _repo(tmp_path):
     _git(src, "init", "-q")
     _git(src, "config", "user.email", "t@t")
     _git(src, "config", "user.name", "t")
-    _commit(src, {HOME: f"<title>Vườn hoa</title>\n<h1>Vườn hoa</h1>\n{LINK}",
+    _commit(src, {HOME: f'<title>Vườn hoa</title>\n<h1>Vườn hoa</h1>\n<script src="/js/menu.js"></script>\n{LINK}',
                   SIBLING: f"<title>Khu vực</title>\n<h1>Khu vực</h1>\n{LINK}",
                   SCRIPT: f"const MENU = [{{label: '{OLD}'}}];\n"})
     return src
@@ -56,7 +56,8 @@ def test_without_a_page_hint_the_model_picks_one_and_justifies(tmp_path):
     none_edited = best_match.old_literal_refusal(VAGUE, {"public/other.html"}, src, "HEAD")
     assert "chọn đúng một" in none_edited and "lý do" in none_edited and "không đổi file khác" in none_edited
     assert best_match.old_literal_refusal(VAGUE, {HOME, SIBLING}, src, "HEAD")
-    assert best_match.old_literal_refusal(VAGUE, {SIBLING, SCRIPT}, src, "HEAD") == ""
+    assert best_match.old_literal_refusal(VAGUE, {HOME, SCRIPT}, src, "HEAD") == ""
+    assert best_match.old_literal_refusal(VAGUE, {SIBLING, SCRIPT}, src, "HEAD")
     assert best_match.old_literal_refusal(VAGUE, {SIBLING}, src, "HEAD") == ""
 
 
@@ -261,3 +262,32 @@ def test_attribute_replacement_ignores_other_attributes_and_reindents():
 def test_colon_reader_reads_every_pair_in_a_sentence():
     assert _colon("Đổi tiêu đề thành: A1. Và đổi nút thành: B2.") == ["A1.", "B2."]
     assert _colon("Đổi tiêu đề", "Đổi tiêu đề thành: A1 và nút thành: B2") == []
+
+
+def test_script_is_exempt_only_for_a_page_that_loads_it(tmp_path):
+    src = _repo(tmp_path)
+    assert best_match.old_literal_refusal(NAMED, {HOME, SCRIPT}, src, "HEAD") == ""
+    reason = best_match.old_literal_refusal(_ask(NAMED["subject"], "Trang khu vực có hai liên kết."), {SIBLING, SCRIPT}, src, "HEAD")
+    assert "chỉ sửa " + SIBLING in reason
+
+
+def test_page_named_twice_is_one_page(tmp_path):
+    src = _repo(tmp_path)
+    twice = _ask(NAMED["subject"], "Ở trang vườn hoa, em muốn đổi chữ liên kết của trang vườn hoa đó.")
+    assert "chỉ sửa " + HOME in best_match.old_literal_refusal(twice, {HOME, SIBLING}, src, "HEAD")
+    assert not functional.all_pages({"request_title": "Đổi chữ trang pet", "request_detail": "Ở trang Pet tuần, quay lại trang chủ, trang trí thêm."})
+    assert functional.all_pages({"request_title": "Đổi chữ", "request_detail": "Ở trang vườn hoa và trang khu vực."})
+    both = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>') +         _diff(SIBLING, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">{NEW}</a>')
+    assert _misses(both, twice)
+
+
+def test_gate_4_pairs_inside_the_hunk_and_rejects_head_only_matches():
+    request = _ask(f"Đổi '{OLD}' thành '{NEW}'")
+    meta = f'+<meta name="description" content="{NEW}">'
+    kept = _diff(HOME, f"-{LINK.strip()}", f'+<a class="back" href="/rung.html">→ {NEW}</a>') + "@@ -40,1 +40,2 @@\n" + meta + "\n"
+    assert _misses(kept, request)
+    colon = _ask(COLON_TITLE)
+    bad = _diff("public/m.html", "-<h1>Chợ bài giảng</h1>", "+<h1>📚 Bảng tập mới nhất</h1>", '+<meta name="description" content="Bảng tập mới nhất.">')
+    assert _misses(bad, colon)
+    moved = _diff(HOME, f"-{LINK.strip()}", "+<p>x</p>") + "@@ -40,1 +40,1 @@\n" + f'+<a class="back" href="/rung.html">{NEW}</a>\n'
+    assert _misses(moved, request) == []

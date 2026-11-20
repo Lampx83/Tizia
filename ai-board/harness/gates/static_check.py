@@ -476,71 +476,96 @@ def _segments(line: str) -> set[str]:
     return {seg.strip() for seg in parts if seg.strip()}
 
 
-def _by_path(hunks) -> dict[str, list[tuple[str, str]]]:
-    rows: dict[str, list[tuple[str, str]]] = {}
+def _kind(line: str) -> str:
+    """Head-only lines (meta, title, comment) are a different kind of element than page content."""
+    return "meta" if line.startswith("<meta") else "comment" if "<!--" in line else "title" if "<title" in line else ""
+
+
+def _shown(rows, kinds: set[str]) -> Counter:
+    """Segments of the added lines whose kind is one of `kinds`."""
+    return Counter(seg for sign, line in rows if sign == "+" and _kind(line) in kinds for seg in _segments(line))
+
+
+def _by_hunk(hunks) -> dict[str, list[list[tuple[str, str]]]]:
+    files: dict[str, list[list[tuple[str, str]]]] = {}
     for path, hunk in hunks:
-        rows.setdefault(path, []).extend(hunk)
-    return rows
+        files.setdefault(path, []).append(hunk)
+    return files
 
 
 def _page_path(path: str) -> bool:
     return bool(re.search(r"\.html?$", path))
 
 
-def _replacement_misses(pairs: list[tuple[str, str]], hunks, every_page: bool) -> tuple[list[str], set[str]]:
-    """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same file;
-    a removed line that comes back unchanged (reindent) is not a target. Several pages holding the old text = one miss
-    unless the request names several places. Returns (misses, new texts judged this way); a pair whose old text no hunk
-    removes is left to the plain presence check."""
+def _loads(checkout, page: str, script: str) -> bool:
+    """The page's own script links include `script`; unknown without a checkout counts as yes (no certain finding)."""
+    try:
+        text = (Path(checkout) / page).read_text(encoding="utf-8")
+    except (OSError, TypeError, UnicodeDecodeError):
+        return checkout is None
+    return script in code_index.parse(page, text)["links"]["js"]
+
+
+def _replacement_misses(pairs: list[tuple[str, str]], hunks, every_page: bool, checkout=None) -> tuple[list[str], set[str]]:
+    """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same hunk
+    (head-only lines only count when the removed element was one); failing that, the identical element with only the text
+    changed in another hunk of the file. A removed line that comes back unchanged (reindent) is not a target.
+    Several pages (or scripts no touched page loads) holding the old text = one miss unless the request names several places.
+    Returns (misses, new texts judged this way); a pair whose old text no hunk removes is left to the plain presence check."""
     misses, judged = [], set()
-    files = _by_path(hunks)
+    files = _by_hunk(hunks)
     for old, text in pairs:
         old, text = _ws(old), _ws(text)
         found: dict[str, list[str]] = {}
-        for path, rows in files.items():
-            unchanged = Counter(line for sign, line in rows if sign == "+")
-            before = []
-            for sign, line in rows:
-                if sign != "-":
+        for path, group in files.items():
+            moved = [{line for sign, line in rows if sign == "+"} for rows in group]
+            for i, rows in enumerate(group):
+                unchanged = Counter(line for sign, line in rows if sign == "+")
+                before = []
+                for sign, line in rows:
+                    if sign != "-" or old not in line:
+                        continue
+                    if unchanged[line]:
+                        unchanged[line] -= 1
+                    else:
+                        before += [(seg, line) for seg in _pieces(line, old)]
+                if not before:
                     continue
-                if unchanged[line]:
-                    unchanged[line] -= 1
-                elif old in line:
-                    before += _pieces(line, old)
-            if not before:
-                continue
-            judged.add(text)
-            found[path] = []
-            added = Counter(seg for sign, line in rows if sign == "+" for seg in _segments(line))
-            for seg in before:
-                want = seg.replace(old, text)
-                if added[want]:
-                    added[want] -= 1
-                    continue
-                near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
-                found[path].append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
-                                   + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
-        touched = [path for path in found if _page_path(path)]
-        if len(touched) > 1 and not every_page:
-            keep = [path for path in touched if not found[path]]
-            misses.append(f'đổi "{old}" thành "{text}" chỉ ở MỘT trang yêu cầu chỉ tới, diff đang sửa {len(touched)} trang ({", ".join(touched)}): '
-                          + (f"giữ {keep[0]}, hoàn tác các trang khác" if keep else
-                             f"giữ đúng một trang (sửa thành đúng chữ mới), hoàn tác các trang khác; {next(m for p in touched for m in found[p])}"))
+                judged.add(text)
+                found.setdefault(path, [])
+                added = _shown(rows, {_kind(line) for _, line in before})
+                for seg, line in before:
+                    want = seg.replace(old, text)
+                    if added[want]:
+                        added[want] -= 1
+                    elif any(line.replace(old, text) in other for j, other in enumerate(moved) if j != i):
+                        continue
+                    else:
+                        near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
+                        found[path].append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
+                                           + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
+        pages = [path for path in found if _page_path(path)]
+        units = pages + [path for path in found if not _page_path(path) and not any(_loads(checkout, page, path) for page in pages)]
+        if len(units) > 1 and not every_page:
+            keep = [path for path in units if not found[path]]
+            misses.append(f'đổi "{old}" thành "{text}" chỉ ở MỘT trang yêu cầu chỉ tới, diff đang sửa {len(units)} file ({", ".join(units)}): '
+                          + (f"giữ {keep[0]}, hoàn tác các file khác" if keep else
+                             f"giữ đúng một trang (sửa thành đúng chữ mới), hoàn tác các file khác; {next(m for p in units for m in found[p])}"))
         else:
             misses += [m for path in found for m in found[path]]
     return misses, judged
 
 
 def _colon_misses(texts: list[str], hunks) -> list[str]:
-    """Unquoted 'thành: X': a file that removes something must add a segment, string literal or attribute value equal to X; X elsewhere does not count."""
+    """Unquoted 'thành: X': a hunk that removes something must add, in an element of the removed kind, a segment, string literal
+    or attribute value equal to X; X elsewhere does not count."""
     misses = []
-    files = _by_path(hunks)
     for text in map(_ws, texts):
-        if any(any(sign == "-" for sign, _ in rows) and any(text in _segments(line) for sign, line in rows if sign == "+")
-               for rows in files.values()):
+        if any(any(sign == "-" for sign, _ in rows) and _shown(rows, {_kind(line) for sign, line in rows if sign == "-"})[text]
+               for _, rows in hunks):
             continue
-        path, closest = next(((path, line) for path, rows in files.items() for sign, line in rows
-                              if sign == "+" and text.rstrip(".!?…") in line), (", ".join(files), None))
+        path, closest = next(((path, line) for path, rows in hunks for sign, line in rows
+                              if sign == "+" and text.rstrip(".!?…") in line), (", ".join(dict.fromkeys(p for p, _ in hunks)), None))
         misses.append(f'{path}: chữ yêu cầu "{text}" phải là đúng nguyên văn một phần tử trong dòng thêm thay cho chữ cũ (từng ký tự, cả dấu câu)'
                       + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
     return misses
@@ -556,7 +581,7 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     colon = [_ws(t) for t in functional.colon_replace(state)]
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
-    misses, judged = _replacement_misses(pairs, hunks, functional.all_pages(state))
+    misses, judged = _replacement_misses(pairs, hunks, functional.all_pages(state), checkout)
     misses += _colon_misses(colon, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
