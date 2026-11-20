@@ -16,7 +16,7 @@ KEPT = "AI_BOARD_SANDBOX_SUBTASK_VM"
 TARGET = "public/a.html"
 TEST = "test/a.test.js"
 BASE = {TARGET: "<h1>A</h1>\n", "public/b.html": "<p>B</p>\n"}
-FREE = ["sh", "-c", "anything goes"]
+FREE = ["node", "--test", TEST]
 BINARY = "\x00BIN"
 
 
@@ -118,26 +118,33 @@ def test_flag_default_off_needs_kept_vm_too(monkeypatch):
     assert make(FakeVM()).worktree is True
 
 
-def test_flag_off_keeps_allow_list_and_never_runs_git(monkeypatch):
+def test_flag_off_never_runs_git(monkeypatch):
     monkeypatch.setenv(KEPT, "1")
     client = FakeVM()
     runner = make(client)
-    with pytest.raises(sandbox_tool.Refused):
-        runner(FREE, {})
-    runner(["node", "--test", TEST], {TEST: "x"})
+    runner(FREE, {TEST: "x"})
     runner.close()
-    assert client.git_calls == [] and client.execs == [["node", "--test", TEST]]
+    assert client.git_calls == [] and client.execs == [FREE]
 
 
-def test_bash_is_not_filtered_but_argv_must_be_strings(on):
+@pytest.mark.parametrize("argv", [["sh", "-c", "ls"], ["git", "status"], ["node", "x.js"], [], "ls", ["ls", 1]])
+def test_model_argv_is_still_allow_listed_in_worktree_mode(on, argv):
     client = FakeVM()
     runner = make(client)
-    assert json.loads(runner(FREE, {}))["rc"] == 0
-    for bad in ([], "ls", ["ls", 1]):
-        with pytest.raises(sandbox_tool.Refused):
-            runner(bad, {})
+    with pytest.raises(sandbox_tool.Refused):
+        runner(argv, {})
+    assert client.created == [] and client.execs == []
+
+
+def test_internal_git_calls_work_and_the_model_still_runs_allowed_argv(on):
+    client = FakeVM(bash=lambda argv, files: write(files, TARGET, "<h1>VM</h1>\n"))
+    ws, runner = workspace(client)
+    assert json.loads(ws.run(sandbox_tool.NAME, {"argv": FREE}))["rc"] == 0
+    assert ws.content == "<h1>VM</h1>\n"
+    assert {c[0] for c in client.git_calls} >= {"init", "add", "write-tree", "diff", "show"}
+    with pytest.raises(Forbidden):
+        ws.run(sandbox_tool.NAME, {"argv": ["git", "-C", "checkout", "add", "-A"]})
     runner.close()
-    assert FREE in client.execs and len(client.created) == 1
 
 
 def test_first_call_records_base_tree_before_the_command(on):

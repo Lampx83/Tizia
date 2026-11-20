@@ -22,8 +22,9 @@ NAME = "run_in_sandbox"
 SCHEMA = {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}}, "required": ["argv"]}
 DESCRIPTION = ("Chạy argv trong sandbox, chỉ mẫu allow-list: node --test test/<file>, node --check <file>, npm test, npm run check:content, node scripts/<file>. "
                "Không shell, không mạng. Output bị cắt; bản đầy đủ lưu thành artifact.")
-WORKTREE_DESCRIPTION = ("Chạy argv trong VM của subtask, không lọc lệnh (bash tự do), không mạng. Worktree trong VM là bản chính: "
-                        "file sửa ở đây là thứ được nộp; diff cuối lấy từ git trong VM và bị kiểm phạm vi + path cấm. Output bị cắt; bản đầy đủ lưu thành artifact.")
+WORKTREE_DESCRIPTION = DESCRIPTION[:-len("Output bị cắt; bản đầy đủ lưu thành artifact.")] + (
+    "Worktree trong VM là bản chính: file đổi ở đó là thứ được nộp; diff cuối lấy từ git trong VM và bị kiểm phạm vi + path cấm. "
+    "Output bị cắt; bản đầy đủ lưu thành artifact.")
 VM_DIR = "checkout"
 _GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-C", VM_DIR)
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
@@ -161,11 +162,6 @@ def _overlay(files: dict[str, str]) -> bytes:
     return buffer.getvalue()
 
 
-def _check_free(argv) -> None:
-    if not isinstance(argv, list) or not argv or not all(isinstance(token, str) for token in argv):
-        raise Refused("argv phải là mảng chuỗi không rỗng")
-
-
 def _write(drafts: dict[str, str], root: Path) -> None:
     for rel, text in drafts.items():
         target = root / rel
@@ -189,10 +185,7 @@ class Runner:
         self.receipts: list[dict] = [] if receipts is None else receipts
 
     def __call__(self, argv, drafts: dict[str, str], call_id: str | None = None) -> str:
-        if self.worktree:
-            _check_free(argv)
-        else:
-            check_argv(argv, self.cfg["allowed_argv"])
+        check_argv(argv, self.cfg["allowed_argv"])
         if self.kept:
             return self._call_kept(argv, drafts, call_id)
         deadline = time.monotonic() + self.cfg["wall_clock_s"]
