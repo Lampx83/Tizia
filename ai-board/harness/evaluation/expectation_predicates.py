@@ -14,7 +14,7 @@ from evaluation.pipeline import DATA, REPO
 from evaluation.pipeline import criteria as C
 from evaluation.pipeline import lf235_grade as L
 
-DATA_FILE = Path(__file__).parent / "datasets" / "expectation-predicates.json"
+DATA_FILE = Path(__file__).with_suffix(".json")
 Verdict = tuple[bool, str]
 
 
