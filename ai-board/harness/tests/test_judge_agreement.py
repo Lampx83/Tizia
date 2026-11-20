@@ -44,11 +44,13 @@ def test_sources_reported_separately_and_combined():
     assert stat(res, src="combined")["tpr"] == 0.5
 
 
-def test_trial_key_with_case_fallback():
+def test_case_fallback_only_when_evaluator_has_no_trial_keys():
     items = [L("t1", "pass", case="c1"), L("t2", "fail", case="c2")]
-    rows = [{"evaluator": "j", "case": "c1", "verdict": "pass"}, V("j", "t2", "fail")]
-    s = stat(ja.evaluate(items, rows))
+    case_only = [{"evaluator": "j", "case": "c1", "verdict": "pass"}, {"evaluator": "j", "case": "c2", "verdict": "fail"}]
+    s = stat(ja.evaluate(items, case_only))
     assert s["tpr"] == 1.0 and s["tnr"] == 1.0 and s["missing"] == 0
+    mixed = [{"evaluator": "j", "case": "c1", "verdict": "pass"}, V("j", "t2", "fail")]
+    assert stat(ja.evaluate(items, mixed))["missing"] == 1
 
 
 def test_missing_verdicts_block_usable():
@@ -138,14 +140,55 @@ def test_main_no_labels_exit_2_and_single_threshold_rejected(tmp_path):
         ja.main(["--min-tpr", "0.9"])
 
 
-def test_exporter_from_results_grades_and_judge(tmp_path):
-    res = tmp_path / "results.jsonl"
-    res.write_text(json.dumps({"id": "t1", "resolved": True}) + "\n" + json.dumps({"id": "t2", "resolved": False}), encoding="utf-8")
-    grades, bmap = tmp_path / "g.json", tmp_path / "m.json"
-    grades.write_text(json.dumps([{"blind_id": "g1", "verdict": "partial"}]), encoding="utf-8")
-    bmap.write_text(json.dumps({"g1": {"run": "r", "id": "t1"}}), encoding="utf-8")
-    judge = tmp_path / "judge.jsonl"
-    judge.write_text(json.dumps({"case": "t1", "verdict": "equivalent"}), encoding="utf-8")
-    rows = ja.export_results("oracle_pack", res) + ja.export_grades("blind", grades, bmap) + ja.export_judge("gemma", judge)
-    assert rows == [{"evaluator": "oracle_pack", "trial": "t1", "verdict": "pass"}, {"evaluator": "oracle_pack", "trial": "t2", "verdict": "fail"},
-                    {"evaluator": "blind", "trial": "t1", "verdict": "partial"}, {"evaluator": "gemma", "trial": "t1", "verdict": "equivalent"}]
+def _w(path, rows):
+    path.write_text(chr(10).join(json.dumps(r) for r in rows), encoding="utf-8")
+    return path
+
+
+def test_exporters_key_by_run_id_mode_repeat(tmp_path):
+    res = _w(tmp_path / "results.jsonl", [{"id": "t1", "mode": "e2e", "repeat": 1, "resolved": True},
+                                           {"id": "t1", "mode": "e2e", "repeat": 2, "resolved": False},
+                                           {"id": "t2", "mode": "e2e", "repeat": 1}])
+    out = ja.export_results("oracle_pack", res)
+    assert [(r["trial"], r["verdict"]) for r in out] == [("t1/e2e/1", "pass"), ("t1/e2e/2", "fail"), ("t2/e2e/1", None)]
+    grades = _w(tmp_path / "g.json", [{"blind_id": "g1", "verdict": "partial"}, {"blind_id": "g2", "verdict": "pass"}])
+    bmap = tmp_path / "m.json"
+    bmap.write_text(json.dumps({"g1": {"run": "A", "id": "t1", "mode": "e2e", "repeat": 1}, "g2": {"run": "B", "id": "t1", "mode": "e2e", "repeat": 1}}), encoding="utf-8")
+    out = ja.export_grades("blind", grades, bmap)
+    assert {(r["evaluator"], r["trial"]) for r in out} == {("blind:A", "t1/e2e/1"), ("blind:B", "t1/e2e/1")}
+    judge = _w(tmp_path / "judge.jsonl", [{"case": "t1", "repeat": 1, "verdict": "equivalent"}, {"case": "t1", "repeat": 2}])
+    out = ja.export_judge("gemma", judge)
+    assert [(r["trial"], r["verdict"]) for r in out] == [("t1/1", "equivalent"), ("t1/2", None)]
+    assert all(ja.evaluate([L("t1/1", "pass", case="t1")], out)["evaluators"]["gemma"]["conflicts"] == 0 for _ in [0])
+
+
+def test_read_accepts_rows_object_and_rejects_other_objects(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text(json.dumps({"rows": [{"id": "t1", "resolved": True}], "meta": 1}), encoding="utf-8")
+    assert ja.export_results("o", p)[0]["verdict"] == "pass"
+    p.write_text(json.dumps({"summary": 1, "n": 2}, indent=1), encoding="utf-8")
+    with pytest.raises(ValueError, match="unsupported"):
+        ja.export_results("o", p)
+
+
+def test_export_criteria_one_row_per_criterion_trial(tmp_path):
+    p = _w(tmp_path / "c.jsonl", [{"trial": "t1", "case": "c1", "criterion": "ship_after_gates", "observed": True},
+                                   {"trial": "t1", "case": "c1", "criterion": "scope_ok", "observed": None},
+                                   {"case": "c1", "criterion": "scope_ok", "observed": True}])
+    out = ja.export_criteria(p)
+    assert out == [{"evaluator": "ship_after_gates", "trial": "t1", "case": "c1", "verdict": True},
+                   {"evaluator": "scope_ok", "trial": "t1", "case": "c1", "verdict": None}]
+
+
+def test_export_appends_never_overwrites(tmp_path):
+    vp = tmp_path / "v.jsonl"
+    vp.write_text(json.dumps(V("old", "a", "pass")), encoding="utf-8")
+    res = _w(tmp_path / "r.jsonl", [{"id": "t1", "resolved": True}])
+    assert ja.main(["--verdicts", str(vp), "--export-results", "new", str(res)]) == 0
+    lines = vp.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and json.loads(lines[0])["evaluator"] == "old"
+
+
+def test_report_states_missing_blocks_usable(tmp_path):
+    items, rows = balanced(1)
+    assert "Any missing" in ja.render(ja.evaluate(items, rows), ja.load_labels([])[1])

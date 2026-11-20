@@ -56,7 +56,7 @@ def collect(run_dirs: list[Path], pack: list[dict], out_dir: Path, seed: int = 2
         batch.append({"blind_id": blind, "request": {"title": entry["title"], "detail": entry["detail"], "verify": [s["verify"] for s in entry["subtasks"]]},
                       "files": entry["files"], "base_sha": entry["base_sha"], "diff": row.get("diff"),
                       "diff_truncated": len(row.get("diff") or "") == OLD_DIFF_CAP})
-        key[blind] = {"run": item["run"], "id": row["id"], "oracle": bool(row.get("resolved")), "mode": row.get("mode")}
+        key[blind] = {"run": item["run"], "id": row["id"], "oracle": bool(row.get("resolved")), "mode": row.get("mode"), "repeat": row.get("repeat")}
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "batch.json").write_text(json.dumps({"prompt": PROMPT, "items": batch}, ensure_ascii=False, indent=1), encoding="utf-8")

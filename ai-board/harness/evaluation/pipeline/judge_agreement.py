@@ -31,6 +31,16 @@ def _read(path) -> list[dict]:
     if not p.exists():
         return []
     text = p.read_text(encoding="utf-8").strip()
+    if text.startswith("{"):
+        try:
+            doc = json.loads(text)
+        except json.JSONDecodeError:
+            return [json.loads(x) for x in text.splitlines() if x.strip()]
+        if isinstance(doc.get("rows"), list):
+            return doc["rows"]
+        if "\n" not in text:
+            return [doc]
+        raise ValueError(f"unsupported format in {p}: a JSON object without a 'rows' list")
     return json.loads(text) if text.startswith("[") else [json.loads(x) for x in text.splitlines() if x.strip()]
 
 
@@ -81,18 +91,16 @@ def load_labels(paths) -> tuple[list[dict], dict]:
                    "skipped_unapproved": skipped, "missing_files": missing}
 
 
-def _lookup(by_key, item):
-    for k in (item["trial"], item["case"]):
-        s = by_key.get(k)
-        if s and len(s) == 1:
-            return next(iter(s))
-    return None
+def _lookup(e, item):
+    """Trial-level verdict; case-level only when the evaluator has no trial-level rows at all."""
+    s = e["by_trial"].get(item["trial"]) if e["by_trial"] else e["by_case"].get(item["case"]) or e["by_case"].get(item["trial"])
+    return next(iter(s)) if s and len(s) == 1 else None
 
 
-def _stats(subset, by_key, thr):
+def _stats(subset, ev, thr):
     pairs, groups, missing = [], {}, 0
     for it in subset:
-        v = _lookup(by_key, it)
+        v = _lookup(ev, it)
         if v is None:
             missing += 1
             continue
@@ -136,20 +144,21 @@ def evaluate(items, rows, thr=None) -> dict:
     seen: dict[str, dict] = {}
     for r in rows:
         ev = r.get("evaluator")
-        e = seen.setdefault(ev or NO_EVALUATOR, {"by_key": {}, "n_rows": 0, "n_valid": 0, "n_invalid": 0})
+        e = seen.setdefault(ev or NO_EVALUATOR, {"by_trial": {}, "by_case": {}, "n_rows": 0, "n_valid": 0, "n_invalid": 0})
         e["n_rows"] += 1
-        key, v = r.get("trial") or r.get("case_id") or r.get("case"), binary(r.get("verdict"))
-        if not ev or not key or v is None:
+        v = binary(r.get("verdict"))
+        trial, case = r.get("trial"), r.get("case_id") or r.get("case")
+        if not ev or not (trial or case) or v is None:
             e["n_invalid"] += 1
             continue
         e["n_valid"] += 1
-        e["by_key"].setdefault(key, set()).add(v)
+        (e["by_trial"] if trial else e["by_case"]).setdefault(trial or case, set()).add(v)
     test = [i for i in items if i["split"] == "test"]
     out = {}
     for ev, e in sorted(seen.items()):
-        by_source = {src: _stats([i for i in test if src == "combined" or i["source"] == src], e["by_key"], thr) for src in SOURCES}
+        by_source = {src: _stats([i for i in test if src == "combined" or i["source"] == src], e, thr) for src in SOURCES}
         out[ev] = {"by_source": by_source, "n_rows": e["n_rows"], "n_valid": e["n_valid"], "n_invalid": e["n_invalid"],
-                   "conflicts": sum(len(s) > 1 for s in e["by_key"].values())}
+                   "conflicts": sum(len(s) > 1 for d in (e["by_trial"], e["by_case"]) for s in d.values())}
     return {"evaluators": out}
 
 
@@ -158,7 +167,7 @@ def render(res, report, thr=None) -> str:
     head = (f"Thresholds (owner): TPR >= {thr['min_tpr']}, TNR >= {thr['min_tnr']}, min labels per class {thr.get('min_n', DEFAULT_MIN_N)}; "
             "bootstrap 95% lower bound by case." if thr else "No thresholds set by owner: all results are reference.")
     lines = ["# Evaluator agreement with human labels (test split)", "", head,
-             "TPR = label pass and evaluator passes. TNR = label fail and evaluator fails. Missing or invalid verdicts block 'usable'.",
+             "TPR = label pass and evaluator passes. TNR = label fail and evaluator fails. Any missing or invalid verdict blocks 'usable' (owner rule).",
              "Sources: owner = owner-reviewed; ai_owner_approved = AI-labelled, owner-approved; combined = both (owner wins on a shared trial).", "",
              f"Label files missing: {report['missing_files'] or 'none'}. Skipped label rows: {report['skipped_unapproved']}. "
              f"Conflicting trials dropped: {report['label_conflicts'] or 'none'}. Owner/AI disagreements: {report['owner_ai_disagree'] or 'none'}. "
@@ -172,22 +181,35 @@ def render(res, report, thr=None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _key(*parts) -> str | None:
+    return "/".join(str(x) for x in parts if x is not None) or None
+
+
 def export_results(evaluator, path) -> list[dict]:
-    """Oracle rows from results.jsonl: resolved -> pass."""
-    return [{"evaluator": evaluator, "trial": r.get("trial") or r.get("case") or r.get("id"), "verdict": "pass" if r.get("resolved") else "fail"}
+    """Oracle rows from results.jsonl keyed id/mode/repeat; missing 'resolved' gives a null (invalid) verdict."""
+    return [{"evaluator": evaluator, "trial": r.get("trial") or _key(r.get("id"), r.get("mode"), r.get("repeat")),
+             "case": r.get("case") or r.get("id"), "verdict": ("pass" if r["resolved"] else "fail") if isinstance(r.get("resolved"), bool) else None}
             for r in _read(path)]
 
 
 def export_judge(evaluator, path) -> list[dict]:
-    """Judge rows from judge.jsonl (equivalent/partial/different)."""
-    return [{"evaluator": evaluator, "trial": r.get("case"), "verdict": r.get("verdict")} for r in _read(path)]
+    """Judge rows from judge.jsonl keyed case/repeat (equivalent/partial/different); missing verdict is null."""
+    return [{"evaluator": evaluator, "trial": r.get("trial") or _key(r.get("case"), r.get("repeat")), "case": r.get("case"),
+             "verdict": r.get("verdict")} for r in _read(path)]
 
 
 def export_grades(evaluator, grades_path, blindmap_path) -> list[dict]:
-    """Blind grades joined to the task id through blindmap.json."""
+    """Blind grades joined through blindmap.json; one evaluator per run ('EVAL:run'), keyed id/mode/repeat."""
     key = json.loads(Path(blindmap_path).read_text(encoding="utf-8"))
-    return [{"evaluator": evaluator, "trial": key[g["blind_id"]]["id"], "verdict": g.get("verdict")}
-            for g in _read(grades_path) if g.get("blind_id") in key]
+    return [{"evaluator": f"{evaluator}:{key[g['blind_id']].get('run')}",
+             "trial": _key(key[g["blind_id"]]["id"], key[g["blind_id"]].get("mode"), key[g["blind_id"]].get("repeat")),
+             "case": key[g["blind_id"]]["id"], "verdict": g.get("verdict")} for g in _read(grades_path) if g.get("blind_id") in key]
+
+
+def export_criteria(path) -> list[dict]:
+    """One row per criterion per trial from rows with 'trial' and 'observed'; evaluator = criterion, null observed stays invalid."""
+    return [{"evaluator": r["criterion"], "trial": r["trial"], "case": r.get("case"), "verdict": r["observed"]}
+            for r in _read(path) if r.get("trial") and r.get("criterion") and "observed" in r]
 
 
 def main(argv=None) -> int:
@@ -201,14 +223,23 @@ def main(argv=None) -> int:
     ap.add_argument("--export-results", nargs=2, action="append", metavar=("EVAL", "FILE"), default=[])
     ap.add_argument("--export-judge", nargs=2, action="append", metavar=("EVAL", "FILE"), default=[])
     ap.add_argument("--export-grades", nargs=3, action="append", metavar=("EVAL", "GRADES", "BLINDMAP"), default=[])
+    ap.add_argument("--export-criteria", action="append", metavar="FILE", default=[])
     a = ap.parse_args(argv)
     if (a.min_tpr is None) != (a.min_tnr is None):
         ap.error("--min-tpr and --min-tnr go together")
-    if a.export_results or a.export_judge or a.export_grades:
-        rows = ([r for e, f in a.export_results for r in export_results(e, f)] + [r for e, f in a.export_judge for r in export_judge(e, f)]
-                + [r for e, g, m in a.export_grades for r in export_grades(e, g, m)])
-        Path(a.verdicts).write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
-        print(f"{len(rows)} verdict rows -> {a.verdicts}")
+    if a.export_results or a.export_judge or a.export_grades or a.export_criteria:
+        try:
+            rows = ([r for e, f in a.export_results for r in export_results(e, f)] + [r for e, f in a.export_judge for r in export_judge(e, f)]
+                    + [r for e, g, m in a.export_grades for r in export_grades(e, g, m)] + [r for f in a.export_criteria for r in export_criteria(f)])
+        except ValueError as error:
+            print(error)
+            return 2
+        vp = Path(a.verdicts)
+        nl = chr(10)
+        sep = nl if vp.exists() and vp.stat().st_size and not vp.read_text(encoding="utf-8").endswith(nl) else ""
+        with vp.open("a", encoding="utf-8") as f:
+            f.write(sep + "".join(json.dumps(r, ensure_ascii=False) + nl for r in rows))
+        print(f"{len(rows)} verdict rows appended to {a.verdicts}; {sum(r['verdict'] is None for r in rows)} have no verdict (counted invalid)")
         return 0
     items, report = load_labels(a.labels)
     if not any(i["split"] == "test" for i in items):
