@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from verification import functional
 import path_policy
-from gates import best_match, grounding_paths, react_plan, subtask_contract
+from gates import best_match, grounding_paths, plan_rules, react_plan, subtask_contract
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -360,6 +360,14 @@ def new_files(plan: dict, source, sha: str | None) -> set[str]:
     return {f for f in files if not tree.exists(f)}
 
 
+def named_in_request(path: str, request_text: str) -> bool:
+    """The exact path, or a directory of it with at least two segments, is named in the request:
+    a plan that renames a requested new file inside the requested folder is still that feature."""
+    parts = path.split('/')
+    prefixes = ("/".join(parts[:i]) + "/" for i in range(2, len(parts)))
+    return path in request_text or any(prefix in request_text for prefix in prefixes)
+
+
 def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = None,
         source=None, sha: str | None = None) -> dict:
     """1 lời gọi GATE1_MODEL (+1 lần hỏi lại nếu plan sai schema/file), tính phí budget.
@@ -400,9 +408,11 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             ask = f"{ask}\n\n{request['plan_repair']}"
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
         react, evidence = None, ""
-        if not attempt and react_plan.enabled():
+        session = get_settings().session_plan_execute
+        if not attempt and (react_plan.enabled() or session):
             react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
-                                   db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
+                                   db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
+                                   **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}))
         elif not attempt and react_plan.exploration_enabled() and react_plan.warranted(request, ctx):
             # Hard request (see react_plan.warranted): one bounded read-only pass puts real source lines in front of
             # the planner; a pass that fails or reads nothing leaves `ask` byte-identical to the one-shot prompt.
@@ -455,14 +465,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             # to edit, so best-match is advisory exactly as for a feature request.
             request_text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
 
-            def in_request(path: str) -> bool:
-                # The exact path, or a directory of it with at least two segments, is named in the request:
-                # a plan that renames a requested new file inside the requested folder is still that feature.
-                parts = path.split('/')
-                prefixes = ("/".join(parts[:i]) + "/" for i in range(2, len(parts)))
-                return path in request_text or any(prefix in request_text for prefix in prefixes)
-
-            named = {path for path in added if in_request(path)}
+            named = {path for path in added if named_in_request(path, request_text)}
             advisory = best_match.objections_advisory()
 
             def objection(message: str) -> None:
@@ -510,7 +513,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match'),
                 'form_warnings': list(form_warnings),
                 **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
-                **({'react_quotes': react['quotes']} if react else {})}
+                **({'react_quotes': react['quotes']} if react else {}),
+                **({'plan_session': react['session'], 'plan_tier': plan_rules.tier(plan)} if react and 'session' in react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
             "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match")}

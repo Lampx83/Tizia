@@ -512,6 +512,10 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     state['source_targets'] = out.get('source_targets') or []
     state['best_match'] = out.get('best_match')
     state['form_warnings'] = list(out.get('form_warnings') or [])
+    state.pop('plan_session', None)
+    state.pop('plan_tier', None)
+    if out.get('plan_session'):
+        state['plan_session'], state['plan_tier'] = out['plan_session'], out.get('plan_tier')
     return out
 
 
