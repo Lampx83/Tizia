@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import limits, meter, model_json, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
+from runtime import expand_tool, limits, meter, model_json, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
 from runtime.budget import BudgetExhausted, ChildBudget
 from runtime.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
@@ -42,11 +42,12 @@ DESCRIPTIONS = {name: spec.description for name, spec in MANIFEST.tools.items()}
 
 
 _SANDBOX_OFFERED = ContextVar("sandbox_offered", default=False)
+_EXPAND_OFFERED = ContextVar("expand_offered", default=False)
 
 
 def _specs() -> dict:
     """Tool của manifest + run_in_sandbox khi subtask đang chạy được phép (flag + task_type)."""
-    return {**MANIFEST.tools, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {})}
+    return {**MANIFEST.tools, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {}), **(expand_tool.specs() if _EXPAND_OFFERED.get() else {})}
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "tool_loop.md").read_text(encoding="utf-8")
 MAX_REPEATS = _LOOP["repeats"]
@@ -711,6 +712,7 @@ def _skill_resource(skills: dict[str, ActiveSkill], path: str) -> str:
 def _cap(name: str) -> int:
     """Trần token quan sát, từ contract."""
     caps = limits.observation_tokens()
+    name = "read_file" if name == expand_tool.NAME else name  # expand pages like read_file; page size and fit cap must match
     return caps.get(name, caps["default"])
 
 
@@ -721,22 +723,32 @@ def _fit(text: str, name: str) -> str:
     specs = _specs()
     if name not in specs:
         return text[:ERROR_CHARS]
-    return token_count.fit(text if name == "read_file" else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
+    return token_count.fit(text if name in ("read_file", expand_tool.NAME) else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
 
 
-def _read_window(content: str, start: int | None, end: int | None) -> str:
+def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "", prefix: str = "L", reserve: int = 0, labels: list[int] | None = None) -> str:
     """Dòng `Lnn| ` của [start, end]; quá trần token thì cắt ở ranh giới dòng, kèm tổng dòng và lệnh đọc tiếp."""
     rows = content.splitlines()
     total = len(rows)
     if not total:
         return "(file rỗng)"
+    shown = (lambda i: labels[i - 1]) if labels else (lambda i: i)  # visible number of row index i (1-based)
+    if labels:
+        asked = (start, end)
+        if start is not None:
+            start = next((i + 1 for i, label in enumerate(labels) if label >= start), total + 1)
+        if end is not None:
+            end = sum(label <= end for label in labels)
+        if (1 if start is None else start) > (total if end is None else end):
+            raise ToolError(f"{tool}: khoảng dòng không hợp lệ (observation có dòng {labels[0]}-{labels[-1]}, start_line={asked[0]}, end_line={asked[1]})")
     start, end = 1 if start is None else start, total if end is None else min(end, total)
     if start < 1 or start > total or end < start:
-        raise ToolError(f"read_file: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
-    cap = _cap("read_file")
+        raise ToolError(f"{tool}: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
+    after = lambda i: labels[i] if labels and i < total else shown(i) + 1  # next visible number after row index i
+    cap = _cap("read_file") - reserve
     room = cap - PAGE_HINT_TOKENS
     def page(last: int) -> str:
-        return "\n".join(f"L{n}| {rows[n - 1]}" for n in range(start, last + 1))
+        return "\n".join(f"{prefix}{shown(n)}| {rows[n - 1]}" if prefix else rows[n - 1] for n in range(start, last + 1))
 
     if token_count.measure(page(end)) <= cap:
         return page(end)
@@ -746,8 +758,8 @@ def _read_window(content: str, start: int | None, end: int | None) -> str:
         low, high = (mid, high) if token_count.measure(page(mid)) <= room else (low, mid - 1)
     body = token_count.fit(page(low), room)
     if low == start and body != page(low):
-        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: read_file start_line={start + 1}]"
-    return f"{body}\n[dòng {start}-{low}/{total}; đọc tiếp: read_file start_line={low + 1}]"
+        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: {tool} {ref}start_line={after(start)}]"
+    return f"{body}\n[dòng {shown(start)}-{shown(low)}/{shown(total)}; đọc tiếp: {tool} {ref}start_line={after(low)}]"
 
 
 def _tool_list() -> str:
@@ -905,6 +917,25 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
 COMPACTED = "(compacted into UNTRUSTED_SUMMARY)"
 
 
+def _expand(history, args: dict) -> str:
+    """Page of the archived original of observation `step`, headed by the digest the summary references; ToolError if unknown."""
+    archive = getattr(history, "archive", {})
+    step = args["step"]
+    if step not in archive:
+        raise ToolError(f"expand: step {step} không có observation (có: {sorted(archive)[:20]})")
+    digest, text = archive[step]
+    body = [row for row in text.splitlines() if row and not row.startswith("[")]
+    marks = [re.match(r"L(\d+)\| ", row) for row in body]
+    header = f"[expand step={step} sha256:{digest}]\n"
+    reserve = token_count.measure(header) + 1
+    lo, hi = args.get("start_line"), args.get("end_line")
+    if body and all(marks):  # read_file/expand text already carries Lnn|: keep its numbers and window by them
+        page = _read_window("\n".join(body), lo, hi, expand_tool.NAME, f"step={step} ", "", reserve, [int(m.group(1)) for m in marks])
+    else:
+        page = _read_window(text, lo, hi, expand_tool.NAME, f"step={step} ", "R" if any(marks) else "L", reserve)
+    return header + page
+
+
 def _release(messages: list, slots: list) -> None:
     for slot in slots:
         messages[slot] = {**messages[slot], "content": COMPACTED}
@@ -920,6 +951,8 @@ def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, ob
         history.add(n, name, _fit(observation, name))
     else:
         prompt += _observation(name, _fit(observation, name), cid)
+    if history is not None:
+        expand_tool.record(history, observation)
     return prompt
 
 
@@ -959,11 +992,13 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     runners: list = []
     vm_unconfirmed = None
     token = _SANDBOX_OFFERED.set(sandbox_tool.offered(subtask.get("task_type")))
+    expand_token = _EXPAND_OFFERED.set(expand_tool.offered())
     try:
         result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks,
                               sandbox_log=sandbox_log, sandbox_runners=runners, **kwargs)
     finally:
         _SANDBOX_OFFERED.reset(token)
+        _EXPAND_OFFERED.reset(expand_token)
         for runner in runners:
             try:
                 runner.close()
@@ -1104,7 +1139,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         pins = {**(pins or {}), "react_schema": True}
     if get_settings().context_compaction:
         from runtime.compaction import History, pin
-        history = History(native=messages is not None)
+        history = (expand_tool.history_class() if expand_tool.offered() else History)(native=messages is not None)
         pins = {**(pins or {}), 'compaction': pin()}
     bad_tool, bad_n = None, 0
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
@@ -1193,7 +1228,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args, cid)
             try:
-                observation = _network(deps, name, args) if name in network_request.TOOLS else ws.run(name, args)
+                observation = (_network(deps, name, args) if name in network_request.TOOLS
+                               else _expand(history, args) if name == expand_tool.NAME else ws.run(name, args))
             except (ToolError, Forbidden, NetworkPause, server_hsm.AuthorityError, BudgetExhausted, sandbox_tool.RunnerBusy):
                 raise
             except Exception as error:
