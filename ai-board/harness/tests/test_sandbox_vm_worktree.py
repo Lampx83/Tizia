@@ -56,6 +56,8 @@ class FakeVM(FakeClient):
             return OK
         self.git_argv.append(list(argv))
         sub = argv[argv.index("-C") + 2:]
+        while sub[0] == "-c":
+            sub = sub[2:]
         self.git_calls.append(sub)
         out = self._git(sub)
         return {**out, "stdout": out["stdout"].replace("\0", "")}
@@ -82,6 +84,8 @@ class FakeVM(FakeClient):
             for path, value in self.files.items():
                 if force or path in self.index or path not in self.ignored:
                     self.index[path] = value
+            return self._out()
+        if name == "commit":
             return self._out()
         if name == "write-tree":
             tree = "tree" + hashlib.sha1(json.dumps({k: blob(v) for k, v in self.index.items()}, sort_keys=True).encode()).hexdigest()[:8]

@@ -385,6 +385,18 @@ class Runner:
         self._vm_state = dict(changed)
         return changed, rejected
 
+    def commit(self, drafts: dict[str, str], step: int) -> None:
+        """One git commit per loop step in the live VM worktree; best effort, the server checkpoint is the record."""
+        if not self.worktree or self._session is None:
+            return
+        try:
+            self._push(drafts)
+            self._git("add", "-A")
+            self._git("-c", "user.name=harness", "-c", "user.email=harness@localhost", "-c", "core.hooksPath=/dev/null",
+                      "commit", "-q", "--no-verify", "--allow-empty", "-m", f"step {step}")
+        except SandboxError:
+            pass
+
     def restore(self, paths) -> None:
         """Put each path back to the base tree, or remove it when the base has none."""
         for path in paths:

@@ -802,6 +802,64 @@ def _prior_rows(stores, expected: dict) -> list | None:
     return rows if rows and rows[-1][1]["kind"] == "finish_ok" else None
 
 
+VM_KEY = "vm"
+VM_CAP = 150_000  # server cuts a ledger at 200 KB; a bigger diff is stored as unresumable
+
+
+def _vm_diff(ws: Workspace) -> dict[str, str]:
+    base = {ws.file: ws.base or "", **{path: text or "" for path, text in ws.extra_base.items()}}
+    files = {ws.file: ws.content, **({ws.test_file: ws.test} if ws.test_file else {}), **ws.extra_content}
+    return {path: text for path, text in files.items() if text != base.get(path, "")}
+
+
+class _VmSteps:
+    """Store wrapper for worktree mode: each saved ledger carries the VM diff, its pins and open faults; one VM commit per state-changing step."""
+    step = None
+
+    def __init__(self, inner, ws: Workspace, sha: str):
+        self._inner, self._ws, self._seen, self._record = inner, ws, None, None
+        self._dirty = False
+        self.pins = {"base": sha, "check_runtime": loop_checks.runtime_hash(),
+                     "spec": sandbox_tool.worktree_spec_hash(), "tools": MANIFEST.hash[:16]}
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def done(self, step, tool, *args, **kwargs):
+        self._inner.done(step, tool, *args, **kwargs)
+        self.step, self._dirty = step, tool in WRITE_TOOLS or tool == sandbox_tool.NAME
+
+    def save_ledger(self, snapshot: dict) -> None:
+        if self.step is not None:
+            if self._seen != self.step:
+                if self._dirty:
+                    self._ws.sandbox.commit(self._ws._drafts(), self.step)
+                files = _vm_diff(self._ws)
+                faults = [[type(fault).__name__, str(fault)] for fault in self._ws.vm_faults]
+                self._record = {"step": self.step, "pins": self.pins, "faults": faults,
+                                "files": files if len(json.dumps(files)) <= VM_CAP else None}
+                self._seen = self.step
+            snapshot = {**snapshot, VM_KEY: self._record}
+        self._inner.save_ledger(snapshot)
+
+
+def _restore_vm(store: _VmSteps, ws: Workspace, saved: dict) -> tuple[int, dict | None]:
+    """Put the last checkpointed VM diff into the drafts; the VM is rebuilt from them on first use. → (last step covered, blocked result|None)."""
+    vm = (saved["ledger"] or {}).get(VM_KEY)
+    if vm is None:
+        return -1, None
+    drift = sorted(k for k in store.pins.keys() | vm["pins"].keys() if store.pins.get(k) != vm["pins"].get(k))
+    if drift:
+        return -1, _result("blocked", f"VM diff không áp được, pin lệch: {', '.join(drift)}", "critical")
+    if vm["files"] is None or vm["step"] > saved["steps"][-1]["step"]:
+        return -1, _result("blocked", "VM diff đã lưu không dùng được để resume", "critical")
+    if vm["faults"]:
+        return -1, _result("blocked", f"VM diff có lỗi path chưa xử lý: {vm['faults'][0][1]}", "critical")
+    ws._adopt(vm["files"], [])
+    store.step = saved["steps"][-1]["step"]
+    return vm["step"], None
+
+
 def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, history=None, messages=None,
             prior=None, feedback=None, mint=None, network=None) -> tuple:
     """Nạp checkpoint: kiểm pin, nhận ledger cũ, dựng lại bản nháp. → (prompt, steps, rejected, kết quả dừng|None).
@@ -823,6 +881,11 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
         return prompt, [], False, None
     if drift:
         return prompt, [], False, _result("blocked", f"checkpoint không tương thích: {', '.join(drift)}", "critical")
+    covered = -1
+    if isinstance(store, _VmSteps) and saved["steps"]:
+        covered, stop = _restore_vm(store, ws, saved)
+        if stop:
+            return prompt, [], False, stop
     rows = list(prior or []) + [(store, row) for row in saved["steps"]]
     pending = feedback is not None and not any(
         row["kind"] == FEEDBACK and row["args"].get("sha") == feedback["sha"] for _, row in rows)
@@ -841,6 +904,7 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
             return prompt, steps, False, _result(
                 "blocked", f"bước {n} ({name}) cần bù trừ; chốt bù trừ xong mới resume", "critical",
                 steps=steps, unknown_outcome={"step": n, "tool": name, "status": status})
+        uncovered = isinstance(store, _VmSteps) and n > covered and name == sandbox_tool.NAME and status in ("done", "applied")
         if status in ("intent", "unknown"):
             if name not in WRITE_TOOLS:
                 owner.drop(n)
@@ -868,9 +932,11 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
             return prompt, steps, False, _result("blocked", observation, "critical", steps=steps)
         if status == "void":
             observation = "bước này bị hủy khi đối chiếu; thử lại nếu cần"
+        elif uncovered:
+            observation = "VM state of this step was not checkpointed before the worker died; run it again if needed"
         elif kind == SCOPE_WARNING:
             ws.scope_warned = True
-        elif name in WRITE_TOOLS and (status == "applied" or kind == "ok"):
+        elif name in WRITE_TOOLS and (status == "applied" or kind == "ok") and n > covered:
             try:
                 observation = ws.run(name, args)
             except (ToolError, Forbidden) as error:
@@ -1104,6 +1170,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         pins = {**(pins or {}), 'compaction': pin()}
     bad_tool, bad_n = None, 0
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
+    if store and ws._vm():
+        store = _VmSteps(store, ws, sha)
     if store:
         prompt, steps, rejected, stop = _resume(store, ws, budget, _pins(subtask, sha, ws, pins), prompt, check, history, messages,
                                                   prior=prior, feedback=feedback, mint=mint, network=getattr(deps, "network", None))
