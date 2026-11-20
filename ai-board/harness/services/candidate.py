@@ -257,7 +257,7 @@ def create(state: dict, source_repo: str | os.PathLike, *, base_ref: str = "HEAD
                 raise ScopeViolation(f"child {index} ghi test '{test_file}' ngoài test/ hoặc tests/")
             extras = [posixpath.normpath(p.replace("\\", "/")) for p in item.get("extra_files") or []]
             for extra in extras:
-                outside = extra in (item.get("out_of_plan") or ()) and path_policy.outside_plan_ok(extra, state.get("requester_role") or "student")
+                outside = not subtask_files.declared(subtask) and extra in (item.get("out_of_plan") or ()) and path_policy.outside_plan_ok(extra, state.get("requester_role") or "student")
                 if (extra not in allowed and not outside) or extra == file:
                     raise ScopeViolation(f"child {index} ghi '{extra}' ngoài allowed_scope {sorted(allowed)}")
             written = [rel for rel in (file, test_file, *extras) if rel]

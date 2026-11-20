@@ -565,6 +565,26 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
     return {'sha': sha, 'evidence': clean}
 
 
+def scope_problems(plan: dict, read) -> list[str]:
+    """Declared allowed_scope sets: within limit, writable by path policy, existing at base or an allowed new path. [] when flag off."""
+    if not subtask_files.enabled():
+        return []
+    from gates.brainstorm import _NEW_OK
+    problems = []
+    for index, task in enumerate(plan.get("subtasks") or []):
+        if not isinstance(task, dict) or "allowed_scope" not in task:
+            continue
+        scope = subtask_files.files_of(task)
+        if len(scope) > subtask_files.limit():
+            problems.append(f"subtask[{index}].allowed_scope có {len(scope)} file, tối đa {subtask_files.limit()}")
+        for path in scope:
+            if not path_policy.check(path, "write")["allow"]:
+                problems.append(f"subtask[{index}]: '{path}' ngoài vùng được phép sửa")
+            elif read is not None and read(path) is None and not _NEW_OK.match(path):
+                problems.append(f"subtask[{index}]: '{path}' không có trong repo và không phải đường file mới hợp lệ")
+    return problems
+
+
 def is_complex(plan: dict) -> bool:
     """3/5 tín hiệu gate 5.5, tính sớm từ plan — xem docstring module.
     Lưu ý cho người xây gate 5.5 thật: tín hiệu "route/
@@ -912,9 +932,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 "signals": issues,
                 "public_message": "Kế hoạch khai kiểm chứng không hợp lệ; đang chờ lập lại kế hoạch."}
 
+    reader = levels.source_reader(state.get('checkout_source'), state.get('base_sha'))
+    if issues := scope_problems(plan, reader):
+        return {"gate": 2.5, "blocked": True, "reason": f"{PLAN_UNFIT}: {issues[0]}", "outcome": PLAN_UNFIT,
+                "signals": issues,
+                "public_message": "Kế hoạch khai tập file sửa không hợp lệ; đang chờ lập lại kế hoạch."}
+
     # Elevation: target protected/core cần admin duyệt trước khi tiêu ngân sách cổng 3. Quyết định
     # bằng code (path + catalog + import sẵn có), không hỏi model — elevation đã duyệt thì plan đi tiếp.
-    reader = levels.source_reader(state.get('checkout_source'), state.get('base_sha'))
     needs = levels.requirements(plan, reader, role=request.get("requester_role") or "student")
     scope = levels.approved_scope(request, state, plan)
     blocked_paths = [item for item in needs if item["level"] == levels.SELF]

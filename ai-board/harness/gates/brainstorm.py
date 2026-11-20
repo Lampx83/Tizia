@@ -65,6 +65,7 @@ RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly tha
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
 # {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
+SCOPE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_allowed_scope.md").read_text(encoding="utf-8")
 # Request keys the planner reads (LF/125). plan_repair is planner-only: the validator never gets it.
 PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", "clarified_spec", "plan_repair", "task_type", "complexity_by_server")
 
@@ -83,7 +84,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         thread=scrub(thread),
         surface=", ".join(sorted(surface)),
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
-    ) + acceptance_structure.prompt_block(request)
+    ) + acceptance_structure.prompt_block(request) + (SCOPE_PROMPT.format(limit=subtask_files.limit()) if subtask_files.enabled() else "")
 
 
 def infer_layer(file: str, role: str = "student") -> str:
@@ -282,6 +283,8 @@ def check_files(plan: dict, source, sha: str | None, approved=None, role: str = 
         if file in seen:
             raise ValueError(f"2 subtask cùng sửa {file} — gộp thành 1")
         seen.append(file)
+        if subtask_files.declared(st):
+            st["allowed_scope"] = subtask_files.files_of(st)
         st["layer"] = st.get("layer") or infer_layer(file, role)
         denied = path_policy.check(file, "write")
         decision = levels.write_check(file, scope, plan_hash, role)
