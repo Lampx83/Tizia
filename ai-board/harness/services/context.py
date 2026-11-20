@@ -38,7 +38,7 @@ VARIANT_FILES = {  # skill nối thêm khi AI_BOARD_SKILL_VARIANT bật; không 
     "test-frame": SKILLS_DIR / "proposed" / "test-frame" / "SKILL.md",
     "review-frame": SKILLS_DIR / "proposed" / "review-frame" / "SKILL.md",
     "all-frame": SKILLS_DIR / "proposed" / "all-frame" / "SKILL.md",
-    "test-unified": SKILLS_DIR / "proposed" / "test-unified" / "SKILL.md",
+    **{f"{n}-unified": SKILLS_DIR / "proposed" / f"{n}-unified" / "SKILL.md" for n in ("test", "backend", "frontend", "database", "review", "merge")},
     "frontend-css-style": SKILLS_DIR / "proposed" / "frontend-css-style" / "SKILL.md",
     "frontend-html-text": SKILLS_DIR / "proposed" / "frontend-html-text" / "SKILL.md",
     "frontend-html-section": SKILLS_DIR / "proposed" / "frontend-html-section" / "SKILL.md",
