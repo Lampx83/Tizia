@@ -13,6 +13,7 @@ services:
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
+      runner-token-init: { condition: service_completed_successfully, required: false }  # chỉ có khi bật profile ai-board
     ports:
       - "8041:8041"
     environment:
@@ -30,7 +31,7 @@ services:
     logging: *logging
     volumes:
       - pharmacysim-data:/data  # sao lưu pg_dump (/data/backups) + file tải lên; dữ liệu chính nằm trong PostgreSQL
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro  # tạo bằng scripts/ai-board-bootstrap.sh
+      - runner-token:/run/secrets:ro  # token do runner-token-init tạo, không cần file trên host
 
   # PostgreSQL: chỉ trên mạng compose nội bộ, KHÔNG publish cổng. Lên bản major mới = dump/restore (không đổi tag tại chỗ);
   # postgresql16-client trong image tizia phải cùng major với tag này.
@@ -65,6 +66,7 @@ services:
     depends_on:
       tizia: { condition: service_healthy }
       sandbox-runner: { condition: service_healthy }
+      runner-token-init: { condition: service_completed_successfully }
     restart: on-failure:10  # crash loop nhanh (vd thiếu AI_BOARD_WORKER_KEY) dừng sau 10 lần
     cap_add: [NET_ADMIN]  # chỉ để khóa egress; Gate 5 chạy trong microVM của sandbox, không privileged
     networks: [default, sandbox-api]
@@ -123,7 +125,7 @@ services:
     volumes:
       - ai-board-repo:/repo
       - ai-board-memory:/opt/ai-board/ai-board/memory
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+      - runner-token:/run/secrets:ro
 
   # Worker thứ hai (profile multi-worker, bật cùng --profile ai-board). Repo và memory riêng: clone git và
   # file memory không ghi chung giữa hai worker. Không nằm trong profile ai-board nên mặc định vẫn chỉ 1 worker.
@@ -135,7 +137,7 @@ services:
     volumes: !override
       - ai-board-repo-2:/repo
       - ai-board-memory-2:/opt/ai-board/ai-board/memory
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+      - runner-token:/run/secrets:ro
 
   # Third worker: only gets work when every active worker runs on the hosted API (limits.workers in contract.json).
   ai-board-worker-3:
@@ -146,7 +148,25 @@ services:
     volumes: !override
       - ai-board-repo-3:/repo
       - ai-board-memory-3:/opt/ai-board/ai-board/memory
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+      - runner-token:/run/secrets:ro
+
+  # Sinh token runner một lần vào volume runner-token (app, worker và runner cùng đọc). Giữ token cũ nếu còn hợp lệ.
+  runner-token-init:
+    container_name: tizia-runner-token-init
+    build:
+      context: ai-board/sandbox-runner
+    image: tizia-sandbox-runner:latest
+    profiles: [ai-board]
+    restart: "no"
+    user: "0"
+    entrypoint: ["sh", "/usr/local/bin/init-token.sh"]
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    network_mode: none
+    volumes:
+      - runner-token:/token
 
   image-registry:
     container_name: tizia-image-registry
@@ -176,12 +196,13 @@ services:
     image: tizia-sandbox-runner:latest
     profiles: [ai-board]
     restart: on-failure
-    user: node
+    depends_on:
+      runner-token-init: { condition: service_completed_successfully }
     devices:
       - /dev/kvm
-    group_add:
-      - "${KVM_GID:-109}"  # ai-board-bootstrap.sh ghi giá trị đúng của host vào ai-board-host.env
+    # Entrypoint chạy root chỉ để đọc gid của /dev/kvm rồi hạ xuống user node; cần SETUID/SETGID cho bước đó.
     cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
     security_opt:
       - no-new-privileges:true
     cpus: 10  # profile large (server); phải ≥ vm.cpus của policy + phần runner
@@ -200,7 +221,7 @@ services:
     volumes:
       - sandbox-runner-state:/home/node/.microsandbox
       - ./ai-board/sandbox-runner/sandbox-policy.large.yaml:/etc/sandbox/sandbox-policy.yaml:ro  # guest Gate 5 ghim qua image-registry; không dùng sandbox-policy.online.yaml (guest alpine khác)
-      - ./ai-board/sandbox-runner/secrets/runner-token:/run/secrets/sandbox-runner-token:ro
+      - runner-token:/run/secrets:ro
 
   # Tùy chọn: kho ảnh bản nháp AI Board trên SeaweedFS (S3 gateway). `docker compose --profile storage up -d seaweedfs`.
   # Trong env của stack: AI_BOARD_SHOTS_S3_ENDPOINT=http://seaweedfs:8333, AI_BOARD_SHOTS_S3_BUCKET, AI_BOARD_SHOTS_S3_ACCESS_KEY / _SECRET_KEY,
@@ -237,4 +258,5 @@ volumes:
   ai-board-memory-3:
   sandbox-runner-state:
   sandbox-registry:
+  runner-token:
   seaweedfs-data:

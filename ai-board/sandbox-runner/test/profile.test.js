@@ -96,7 +96,7 @@ test('dev stack compose defaults to the dev profile when no env is set', () => {
   for (const want of [
     'cpus: ${WORKER_CPUS:-2}', 'mem_limit: ${WORKER_MEM:-4g}',
     'cpus: ${RUNNER_CPUS:-6}', 'mem_limit: ${RUNNER_MEM:-3g}',
-    'RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}', 'sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml',
+    'RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}', 'SANDBOX_POLICY_FILE: /etc/sandbox/generated/sandbox-policy.yaml',
   ]) assert.ok(text.includes(want), `missing default: ${want}`);
   assert.doesNotMatch(text, /:-(large|8|16g|10|6g)\}/);
 });
