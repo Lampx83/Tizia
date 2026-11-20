@@ -28,7 +28,7 @@ from pathlib import Path
 
 from security import classifier, spotlight
 from gates import guard
-from runtime import model_json
+from runtime import limits, model_json
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")
 
@@ -39,7 +39,7 @@ LABELS = (
 )
 VERDICTS = ("allow", "needs_info", "human_review", "reject", "critical")  # tăng dần
 _LLM_NEEDS_INFO = {"personal_data", "off_topic"}
-MAX_TITLE, MAX_DETAIL = 200, 2000  # prompt + input vừa num_ctx 8192 của qwen3:8b
+MAX_TITLE, MAX_DETAIL = 200, limits.prompt_cap_chars("intake_detail")
 _WORD = re.compile(r"[^\W\d_]{2,}")
 _FORMAT_CUE = re.compile(r"dinh dang|format|dau (?:cham|phay|ngan cach)|doi ten|rename|lam tron")
 _MONEY_ACTION = re.compile(r"thanh toan|rut tien|hoan tien|refund|ma giam gia|ma khuyen mai|mua goi|nang cap|dang ky goi|"
