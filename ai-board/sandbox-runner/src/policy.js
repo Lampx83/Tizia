@@ -24,6 +24,11 @@ const object = (shape) => (value, path) => {
   }));
 };
 
+const MIRROR = object({
+  host: (h, p) => { if (typeof h !== 'string' || !HOST.test(h)) throw new PolicyError(`${p}: exact hostname required`); return h; },
+  port: int(1, 65535),
+});
+
 const SCHEMA = object({
   version: (v, p) => { if (v !== 1) throw new PolicyError(`${p}: must be 1`); return v; },
   vm: object({
@@ -69,9 +74,15 @@ export function loadPolicy(text) {
   // optional; absent keeps the existing shape and hash of pinned policies
   const network = data && typeof data === 'object' ? data.network : undefined;
   if (network !== undefined) {
-    if (network !== 'none') throw new PolicyError('policy.network: only none allowed');
+    if (network !== 'none' && network !== 'mirror') throw new PolicyError('policy.network: none or mirror allowed');
     data = { ...data };
     delete data.network;
+  }
+  const rawMirror = data && typeof data === 'object' ? data.mirror : undefined;
+  if (rawMirror !== undefined) {
+    if (network !== 'mirror') throw new PolicyError('policy.mirror: only allowed with network mirror');
+    data = { ...data };
+    delete data.mirror;
   }
   // optional profile tag, excluded from the hash so tagging a pinned policy does not change its hash
   const profile = data && typeof data === 'object' ? data.profile : undefined;
@@ -86,6 +97,12 @@ export function loadPolicy(text) {
   if (network === 'none') {
     if (policy.egress.length) throw new PolicyError('policy.egress: must be empty when network is none');
     policy.network = 'none';
+  }
+  if (network === 'mirror') {
+    if (rawMirror === undefined) throw new PolicyError('policy.mirror: required when network is mirror');
+    if (policy.egress.length) throw new PolicyError('policy.egress: must be empty when network is mirror');
+    policy.network = 'mirror';
+    policy.mirror = MIRROR(rawMirror, 'policy.mirror');
   }
   const hash = createHash('sha256').update(JSON.stringify(policy)).digest('hex');
   return { ...policy, ...(profile === undefined ? {} : { profile }), hash };
