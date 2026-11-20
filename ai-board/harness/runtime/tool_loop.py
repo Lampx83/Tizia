@@ -69,9 +69,9 @@ CONSTANTS = ("\nThe requester's quoted strings are named constants. In edit_file
              "exact text; do not retype them:\n{listing}\n")
 
 
-def constants_of(text: str | None) -> dict[str, str]:
-    """Requester literals -> {LIT_n: verbatim text}."""
-    return {f"LIT_{n}": lit for n, lit in enumerate(file_context.literals(text), 1)}
+def constants_of(*texts: str | None) -> dict[str, str]:
+    """Requester literals (title, detail) -> {LIT_n: verbatim text}."""
+    return {f"LIT_{n}": lit for n, lit in enumerate(file_context.literals(*texts), 1)}
 
 
 def _tool_doc(name: str) -> str:
@@ -905,7 +905,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
                 sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=(),
-                requester_role: str | None = None, request_text: str | None = None) -> dict:
+                requester_role: str | None = None, request_text: tuple | str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -932,7 +932,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
                    outside_role=requester_role if get_settings().out_of_plan_files else None,
-                   constants=constants_of(request_text) if get_settings().literal_by_reference else None)
+                   constants=constants_of(*(request_text if isinstance(request_text, tuple) else (request_text,)))
+                   if get_settings().literal_by_reference else None)
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if extras:
         prompt += MULTI.format(files=", ".join(paths))

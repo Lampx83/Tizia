@@ -73,3 +73,9 @@ def test_manifest_hash_unchanged_by_flag(monkeypatch):
     before = tool_loop.MANIFEST.hash
     monkeypatch.setenv("AI_BOARD_LITERAL_BY_REFERENCE", "1")
     assert tool_loop.MANIFEST.hash == before
+
+
+def test_constants_cover_title_and_detail_once():
+    from runtime import tool_loop
+    got = tool_loop.constants_of("Đổi chữ 'Cũ' thành 'Mới.'", "Em muốn ('Cũ') đổi thành 'Mới.', cái 'Giữ' để nguyên.")
+    assert list(got.values()) == ["Cũ", "Mới.", "Giữ"]
