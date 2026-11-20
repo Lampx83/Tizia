@@ -22,6 +22,10 @@ NAME = "run_in_sandbox"
 SCHEMA = {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}}, "required": ["argv"]}
 DESCRIPTION = ("Chạy argv trong sandbox, chỉ mẫu allow-list: node --test test/<file>, node --check <file>, npm test, npm run check:content, node scripts/<file>. "
                "Không shell, không mạng. Output bị cắt; bản đầy đủ lưu thành artifact.")
+WORKTREE_DESCRIPTION = ("Chạy argv trong VM của subtask, không lọc lệnh (bash tự do), không mạng. Worktree trong VM là bản chính: "
+                        "file sửa ở đây là thứ được nộp; diff cuối lấy từ git trong VM và bị kiểm phạm vi + path cấm. Output bị cắt; bản đầy đủ lưu thành artifact.")
+VM_DIR = "checkout"
+_GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-C", VM_DIR)
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
 OUTPUT_CAP = 4000  # redacted stdout+stderr kept per receipt; the trace note clips again to its own cap
 SOURCE_SUFFIXES = (".js", ".mjs", ".cjs")
@@ -56,19 +60,34 @@ def tier_armed(tier: str, env=None) -> bool:
     return tier in {t.strip() for t in get_settings(env).sandbox_repo_scripts_tiers.split(",") if t.strip()}
 
 
-def _spec(cfg: dict) -> tool_manifest.ToolSpec:
-    return tool_manifest.ToolSpec(NAME, DESCRIPTION, SCHEMA, "read", 2000, cfg["output_chars"], cfg["wall_clock_s"])
+def _spec(cfg: dict, worktree: bool = False) -> tool_manifest.ToolSpec:
+    return tool_manifest.ToolSpec(NAME, WORKTREE_DESCRIPTION if worktree else DESCRIPTION, SCHEMA, "read", 2000, cfg["output_chars"], cfg["wall_clock_s"])
+
+
+def worktree_on(env=None) -> bool:
+    """Worktree-in-VM mode: its flag and the subtask VM flag both on."""
+    settings = get_settings(env)
+    return settings.sandbox_vm_worktree and settings.sandbox_subtask_vm
 
 
 def specs(env=None) -> dict[str, tool_manifest.ToolSpec]:
     """Spec tool bổ sung cho tool-loop; rỗng khi flag tắt. Không nằm trong tool_manifest.json nên hash manifest không đổi."""
     cfg = limits.sandbox_tool(env)
-    return {NAME: _spec(cfg)} if cfg["enabled"] else {}
+    return {NAME: _spec(cfg, worktree_on(env))} if cfg["enabled"] else {}
+
+
+def _hash(spec: tool_manifest.ToolSpec) -> str:
+    return hashlib.sha256(json.dumps(asdict(spec), sort_keys=True, default=str).encode()).hexdigest()
 
 
 def spec_hash() -> str:
     """Băm spec bổ sung (bất kể flag) để root ghim khi chốt manifest."""
-    return hashlib.sha256(json.dumps(asdict(_spec(limits.sandbox_tool())), sort_keys=True, default=str).encode()).hexdigest()
+    return _hash(_spec(limits.sandbox_tool()))
+
+
+def worktree_spec_hash() -> str:
+    """Băm spec khi worktree-in-VM bật."""
+    return _hash(_spec(limits.sandbox_tool(), True))
 
 
 def authority_ok() -> bool:
@@ -125,6 +144,28 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
     _write(drafts, root)
 
 
+def _overlay(files: dict[str, str]) -> bytes:
+    """tar.gz chỉ gồm `files` dưới checkout/, để upload đè lên worktree VM mà không đụng file khác."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        dirs = {VM_DIR} | {"/".join((VM_DIR, *parts[:i])) for parts in (PurePosixPath(rel).parts for rel in files) for i in range(1, len(parts))}
+        for name in sorted(dirs):
+            info = tarfile.TarInfo(name)
+            info.type, info.mode, info.mtime = tarfile.DIRTYPE, 0o755, 0
+            archive.addfile(info)
+        for rel, text in files.items():
+            data = text.encode("utf-8")
+            info = tarfile.TarInfo(f"{VM_DIR}/{rel}")
+            info.size, info.mode, info.mtime = len(data), 0o644, 0
+            archive.addfile(info, io.BytesIO(data))
+    return buffer.getvalue()
+
+
+def _check_free(argv) -> None:
+    if not isinstance(argv, list) or not argv or not all(isinstance(token, str) for token in argv):
+        raise Refused("argv phải là mảng chuỗi không rỗng")
+
+
 def _write(drafts: dict[str, str], root: Path) -> None:
     for rel, text in drafts.items():
         target = root / rel
@@ -136,9 +177,11 @@ class Runner:
     """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
 
     def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
-                 tier: str | None = None, kept: bool | None = None):
+                 tier: str | None = None, kept: bool | None = None, worktree: bool | None = None):
         self.kept = get_settings(env).sandbox_subtask_vm if kept is None else kept
-        self._session = self._tmp = self._uploaded = None
+        self.worktree = self.kept and (get_settings(env).sandbox_vm_worktree if worktree is None else worktree)
+        self._session = self._tmp = self._uploaded = self._tree = None
+        self._vm_state: dict[str, str] = {}
         self._opened = 0.0
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
@@ -146,7 +189,10 @@ class Runner:
         self.receipts: list[dict] = [] if receipts is None else receipts
 
     def __call__(self, argv, drafts: dict[str, str], call_id: str | None = None) -> str:
-        check_argv(argv, self.cfg["allowed_argv"])
+        if self.worktree:
+            _check_free(argv)
+        else:
+            check_argv(argv, self.cfg["allowed_argv"])
         if self.kept:
             return self._call_kept(argv, drafts, call_id)
         deadline = time.monotonic() + self.cfg["wall_clock_s"]
@@ -219,21 +265,81 @@ class Runner:
     def _open(self, drafts: dict[str, str]) -> SandboxSession:
         """Live subtask VM: created on first use, later calls upload only edited drafts."""
         if self._session is not None:
-            if drafts != self._uploaded:
+            if self.worktree:
+                self._push(drafts)
+            elif drafts != self._uploaded:
                 _write(drafts, Path(self._tmp.name))
                 self._sync(self._session)
                 self._uploaded = dict(drafts)
             return self._session
         self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-")
-        _stage(self.source, self.sha, drafts, Path(self._tmp.name))
+        _stage(self.source, self.sha, {} if self.worktree else drafts, Path(self._tmp.name))
         left = getattr(self.budget, "remaining_s", None)
         self._opened = time.monotonic()
         session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok,
                                  deadline=self._opened + (left() if left else self.cfg["wall_clock_s"]))
         self._session = session
         session.__enter__()
-        self._uploaded = dict(drafts)
+        if self.worktree:
+            self._git("init", "-q")
+            self._git("add", "-A")
+            self._tree, self._vm_state = self._git("write-tree").strip(), {}
+            self._push(drafts)
+        else:
+            self._uploaded = dict(drafts)
         return session
+
+    def _vm(self, *argv: str) -> dict:
+        out = self._session.exec(list(argv), self.cfg["exec_timeout_s"])
+        if out["timed_out"] or out["truncated"]:
+            raise SandboxError("worktree_exec", "exec")
+        return out
+
+    def _git(self, *args: str) -> str:
+        out = self._vm(*_GIT, *args)
+        if out["rc"] != 0:
+            raise SandboxError("worktree_git", "exec")
+        return out["stdout"]
+
+    def _base_text(self, rel: str) -> str:
+        try:
+            return (Path(self._tmp.name) / rel).read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+    def _push(self, drafts: dict[str, str]) -> None:
+        """Upload drafts the VM does not hold yet; files the VM already has (shell edits included) are left alone."""
+        todo = {rel: text for rel, text in drafts.items() if text != self._vm_state.get(rel, self._base_text(rel))}
+        if not todo:
+            return
+        session = self._session
+        if session.lease.revoked or not self.lease_ok():
+            raise SandboxError("lease_lost", "lease")
+        session.client.upload(session.run_id, _overlay(todo), deadline=session.deadline)
+        self._vm_state.update(todo)
+
+    def changes(self, drafts: dict[str, str], ensure: bool = False):
+        """(changed {path: text}, rejected [(path, kind)]) of the VM worktree against its base tree, read from git there; None when no VM and not ensure."""
+        if self._session is None and not ensure:
+            return None
+        self._open(drafts)
+        self._git("add", "-A")
+        raw = self._git("diff", "--cached", "--numstat", "-z", "--no-renames", self._tree)
+        changed, rejected = {}, []
+        for number, entry in enumerate(e for e in raw.split("\0") if e):
+            added, _, path = entry.split("\t", 2)
+            if path_policy.normalize(path) != path:
+                rejected.append((path, "path"))
+            elif number >= path_policy.OUT_OF_PLAN_CAP:
+                rejected.append((path, "extra"))
+            elif added == "-":
+                rejected.append((path, "binary"))
+            elif (shown := self._vm(*_GIT, "show", f":{path}"))["rc"] != 0:
+                rejected.append((path, "deleted"))
+            else:
+                changed[path] = shown["stdout"]
+        self._vm_state = dict(changed)
+        return changed, rejected
 
     def _sync(self, session: SandboxSession) -> None:
         if session.lease.revoked or not self.lease_ok():
@@ -243,6 +349,7 @@ class Runner:
     def _drop(self) -> None:
         """Destroy the subtask VM and its staging; CleanupUnconfirmed when teardown is not confirmed."""
         session, tmp, self._session, self._tmp, self._uploaded = self._session, self._tmp, None, None, None
+        self._tree, self._vm_state = None, {}
         if session is None:
             return
         pending = session.cleanup_pending

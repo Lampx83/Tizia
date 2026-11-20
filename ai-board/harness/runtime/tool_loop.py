@@ -373,6 +373,7 @@ class Workspace:
         self.plan_checks = plan_checks
         self.trace = trace
         self.sandbox = sandbox
+        self.vm_faults: list[Exception] = []
         self.call_id = None
 
     def _read(self, path: str) -> str:
@@ -557,13 +558,67 @@ class Workspace:
     def _sandbox(self, args: dict) -> str:
         if self.sandbox is None:
             raise ToolError(f'{sandbox_tool.NAME} chưa có runner')
-        drafts = {self.file: self.content, **({self.test_file: self.test} if self.test_file else {})}
+        drafts = self._drafts()
         try:
-            return self.sandbox(args['argv'], drafts, self.call_id)
+            out = self.sandbox(args['argv'], drafts, self.call_id)
+            if self._vm():
+                self._follow_vm(drafts)
+            return out
         except sandbox_tool.Refused as error:
             raise Forbidden(str(error)) from None
         except sandbox_tool.CleanupUnconfirmed as error:
             raise Forbidden(f"{error}; subtask stopped, VM teardown not confirmed") from None
+
+    def _vm(self) -> bool:
+        return bool(getattr(self.sandbox, "worktree", False))
+
+    def _drafts(self) -> dict[str, str]:
+        drafts = {self.file: self.content, **({self.test_file: self.test} if self.test_file else {})}
+        return {**drafts, **self.extra_content} if self._vm() else drafts
+
+    def _follow_vm(self, drafts: dict[str, str]) -> None:
+        try:
+            snapshot = self.sandbox.changes(drafts)
+        except SandboxError:
+            return  # a broken VM surfaces at finish, where the diff is read again
+        if snapshot is not None:
+            self._adopt(*snapshot)
+
+    def _adopt(self, changed: dict[str, str], rejected: list[tuple[str, str]]) -> None:
+        """Drafts become what git in the VM holds; paths failing scope or path policy are kept as faults for finish."""
+        self.vm_faults = [PathDenied(f"path không hợp lệ từ VM: {path!r}") if kind == "path"
+                          else ScopeMiss(f"{path!r} trong VM không nhận được ({kind})") for path, kind in rejected]
+        tests = []
+        for path in sorted(changed):
+            is_test = path != self.file and path not in self.extra_content and path.startswith(("test/", "tests/"))
+            try:
+                self._check_scope(path, test=is_test)
+            except Forbidden as error:
+                self.vm_faults.append(error)
+                continue
+            if is_test:
+                tests.append(path)
+        if len(tests) > 1:
+            self.vm_faults.append(ScopeMiss(f"chỉ một file test, VM có: {', '.join(tests)}"))
+        self.content = changed.get(self.file, self.base or "")
+        for path, base in self.extra_base.items():
+            self.extra_content[path] = changed.get(path, base or "")
+        if tests:
+            self.test_file, self.test = tests[0], changed[tests[0]]
+        elif self.test_file and self.test_file not in changed:
+            self.test_file = self.test = None
+
+    def _vm_settle(self) -> None:
+        """Finish: push pending drafts, read the final diff from git in the VM, refuse faults."""
+        try:
+            self._adopt(*self.sandbox.changes(self._drafts(), ensure=True))
+        except (SandboxError, sandbox_tool.CleanupUnconfirmed) as error:
+            raise Forbidden(f"worktree VM unavailable: {error}") from None
+        hard = [fault for fault in self.vm_faults if not isinstance(fault, ScopeMiss)]
+        if hard:
+            raise hard[0]
+        if self.vm_faults:
+            raise ValueError("diff trong VM ngoài phạm vi: " + "; ".join(str(fault) for fault in self.vm_faults))
 
     def _candidates(self, edits: list, message: str) -> str:
         """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
@@ -587,6 +642,8 @@ class Workspace:
         return (bool(self.test_file) or not self.test_required()) and not (self.content == self.base or (self.base is None and not self.content))
 
     def proposal(self) -> dict:
+        if self._vm():
+            self._vm_settle()
         if self.content == self.base or (self.base is None and not self.content):
             raise ValueError("chưa có thay đổi nào ở file đích")
         if not self.test_file and self.test_required():
