@@ -373,6 +373,11 @@ class Tracer:
             except Exception as error:  # noqa: BLE001 — trace best-effort
                 print(f"[trace {fmt(now_ms())}] gửi {len(spans[i:i + 50])} span lỗi: {str(error)[:200]}")
 
+    def add_gpu_s(self, seconds: float) -> None:
+        """Cộng giây VM sandbox vào cửa sổ GPU giờ qua."""
+        with self._lock:
+            self._gpu.append((time.monotonic(), seconds))
+
     def over_hourly_cap(self, cap: float = HOURLY_GPU_S) -> bool:
         return self.gpu_s_last_hour() >= cap
 

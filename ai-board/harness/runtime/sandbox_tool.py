@@ -16,7 +16,7 @@ import path_policy
 from repositories import server_hsm
 from runtime import limits, meter, tool_manifest
 from settings import get_settings
-from verification.sandbox import SandboxError, SandboxSession
+from verification.sandbox import SandboxError, SandboxSession, package
 
 NAME = "run_in_sandbox"
 SCHEMA = {"type": "object", "properties": {"argv": {"type": "array", "items": {"type": "string"}}}, "required": ["argv"]}
@@ -122,6 +122,10 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
             target = root / member.name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(archive.extractfile(member).read())
+    _write(drafts, root)
+
+
+def _write(drafts: dict[str, str], root: Path) -> None:
     for rel, text in drafts.items():
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -132,7 +136,10 @@ class Runner:
     """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
 
     def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
-                 tier: str | None = None):
+                 tier: str | None = None, kept: bool | None = None):
+        self.kept = get_settings(env).sandbox_subtask_vm if kept is None else kept
+        self._session = self._tmp = self._uploaded = None
+        self._opened = 0.0
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
         self.cfg = limits.sandbox_tool(env, tier=tier)
@@ -140,6 +147,8 @@ class Runner:
 
     def __call__(self, argv, drafts: dict[str, str], call_id: str | None = None) -> str:
         check_argv(argv, self.cfg["allowed_argv"])
+        if self.kept:
+            return self._call_kept(argv, drafts, call_id)
         deadline = time.monotonic() + self.cfg["wall_clock_s"]
         with tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-") as stage:
             _stage(self.source, self.sha, drafts, Path(stage))
@@ -174,6 +183,85 @@ class Runner:
                         raise RunnerBusy(f"sandbox runner busy (run {session.run_id})")
                     return json.dumps({"rc": None, "error": error.code, "phase": error.phase}, ensure_ascii=False)
         raise AssertionError("unreachable")
+
+    def _call_kept(self, argv, drafts: dict[str, str], call_id: str | None) -> str:
+        for attempt in range(self.cfg["max_retries"] + 1):
+            started = time.monotonic()
+            receipt = {"run_id": None, "tool_call_id": call_id, "argv": list(argv), "attempt": attempt, "rc": None, "error": None}
+            outcome, error = None, None
+            try:
+                session = self._open(drafts)
+                receipt["run_id"] = session.run_id
+                outcome = session.exec(argv, self.cfg["exec_timeout_s"])
+            except SandboxError as caught:
+                error = caught
+            if outcome is not None:
+                return self._observe(receipt, outcome, started)
+            receipt["run_id"] = receipt["run_id"] or getattr(self._session, "run_id", None)
+            try:
+                self._drop()
+            except CleanupUnconfirmed:
+                receipt["error"] = "cleanup_unconfirmed"
+                self._record(receipt, started)
+                raise
+            receipt["error"] = error.code
+            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE \
+                and (error.status in (0, 429) or error.status >= 500)
+            self._record(receipt, started)
+            if retry and self.budget is not None and not self.budget.spend("tool_calls"):
+                retry = False
+            if not retry:
+                if error.status == 429:
+                    raise RunnerBusy("sandbox runner busy")
+                return json.dumps({"rc": None, "error": error.code, "phase": error.phase}, ensure_ascii=False)
+        raise AssertionError("unreachable")
+
+    def _open(self, drafts: dict[str, str]) -> SandboxSession:
+        """Live subtask VM: created on first use, later calls upload only edited drafts."""
+        if self._session is not None:
+            if drafts != self._uploaded:
+                _write(drafts, Path(self._tmp.name))
+                self._sync(self._session)
+                self._uploaded = dict(drafts)
+            return self._session
+        self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-")
+        _stage(self.source, self.sha, drafts, Path(self._tmp.name))
+        left = getattr(self.budget, "remaining_s", None)
+        self._opened = time.monotonic()
+        session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok,
+                                 deadline=self._opened + (left() if left else self.cfg["wall_clock_s"]))
+        self._session = session
+        session.__enter__()
+        self._uploaded = dict(drafts)
+        return session
+
+    def _sync(self, session: SandboxSession) -> None:
+        if session.lease.revoked or not self.lease_ok():
+            raise SandboxError("lease_lost", "lease")
+        session.client.upload(session.run_id, package(session.checkout, {}, {}), deadline=session.deadline)
+
+    def _drop(self) -> None:
+        """Destroy the subtask VM and its staging; CleanupUnconfirmed when teardown is not confirmed."""
+        session, tmp, self._session, self._tmp, self._uploaded = self._session, self._tmp, None, None, None
+        if session is None:
+            return
+        pending = session.cleanup_pending
+        if session.lease is not None and not pending:
+            try:
+                session.__exit__(None, None, None)
+            except SandboxError:
+                pass
+            pending = session.cleanup_pending
+        if tmp is not None:
+            tmp.cleanup()
+        if hasattr(self.trace, "add_gpu_s"):
+            self.trace.add_gpu_s(max(0.0, time.monotonic() - self._opened))
+        if pending:
+            raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {session.run_id})")
+
+    def close(self) -> None:
+        """End of subtask: destroy the VM; idempotent."""
+        self._drop()
 
     def _observe(self, receipt: dict, outcome: dict, started: float) -> str:
         limit = self.cfg["output_chars"]

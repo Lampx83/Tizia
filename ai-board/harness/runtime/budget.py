@@ -220,6 +220,10 @@ class ChildBudget:
     def tick(self) -> bool:
         return self.exhausted() is None
 
+    def remaining_s(self) -> float:
+        """Giây còn lại theo trần loop và trần run."""
+        return min(self._deadline - time.monotonic(), self.parent.max_wall_clock_s - self.parent.elapsed_s)
+
     def spend(self, cap: str, n: int = 1) -> bool:
         if cap in self._own:
             self._own[cap] += n

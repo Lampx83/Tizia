@@ -876,12 +876,19 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     if checks and MANIFEST.data.get('check_runtime_sha256') != loop_checks.runtime_hash():
         return _result('blocked', 'check runtime differs from approved manifest', 'critical')
     sandbox_log: list = []
+    runners: list = []
+    vm_unconfirmed = None
     token = _SANDBOX_OFFERED.set(sandbox_tool.offered(subtask.get("task_type")))
     try:
         result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks,
-                              sandbox_log=sandbox_log, **kwargs)
+                              sandbox_log=sandbox_log, sandbox_runners=runners, **kwargs)
     finally:
         _SANDBOX_OFFERED.reset(token)
+        for runner in runners:
+            try:
+                runner.close()
+            except sandbox_tool.CleanupUnconfirmed as error:
+                vm_unconfirmed = str(error)
         if checks:
             checks.close()
             if checks.cleanup_pending and hasattr(deps, 'capture'):
@@ -891,6 +898,8 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     if checks and checks.cleanup_pending:
         return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical',
                        unknown_outcome={'run_id': checks.run_id})
+    if vm_unconfirmed:
+        return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical')
     return {**result, 'sandbox_receipts': sandbox_log} if sandbox_log else result
 
 
@@ -904,7 +913,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
-                sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=(),
+                sandbox_log: list | None = None, sandbox_runners: list | None = None, repair_evidence: dict | None = None, session_from=(),
                 requester_role: str | None = None, request_text: tuple | str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
@@ -928,6 +937,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                                    receipts=sandbox_log, budget=budget,
                                    tier="multi" if len(paths) > 1 else "single")
                if _SANDBOX_OFFERED.get() else None)
+    if sandbox is not None and sandbox.kept and sandbox_runners is not None:
+        sandbox_runners.append(sandbox)
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
