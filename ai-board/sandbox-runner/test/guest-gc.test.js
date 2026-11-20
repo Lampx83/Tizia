@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { childDigests, staleGuestRefs, staleManifests } from '../scripts/gc-guest-images.mjs';
+import { childDigests, runningContainer, staleGuestRefs, staleManifests } from '../scripts/gc-guest-images.mjs';
 
 const A = `sha256:${'a'.repeat(64)}`;
 const B = `sha256:${'b'.repeat(64)}`;
@@ -34,4 +34,11 @@ test('registry: manifests the pinned index points at (platform image, attestatio
   assert.deepEqual(childDigests(index), [B, C]);
   assert.deepEqual(childDigests({ mediaType: 'application/vnd.oci.image.manifest.v1+json', layers: [{ digest: B }] }), []);
   assert.deepEqual(staleManifests([A.slice(7), B.slice(7), C.slice(7), 'd'.repeat(64)], A, childDigests(index)), [`sha256:${'d'.repeat(64)}`]);
+});
+
+test('container: first running name wins, whichever compose file started the stack', () => {
+  const names = ['aiboard-sandbox-runner', 'tizia-sandbox-runner'];
+  assert.equal(runningContainer('aiboard-server\naiboard-sandbox-runner\n', names), 'aiboard-sandbox-runner');
+  assert.equal(runningContainer('tizia-sandbox-runner\n', names), 'tizia-sandbox-runner');
+  assert.throws(() => runningContainer('aiboard-server\n', names), /aiboard-sandbox-runner/);
 });
