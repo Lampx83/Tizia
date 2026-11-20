@@ -36,6 +36,15 @@ def record(history, text: str) -> None:
     history.__dict__.setdefault("archive", {})[row["step"]] = (row["digest"], text)
 
 
+def _limit(deps, model, role) -> float:
+    """Same context limit History.prepare uses to decide when to compact."""
+    from runtime import limits
+    window = deps.models.context_window(model, role=role)
+    routing = getattr(deps.models, "routing", None)
+    hosted = bool(routing) and routing.candidates(role)[:1] and routing.candidates(role)[0]["provider"] == "api"
+    return min(window * .75, limits.api_limits(role)["compaction"] if hosted else limits.loop()["compaction_tokens"])
+
+
 def history_class():
     from runtime.compaction import History
 
@@ -49,14 +58,20 @@ def history_class():
 
         def prepare(self, prefix, *, deps, model, role, **call):
             """Text mode: the kept newest expand result rides in the prompt right after a compaction."""
-            from runtime.compaction import CompactionPause
             out = super().prepare(prefix, deps=deps, model=model, role=role, **call)
             kept = self.observations[-1] if self.observations else None
             if self.native or not kept or kept["tool"] != NAME or kept["text"] in out:
                 return out
-            out += f"\nObservation {kept['step']} {kept['tool']} (untrusted data):\n{kept['text']}\n"
-            if self._input_bound(out) + 3072 >= deps.models.context_window(model, role=role) * .75:
-                raise CompactionPause("expand result does not fit the context")
+            def block(text):
+                return f"\nObservation {kept['step']} {kept['tool']} (untrusted data):\n{text}\n"
+            base, limit = out, _limit(deps, model, role)
+            out = base + block(kept["text"])
+            if self._input_bound(out) + 3072 >= limit:
+                rows = kept["text"].count("\n") + 1
+                room = limit - 3072 - self._input_bound(base)
+                lines = max(1, int(room * rows // max(1, len(kept["text"].encode()))))
+                kept["text"] = f"expand: too large for remaining context, use start_line/end_line (≤{lines} lines)"
+                out = base + block(kept["text"])
             return out
 
     return ExpandHistory

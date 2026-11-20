@@ -8,7 +8,9 @@ import pytest
 
 import tools
 from runtime import tool_loop, tool_manifest
+from runtime.budget import Budget
 from test_context_compaction import CompactingDeps, trial
+from test_tool_loop import SUBTASK
 from test_tool_loop import PAGE
 
 ROWS = [f'row {i} ' + '界' * 40 for i in range(300)]
@@ -192,3 +194,31 @@ def test_header_reserve_is_measured_not_fixed():
 def test_window_outside_embedded_numbers_names_the_available_range():
     with pytest.raises(tool_loop.ToolError, match='100-140'):
         tool_loop._expand(archived(numbered_from(100, 140)), {'step': 7, 'start_line': 2, 'end_line': 3})
+
+
+def test_oversized_expand_comes_back_as_an_error_with_a_line_budget(monkeypatch):
+    big = chr(10).join(f'const v{i} = "{"x" * 30}";' for i in range(400))
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    monkeypatch.setattr(tools, '_show', lambda *_a: big)
+    deps = CompactingDeps()
+    deps.models.context_window = lambda *_a, **_k: 14000
+    deps.script[0:0] = [{'tool': 'read_file', 'arguments': {'file': 'public/a.html'}}]
+    deps.script[4:4] = [expand(step=0)]
+    result = tool_loop.run_subtask(SUBTASK, big, deps=deps, budget=Budget(), model='m', source='.', sha='abc', check=lambda _o: None, store=None)
+    assert 'does not fit' not in str(result['reason'])
+    assert any(re.search(r'too large for remaining context, use start_line/end_line \(≤\d+ lines\)', p) for p in deps.prompts)
+
+
+def test_hint_range_and_gaps_use_visible_line_numbers(monkeypatch):
+    token = offered(monkeypatch)
+    try:
+        paged = shown(archived(numbered_from(100, 400)), step=7)
+        gap = archived(chr(10).join(f'L{n}| v' for n in (10, 11, 12, 50, 51)))
+        with pytest.raises(tool_loop.ToolError, match='10-51'):
+            tool_loop._expand(gap, {'step': 7, 'start_line': 13, 'end_line': 49})
+        tail = shown(gap, step=7, start_line=12, end_line=50)
+    finally:
+        tool_loop._EXPAND_OFFERED.reset(token)
+    last = max(int(n) for n in re.findall(r'^L(\d+)\| ', paged, re.M))
+    assert re.search(rf'dòng 100-{last}/400; đọc tiếp: expand step=7 start_line={last + 1}\]', paged)
+    assert [int(n) for n in re.findall(r'^L(\d+)\| ', tail, re.M)] == [12, 50]

@@ -652,20 +652,23 @@ def _read_window(content: str, start: int | None, end: int | None, tool: str = "
     total = len(rows)
     if not total:
         return "(file rỗng)"
+    shown = (lambda i: labels[i - 1]) if labels else (lambda i: i)  # visible number of row index i (1-based)
     if labels:
-        if (start is not None and start > labels[-1]) or (end is not None and end < labels[0]) or (None not in (start, end) and end < start):
-            raise ToolError(f"{tool}: khoảng dòng không hợp lệ (observation có dòng {labels[0]}-{labels[-1]}, start_line={start}, end_line={end})")
+        asked = (start, end)
         if start is not None:
             start = next((i + 1 for i, label in enumerate(labels) if label >= start), total + 1)
         if end is not None:
             end = sum(label <= end for label in labels)
+        if (1 if start is None else start) > (total if end is None else end):
+            raise ToolError(f"{tool}: khoảng dòng không hợp lệ (observation có dòng {labels[0]}-{labels[-1]}, start_line={asked[0]}, end_line={asked[1]})")
     start, end = 1 if start is None else start, total if end is None else min(end, total)
     if start < 1 or start > total or end < start:
         raise ToolError(f"{tool}: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
+    after = lambda i: labels[i] if labels and i < total else shown(i) + 1  # next visible number after row index i
     cap = _cap("read_file") - reserve
     room = cap - PAGE_HINT_TOKENS
     def page(last: int) -> str:
-        return "\n".join(f"{prefix}{labels[n - 1] if labels else n}| {rows[n - 1]}" if prefix else rows[n - 1] for n in range(start, last + 1))
+        return "\n".join(f"{prefix}{shown(n)}| {rows[n - 1]}" if prefix else rows[n - 1] for n in range(start, last + 1))
 
     if token_count.measure(page(end)) <= cap:
         return page(end)
@@ -675,8 +678,8 @@ def _read_window(content: str, start: int | None, end: int | None, tool: str = "
         low, high = (mid, high) if token_count.measure(page(mid)) <= room else (low, mid - 1)
     body = token_count.fit(page(low), room)
     if low == start and body != page(low):
-        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: {tool} {ref}start_line={labels[start] if labels and start < total else start + 1}]"
-    return f"{body}\n[dòng {start}-{low}/{total}; đọc tiếp: {tool} {ref}start_line={labels[low] if labels else low + 1}]"
+        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: {tool} {ref}start_line={after(start)}]"
+    return f"{body}\n[dòng {shown(start)}-{shown(low)}/{shown(total)}; đọc tiếp: {tool} {ref}start_line={after(low)}]"
 
 
 def _tool_list() -> str:
