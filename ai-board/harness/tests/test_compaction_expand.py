@@ -1,5 +1,6 @@
 """expand tool: re-open a compacted observation by step; off unless compaction and its own flag are on."""
 import hashlib
+import re
 import json
 from types import SimpleNamespace
 
@@ -152,3 +153,42 @@ def test_flag_change_blocks_resume_through_the_prompt_pin(monkeypatch):
     resumed = scripted()
     result, _ = trial(resumed, store=MemSteps(shared=store.db))
     assert result['status'] == 'blocked' and 'prompt' in result['reason'] and resumed.prompts == []
+
+
+def test_prompt_right_after_expand_shows_its_result(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    deps = scripted(expand(step=0))
+    trial(deps)
+    assert 'Observation 3 expand' in deps.prompts[4]
+
+
+def numbered_from(first, last):
+    return chr(10).join(f'L{n}| row {n} ' + '界' * 40 for n in range(first, last + 1))
+
+
+def test_window_arguments_use_the_embedded_line_numbers(monkeypatch):
+    token = offered(monkeypatch)
+    try:
+        history = archived(numbered_from(100, 300))
+        window = shown(history, step=7, start_line=101, end_line=102)
+        paged = shown(history, step=7)
+    finally:
+        tool_loop._EXPAND_OFFERED.reset(token)
+    assert [int(n) for n in re.findall(r'^L(\d+)\| ', window, re.M)] == [101, 102]
+    shown_to = max(int(n) for n in re.findall(r'^L(\d+)\| ', paged, re.M))
+    assert f'start_line={shown_to + 1}]' in paged
+
+
+def test_partly_numbered_text_gets_row_labels_not_a_doubled_prefix():
+    history = archived(chr(10).join(['L1| a', 'stderr', 'L2| b']))
+    page = tool_loop._expand(history, {'step': 7})
+    assert 'L1| L1|' not in page and 'R2| stderr' in page
+
+
+def test_header_reserve_is_measured_not_fixed():
+    assert not hasattr(tool_loop, 'EXPAND_HEADER_TOKENS')
+
+
+def test_window_outside_embedded_numbers_names_the_available_range():
+    with pytest.raises(tool_loop.ToolError, match='100-140'):
+        tool_loop._expand(archived(numbered_from(100, 140)), {'step': 7, 'start_line': 2, 'end_line': 3})

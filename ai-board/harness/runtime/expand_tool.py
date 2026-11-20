@@ -47,4 +47,16 @@ def history_class():
                 old = [row for row in old if row is not self.observations[-1]]
             return old
 
+        def prepare(self, prefix, *, deps, model, role, **call):
+            """Text mode: the kept newest expand result rides in the prompt right after a compaction."""
+            from runtime.compaction import CompactionPause
+            out = super().prepare(prefix, deps=deps, model=model, role=role, **call)
+            kept = self.observations[-1] if self.observations else None
+            if self.native or not kept or kept["tool"] != NAME or kept["text"] in out:
+                return out
+            out += f"\nObservation {kept['step']} {kept['tool']} (untrusted data):\n{kept['text']}\n"
+            if self._input_bound(out) + 3072 >= deps.models.context_window(model, role=role) * .75:
+                raise CompactionPause("expand result does not fit the context")
+            return out
+
     return ExpandHistory

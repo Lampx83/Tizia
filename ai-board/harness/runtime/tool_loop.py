@@ -31,7 +31,6 @@ from settings import get_settings
 
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
-EXPAND_HEADER_TOKENS = 40  # room kept for the expand digest header
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "read_skill_resource", "edit_file", "write_test", "run_check", "request_package", "fetch_url", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
@@ -647,19 +646,26 @@ def _fit(text: str, name: str) -> str:
     return token_count.fit(text if name in ("read_file", expand_tool.NAME) else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
 
 
-def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "", numbered: bool = True, reserve: int = 0) -> str:
+def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "", prefix: str = "L", reserve: int = 0, labels: list[int] | None = None) -> str:
     """Dòng `Lnn| ` của [start, end]; quá trần token thì cắt ở ranh giới dòng, kèm tổng dòng và lệnh đọc tiếp."""
     rows = content.splitlines()
     total = len(rows)
     if not total:
         return "(file rỗng)"
+    if labels:
+        if (start is not None and start > labels[-1]) or (end is not None and end < labels[0]) or (None not in (start, end) and end < start):
+            raise ToolError(f"{tool}: khoảng dòng không hợp lệ (observation có dòng {labels[0]}-{labels[-1]}, start_line={start}, end_line={end})")
+        if start is not None:
+            start = next((i + 1 for i, label in enumerate(labels) if label >= start), total + 1)
+        if end is not None:
+            end = sum(label <= end for label in labels)
     start, end = 1 if start is None else start, total if end is None else min(end, total)
     if start < 1 or start > total or end < start:
         raise ToolError(f"{tool}: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
     cap = _cap("read_file") - reserve
     room = cap - PAGE_HINT_TOKENS
     def page(last: int) -> str:
-        return "\n".join(f"L{n}| {rows[n - 1]}" if numbered else rows[n - 1] for n in range(start, last + 1))
+        return "\n".join(f"{prefix}{labels[n - 1] if labels else n}| {rows[n - 1]}" if prefix else rows[n - 1] for n in range(start, last + 1))
 
     if token_count.measure(page(end)) <= cap:
         return page(end)
@@ -669,8 +675,8 @@ def _read_window(content: str, start: int | None, end: int | None, tool: str = "
         low, high = (mid, high) if token_count.measure(page(mid)) <= room else (low, mid - 1)
     body = token_count.fit(page(low), room)
     if low == start and body != page(low):
-        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: {tool} {ref}start_line={start + 1}]"
-    return f"{body}\n[dòng {start}-{low}/{total}; đọc tiếp: {tool} {ref}start_line={low + 1}]"
+        return f"{body}\n[dòng {start} dài hơn trần, đã cắt còn {len(body)}/{len(page(low))} ký tự; phần cuối dòng không đọc được bằng read_file, dùng grep; đọc tiếp: {tool} {ref}start_line={labels[start] if labels and start < total else start + 1}]"
+    return f"{body}\n[dòng {start}-{low}/{total}; đọc tiếp: {tool} {ref}start_line={labels[low] if labels else low + 1}]"
 
 
 def _tool_list() -> str:
@@ -836,9 +842,15 @@ def _expand(history, args: dict) -> str:
         raise ToolError(f"expand: step {step} không có observation (có: {sorted(archive)[:20]})")
     digest, text = archive[step]
     body = [row for row in text.splitlines() if row and not row.startswith("[")]
-    numbered = not (body and all(re.match(r"L\d+\| ", row) for row in body))  # read_file/expand text already carries Lnn|
-    page = _read_window(text, args.get("start_line"), args.get("end_line"), expand_tool.NAME, f"step={step} ", numbered, EXPAND_HEADER_TOKENS)
-    return f"[expand step={step} sha256:{digest}]\n{page}"
+    marks = [re.match(r"L(\d+)\| ", row) for row in body]
+    header = f"[expand step={step} sha256:{digest}]\n"
+    reserve = token_count.measure(header) + 1
+    lo, hi = args.get("start_line"), args.get("end_line")
+    if body and all(marks):  # read_file/expand text already carries Lnn|: keep its numbers and window by them
+        page = _read_window("\n".join(body), lo, hi, expand_tool.NAME, f"step={step} ", "", reserve, [int(m.group(1)) for m in marks])
+    else:
+        page = _read_window(text, lo, hi, expand_tool.NAME, f"step={step} ", "R" if any(marks) else "L", reserve)
+    return header + page
 
 
 def _release(messages: list, slots: list) -> None:
