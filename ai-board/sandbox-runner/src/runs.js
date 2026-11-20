@@ -33,7 +33,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
   const save = () => store.save(data);
   const view = (run) => ({
     run_id: run.run_id, state: run.state, lease_expires_at: run.lease_expires_at, expires_at: run.expires_at, policy_hash: policy.hash,
-    ...(policy.network === 'none' ? { network: 'none' } : {}),
+    ...(policy.network ? { network: policy.network } : {}),
   });
   const markUnhealthy = (reason, runId) => {
     if (!unhealthy) alert({ event: reason, run_id: runId });
@@ -110,7 +110,7 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
     try {
       await backend.create({
         name: run.sandbox, image: policy.guest_image, vm: { cpus: policy.vm.cpus, memory_mib: policy.vm.memory_mib, disk_mib: policy.vm.disk_mib },
-        egress: policy.egress, network: policy.network, env: policy.guest_env, ttl_s: policy.vm.ttl_s, workdir: policy.exec.workdir,
+        egress: policy.egress, network: policy.network, mirror: policy.mirror, env: policy.guest_env, ttl_s: policy.vm.ttl_s, workdir: policy.exec.workdir,
         labels: { run_id: runId, runner_id: runnerId, runner_version: runnerVersion },
       });
     } catch (error) {
@@ -149,7 +149,9 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
 
   async function exec(runId, request) {
     const run = live(runId, 'exec');
-    exactKeys(request, ['argv', 'timeout_s'], 'exec');
+    exactKeys(request, ['argv', 'timeout_s', 'phase'], 'exec');
+    const { phase } = request;
+    if (policy.network === 'mirror' ? phase !== 'build' && phase !== 'run' : phase !== undefined) throw new RunnerError(400, 'invalid_request', 'exec');
     const { argv } = request;
     const timeout = request.timeout_s === undefined ? policy.exec.timeout_s : request.timeout_s;
     if (typeof timeout !== 'number' || !Number.isFinite(timeout) || timeout <= 0 || timeout > policy.exec.timeout_s) {
@@ -160,13 +162,24 @@ export function createRuns({ policy, backend, store, now = Date.now, alert = () 
       throw new RunnerError(400, 'invalid_request', 'exec');
     }
     if (running.has(runId)) throw new RunnerError(409, 'exec_in_progress', 'exec');
+    if (phase === 'build' && run.sealed) throw new RunnerError(409, 'network_sealed', 'exec');
     running.add(runId);
     try {
+      if (phase === 'run' && !run.sealed) {
+        try { await backend.sealNetwork(run.sandbox); } catch (error) {
+          report('network_seal_failed', runId, error);
+          await close(run, 'indeterminate');
+          throw new RunnerError(502, 'network_seal_failed', 'exec');
+        }
+        run.sealed = true;
+        save();
+      }
       return await backend.exec(run.sandbox, {
         argv, cwd: policy.exec.workdir, env: policy.guest_env, timeout_s: timeout,
         max_stdout_bytes: policy.exec.max_stdout_bytes, max_stderr_bytes: policy.exec.max_stderr_bytes,
       });
     } catch (error) {
+      if (error instanceof RunnerError) throw error;
       report('exec_ambiguous', runId, error);
       // completion unknown: never replay, end the run
       await close(run, 'indeterminate');

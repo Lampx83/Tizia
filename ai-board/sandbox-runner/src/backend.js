@@ -21,6 +21,20 @@ export function egressPolicy(egress) {
   };
 }
 
+/** Build-time policy: DNS and the one mirror destination only. The mirror lives inside the runner network, so its allow precedes the private-range denies. */
+export function mirrorEgressPolicy({ host, port }) {
+  const [dns, ...denies] = egressPolicy([]).rules;
+  return {
+    defaultEgress: 'deny',
+    defaultIngress: 'deny',
+    rules: [
+      dns,
+      { direction: 'egress', destination: { kind: 'domain', domain: host }, protocols: ['tcp'], ports: [{ start: port, end: port }], action: 'allow' },
+      ...denies,
+    ],
+  };
+}
+
 /**
  * Online-feature policy: zero egress. Every group, every destination, TCP/UDP/ICMP, DNS included.
  * No host-DNS exception (unlike egressPolicy): the guest cannot resolve names or reach host/gateway services.
@@ -80,14 +94,24 @@ export function createMicrosandboxBackend() {
   }
 
   return {
-    async create({ name, image, vm, egress, network, env, ttl_s, workdir, labels }) {
+    async create({ name, image, vm, egress, network, mirror, env, ttl_s, workdir, labels }) {
       const sandbox = await Sandbox.builder(name).image(image).cpus(vm.cpus).memory(vm.memory_mib).rootDisk(vm.disk_mib)
         .maxDuration(ttl_s).envs(env).labels(labels)
         .registry((r) => (/^image-registry[:/]/.test(image) ? r.insecure() : r)) // the in-compose registry speaks plain http
         // tls(): host-enforced domain rules need the TLS-aware path; without it every HTTPS handshake to an allowed host is reset
-        .network((n) => (network === 'none' ? n.policy(onlineEgressPolicy()) : n.policy(egressPolicy(egress)).tls((t) => t))).create();
+        .network((n) => {
+          if (network === 'none') return n.policy(onlineEgressPolicy());
+          return n.policy(network === 'mirror' ? mirrorEgressPolicy(mirror) : egressPolicy(egress)).tls((t) => t);
+        }).create();
       live.set(name, sandbox);
       await sandbox.exec('mkdir', ['-p', workdir]);
+    },
+
+    /** Replace the live policy with zero egress. Throws when the SDK cannot, so the caller fails closed. */
+    async sealNetwork(name) {
+      const sandbox = get(name);
+      if (typeof sandbox.setNetworkPolicy !== 'function') throw new Error('runtime network policy change unsupported');
+      await sandbox.setNetworkPolicy(onlineEgressPolicy());
     },
 
     async putArchive(name, bytes, workdir) {
