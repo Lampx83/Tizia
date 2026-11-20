@@ -28,6 +28,9 @@ Limits: <READS> tool calls, <CALLS> replies in total. Finish as soon as the quot
 meter.register_prompt("react_plan.md", PROTOCOL)
 
 
+RULE_ROUNDS = 2  # plan-rule objections answered in the session before the plan goes on to the gates
+
+
 def enabled() -> bool:
     return limits.react_plan()["enabled"]
 
@@ -180,17 +183,19 @@ def _rewoo(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
 
 
 def run(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None, proposal_id=None,
-        skill_context=None) -> dict | None:
+        skill_context=None, rules=None) -> dict | None:
     """{"response": plan_json, "quotes": [[...]]} khi finish đạt; None khi hết trần, stuck, hoặc hết lượt không finish.
     Cờ rewoo_gate2_reads: thử kế hoạch một lượt trước, hỏng thì chạy vòng ReAct."""
     kwargs = dict(model=model, source=source, sha=sha, db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
+    if rules is not None:  # one session: the plan, its rule observations and the edit step share one history
+        return _react(prompt, deps, budget, rules=rules, **kwargs)
     if get_settings().rewoo_gate2_reads and (plan := _rewoo(prompt, deps, budget, **kwargs)) is not None:
         return plan
     return _react(prompt, deps, budget, **kwargs)
 
 
 def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None, proposal_id=None,
-           skill_context=None) -> dict | None:
+           skill_context=None, rules=None) -> dict | None:
     spec = limits.react_plan()
     loop = LoopBudget({key: spec[key] for key in ("soft_start", "soft_step", "same_call_repeats", "no_progress_steps")},
                       ceiling=spec["model_calls"])
@@ -198,7 +203,7 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
     protocol = PROTOCOL.replace("<TOOLS>", readonly.schema_text()).replace(
         "<READS>", str(spec["tool_calls"])).replace("<CALLS>", str(spec["model_calls"]))
     trace = getattr(deps, "trace", None)
-    transcript, observed, reads = "", "", 0
+    transcript, observed, reads, objected = "", "", 0, 0
     while loop.allow():
         body = deps.call_model(model, prompt + protocol + transcript, gate=1, budget=budget, format="json",
                                db_path=db_path, proposal_id=proposal_id, prompt_name="react_plan.md",
@@ -217,9 +222,14 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
                 except ValueError as error:
                     observation, ok = f"BỊ LOẠI: {error}. Sửa rồi finish lại.", False
                 else:
-                    if trace:
-                        trace.note("tool", "react_plan", f"finish with quotes for {len(quotes)} subtask(s)")
-                    return {"response": json.dumps(args["plan"], ensure_ascii=False), "quotes": quotes}
+                    text = json.dumps(args["plan"], ensure_ascii=False)
+                    if rules is not None and objected < RULE_ROUNDS and (broken := rules(text)):
+                        objected += 1
+                        observation, ok = "BỊ LOẠI (plan rules): " + "; ".join(broken)[:1200] + ". Sửa plan rồi finish lại.", False
+                    else:
+                        if trace:
+                            trace.note("tool", "react_plan", f"finish with quotes for {len(quotes)} subtask(s)")
+                        return {"response": text, "quotes": quotes, **({"session": transcript} if rules is not None else {})}
             elif name not in readonly.SPECS:
                 observation, ok = f"tool lạ {name!r}; có: {', '.join(readonly.SPECS)}, finish", False
             elif reads >= spec["tool_calls"]:

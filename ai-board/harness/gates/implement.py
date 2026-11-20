@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import services.context as repo_context
 from services import file_context
 import path_policy
-from gates import change_class, gate3_guards, subtask_contract
+from gates import change_class, gate3_guards, plan_rules, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, model_json, network_request, state_file, subtask_files, tool_loop
@@ -705,7 +705,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
-    contract = (subtask_contract.block(state.get("plan") or {}) or "") + subtask_contract.warnings_block(state.get("form_warnings")) + state_file.block(state) or None
+    contract = (subtask_contract.block(state.get("plan") or {}) or "") + subtask_contract.warnings_block(state.get("form_warnings")) + plan_rules.session_block(state) + state_file.block(state) or None
     prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons,
                              produced=sorted((state.get("produced") or {}).keys()), contract=contract)
     feedback = ""
