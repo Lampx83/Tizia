@@ -290,3 +290,48 @@ def test_cleanup_unconfirmed_at_subtask_end_blocks_result(monkeypatch):
     monkeypatch.setattr(sandbox_tool.Runner, "close", boom)
     out = tool_loop.run_subtask({"task_type": "t"}, None, deps=object(), budget=Budget(), source=".", sha="abc")
     assert out["status"] == "blocked" and out["failure_class"] == "critical"
+
+
+class StuckDestroy(UploadClient):
+    def destroy(self, run_id, **_):
+        return {"state": "destroying"}
+
+
+def test_draft_path_change_with_unconfirmed_teardown_records_a_receipt_and_stops():
+    receipts = []
+    runner = kept(StuckDestroy(), receipts=receipts)
+    runner(ALLOWED, {"a.html": "x", "test/a.test.js": "t"})
+    with pytest.raises(sandbox_tool.CleanupUnconfirmed):
+        runner(ALLOWED, {"a.html": "x"})
+    assert receipts[-1]["error"] == "cleanup_unconfirmed"
+
+
+def test_failed_create_with_unconfirmed_cleanup_stops_at_once():
+    class Bad(StuckDestroy):
+        def create(self, *a, **kw):
+            raise SandboxError("bad_request", "create", 400)
+
+    receipts = []
+    with pytest.raises(sandbox_tool.CleanupUnconfirmed):
+        kept(Bad(), receipts=receipts)(ALLOWED, {})
+    assert receipts[-1]["error"] == "cleanup_unconfirmed"
+
+
+def test_added_draft_path_keeps_the_vm():
+    client = UploadClient()
+    runner = kept(client)
+    runner(ALLOWED, {"a.html": "x"})
+    runner(ALLOWED, {"a.html": "x", "test/a.test.js": "t"})
+    assert len(client.created) == 1 and client.uploads == 2
+    runner.close()
+
+
+def test_unknown_outcome_carries_the_run_id_when_close_fails_otherwise(monkeypatch):
+    monkeypatch.setenv(FLAG, "1")
+    monkeypatch.setattr(sandbox_tool, "offered", lambda *_: True)
+    runner = sandbox_tool.Runner("repo", "abc", client=UploadClient())
+    runner.run_id = "run-5"
+    monkeypatch.setattr(tool_loop, "_run_subtask", lambda *a, **kw: kw["sandbox_runners"].append(runner) or {"status": "proposed"})
+    monkeypatch.setattr(sandbox_tool.Runner, "close", lambda self: (_ for _ in ()).throw(PermissionError("x")))
+    out = tool_loop.run_subtask({"task_type": "t"}, None, deps=object(), budget=Budget(), source=".", sha="abc")
+    assert out["unknown_outcome"] == {"run_id": "run-5"}

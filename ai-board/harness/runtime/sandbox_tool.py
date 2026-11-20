@@ -138,7 +138,7 @@ class Runner:
     def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
                  tier: str | None = None, kept: bool | None = None, remaining=None):
         self.kept = get_settings(env).sandbox_subtask_vm if kept is None else kept
-        self.remaining, self.unconfirmed = remaining, None
+        self.remaining, self.unconfirmed, self.run_id = remaining, None, None
         self._session = self._tmp = self._uploaded = self._charged_at = None
         self._deadline = 0.0
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
@@ -194,6 +194,10 @@ class Runner:
                 session = self._open(drafts)
                 receipt["run_id"] = session.run_id
                 outcome = session.exec(argv, self.cfg["exec_timeout_s"])
+            except CleanupUnconfirmed:
+                receipt["error"] = "cleanup_unconfirmed"
+                self._record(receipt, started)
+                raise
             except SandboxError as caught:
                 error = caught
                 if caught.code == "lease_lost" and time.monotonic() >= self._deadline:
@@ -221,8 +225,8 @@ class Runner:
         raise AssertionError("unreachable")
 
     def _open(self, drafts: dict[str, str]) -> SandboxSession:
-        """Live subtask VM: created on first use; edited drafts are re-uploaded, a changed draft path set gets a fresh VM."""
-        if self._session is not None and drafts.keys() != self._uploaded.keys():
+        """Live subtask VM: created on first use; edited drafts are re-uploaded, a removed draft path gets a fresh VM."""
+        if self._session is not None and self._uploaded.keys() - drafts.keys():
             self._drop()
         if self._session is not None:
             if drafts != self._uploaded:
@@ -238,14 +242,17 @@ class Runner:
             _stage(self.source, self.sha, drafts, Path(self._tmp.name))
             self._deadline = time.monotonic() + left
             session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok, deadline=self._deadline)
-            self._session = session
+            self._session, self.run_id = session, session.run_id
             session.__enter__()
-        except BaseException:
-            if self._session is not None and self._session.cleanup_pending:
+        except BaseException as caught:
+            pending = self._session is not None and self._session.cleanup_pending
+            if pending:
                 self.unconfirmed = self._session.run_id
             self._session = None
             self._tmp.cleanup()
             self._tmp = None
+            if pending:
+                raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {self.unconfirmed})") from caught
             raise
         self._uploaded = dict(drafts)
         self._charged_at = time.monotonic()

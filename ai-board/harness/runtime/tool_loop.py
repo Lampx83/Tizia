@@ -888,7 +888,7 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
             try:
                 runner.close()
             except Exception:  # noqa: BLE001 - one failing close must not skip the other runners or checks.close()
-                vm_unconfirmed = vm_unconfirmed or getattr(runner, "unconfirmed", None) or "unknown"
+                vm_unconfirmed = vm_unconfirmed or getattr(runner, "unconfirmed", None) or getattr(runner, "run_id", None) or "unknown"
             else:
                 vm_unconfirmed = vm_unconfirmed or runner.unconfirmed
         if checks:
