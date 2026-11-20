@@ -1083,6 +1083,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             added = {task['file'] for task in plan['subtasks'] if task['file'] not in files} if sha else set()
             if refusal := best_match.new_page_refusal(request, added - set(_named_new_files(plan, files, request)), source, sha):
                 raise ValueError(refusal)
+            if refusal := best_match.old_literal_refusal(request, targets, source, sha):
+                raise ValueError(refusal)
             planned = [files.get(task['file'], '') for task in plan['subtasks']]
             # trace only: an insert request quotes new text, which may already sit in another file
             if elsewhere := [f"'{lit}' có ở {', '.join(paths[:3])}" for lit, paths in best_match.literal_homes(request, source, sha).items()

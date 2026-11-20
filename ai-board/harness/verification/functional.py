@@ -96,13 +96,21 @@ def _request_raw(state):
     return unicodedata.normalize('NFC', _PAGE_LINE.sub('', raw))  # the requester's own page, not words they asked for
 
 
-def _pairs(raw):
-    """[(old, new)] when every quote sits in a "'old' thành 'new'" pair, else []."""
+def _pairs(raw, loose=False):
+    """[(old, new)] when every quote sits in a "'old' thành 'new'" pair, else []; loose = adjacent pairs, other quotes allowed."""
     found = list(_QUOTED.finditer(raw))
     text = lambda m: next(g for g in m.groups() if g)
+    if loose:
+        return list(dict.fromkeys((text(a), text(b)) for a, b in zip(found, found[1:]) if _PAIR_GAP.fullmatch(raw[a.end():b.start()])))
     if not found or len(found) % 2 or not all(_PAIR_GAP.fullmatch(raw[a.end():b.start()]) for a, b in zip(found[::2], found[1::2])):
         return []
     return list(dict.fromkeys((text(a), text(b)) for a, b in zip(found[::2], found[1::2])))
+
+
+def replace_pairs(state):
+    """[(old, new)] quoted in a replace request, keep-as-is quotes around them ignored; [] when no replace verb."""
+    raw = _request_raw(state)
+    return _pairs(raw, loose=True) if _REPLACE.search(raw.lower()) else []
 
 
 def anchor(state):

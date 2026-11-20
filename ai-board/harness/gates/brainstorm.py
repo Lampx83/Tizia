@@ -465,6 +465,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             named = {path for path in added if in_request(path)}
             if refusal := best_match.new_page_refusal(request, added - named, source, commit):
                 raise ValueError(refusal)
+            if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit):
+                raise ValueError(refusal)
             if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
                 # recommendation instead of blocking the plan (path/layer rules still apply). An edit request

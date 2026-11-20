@@ -5,6 +5,7 @@ import re
 
 from services import file_context, target_confidence
 from settings import get_settings
+from verification import functional
 
 ADVISORY = "advisory"
 REASON_CODE = "best_match_advisory"
@@ -50,3 +51,14 @@ def new_page_refusal(request: dict, added, source, sha: str | None) -> str:
     homes = list(dict.fromkeys(path for paths in literal_homes(request, source, sha).values() for path in paths))[:5]
     return (f"yêu cầu sửa giao diện có sẵn: không tạo trang mới {', '.join(pages)}, sửa trang đang có"
             + (f"; chữ trong nháy có ở {', '.join(homes)}" if homes else ""))
+
+
+def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
+    """Reason to send back a replace plan editing no file that holds an old text found verbatim at sha; '' = allowed."""
+    if not sha or feature(request):
+        return ""
+    for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
+        homes = target_confidence._grep_files(source, sha, old)
+        if homes and not set(homes) & set(targets):
+            return f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}, plan phải sửa file chứa chữ đó"
+    return ""

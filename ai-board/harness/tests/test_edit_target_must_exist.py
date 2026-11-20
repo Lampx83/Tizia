@@ -116,7 +116,8 @@ def test_gate25_flags_but_does_not_block_a_plan_file_without_the_quoted_text(tmp
     tracer, batches = meter.Tracer(None), []
     tracer.begin(2.5, batches.append)
     deps = dataclasses.replace(deps_with(FakeModels(plan, validation=validation)), trace=tracer)
-    out = plan_validate.run({**EDIT, "grounding_required": True}, deps, Budget(), {"plan": plan, "checkout_source": str(src)})
+    insert = {**EDIT, "subject": f"Thêm liên kết '{LITERAL}' vào trang giới thiệu", "body": f"Thêm liên kết '{LITERAL}' vào trang giới thiệu"}
+    out = plan_validate.run({**insert, "grounding_required": True}, deps, Budget(), {"plan": plan, "checkout_source": str(src)})
     tracer.flush()
     assert not out["blocked"]
     flag = {e["check"]: e for e in batches[0][0]["evaluation"]}["quoted text elsewhere"]
