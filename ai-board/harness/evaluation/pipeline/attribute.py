@@ -61,13 +61,14 @@ sys.path.insert(0, sys.argv[1])
 
 def run(job):
     try:
-        fn = getattr(importlib.import_module(job["module"]), job["func"])
+        mod = importlib.import_module(job["module"])
     except ModuleNotFoundError as e:
         return {"absent": True} if e.name == job["module"] else {"error": repr(e)}
-    except AttributeError:
-        return {"absent": True}
     except Exception as e:
         return {"error": repr(e)}
+    fn = getattr(mod, job["func"], None)
+    if fn is None:
+        return {"absent": True}
     params = inspect.signature(fn).parameters
     pos = job["args"] if any(p.kind == p.VAR_POSITIONAL for p in params.values()) else job["args"][:len(params)]
     try:
@@ -245,7 +246,8 @@ def _summary(job: dict, seq: list[str], outs: list[dict], pin_at: int) -> dict:
     flip = next((sha for sha, o in zip(seq[1:pin_at + 1], outs[1:pin_at + 1])
                  if o["blocked"] is not None and o["blocked"] != outs[0]["blocked"]), None)
     errors = [o["error"] for o in outs if o.get("error")]
-    status = "error" if outs[pin_at].get("error") else "replayed" if reproduced else "mismatch"
+    status = ("error" if outs[pin_at].get("error") else "baseline_error" if outs[0].get("error")
+              else "replayed" if reproduced else "mismatch")
     return {"status": status, "function": f"{job['module']}.{job['func']}", "reproduced": reproduced,
             "baseline": {"sha": seq[0], "blocked": outs[0]["blocked"], "value": outs[0]["value"]},
             "at_pin": {"blocked": outs[pin_at]["blocked"], "value": outs[pin_at]["value"]},
@@ -300,6 +302,7 @@ def attribute(n: int, m: int, *, data=DATA, repo=REPO, plan_path=None, arm="B0",
         reason = str(fb.get("reason") or t.get("verdict_reason") or "")
         check = _check(reason)
         regs.append({"case": k[0], "seed": k[1], "prev_trial": a["stem"], "trial": b["stem"],
+                     "infra": bool(t.get("call_errors_before")) or t.get("failure_class") == "transient" or bool(t.get("timed_out")),
                      "prev": {"solved": a["solved"], "shipped": a["shipped"], "outcome": a["trial"].get("outcome")},
                      "now": {"solved": b["solved"], "shipped": b["shipped"], "outcome": t.get("outcome")},
                      "first_block": {"gate": gate, "check": check, "reason": reason[:300]},
@@ -322,8 +325,9 @@ def attribute(n: int, m: int, *, data=DATA, repo=REPO, plan_path=None, arm="B0",
                 jobs.append(job)
                 owners.append(i)
             else:
-                r["replay"] = {"status": "not_replayable",
-                               "why": "model-path gate or inputs (plan, validation) not stored in the trial"}
+                r["replay"] = {"status": "not_replayable", "why": "no gate block" if not r["first_block"]["gate"] else
+                               f"gate {r['first_block']['gate']} {r['first_block']['check']}: no deterministic replay "
+                               "or its inputs (plan, validation) are not stored in the trial"}
         seq = [full_m] + [c["sha"] for c in commits + after]
         env = {**os.environ, **flags_n, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
         for i, job, outs in zip(owners, jobs, _replay(repo, seq, jobs, env, root) if jobs else []):
@@ -331,7 +335,8 @@ def attribute(n: int, m: int, *, data=DATA, repo=REPO, plan_path=None, arm="B0",
     finally:
         shutil.rmtree(root, ignore_errors=True)
     for r in regs:
-        r["suspects"] = _suspects(commits, r["modules"], r["replay"], flag_shas)
+        # a failed model call is the endpoint, not a merge
+        r["suspects"] = [] if r["infra"] else _suspects(commits, r["modules"], r["replay"], flag_shas)
     return {"round": n, "prev": m, "arm": arm, "pins": {"prev": pin_m, "round": pin_n}, "until": until,
             "commits": commits, "after_pin": after,
             "flags": {"prev": flags_m, "round": flags_n, "introduced": introduced,
@@ -353,13 +358,16 @@ def md(rep: dict) -> str:
            f"pins {rep['pins']['prev']} -> {rep['pins']['round']}, {len(rep['commits'])} first-parent commits; "
            f"paired {rep['paired']}, unpaired prev_only {len(rep['unpaired']['prev_only'])} round_only {len(rep['unpaired']['round_only'])}",
            f"flags changed: {f['changed'] or '-'}; introduced: " + (", ".join(f"{k} ({v[:8]})" for k, v in f["introduced"].items()) or "-"),
-           "", "| case | seed | first_block | replay | suspects |", "|---|---|---|---|---|"]
+           "", "| commit | LF | key / branch | files |", "|---|---|---|---|"]
+    out += [f"| {c['sha'][:8]}{' (after pin)' if c in rep['after_pin'] else ''} | {c['lf'] or '-'} | "
+            f"{c['key'] or c['branch'] or c['subject'][:40]} | {len(c['files'])} |" for c in rep["commits"] + rep["after_pin"]]
+    out += ["", "| case | seed | first_block | replay | suspects |", "|---|---|---|---|---|"]
     for r in rep["regressions"]:
         rp = r["replay"]
         flip = f", first flip {rp['first_flip'][:8]}" if rp.get("first_flip") else ""
         later = [c["sha"][:8] for c in rp.get("changes", []) if c["sha"] in {a["sha"] for a in rep["after_pin"]}]
         fb = r["first_block"]
-        out.append(f"| {r['case']} | {r['seed']} | {fb['gate']} {fb['check']} | {rp['status']}{flip}"
+        out.append(f"| {r['case']} | {r['seed']} | {fb['gate']} {fb['check']}{' (infra)' if r['infra'] else ''} | {rp['status']}{flip}"
                    f"{', after pin ' + ' '.join(later) if later else ''} | {'; '.join(map(_sus, r['suspects'])) or '-'} |")
     return "\n".join(out) + "\n"
 

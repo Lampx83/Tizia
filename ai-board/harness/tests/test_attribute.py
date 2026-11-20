@@ -110,3 +110,16 @@ def test_model_path_gate_has_module_and_flag_suspects_only(world):
     assert {s["sha"]: (s["evidence"], s["hit"]) for s in reg["suspects"]} == {
         world["shas"]["literal"]: (["module"], "package"), world["shas"]["server"]: (["flag"], None)}
     assert reg["suspects"][0]["sha"] == world["shas"]["literal"]
+
+
+def test_import_error_is_an_error_and_an_errored_baseline_names_no_flip(world):
+    repo = world["repo"]
+    git(repo, "checkout", "-q", "-b", "broken", world["shas"]["base"])
+    (repo / TOY).write_text("raise AttributeError('broken import')\n", encoding="utf-8")
+    git(repo, "commit", "-qam", "broken")
+    job = {"module": "gates.static_check", "func": "literal_misses", "args": [{"request_title": "t"}, "X", None], "kind": "list"}
+    seq = [git(repo, "rev-parse", "HEAD"), world["shas"]["literal"]]
+    outs = A._replay(repo, seq, [job], None, world["tmp"])[0]
+    assert outs[0]["blocked"] is None and "AttributeError" in outs[0]["error"] and outs[1]["blocked"] is True
+    s = A._summary(job, seq, outs, 1)
+    assert s["status"] == "baseline_error" and s["first_flip"] is None
