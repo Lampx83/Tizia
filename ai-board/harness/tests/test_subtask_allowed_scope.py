@@ -235,3 +235,12 @@ def test_primary_dotfile_scope_stays_in_step_with_check_files(on):
         pass
     st = plan["subtasks"][0]
     assert st["file"] in st["allowed_scope"]
+
+
+def test_prompt_limit_follows_the_setting(monkeypatch):
+    request = {"id": "1", "type": "feature", "subject": "s", "body": "b"}
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "5")
+    assert "at most 5 repo paths" in brainstorm.build_prompt(request, frozenset())
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "2")
+    assert "at most 2 repo paths" in brainstorm.build_prompt(request, frozenset())

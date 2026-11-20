@@ -84,7 +84,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         thread=scrub(thread),
         surface=", ".join(sorted(surface)),
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
-    ) + acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else "")
+    ) + acceptance_structure.prompt_block(request) + (SCOPE_PROMPT.format(limit=subtask_files.limit()) if subtask_files.enabled() else "")
 
 
 def infer_layer(file: str, role: str = "student") -> str:
