@@ -9,22 +9,28 @@ from collections import Counter
 from pathlib import Path
 
 VERDICTS = ("pass", "fail")
-LEGACY_PASS = "correct"
+LEGACY_PASS = ("correct", "equivalent")
+LEGACY_FAIL = ("partial", "wrong", "no_candidate", "different")
+OLD_DIFF_CAP = 6000
 
 PROMPT = """You grade code changes written by a small AI model for a Vietnamese education website (static HTML/CSS/JS pages plus a Node server).
 For each item you get the user's request and the complete unified diff the model produced against the base commit. Judge ONLY whether the diff, once shipped,
 satisfies the request. Use the base code in the repository when you need to check that files, functions, element ids or classes the diff refers to exist.
 An alternative implementation that plainly satisfies the request passes. Binary verdicts:
-- pass: satisfies the request, no broken references, no syntax errors.
+- pass: satisfies the request, no broken references, no syntax errors, and nothing else visible in the diff is broken.
 - fail: anything else, including an almost-right diff that is incomplete or has one defect breaking part of the behaviour (say which in the reason), a diff that does not do the request, refers to things that do not exist, breaks syntax, changes nothing useful, or is empty or missing.
+An item with "diff_truncated": true was cut by an old size cap, so the rest is unseen: do not assume it is complete; fail it and start the reason with "truncated" unless the visible part already fails.
 Output a JSON array of {"blind_id", "verdict", "reason"} with reason at most 200 characters. You do not know which model setting produced a diff."""
 
 
 def binary(verdict) -> str | None:
-    """pass|fail from a grader verdict; legacy 'correct' is pass, other legacy labels fail, unknown None."""
-    if verdict in VERDICTS:
-        return verdict
-    return "pass" if verdict == LEGACY_PASS else "fail" if verdict in ("partial", "wrong", "no_candidate") else None
+    """pass|fail from a verdict (case/space-insensitive, bool, legacy and judge vocab; partial is fail); unknown None."""
+    if isinstance(verdict, bool):
+        return "pass" if verdict else "fail"
+    if not isinstance(verdict, str):
+        return None
+    verdict = verdict.strip().lower()
+    return verdict if verdict in VERDICTS else "pass" if verdict in LEGACY_PASS else "fail" if verdict in LEGACY_FAIL else None
 
 
 def _rows(run_dir: Path) -> list[dict]:
@@ -48,7 +54,8 @@ def collect(run_dirs: list[Path], pack: list[dict], out_dir: Path, seed: int = 2
         blind = f"g{index:04d}"
         entry, row = item["entry"], item["row"]
         batch.append({"blind_id": blind, "request": {"title": entry["title"], "detail": entry["detail"], "verify": [s["verify"] for s in entry["subtasks"]]},
-                      "files": entry["files"], "base_sha": entry["base_sha"], "diff": row.get("diff")})
+                      "files": entry["files"], "base_sha": entry["base_sha"], "diff": row.get("diff"),
+                      "diff_truncated": len(row.get("diff") or "") == OLD_DIFF_CAP})
         key[blind] = {"run": item["run"], "id": row["id"], "oracle": bool(row.get("resolved")), "mode": row.get("mode")}
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

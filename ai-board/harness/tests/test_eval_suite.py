@@ -564,7 +564,10 @@ def test_blind_batch_keeps_full_diff_and_prompt_is_binary(tmp_path):
     grading.collect([tmp_path / "runA"], pack, tmp_path / "out")
     batch = json.loads((tmp_path / "out" / "batch.json").read_text(encoding="utf-8"))
     assert len(batch["items"][0]["diff"]) == 20000
-    assert "truncated" not in batch["prompt"] and "- pass:" in batch["prompt"] and "- fail:" in batch["prompt"]
+    assert batch["items"][0]["diff_truncated"] is False and "- pass:" in batch["prompt"] and "- fail:" in batch["prompt"]
+    (tmp_path / "runA" / "results.jsonl").write_text(json.dumps({"id": "t1", "mode": "gold", "resolved": True, "diff": "x" * 6000}), encoding="utf-8")
+    grading.collect([tmp_path / "runA"], pack, tmp_path / "out")
+    assert json.loads((tmp_path / "out" / "batch.json").read_text(encoding="utf-8"))["items"][0]["diff_truncated"] is True
 
 
 def test_plan_cards_are_matched_and_hide_arm_outcome_and_gold(tmp_path):
