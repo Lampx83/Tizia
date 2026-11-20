@@ -18,6 +18,7 @@ import posixpath
 import re
 import subprocess
 import unicodedata
+from collections import Counter
 from pathlib import Path
 
 import path_policy
@@ -439,11 +440,6 @@ def _existing(checkout, paths: list[str], text: str, added: int) -> bool:
     return count > added
 
 
-def _segment(line: str, text: str) -> str | None:
-    """Text between tags that holds `text`."""
-    return next((piece.strip() for piece in re.split(r"<[^>]*>", line) if text in piece), None)
-
-
 def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bool:
     """Added line `at` holds text right after the anchor: same line, or only tag lines between them; hunk start = unknown, passes."""
     if anchor in view[at][1] and view[at][1].index(anchor) < view[at][1].index(text):
@@ -456,6 +452,35 @@ def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bo
     return True
 
 
+def _pieces(line: str, text: str) -> list[str]:
+    """Text between tags holding `text`; the whole line when it sits only inside a tag (attribute value)."""
+    found = [piece.strip() for piece in re.split(r"<[^>]*>", line) if text in piece]
+    return found or ([line] if text in line else [])
+
+
+def _replacement_misses(pairs: list[tuple[str, str]], hunks) -> tuple[list[str], set[str]]:
+    """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same hunk.
+    Returns (misses, new texts judged this way); a pair whose old text no hunk removes is left to the plain presence check."""
+    misses, judged = [], set()
+    for old, text in pairs:
+        old, text = _ws(old), _ws(text)
+        for path, hunk in hunks:
+            before = [seg for sign, line in hunk if sign == "-" for seg in _pieces(line, old)]
+            if not before:
+                continue
+            judged.add(text)
+            added = Counter(seg.strip() for sign, line in hunk if sign == "+" for seg in {line, *re.split(r"<[^>]*>", line)} if seg.strip())
+            for seg in before:
+                want = seg.replace(old, text)
+                if added[want]:
+                    added[want] -= 1
+                else:
+                    near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
+                    misses.append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
+                                  + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
+    return misses, judged
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -465,29 +490,21 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     pairs = functional.replace_pairs(state) if want["absent"] else []
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
+    misses, judged = _replacement_misses(pairs, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
+    new = [text for text in new if text not in judged]
     added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
     # Only the changed files count: text that sits on another page still has to be added where the request asks.
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]
     if functional.quoted(raw) and not want["absent"] and len(new) > 1:
         new = []  # a plain add quoting several texts: which one is new is not pinned down
-    misses = []
     for text in new:
         if not added[text]:
             path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
                                   if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
             misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
                           + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
-    for old, text in pairs:
-        old, text = _ws(old), _ws(text)
-        for path, hunk in hunks:
-            before = [seg for sign, line in hunk if sign == "-" and (seg := _segment(line, old)) is not None]
-            after = [seg for sign, line in hunk if sign == "+" and (seg := _segment(line, text)) is not None]
-            expected = {seg.replace(old, text) for seg in before}
-            if before and after and not expected & set(after):
-                misses.append(f'{path}: đổi "{old}" thành "{text}": phần tử phải thành "{sorted(expected)[0]}", '
-                              f'đang là "{after[0]}" (không giữ lại phần nào của chữ cũ)')
     if anchor:
         anchor = _ws(anchor)
         for text in new:

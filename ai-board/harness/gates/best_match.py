@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from services import file_context, target_confidence
+from services import context, file_context, target_confidence
 from settings import get_settings
 from verification import functional
 
@@ -58,12 +58,43 @@ def new_page_refusal(request: dict, added, source, sha: str | None) -> str:
             + (f"; chữ trong nháy có ở {', '.join(homes)}" if homes else ""))
 
 
+_PAGE_LINE = re.compile(r"^\[Trang: .*\] (/\S+)[ \t]*$", re.M)
+_WORD_AFTER_PAGE = re.compile(r"\b(?:trang|page) (\w+)")
+_EVERYWHERE = re.compile(r"\b(?:moi|tat ca|toan bo|khap|cac trang|every|all)\b")
+
+
+def _requested_page(request: dict, homes: list[str], source, sha: str) -> str | None:
+    """The one home the request points at: its [Trang: ...] line, a page it names by title/link/path, or a page word matching one home's file name."""
+    text = "\n".join(str(request.get(key) or "") for key in ("subject", "body"))
+    line = _PAGE_LINE.search(str(request.get("body") or ""))
+    by_line = ["public" + line.group(1)] if line and not line.group(1).startswith("//") else []
+    word = [home for home in homes
+            if any(m.group(1) in re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1].lower()) for m in _WORD_AFTER_PAGE.finditer(file_context.fold(text)))]
+    for found in (by_line, context._named_pages(text, source, sha), context._mentioned_files(text, source, sha), word):
+        pages = [home for home in homes if home in found]
+        if len(pages) == 1:
+            return pages[0]
+    return None
+
+
 def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
-    """Reason to send back a replace plan editing no file that holds an old text found verbatim at sha; '' = allowed."""
+    """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several homes
+    when the request names one element; '' = allowed."""
     if not sha or feature(request):
         return ""
+    everywhere = _EVERYWHERE.search(file_context.fold(functional._QUOTED.sub(" ", f"{request.get('subject') or ''} {request.get('body') or ''}")))
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
         homes = target_confidence._grep_files(source, sha, old)
-        if homes and not set(homes) & set(targets):
-            return f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}, plan phải sửa file chứa chữ đó"
+        if not homes:
+            continue
+        edited = set(homes) & set(targets)
+        page = _requested_page(request, homes, source, sha) if len(homes) > 1 else None
+        if edited and (len(homes) == 1 or everywhere or (len(edited) == 1 and page in (None, *edited))):
+            continue
+        where = f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}"
+        if len(homes) == 1:
+            return f"{where}, plan phải sửa file chứa chữ đó"
+        if page:
+            return f"{where}; yêu cầu chỉ tới {page}: chỉ sửa {page}, không đổi file khác"
+        return f"{where}; yêu cầu chỉ tới một phần tử: chọn đúng một file trong số đó, nêu lý do chọn, không đổi file khác"
     return ""

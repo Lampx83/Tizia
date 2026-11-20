@@ -89,6 +89,24 @@ _ANCHOR_CUE = re.compile(r'\b(?:sau|dưới|after|below)\s+(?:the\s+)?(?:dòng|c
 # "Thêm dòng … : <text>": the text after the colon is the literal, to the end of the line, punctuation included
 _COLON_LITERAL = re.compile(r'^[^\S\n]*(?:thêm|chèn|add|insert)\b[^:\n]*?\b(?:dòng|câu|chữ|đoạn|line|text|sentence)\b'
                             r'[^:\n]*:[^\S\n]*([^\n\'"“”‘’«»]{2,120}?)[^\S\n]*$', re.I | re.M)
+# "Đổi … thành: <text>": unquoted new text after the colon; a bare "10:30" (no space after the colon) is not a cue
+_REPLACE_COLON = re.compile(r'\b(?:đổi|thay|rename|change|replace)\b[^\n:]*?(?:thành|bằng|\bto\b)[^\n:]{0,30}:[^\S\n]+([^\n]+)', re.I)
+
+
+def _first_sentence(text):
+    """Text up to the first sentence end (final punctuation kept) that a capitalised sentence follows."""
+    for m in re.finditer(r'[.!?…]+(?=\s+(\S))', text):
+        if m.group(1).isupper():
+            return text[:m.end()]
+    return text.strip()
+
+
+def _replace_colon_literal(raw):
+    """New text written after 'thành:' in title and detail; the shortest reading when one is a prefix of the others
+    (a title's final period is the literal's own, a detail's may end a sentence)."""
+    found = list(dict.fromkeys(t for m in _REPLACE_COLON.finditer(raw) if 2 <= len(t := _first_sentence(m.group(1)).strip()) <= 120))
+    shortest = min(found, key=len, default=None)
+    return [shortest] if shortest and all(t.startswith(shortest) for t in found) else found
 
 
 def _request_raw(state):
@@ -133,7 +151,10 @@ def text_expectation(state):
         return none
     if not quotes:
         colon = list(dict.fromkeys(m.group(1) for m in _COLON_LITERAL.finditer(raw)))
-        return {'present': colon, 'absent': []} if add and colon and not _QUOTED.search(raw) else none
+        if add and colon and not _QUOTED.search(raw):
+            return {'present': colon, 'absent': []}
+        unquoted = _replace_colon_literal(raw) if replace and not _QUOTED.search(raw) else []
+        return {'present': unquoted, 'absent': []} if unquoted else none
     shown = lambda items: [t for t in items if t not in ignored]
     cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
     if cut and not remove:
