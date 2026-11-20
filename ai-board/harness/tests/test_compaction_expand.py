@@ -1,4 +1,5 @@
 """expand tool: re-open a compacted observation by step; off unless compaction and its own flag are on."""
+import hashlib
 import json
 from types import SimpleNamespace
 
@@ -58,11 +59,11 @@ def test_unknown_step_is_a_clear_tool_error_and_the_loop_continues(monkeypatch):
 
 
 def test_unpaged_expand_ends_with_a_continue_hint_for_expand():
-    history = SimpleNamespace(archive={7: chr(10).join(ROWS * 4)})
+    history = SimpleNamespace(archive={7: ('d', chr(10).join(ROWS * 4))})
     page = tool_loop._expand(history, {'step': 7})
     assert page.endswith(']') and 'expand step=7 start_line=' in page and 'read_file start_line' not in page
     nxt = int(page.rsplit('start_line=', 1)[1].rstrip(']'))
-    assert tool_loop._expand(history, {'step': 7, 'start_line': nxt}).startswith(f'L{nxt}| ')
+    assert tool_loop._expand(history, {'step': 7, 'start_line': nxt}).split(chr(10), 1)[1].startswith(f'L{nxt}| ')
 
 
 def test_expand_needs_compaction_on(monkeypatch):
@@ -82,3 +83,72 @@ def test_expand_offered_with_both_flags(monkeypatch):
     monkeypatch.setattr(tool_loop, '_specs', lambda: seen.extend(real()) or real())
     trial(scripted())
     assert 'expand' in seen
+
+
+def offered(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    token = tool_loop._EXPAND_OFFERED.set(True)
+    return token
+
+
+def shown(history, **args):
+    return tool_loop._fit(tool_loop._expand(history, args), 'expand')
+
+
+def archived(text, step=7):
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    return SimpleNamespace(archive={step: (digest, text)})
+
+
+def test_expand_page_survives_the_fit_with_its_hint(monkeypatch):
+    token = offered(monkeypatch)
+    try:
+        page = shown(archived(chr(10).join(ROWS * 4)), step=7)
+    finally:
+        tool_loop._EXPAND_OFFERED.reset(token)
+    assert page.endswith(']') and 'expand step=7 start_line=' in page
+    assert tool_loop.token_count.measure(page) > 1000
+
+
+def test_expanding_numbered_text_does_not_double_the_prefix(monkeypatch):
+    token = offered(monkeypatch)
+    try:
+        read = tool_loop._read_window(chr(10).join(ROWS), 1, 20)
+        page = shown(archived(read), step=7)
+        again = shown(archived(page, step=8), step=8)
+    finally:
+        tool_loop._EXPAND_OFFERED.reset(token)
+    for text in (page, again):
+        assert 'L1| L1|' not in text and 'L2| L2|' not in text and 'L2| row 1' in text
+
+
+def test_expand_reports_the_digest_the_summary_references(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    deps = scripted(expand(step=0, start_line=1, end_line=2))
+    trial(deps)
+    digest = deps.compactions[0]['required_references'][0]['digest']
+    assert any(f'sha256:{digest}' in p for p in deps.prompts if 'Observation 3 expand' in p)
+
+
+def test_unpaged_expand_is_not_compacted_before_the_model_sees_it(monkeypatch):
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    deps = scripted(expand(step=0))
+    result, _ = trial(deps)
+    assert result['status'] == 'proposed'
+    assert any('Observation 3 expand' in p for p in deps.prompts)
+
+
+def test_flag_change_blocks_resume_through_the_prompt_pin(monkeypatch):
+    from test_tool_checkpoint import Crash, MemSteps
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
+    def crash():
+        raise Crash()
+    store = MemSteps()
+    deps = scripted()
+    deps.on_compact = crash
+    with pytest.raises(Crash):
+        trial(deps, store=store)
+    monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '0')
+    resumed = scripted()
+    result, _ = trial(resumed, store=MemSteps(shared=store.db))
+    assert result['status'] == 'blocked' and 'prompt' in result['reason'] and resumed.prompts == []

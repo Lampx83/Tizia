@@ -30,6 +30,21 @@ def spec_hash() -> str:
     return hashlib.sha256(json.dumps(asdict(_SPEC), sort_keys=True, default=str).encode()).hexdigest()
 
 
-def record(history, step: int, text: str) -> None:
-    # attribute on History, not a field: compaction.py's pin stays unchanged
-    history.__dict__.setdefault("archive", {})[step] = text
+def record(history, text: str) -> None:
+    """Archive `text` under the newest observation's step and digest."""
+    row = history.observations[-1]
+    history.__dict__.setdefault("archive", {})[row["step"]] = (row["digest"], text)
+
+
+def history_class():
+    from runtime.compaction import History
+
+    class ExpandHistory(History):
+        def _old(self):
+            """Never summarise the newest expand result before the model has read it."""
+            old = super()._old()
+            if self.observations and self.observations[-1]["tool"] == NAME:
+                old = [row for row in old if row is not self.observations[-1]]
+            return old
+
+    return ExpandHistory

@@ -31,6 +31,7 @@ from settings import get_settings
 
 _LOOP = limits.loop(env={})
 ERROR_CHARS = _LOOP["error_chars"]
+EXPAND_HEADER_TOKENS = 40  # room kept for the expand digest header
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "read_skill_resource", "edit_file", "write_test", "run_check", "request_package", "fetch_url", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
@@ -632,6 +633,7 @@ def _skill_resource(skills: dict[str, ActiveSkill], path: str) -> str:
 def _cap(name: str) -> int:
     """Trần token quan sát, từ contract."""
     caps = limits.observation_tokens()
+    name = "read_file" if name == expand_tool.NAME else name  # expand pages like read_file; page size and fit cap must match
     return caps.get(name, caps["default"])
 
 
@@ -645,7 +647,7 @@ def _fit(text: str, name: str) -> str:
     return token_count.fit(text if name in ("read_file", expand_tool.NAME) else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
 
 
-def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "") -> str:
+def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "", numbered: bool = True, reserve: int = 0) -> str:
     """Dòng `Lnn| ` của [start, end]; quá trần token thì cắt ở ranh giới dòng, kèm tổng dòng và lệnh đọc tiếp."""
     rows = content.splitlines()
     total = len(rows)
@@ -654,10 +656,10 @@ def _read_window(content: str, start: int | None, end: int | None, tool: str = "
     start, end = 1 if start is None else start, total if end is None else min(end, total)
     if start < 1 or start > total or end < start:
         raise ToolError(f"{tool}: khoảng dòng không hợp lệ (file có {total} dòng, start_line={start}, end_line={end})")
-    cap = _cap("read_file")
+    cap = _cap("read_file") - reserve
     room = cap - PAGE_HINT_TOKENS
     def page(last: int) -> str:
-        return "\n".join(f"L{n}| {rows[n - 1]}" for n in range(start, last + 1))
+        return "\n".join(f"L{n}| {rows[n - 1]}" if numbered else rows[n - 1] for n in range(start, last + 1))
 
     if token_count.measure(page(end)) <= cap:
         return page(end)
@@ -827,11 +829,16 @@ COMPACTED = "(compacted into UNTRUSTED_SUMMARY)"
 
 
 def _expand(history, args: dict) -> str:
-    """Page of the archived original of observation `step`; ToolError if unknown."""
+    """Page of the archived original of observation `step`, headed by the digest the summary references; ToolError if unknown."""
     archive = getattr(history, "archive", {})
-    if args["step"] not in archive:
-        raise ToolError(f"expand: step {args['step']} không có observation (có: {sorted(archive)[:20]})")
-    return _read_window(archive[args["step"]], args.get("start_line"), args.get("end_line"), expand_tool.NAME, f"step={args['step']} ")
+    step = args["step"]
+    if step not in archive:
+        raise ToolError(f"expand: step {step} không có observation (có: {sorted(archive)[:20]})")
+    digest, text = archive[step]
+    body = [row for row in text.splitlines() if row and not row.startswith("[")]
+    numbered = not (body and all(re.match(r"L\d+\| ", row) for row in body))  # read_file/expand text already carries Lnn|
+    page = _read_window(text, args.get("start_line"), args.get("end_line"), expand_tool.NAME, f"step={step} ", numbered, EXPAND_HEADER_TOKENS)
+    return f"[expand step={step} sha256:{digest}]\n{page}"
 
 
 def _release(messages: list, slots: list) -> None:
@@ -841,8 +848,6 @@ def _release(messages: list, slots: list) -> None:
 
 def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, observation: str, kind: str = "", cid: str | None = None) -> str:
     """Observation vào lịch sử hiện hành (compaction, native, hoặc nối prompt); trả prompt mới."""
-    if history is not None:
-        expand_tool.record(history, n, observation)
     if messages is not None:
         _native_turn(messages, n, name, args, _fit(observation, name), cid)
         if history is not None:
@@ -851,6 +856,8 @@ def _show_step(prompt: str, history, messages, n: int, name: str, args: dict, ob
         history.add(n, name, _fit(observation, name))
     else:
         prompt += _observation(name, _fit(observation, name), cid)
+    if history is not None:
+        expand_tool.record(history, observation)
     return prompt
 
 
@@ -1020,7 +1027,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         pins = {**(pins or {}), "react_schema": True}
     if get_settings().context_compaction:
         from runtime.compaction import History, pin
-        history = History(native=messages is not None)
+        history = (expand_tool.history_class() if expand_tool.offered() else History)(native=messages is not None)
         pins = {**(pins or {}), 'compaction': pin()}
     bad_tool, bad_n = None, 0
     steps, rejected, nudged = [], False, False  # the first premature finish is a free nudge; repeating it spends a content repair
