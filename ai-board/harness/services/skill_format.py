@@ -6,15 +6,27 @@ from services import file_context
 MAX_STEPS = 7
 _STEP = re.compile(r'^\s*\d+[.)]\s', re.M)
 _EXT = r'(?:html?|css|scss|sass|less|jsx?|mjs|cjs|tsx?|vue|py|json|ya?ml|toml|ini|md|sql|sh|txt)'
-_GENERIC = r'(?:a|an|the|each|every|any|that|this|one|same|new|existing|changed|public|web|target)'
+_GENERIC = r'(?:a|an|the|each|every|any|that|this|one|same|new|existing|changed|public|web|target|sibling|current|other|another|parent|linked|given|named)'
 _SPECIFIC = re.compile(
     rf'[\w./-]+\.{_EXT}\b|\bDockerfile\b|(?<![\w/])/[a-z][\w-]*(?:/[\w-]+)*|(?<![\w&])#[a-z][\w-]+'
-    rf'|\b(?!{_GENERIC}\b)[\w-]+ page\b'
-    r'|"(?![a-z]{1,8}")[^"\n]+"|(?<!\w)\'[^\'\n]+\'(?!\w)|`[^`\n]+`|“[^”\n]+”', re.I)
+    rf'|\b(?!{_GENERIC}\b)[\w-]+ page\b', re.I)
+_QUOTED = re.compile(r'"([^"\n]*)"|\u201c([^\u201d\n]*)\u201d|(?<!\w)\'([^\'\n]*)\'(?!\w)|`([^`\n]*)`')
 _EXCLUSION = re.compile(r',\s*not when\b|;\s*not for\b', re.I)
 _STOP = frozenset('a an the and or of to for in on it its is are be step only just when use that this with my i how after against new old'.split())
 _MIN_SHARED = 2
 _DESC = re.compile(r'^description:\s*(?:"(.*)"|(.*))\s*$', re.M)
+
+
+def _specific(text):
+    """True when text names a file, path, id, page or a non-generic quoted string."""
+    if _SPECIFIC.search(text):
+        return True
+    for m in _QUOTED.finditer(text):
+        quoted = next(g for g in m.groups() if g is not None)
+        word = re.fullmatch(r'[a-z]+(?: [a-z]+)?', quoted)
+        if not word or len(quoted) > 12 or (m.group(4) is not None and ' ' in quoted):
+            return True
+    return False
 
 
 def is_unified(text):
@@ -63,7 +75,7 @@ def check(text):
         errors.append('order must be Look, steps, Done means')
     if example is not None and not example.strip():
         errors.append('Example is empty')
-    if _SPECIFIC.search((facts or '') + '\n' + rules):
+    if _specific((facts or '') + '\n' + rules):
         errors.append('rules name a specific file, string or page; move it to the Example')
     return errors
 
@@ -81,7 +93,7 @@ def _stems(text):
 
 
 def routes(sentence, text):
-    """Offline router: sentence shares >=2 stems with the description's Use-when clause and <2 with its exclusion."""
+    """Offline lint helper only (production routing is default_skills.select by task type/file): sentence shares >=2 stems with the description's Use-when clause and <2 with its exclusion."""
     match = _DESC.search(text)
     desc = (match.group(1) or match.group(2) or '') if match else ''
     if 'Use when' not in desc:
