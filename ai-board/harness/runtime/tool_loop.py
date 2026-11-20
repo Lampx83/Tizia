@@ -599,15 +599,16 @@ class Workspace:
     def _restore_vm(self) -> list[str]:
         paths, self.vm_restore = self.vm_restore, []
         if paths:
-            self.sandbox.restore(paths)
+            self.sandbox.restore(paths, self._drafts())
         return paths
 
     def _adopt(self, changed: dict[str, str], rejected: list[tuple[str, str]]) -> None:
         """Drafts become what git in the VM holds. Path-policy faults wait for finish; out-of-scope paths are queued for restore to base."""
         self.vm_faults = [PathDenied(f"path không hợp lệ từ VM: {path!r}") for path, kind in rejected if kind == "path"]
         self.vm_restore = [path for path, kind in rejected if kind != "path"]
+        kept = {path for path, kind in rejected if kind != "path"}
         tests = []
-        for path in sorted(changed):
+        for path in sorted(changed, key=lambda p: (p != self.test_file, p)):
             is_test = path != self.file and path not in self.extra_content and path.startswith(("test/", "tests/"))
             try:
                 self._check_scope(path, test=is_test)
@@ -619,14 +620,17 @@ class Workspace:
                 continue
             if is_test:
                 tests.append(path)
-        self.vm_restore.extend(tests[1:])
-        tests = tests[:1]
-        self.content = changed.get(self.file, self.base or "")
+        keep_tests = 0 if self.test_file in kept else 1
+        self.vm_restore.extend(tests[keep_tests:])
+        tests = tests[:keep_tests]
+        if self.file not in kept:
+            self.content = changed.get(self.file, self.base or "")
         for path, base in self.extra_base.items():
-            self.extra_content[path] = changed.get(path, base or "")
+            if path not in kept:
+                self.extra_content[path] = changed.get(path, base or "")
         if tests:
             self.test_file, self.test = tests[0], changed[tests[0]]
-        elif self.test_file and self.test_file not in changed:
+        elif self.test_file and self.test_file not in changed and self.test_file not in kept:
             self.test_file = self.test = None
 
     def _vm_settle(self) -> None:
