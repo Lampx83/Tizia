@@ -130,3 +130,13 @@ def test_flag_on_infra_block_stays_blocked(monkeypatch):
     ex = execution(gates, kind="transient")
     ex.verdict()
     assert ex.result["outcome"] == "blocked"
+
+
+def test_replace_needs_the_old_text_removed_even_with_extra_quotes():
+    request = "Trang có hai liên kết, em muốn cái thứ hai ('🌲 Rừng') đổi chữ thành 'Ôn bài.', cái '↩ Về' để nguyên ạ."
+    wrong = diff("public/index.html", "<a>Ôn bài.</a>", removed=("<a>Rừng</a>",))
+    right = diff("public/index.html", "<a>Ôn bài.</a>", removed=("<a>🌲 Rừng</a>",))
+    titled = lambda text: {**state(request=request, text=text), "request_title": "Đổi chữ liên kết '🌲 Rừng' thành 'Ôn bài.'"}
+    out = ready_oracle.check(titled(wrong))
+    assert not out["passed"] and "🌲 Rừng" in out["reason"]
+    assert ready_oracle.check(titled(right))["passed"]

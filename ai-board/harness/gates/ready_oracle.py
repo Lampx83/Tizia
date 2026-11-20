@@ -24,8 +24,10 @@ def check(state: dict | None) -> dict:
         anchor = functional.anchor(state)
     except GuestInputMissing:
         return _fail(NO_ORACLE)
-    present = [text for text in want["present"] if text != anchor and not functional._is_css_selector(text)]
-    absent = want["absent"]
+    pairs = functional.replace_pairs(state)
+    # A replace pins both sides even when keep-as-is quotes defeat the strict pair parse.
+    present = [new for _, new in pairs] or [text for text in want["present"] if text != anchor and not functional._is_css_selector(text)]
+    absent = [old for old, _ in pairs] or want["absent"]
     diffs = state.get("full_diff") or state.get("diffs") or []
     if not (present or absent):
         return _fail(NO_ORACLE)
