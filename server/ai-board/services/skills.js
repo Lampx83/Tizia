@@ -9,6 +9,7 @@ import { essenceMissing } from '../security/essence.js';
 import { reviewEvidence, reviewSkillText } from '../security/skill-review.js';
 import { tokenCounter } from './token-count.js';
 import { contentHash, servedText, validateBundle } from './skills-bundle.js';
+import { parseEvalResult, judgeEval } from '../prompt-promotion.js';
 
 export const TASK_TYPES = SKILL_TASK_TYPES;
 const FIELDS = ['name', 'description', 'task_type', 'source', 'version', 'max_tokens'];
@@ -247,21 +248,53 @@ export function createSkillService(repo, { reviewText = reviewSkillText, labelsO
     if (!version) throw bad('Version does not belong to skill');
     return { item, version };
   }
+  const servedHash = v => v.rewritten_text != null ? v.rewritten_hash : v.hash;
+  /** Refusal reason when the flag is on and no passing eval receipt names this version and the current production as baseline; '' otherwise. */
+  async function promotionRefusal(item, version) {
+    if (!labelsOn() || (item.status === 'approved' && item.active_version_id === version.id)) return '';
+    const baseline = item.status === 'approved' && item.active_version_id ? servedHash(await repo.versionById(item.active_version_id)) : null;
+    const row = await repo.evalReceipt(`skills/${item.name}`, servedHash(version), baseline);
+    return !row ? 'no_eval_receipt' : row.passed ? '' : row.reasons;
+  }
   async function approve(actor, id, input) {
     if (input.confirmed !== true) throw bad('Approval confirmation required', 'confirmation_required');
     if (!validId(id) || !validId(input.version_id)) throw bad('Invalid skill version id');
-    return repo.tx(async () => {
+    let refused = '';
+    const view = await repo.tx(async () => {
       await requireCurrentAdmin(actor);
       const { item, version } = await lockedVersion(id, input.version_id);
       const job = await repo.rewriteStatusOf(version.id);
       if (job && ['queued', 'running'].includes(job.status)) throw bad('Rewrite still in progress', 'rewrite_in_progress', 409);
       const lint = servable(item, version);
       const now = Date.now();
+      refused = await promotionRefusal(item, version);
+      if (refused) {
+        const baseline = item.status === 'approved' && item.active_version_id ? servedHash(await repo.versionById(item.active_version_id)) : null;
+        await repo.insertRefusal({ name: `skills/${item.name}`, from: baseline, to: servedHash(version), actorId: actor.id, reason: cleanReason(refused), now });
+        return null;
+      }
       await repo.markApproved(version.id, actor.id, now);
       await repo.activateSkill(id, version.id, lint.task_types, actor.id, now);
       await productionReceipt(item, version.id, actor.id, 'set', input.reason, now);
       if (version.proposal_id) await repo.acceptProposal(version.proposal_id, now);
       return read(id);
+    });
+    if (refused) throw bad(refused, 'prompt_promotion_refused', 409);
+    return view;
+  }
+  async function recordEval(actor, id, input) {
+    let result;
+    try { result = parseEvalResult(input); } catch { throw bad('Invalid eval result', 'eval_receipt_invalid', 400); }
+    return repo.tx(async () => {
+      await requireCurrentAdmin(actor);
+      const item = await skill(id);
+      if (result.name !== `skills/${item.name}`) throw bad('Receipt names another skill', 'eval_receipt_invalid', 400);
+      const version = (await repo.versionRows(item.id)).find(v => servedHash(v) === result.version_hash);
+      if (!version) throw bad('Unknown version', 'skill_version_unknown', 404);
+      const verdict = judgeEval(result);
+      const receiptId = await repo.insertEvalReceipt({ name: result.name, hash: result.version_hash, baseline: result.baseline_hash, result,
+        passed: verdict.passed, reasons: verdict.reasons.join(','), actorId: actor.id, now: Date.now() });
+      return { id: receiptId, ...verdict };
     });
   }
   // Chuyển bản viết lại cũ (rewritten_text nằm trên version nguồn) thành version con; nguồn không còn bản viết lại.
@@ -352,7 +385,8 @@ export function createSkillService(repo, { reviewText = reviewSkillText, labelsO
     if (!validId(id)) throw bad('Invalid skill id');
     const item = await skill(id);
     return { labels: { production: item.status === 'approved' ? item.active_version_id : null, staging: (await repo.stagingRow(item.id))?.version_id ?? null },
-      receipts: await repo.labelReceipts(item.id) };
+      receipts: await repo.labelReceipts(item.id),
+      eval_receipts: (await repo.evalReceiptsOf(`skills/${item.name}`)).map(r => ({ ...r, passed: !!r.passed })), refusals: await repo.refusalsOf(`skills/${item.name}`) };
   }
   async function moveStaging(actor, id, to, kind, reason, expectedFrom) {
     return repo.tx(async () => {
@@ -636,8 +670,12 @@ export function createSkillService(repo, { reviewText = reviewSkillText, labelsO
       throw error;
     }
     const approved = item.status === 'approved';
-    if (approved) await approve(actor, made.skill.id, { version_id: made.version.id, confirmed: true });
-    return { ...base, outcome: 'imported', reason: null, skill_id: made.skill.id, version_id: made.version.id, status: approved ? 'approved' : 'draft' };
+    let promoted = false;
+    if (approved) {
+      try { await approve(actor, made.skill.id, { version_id: made.version.id, confirmed: true }); promoted = true; }
+      catch (error) { if (error.code !== 'prompt_promotion_refused') throw error; }
+    }
+    return { ...base, outcome: 'imported', reason: null, skill_id: made.skill.id, version_id: made.version.id, status: promoted ? 'approved' : 'draft' };
   }
   async function importBundle(actor, input) {
     if (input.overwrite != null && typeof input.overwrite !== 'boolean') throw bad('overwrite must be boolean');
@@ -651,5 +689,5 @@ export function createSkillService(repo, { reviewText = reviewSkillText, labelsO
       return { summary, results };
     });
   }
-  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, labels, setStaging, rollbackStaging, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro, importBundle };
+  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, labels, recordEval, setStaging, rollbackStaging, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro, importBundle };
 }

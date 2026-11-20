@@ -1,6 +1,7 @@
 // Prompts sub-tab of Skills & Tools: set production/staging labels against a shown diff, roll back, read receipts.
-import { lineDiff } from './admin-skills.js?v=skills-labels1';
+import { lineDiff } from './admin-skills.js?v=skills-labels2';
 import { fmt } from './ai-board-clock.js';
+import { errorText, evalEvidenceHtml } from './admin-skills-state.js?v=skills-ux3';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const short = hash => hash ? hash.slice(0, 12) : '(chưa đặt)';
@@ -17,10 +18,10 @@ export async function mountPromptLabels(host, { api, toast }) {
   const res = await api('/api/admin/ai-board/prompt-labels');
   if (res.status === 404) { host.innerHTML = '<p class="meta">Nhãn prompt chưa được bật (AI_BOARD_PROMPT_LABELS).</p>'; return; }
   if (!res.ok) { host.innerHTML = `<div class="err">Lỗi nhãn prompt: ${esc(res.data?.error || res.status)}</div>`; return; }
-  const { labels, versions, receipts } = res.data;
+  const { labels, versions, receipts, eval_receipts, refusals } = res.data;
   const names = [...new Set(versions.map(v => v.name))].sort();
   const refresh = () => mountPromptLabels(host, { api, toast });
-  const fail = response => toast('Lỗi: ' + (ERRORS[response.data?.error] || response.data?.error || response.status), 'err');
+  const fail = response => toast(response.data?.error === 'prompt_promotion_refused' ? errorText(response) : 'Lỗi: ' + (ERRORS[response.data?.error] || response.data?.error || response.status), 'err');
 
   host.innerHTML = `<section class="prompt-labels">
     <p class="meta">Mỗi phiên bản prompt bất biến theo băm nội dung. Worker chỉ chạy khi file prompt khớp nhãn production (hoặc prompts.lock.json nếu chưa gắn nhãn). Gắn nhãn cần xem diff; quay lại bản trước ghi receipt.</p>
@@ -37,6 +38,7 @@ export async function mountPromptLabels(host, { api, toast }) {
       </tr>`).join('')}</tbody></table>` : '<p class="meta">Chưa có worker nào báo phiên bản prompt.</p>'}
     ${receipts.length ? `<details><summary>Receipt gần đây (${receipts.length})</summary><ul>${receipts.map(r =>
       `<li>${esc(fmt(r.created_at))} · ${esc(r.name)}/${esc(r.label)}: ${esc(short(r.from_hash))} → ${esc(short(r.to_hash))} (${r.kind === 'rollback' ? 'quay lại' : 'đặt'}, quản trị viên #${r.actor})${r.reason ? ' · ' + esc(r.reason) : ''}</li>`).join('')}</ul></details>` : ''}
+    ${evalEvidenceHtml({ eval_receipts, refusals }, fmt)}
   </section>`;
 
   for (const row of host.querySelectorAll('tr[data-name]')) {

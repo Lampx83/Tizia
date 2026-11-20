@@ -70,3 +70,11 @@ test('receipt check: changed hash needs a passing receipt for the on-disk hash',
 test('repository prompts and skills match their locks with no receipts', () => {
   assert.deepEqual(findUnreceipted([]), []);
 });
+
+test('CLI runs without a receipts file and exits 0 on a clean tree; npm script exists', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const run = spawnSync(process.execPath, ['scripts/check-prompt-receipts.mjs'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(JSON.parse(readFileSync('package.json', 'utf8')).scripts['check:prompt-receipts'], 'node scripts/check-prompt-receipts.mjs');
+});

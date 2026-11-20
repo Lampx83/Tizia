@@ -1,5 +1,5 @@
 // Fails when a prompt/skill file differs from its lock hash without a passing eval receipt for the on-disk hash.
-// Usage: node scripts/check-prompt-receipts.mjs <receipts.json>   (export of GET .../prompt-labels, or a bare array)
+// Usage: node scripts/check-prompt-receipts.mjs [receipts.json]   (export of GET .../prompt-labels, or a bare array; none = no receipts)
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +30,7 @@ export function findUnreceipted(receipts, harness = HARNESS) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const bad = findUnreceipted(json(process.argv[2]));
+  const bad = findUnreceipted(process.argv[2] ? json(process.argv[2]) : []);
   for (const b of bad) console.error(`no passing eval receipt: ${b.name} ${b.hash}`);
   process.exit(bad.length ? 1 : 0);
 }
