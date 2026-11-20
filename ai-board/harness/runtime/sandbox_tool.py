@@ -27,7 +27,7 @@ WORKTREE_DESCRIPTION = DESCRIPTION[:-len("Output bị cắt; bản đầy đủ 
     "Worktree trong VM là bản chính: file đổi ở đó là thứ được nộp; diff cuối lấy từ git trong VM và bị kiểm phạm vi + path cấm. "
     "Output bị cắt; bản đầy đủ lưu thành artifact.")
 VM_DIR = "checkout"
-_GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null", "-C", VM_DIR)
+_GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-c", "core.quotePath=false", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null", "-C", VM_DIR)
 REGULAR_MODES = ("100644", "100755")
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
 OUTPUT_CAP = 4000  # redacted stdout+stderr kept per receipt; the trace note clips again to its own cap
@@ -153,6 +153,33 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(archive.extractfile(member).read())
     _write(drafts, root)
+
+
+_ESCAPES = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11, '"': 34, "\\": 92}
+
+
+def _unquote(path: str) -> str | None:
+    """C-style unquote of a path git still quotes; None when it is not a well-formed quoted path."""
+    if len(path) < 2 or path[0] != '"' or path[-1] != '"':
+        return None
+    out, body, i = bytearray(), path[1:-1], 0
+    while i < len(body):
+        char = body[i]
+        if char != "\\":
+            out += char.encode("utf-8")
+            i += 1
+        elif body[i + 1:i + 2] in _ESCAPES:
+            out.append(_ESCAPES[body[i + 1]])
+            i += 2
+        elif re.fullmatch(r"[0-3][0-7]{2}", body[i + 1:i + 4]):
+            out.append(int(body[i + 1:i + 4], 8))
+            i += 4
+        else:
+            return None
+    try:
+        return out.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 def _blob_oid(data: bytes) -> str:
@@ -368,7 +395,9 @@ class Runner:
         changed, rejected = {}, []
         for number, (meta, path) in enumerate(entries):
             _, mode, _, oid, status = meta.lstrip(":").split()
-            if path.startswith('"') or path_policy.normalize(path) != path:
+            if path.startswith('"'):
+                rejected.append((_unquote(path) or path, "quoted" if _unquote(path) else "path"))
+            elif path_policy.normalize(path) != path:
                 rejected.append((path, "path"))
             elif number >= path_policy.OUT_OF_PLAN_CAP:
                 rejected.append((path, "extra"))
@@ -397,14 +426,15 @@ class Runner:
         except SandboxError:
             pass
 
-    def restore(self, paths) -> None:
-        """Put each path back to the base tree, or remove it when the base has none."""
+    def restore(self, paths, drafts=None) -> None:
+        """Put each path back to the base tree (removed when the base has none), then re-push the model's draft for the declared ones."""
         for path in paths:
             if self._exec(*_GIT, "cat-file", "-e", f"{self._tree}:{path}")["rc"] == 0:
                 self._git("checkout", self._tree, "--", path)
             else:
                 self._git("rm", "-f", "-q", "--ignore-unmatch", "--", path)
             self._vm_state.pop(path, None)
+        self._push({path: drafts[path] for path in paths if drafts and path in drafts})
 
     def settle(self, drafts: dict[str, str]):
         """Final diff for finish; transient VM errors retry like a tool call. Busy raises RunnerBusy, out of time BudgetExhausted, else VMUnavailable."""
