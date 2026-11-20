@@ -776,3 +776,12 @@ def test_public_manifest_has_no_page_on_both_sides(world):
 def test_page_overlap_check_flags_shared_page_and_corpus_refuses_it():
     assert eval_corpus.page_overlap([{"split": "dev", "file": "a.html"}, {"split": "heldout", "file": "b.html"}]) == []
     assert eval_corpus.page_overlap([{"split": "dev", "file": "a.html"}, {"split": "heldout", "file": "a.html"}]) == ["a.html"]
+
+
+def test_unified_skill_variants_need_prompt_split(world, monkeypatch):
+    root, _ = world
+    deps, _ = deps_for(world)
+    argv = ["run", "--seed", str(SEED), "--split", "dev", "--cases", "1", "--repeats", "1", "--modes", "gold", "--root", str(root), "--allow-dirty", "--gate25-sim-user"]
+    assert runner.main([*argv, "--skill-variant", "backend-unified"], deps) == 2
+    assert runner.main([*argv, "--skill-variant", "review-two-axes,test-unified"], deps) == 2
+    assert runner.main([*argv, "--skill-variant", "backend-unified", "--prompt-split"], deps) == 0

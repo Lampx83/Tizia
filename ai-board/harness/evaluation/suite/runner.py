@@ -263,6 +263,9 @@ def cmd_run(args, deps=None) -> int:
     if set(variant) - set(VARIANT_FILES) or len(set(variant)) != len(variant):
         print(f"[suite] --skill-variant must be distinct names from {', '.join(VARIANT_FILES)}", file=sys.stderr)
         return 2
+    if any(v.endswith("-unified") for v in variant) and not args.prompt_split:
+        print("[suite] *-unified skill variants reach gate 1/3 prompts only in split mode; add --prompt-split", file=sys.stderr)
+        return 2
     os.environ["AI_BOARD_SKILL_VARIANT"] = ",".join(variant)
     os.environ["AI_BOARD_SKILL_PAD_CHARS"] = str(args.skill_pad_chars or "")
     os.environ["AI_BOARD_PROMPT_ROLE_SPLIT"] = "1" if args.prompt_split else ""
@@ -600,7 +603,7 @@ def main(argv=None, deps=None) -> int:
     run.add_argument("--rewoo-gate2-reads", action="store_true", help="gate 2 read-only plan executed by the harness, one synthesis call, ReAct on invalid plan (AI_BOARD_REWOO_GATE2_READS); needs --react-plan; default off")
     run.add_argument("--loop-caps", default="", help="MODEL_CALLS,TOOL_CALLS per-subtask loop ceilings (default 10,30); recorded in the manifest")
     run.add_argument("--skill-pad-chars", type=int, default=0, help="pad the picked skill section to N chars with other skills' sections (skill length ablation)")
-    run.add_argument("--skill-variant", default="", help=f"append gate 1/3 sections of these skills after the picked one: comma list from {', '.join(VARIANT_FILES)}")
+    run.add_argument("--skill-variant", default="", help=f"append gate 1/3 sections of these skills after the picked one (*-unified variants replace the task-type default and need --prompt-split): comma list from {', '.join(VARIANT_FILES)}")
     run.add_argument("--winner-rule", default="", help="the decision rule, written before the run and stored in the manifest with its hash")
     run.add_argument("--timing-conditions", default="", help="JSON object {gpu, load, warm_cold, protocol, comparable} the operator vouches for; without it timing stays pending")
     run.add_argument("--reasoning-on", default="", help="comma list of roles to run with thinking on (ablation), e.g. gate1,gate25")

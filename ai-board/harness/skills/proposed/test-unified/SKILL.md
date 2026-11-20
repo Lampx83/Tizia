@@ -18,4 +18,4 @@ Look: the changed behavior in the request, the code that implements it, and the 
 5. Run the repo's documented test command and record its exit status and summary.
 Done means: tests added or changed, the command run, and the observed pass and fail counts are reported; no existing test was weakened, deleted or skipped.
 Example:
-Request: orders over 100 get 10% off. Wrong: expected total copied from the current output. Right: a test asserting 90 for a 100 order, plus one for a negative quantity that must raise; report "2 passed".
+Request: the admin count endpoint must count only pending requests. Wrong: expected number copied from the current output. Right: a node:test file in test/ that seeds one pending and one done row and asserts the count is 1, plus one that a non-admin gets 403; report "2 passed" from npm test.

@@ -153,7 +153,10 @@ def skill_block(skill: Skill, gate: int) -> str:
 FRONTEND_SKILLS = ("edit-css-style", "edit-html-text", "add-html-section", "new-static-page")
 VARIANT_SCOPE = {"frontend-design-core": FRONTEND_SKILLS,  # variant attaches only to these picked skills
                  "frontend-css-style": ("edit-css-style",), "frontend-html-text": ("edit-html-text",),
-                 "frontend-html-section": ("add-html-section",), "frontend-new-page": ("new-static-page",)}
+                 "frontend-html-section": ("add-html-section",), "frontend-new-page": ("new-static-page",),
+                 "frontend-unified": FRONTEND_SKILLS,
+                 **dict.fromkeys(("backend-unified", "database-unified", "test-unified", "review-unified", "merge-unified"),
+                                 ("default", "fix-js-behavior", "new-feature", "implement-one-slice", "plan-from-request"))}
 
 
 def select_block(skill: Skill, gate: int) -> tuple[str, dict]:

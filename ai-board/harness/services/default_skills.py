@@ -173,7 +173,10 @@ def select_report(role, context=None):
                 continue
             candidates.append(skill_selection.Candidate(skill.name, 1, 'approved admin skill', bound, topic=skill.topic,
                                                         payload=skill))
-    candidates += variant_candidates(role, task)
+    variants = variant_candidates(role, task)
+    if any(c.name == f'{task}-unified' for c in variants):
+        candidates = [c for c in candidates if c.name != task_skill.name]  # unified variant is the task-type rule set, not an add-on
+    candidates += variants
     budget = stage_budget(role)
     chosen, report = skill_selection.choose(candidates, budget['max_per_prompt'], budget['max_tokens_per_prompt'])
     report['dropped'].extend(overlaps)
