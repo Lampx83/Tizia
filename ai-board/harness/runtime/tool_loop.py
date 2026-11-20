@@ -876,12 +876,21 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     if checks and MANIFEST.data.get('check_runtime_sha256') != loop_checks.runtime_hash():
         return _result('blocked', 'check runtime differs from approved manifest', 'critical')
     sandbox_log: list = []
+    runners: list = []
+    vm_unconfirmed = None
     token = _SANDBOX_OFFERED.set(sandbox_tool.offered(subtask.get("task_type")))
     try:
         result = _run_subtask(subtask, current, deps=deps, budget=budget, source=source, sha=sha, checks=checks,
-                              sandbox_log=sandbox_log, **kwargs)
+                              sandbox_log=sandbox_log, sandbox_runners=runners, **kwargs)
     finally:
         _SANDBOX_OFFERED.reset(token)
+        for runner in runners:
+            try:
+                runner.close()
+            except Exception:  # noqa: BLE001 - one failing close must not skip the other runners or checks.close()
+                vm_unconfirmed = vm_unconfirmed or getattr(runner, "unconfirmed", None) or getattr(runner, "run_id", None) or "unknown"
+            else:
+                vm_unconfirmed = vm_unconfirmed or runner.unconfirmed
         if checks:
             checks.close()
             if checks.cleanup_pending and hasattr(deps, 'capture'):
@@ -891,6 +900,12 @@ def run_subtask(subtask, current, *, deps, budget, source, sha, **kwargs):
     if checks and checks.cleanup_pending:
         return _result('blocked', 'sandbox cleanup requires reconciliation', 'critical',
                        unknown_outcome={'run_id': checks.run_id})
+    if vm_unconfirmed:
+        if hasattr(deps, 'capture'):
+            deps.capture['sandbox_cleanup_pending'] = True
+        extra = {'unknown_outcome': {'run_id': vm_unconfirmed}}
+        return {**_result('blocked', 'sandbox cleanup requires reconciliation', 'critical', **extra),
+                **({'sandbox_receipts': sandbox_log} if sandbox_log else {})}
     return {**result, 'sandbox_receipts': sandbox_log} if sandbox_log else result
 
 
@@ -904,7 +919,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 role: str | None = None, call_extra: dict | None = None, db_path=None, proposal_id=None,
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
-                sandbox_log: list | None = None, repair_evidence: dict | None = None, session_from=(),
+                sandbox_log: list | None = None, sandbox_runners: list | None = None, repair_evidence: dict | None = None, session_from=(),
                 requester_role: str | None = None, request_text: tuple | str | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
@@ -925,9 +940,11 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     if len(paths) > 1 and (checks or (_SANDBOX_OFFERED.get() and not sandbox_tool.tier_armed("multi"))):
         return _result("blocked", "multi-file subtask cannot be combined with verified loop or sandbox", "critical")
     sandbox = (sandbox_tool.Runner(source, sha, lease_ok=getattr(deps, 'lease_ok', None), trace=getattr(deps, 'trace', None),
-                                   receipts=sandbox_log, budget=budget,
+                                   receipts=sandbox_log, budget=budget, remaining=loop_budget.remaining_s,
                                    tier="multi" if len(paths) > 1 else "single")
                if _SANDBOX_OFFERED.get() else None)
+    if sandbox is not None and sandbox.kept and sandbox_runners is not None:
+        sandbox_runners.append(sandbox)
     extras = {path: tools._show(source, sha, path) for path in paths[1:]}
     ws = Workspace(source, sha, subtask["file"], current, checks=checks, budget=budget, trace=getattr(deps, 'trace', None), sandbox=sandbox,
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),

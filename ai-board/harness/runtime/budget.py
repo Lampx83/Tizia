@@ -56,6 +56,7 @@ class Budget:
     # 20 × max_wall_clock_s GPU mà budget không bao giờ báo chạm trần.
     elapsed_before_s: float = 0.0
     quality_switches: int = 0
+    vm_s: float = 0.0  # giây VM sandbox của subtask, tách khỏi wall-clock model
     started_at: float = field(default_factory=time.monotonic)
     # Fan-out cổng 3 gọi model song song trong 1 process: mọi khoản chi phải cộng dồn dưới 1 khoá.
     lock: object = field(default_factory=threading.RLock, repr=False, compare=False)
@@ -78,6 +79,7 @@ class Budget:
             setattr(b, cap, snapshot.get(cap, 0))
         b.elapsed_before_s = float(snapshot.get("elapsed_s", 0.0))
         b.quality_switches = int(snapshot.get('quality_switches', 0))
+        b.vm_s = float(snapshot.get('vm_s', 0.0))
         return b
 
     def absorb(self, snapshot: dict) -> None:
@@ -85,6 +87,7 @@ class Budget:
         for cap in CAPS:
             setattr(self, cap, max(getattr(self, cap), snapshot.get(cap, 0)))
         self.quality_switches = max(self.quality_switches, int(snapshot.get("quality_switches", 0)))
+        self.vm_s = max(self.vm_s, float(snapshot.get("vm_s", 0.0)))
         ran = time.monotonic() - self.started_at
         self.elapsed_before_s = max(self.elapsed_before_s, float(snapshot.get("elapsed_s", 0.0)) - ran)
 
@@ -161,6 +164,8 @@ class Budget:
                 exhausted=self.exhausted(),
                 quality_switches=self.quality_switches,
             )
+            if self.vm_s:
+                out["vm_s"] = round(self.vm_s, 3)
         return out
 
     def can_afford(self, reserve: dict = VERIFY_RESERVE) -> bool:
@@ -219,6 +224,10 @@ class ChildBudget:
 
     def tick(self) -> bool:
         return self.exhausted() is None
+
+    def remaining_s(self) -> float:
+        """Giây còn lại theo trần loop và trần run."""
+        return min(self._deadline - time.monotonic(), self.parent.max_wall_clock_s - self.parent.elapsed_s)
 
     def spend(self, cap: str, n: int = 1) -> bool:
         if cap in self._own:
