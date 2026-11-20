@@ -15,6 +15,7 @@ from worker_client import CONTRACT, LeaseLostError, REPO_ROOT
 from runtime import feedback_cap, loop_guard, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
+from gates import ready_oracle  # noqa: E402
 from verification import checks  # noqa: E402
 import path_policy  # noqa: E402
 
@@ -936,9 +937,15 @@ class _Execution:
         files = next((g["files"] for g in gates if g["gate"] == 4 and g.get("files")), None)
         outside = (files or {}).get("out_of_plan") or []
         revised = revision_of(self.plan) if get_settings().red_check_classify else []
+        ready = ready_oracle.check(self.state) if passed and get_settings().deterministic_ready_oracle else None
+        oracle_capped = bool(ready) and not ready["passed"]
         needs_review = passed and (oracle_review or bool(revised) or last["risk_level"] in ("high", "critical")
-                                   or bool(manifests) or bool(outside))
+                                   or bool(manifests) or bool(outside) or oracle_capped)
         outcome = "needs_review" if needs_review else "ready_for_pr" if passed else "blocked"
+        loop_stopped = (not passed and get_settings().deterministic_ready_oracle and kind == "ordinary"
+                        and bool(self.halt.get("reason") or self.stop_note))
+        if loop_stopped:
+            outcome = "needs_review"
         if self.memory_path:
             _remember(self.memory_path, self.plan, self.ticket_id, self.repairs, None if passed else kind, last, bool(passed))
         if passed and revised:
@@ -948,6 +955,8 @@ class _Execution:
             reason = ("needs_review, không có oracle hành vi, generated tests/smoke/acceptance xanh: "
                       if not oracle.get("probe_id")
                       else "oracle functional fail trong khi acceptance, generated tests và smoke xanh: ") + str(oracle.get("reason"))[:300]
+        elif needs_review and oracle_capped and not (manifests or outside or last["risk_level"] in ("high", "critical")):
+            reason = f"needs_review, deterministic check not passed: {ready['reason']}"
         elif needs_review:
             reason = (f"package manifest changed, human review required: {', '.join(manifests)}" if manifests
                       else f"files outside the plan, human review required: {', '.join(outside)}" if outside
