@@ -105,11 +105,9 @@ def test_keep_literal_is_a_reference_and_only_the_new_text_must_be_added():
     assert len(found) == 1 and NEW in found[0] and KEEP not in found[0]
 
 
-def test_quote_already_in_the_base_tree_is_a_reference_for_a_non_replace_request(tmp_path):
+def test_quote_on_another_page_is_still_required_where_the_request_asks(tmp_path):
     src = _repo(tmp_path)
     request = {"subject": f"Hiển thị '{KEEP}' ở trang giới thiệu", "body": ""}
     text = (f"diff --git a/{THIRD} b/{THIRD}\n--- a/{THIRD}\n+++ b/{THIRD}\n@@ -1 +1,2 @@\n"
             f" <h1>Giới thiệu nhà trường</h1>\n+<a href=\"/\">Về đầu</a>\n")
-    assert _misses(request, text, src, base_sha="HEAD") == []
-    assert _misses(request, text, src) and _misses({**request, "subject": "Hiển thị 'Chưa có ở đâu' ở trang giới thiệu"},
-                                                   text, src, base_sha="HEAD")
+    assert _misses(request, text, src, base_sha="HEAD")
