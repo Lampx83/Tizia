@@ -592,8 +592,9 @@ PROGRESS_CAP = 150_000  # ký tự JSON tiến độ cổng 3 giữ được tro
 
 
 def fanout_limit(env=None) -> int:
-    """Số model call song song trong 1 lớp DAG: 1 = tuần tự, trần 4 (một workload vLLM, không mở workload thứ hai)."""
-    return get_settings(env).fanout_max
+    """Số model call song song trong 1 lớp DAG: 1 = tuần tự, trần 4 (một workload vLLM, không mở workload thứ hai); VM subtask giữ slot runner duy nhất nên ép 1."""
+    settings = get_settings(env)
+    return 1 if settings.sandbox_subtask_vm and settings.sandbox_tool else settings.fanout_max
 
 
 def _progress_store(state: dict):
