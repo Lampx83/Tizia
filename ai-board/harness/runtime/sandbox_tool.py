@@ -1,4 +1,4 @@
-"""run_in_sandbox cho tool-loop: argv theo allow-list, một microVM mỗi lần gọi. Tắt trừ khi AI_BOARD_SANDBOX_TOOL=1."""
+"""run_in_sandbox cho tool-loop: argv theo allow-list, một microVM mỗi lần gọi (hoặc mỗi subtask khi AI_BOARD_SANDBOX_SUBTASK_VM=1). Tắt trừ khi AI_BOARD_SANDBOX_TOOL=1."""
 from __future__ import annotations
 
 import hashlib
@@ -15,6 +15,7 @@ from repositories import code_index
 import path_policy
 from repositories import server_hsm
 from runtime import limits, meter, tool_manifest
+from runtime.budget import BudgetExhausted
 from settings import get_settings
 from verification.sandbox import SandboxError, SandboxSession, package
 
@@ -26,7 +27,8 @@ WORKTREE_DESCRIPTION = DESCRIPTION[:-len("Output bị cắt; bản đầy đủ 
     "Worktree trong VM là bản chính: file đổi ở đó là thứ được nộp; diff cuối lấy từ git trong VM và bị kiểm phạm vi + path cấm. "
     "Output bị cắt; bản đầy đủ lưu thành artifact.")
 VM_DIR = "checkout"
-_GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-C", VM_DIR)
+_GIT = ("git", "-c", "safe.directory=*", "-c", "core.fileMode=false", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null", "-C", VM_DIR)
+REGULAR_MODES = ("100644", "100755")
 NON_RETRYABLE = {"lease_lost", "wall_clock_s", "cleanup_unconfirmed", "not_configured"}
 OUTPUT_CAP = 4000  # redacted stdout+stderr kept per receipt; the trace note clips again to its own cap
 SOURCE_SUFFIXES = (".js", ".mjs", ".cjs")
@@ -39,6 +41,14 @@ class Refused(ValueError):
 
 class CleanupUnconfirmed(RuntimeError):
     """VM teardown not confirmed: stop the subtask as blocked, same as Gate 5."""
+
+
+class VMUnavailable(RuntimeError):
+    """Worktree VM could not give the final diff: transient for network and 5xx, critical otherwise."""
+
+    def __init__(self, code: str, status: int = 0):
+        super().__init__(f"worktree VM unavailable: {code}")
+        self.failure_class = "transient" if status == 0 or status >= 500 else "critical"
 
 
 class RunnerBusy(RuntimeError):
@@ -145,6 +155,10 @@ def _stage(source, sha: str, drafts: dict[str, str], root: Path) -> None:
     _write(drafts, root)
 
 
+def _blob_oid(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
 def _overlay(files: dict[str, str]) -> bytes:
     """tar.gz chỉ gồm `files` dưới checkout/, để upload đè lên worktree VM mà không đụng file khác."""
     buffer = io.BytesIO()
@@ -170,15 +184,16 @@ def _write(drafts: dict[str, str], root: Path) -> None:
 
 
 class Runner:
-    """Gọi run_in_sandbox: stage một lần, mỗi attempt một VM; ghi receipt cho từng lần exec."""
+    """Gọi run_in_sandbox: mỗi attempt một VM, hoặc một VM suốt subtask khi `kept`; ghi receipt cho từng lần exec."""
 
     def __init__(self, source, sha: str, *, client=None, lease_ok=None, trace=None, env=None, receipts=None, budget=None,
-                 tier: str | None = None, kept: bool | None = None, worktree: bool | None = None):
+                 tier: str | None = None, kept: bool | None = None, remaining=None, worktree: bool | None = None):
         self.kept = get_settings(env).sandbox_subtask_vm if kept is None else kept
         self.worktree = self.kept and (get_settings(env).sandbox_vm_worktree if worktree is None else worktree)
-        self._session = self._tmp = self._uploaded = self._tree = None
+        self.remaining, self.unconfirmed, self.run_id = remaining, None, None
+        self._session = self._tmp = self._uploaded = self._charged_at = self._tree = None
         self._vm_state: dict[str, str] = {}
-        self._opened = 0.0
+        self._deadline = 0.0
         self.source, self.sha, self.client, self.trace, self.budget = source, sha, client, trace, budget
         self.lease_ok = lease_ok or authority_ok
         self.cfg = limits.sandbox_tool(env, tier=tier)
@@ -232,9 +247,16 @@ class Runner:
                 session = self._open(drafts)
                 receipt["run_id"] = session.run_id
                 outcome = session.exec(argv, self.cfg["exec_timeout_s"])
+            except CleanupUnconfirmed:
+                receipt["error"] = "cleanup_unconfirmed"
+                self._record(receipt, started)
+                raise
             except SandboxError as caught:
                 error = caught
+                if caught.code == "lease_lost" and time.monotonic() >= self._deadline:
+                    error = SandboxError("wall_clock_s", caught.phase, caught.status)
             if outcome is not None:
+                self._charge()
                 return self._observe(receipt, outcome, started)
             receipt["run_id"] = receipt["run_id"] or getattr(self._session, "run_id", None)
             try:
@@ -244,7 +266,7 @@ class Runner:
                 self._record(receipt, started)
                 raise
             receipt["error"] = error.code
-            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE \
+            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and time.monotonic() < self._deadline \
                 and (error.status in (0, 429) or error.status >= 500)
             self._record(receipt, started)
             if retry and self.budget is not None and not self.budget.spend("tool_calls"):
@@ -256,7 +278,9 @@ class Runner:
         raise AssertionError("unreachable")
 
     def _open(self, drafts: dict[str, str]) -> SandboxSession:
-        """Live subtask VM: created on first use, later calls upload only edited drafts."""
+        """Live subtask VM: created on first use; edited drafts are re-uploaded, a removed draft path gets a fresh VM."""
+        if self._session is not None and not self.worktree and self._uploaded.keys() - drafts.keys():
+            self._drop()
         if self._session is not None:
             if self.worktree:
                 self._push(drafts)
@@ -265,32 +289,52 @@ class Runner:
                 self._sync(self._session)
                 self._uploaded = dict(drafts)
             return self._session
-        self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-")
-        _stage(self.source, self.sha, {} if self.worktree else drafts, Path(self._tmp.name))
-        left = getattr(self.budget, "remaining_s", None)
-        self._opened = time.monotonic()
-        session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok,
-                                 deadline=self._opened + (left() if left else self.cfg["wall_clock_s"]))
-        self._session = session
-        session.__enter__()
-        if self.worktree:
-            self._git("init", "-q")
-            self._git("add", "-A")
-            self._tree, self._vm_state = self._git("write-tree").strip(), {}
-            self._push(drafts)
-        else:
+        left = self.remaining() if self.remaining else self.cfg["wall_clock_s"]
+        if left <= 0:
+            raise SandboxError("wall_clock_s", "exec")
+        self._tmp = tempfile.TemporaryDirectory(prefix="ai-sandbox-stage-", ignore_cleanup_errors=True)
+        entered = False
+        try:
+            _stage(self.source, self.sha, {} if self.worktree else drafts, Path(self._tmp.name))
+            self._deadline = time.monotonic() + left
+            session = SandboxSession(self._tmp.name, client=self.client, lease_ok=self.lease_ok, deadline=self._deadline)
+            self._session, self.run_id = session, session.run_id
+            session.__enter__()
+            entered = True
+            if self.worktree:
+                self._git("init", "-q")
+                self._git("add", "-A", "-f")
+                self._tree, self._vm_state = self._git("write-tree").strip(), {}
+                self._push(drafts)
+        except BaseException as caught:
+            if entered:
+                try:
+                    self._session.__exit__(None, None, None)
+                except SandboxError:
+                    pass
+            pending = self._session is not None and self._session.cleanup_pending
+            if pending:
+                self.unconfirmed = self._session.run_id
+            self._session, self._tree, self._vm_state = None, None, {}
+            self._tmp.cleanup()
+            self._tmp = None
+            if pending:
+                raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {self.unconfirmed})") from caught
+            raise
+        if not self.worktree:
             self._uploaded = dict(drafts)
+        self._charged_at = time.monotonic()
         return session
 
-    def _vm(self, *argv: str) -> dict:
+    def _exec(self, *argv: str) -> dict:
         out = self._session.exec(list(argv), self.cfg["exec_timeout_s"])
-        if out["timed_out"] or out["truncated"]:
+        if out["timed_out"]:
             raise SandboxError("worktree_exec", "exec")
         return out
 
     def _git(self, *args: str) -> str:
-        out = self._vm(*_GIT, *args)
-        if out["rc"] != 0:
+        out = self._exec(*_GIT, *args)
+        if out["rc"] != 0 or out["truncated"]:
             raise SandboxError("worktree_git", "exec")
         return out["stdout"]
 
@@ -317,27 +361,76 @@ class Runner:
             return None
         self._open(drafts)
         self._git("add", "-A")
-        raw = self._git("diff", "--cached", "--numstat", "-z", "--no-renames", self._tree)
+        for rel in drafts:
+            self._exec(*_GIT, "add", "-f", "--", rel)  # ignored targets must be submitted; a missing one is not an error
+        raw = self._git("diff", "--cached", "--raw", "--no-abbrev", "--no-renames", self._tree)
+        entries = sorted((line.partition("\t")[::2] for line in raw.split("\n") if line), key=lambda e: e[1] not in drafts)
         changed, rejected = {}, []
-        for number, entry in enumerate(e for e in raw.split("\0") if e):
-            added, _, path = entry.split("\t", 2)
-            if path_policy.normalize(path) != path:
+        for number, (meta, path) in enumerate(entries):
+            _, mode, _, oid, status = meta.lstrip(":").split()
+            if path.startswith('"') or path_policy.normalize(path) != path:
                 rejected.append((path, "path"))
             elif number >= path_policy.OUT_OF_PLAN_CAP:
                 rejected.append((path, "extra"))
-            elif added == "-":
-                rejected.append((path, "binary"))
-            elif (shown := self._vm(*_GIT, "show", f":{path}"))["rc"] != 0:
+            elif status == "D":
                 rejected.append((path, "deleted"))
+            elif mode not in REGULAR_MODES:
+                rejected.append((path, "symlink" if mode == "120000" else "mode"))
             else:
-                changed[path] = shown["stdout"]
+                shown = self._exec(*_GIT, "cat-file", "blob", oid)
+                if shown["rc"] != 0 or shown["truncated"] or _blob_oid(shown["stdout"].encode("utf-8")) != oid:
+                    rejected.append((path, "binary"))
+                else:
+                    changed[path] = shown["stdout"]
         self._vm_state = dict(changed)
         return changed, rejected
+
+    def restore(self, paths) -> None:
+        """Put each path back to the base tree, or remove it when the base has none."""
+        for path in paths:
+            if self._exec(*_GIT, "cat-file", "-e", f"{self._tree}:{path}")["rc"] == 0:
+                self._git("checkout", self._tree, "--", path)
+            else:
+                self._git("rm", "-f", "-q", "--ignore-unmatch", "--", path)
+            self._vm_state.pop(path, None)
+
+    def settle(self, drafts: dict[str, str]):
+        """Final diff for finish; transient VM errors retry like a tool call. Busy raises RunnerBusy, out of time BudgetExhausted, else VMUnavailable."""
+        for attempt in range(self.cfg["max_retries"] + 1):
+            try:
+                return self.changes(drafts, ensure=True)
+            except SandboxError as caught:
+                error = caught
+                if error.code == "lease_lost" and time.monotonic() >= self._deadline:
+                    error = SandboxError("wall_clock_s", error.phase, error.status)
+            self._drop()
+            if error.code == "wall_clock_s":
+                raise BudgetExhausted("sandbox wall clock exhausted before finish")
+            retry = attempt < self.cfg["max_retries"] and error.code not in NON_RETRYABLE and (not self._deadline or time.monotonic() < self._deadline) \
+                and (error.status in (0, 429) or error.status >= 500)
+            if retry and self.budget is not None and not self.budget.spend("tool_calls"):
+                retry = False
+            if not retry:
+                if error.status == 429:
+                    raise RunnerBusy("sandbox runner busy")
+                raise VMUnavailable(error.code, error.status)
+        raise AssertionError("unreachable")
 
     def _sync(self, session: SandboxSession) -> None:
         if session.lease.revoked or not self.lease_ok():
             raise SandboxError("lease_lost", "lease")
         session.client.upload(session.run_id, package(session.checkout, {}, {}), deadline=session.deadline)
+
+    def _charge(self) -> None:
+        """Bill VM seconds since the last charge to the run ledger and the GPU window; only once the VM is up."""
+        if self._charged_at is None:
+            return
+        now = time.monotonic()
+        seconds, self._charged_at = max(0.0, now - self._charged_at), now
+        if self.budget is not None and hasattr(self.budget, "vm_s"):
+            self.budget.vm_s += seconds
+        if hasattr(self.trace, "add_gpu_s"):
+            self.trace.add_gpu_s(seconds)
 
     def _drop(self) -> None:
         """Destroy the subtask VM and its staging; CleanupUnconfirmed when teardown is not confirmed."""
@@ -345,18 +438,19 @@ class Runner:
         self._tree, self._vm_state = None, {}
         if session is None:
             return
-        pending = session.cleanup_pending
-        if session.lease is not None and not pending:
-            try:
-                session.__exit__(None, None, None)
-            except SandboxError:
-                pass
-            pending = session.cleanup_pending
-        if tmp is not None:
-            tmp.cleanup()
-        if hasattr(self.trace, "add_gpu_s"):
-            self.trace.add_gpu_s(max(0.0, time.monotonic() - self._opened))
-        if pending:
+        try:
+            if session.lease is not None and not session.cleanup_pending:
+                try:
+                    session.__exit__(None, None, None)
+                except SandboxError:
+                    pass
+        finally:
+            if tmp is not None:
+                tmp.cleanup()
+            self._charge()
+            self._charged_at = None
+        if session.cleanup_pending:
+            self.unconfirmed = session.run_id
             raise CleanupUnconfirmed(f"sandbox destroy: cleanup_unconfirmed (run {session.run_id})")
 
     def close(self) -> None:
