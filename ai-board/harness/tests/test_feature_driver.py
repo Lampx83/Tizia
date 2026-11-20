@@ -129,3 +129,75 @@ def test_clarify_flag_reaches_record():
     row = row_for(BY_ID["ft-bogus-1"], {})
     row["capture"]["final_plan"]["clarify"] = True
     assert feature_driver.record_of(row)["plan"]["clarify"] is True
+
+
+def test_reply_policy_two_case_answers_then_assume():
+    case = {"answers": ["một", "hai", "ba"]}
+    assert [feature_driver.reply_for(case, n) for n in range(4)] == ["một", "hai", feature_driver.CANNED, feature_driver.CANNED]
+    assert feature_driver.CANNED == "tự giả định và ghi rõ"
+    assert feature_driver.reply_for({}, 0) == feature_driver.CANNED
+    assert feature_driver.reply_for({"answers": ["chỉ một"]}, 1) == feature_driver.CANNED
+
+
+def _asking(question):
+    return {"capture": {"final_plan": {"subtasks": []}, "full_diff": "", "validator_results": [
+        {"blocked": True, "reason": "needs_clarification", "public_message": question}]}}
+
+
+def test_question_of_reads_clarification_from_validator_results():
+    assert feature_driver.question_of(_asking("Tên trang?")) == "Tên trang?"
+    assert feature_driver.question_of({"capture": {"validator_results": [{"blocked": True, "reason": "other"}]}}) is None
+    assert feature_driver.question_of({"capture": None}) is None
+
+
+def test_converse_answers_in_order_and_stops_when_no_question():
+    case = {"answers": ["A1", "A2"]}
+    threads = []
+    asks = iter(["q1", "q2", "q3", None])
+
+    def runner(task):
+        threads.append([m["body"] for m in task.get("thread", [])])
+        q = next(asks)
+        return _asking(q) if q else {"capture": {"final_plan": None}}
+
+    row, log = feature_driver.converse({"id": "x"}, case, runner)
+    assert threads[-1] == ["q1", "A1", "q2", "A2", "q3", feature_driver.CANNED]
+    assert [e["reply"] for e in log] == ["A1", "A2", feature_driver.CANNED]
+    assert feature_driver.question_of(row) is None
+
+
+def test_converse_gives_up_after_round_cap():
+    calls = []
+
+    def runner(task):
+        calls.append(1)
+        return _asking("lại hỏi")
+    row, log = feature_driver.converse({"id": "x"}, {}, runner)
+    assert len(log) == feature_driver.MAX_ROUNDS and len(calls) == feature_driver.MAX_ROUNDS + 1
+
+
+def test_run_answers_questions_and_exposes_diff_and_criteria(monkeypatch):
+    monkeypatch.setenv(feature_driver.BASE_ENV, BASE)
+    case = {"id": "t", "request": "r", "answers": ["đáp"], "files": [{"path": "public/n.html", "new": {}}]}
+    seen = []
+
+    def runner(task):
+        seen.append(task)
+        if len(seen) == 1:
+            return _asking("Tên?")
+        plan = {"subtasks": [{"file": "public/n.html", "checks": [{"primitive": "http_status", "path": "/n.html", "status": 200}]}],
+                "acceptance": ["trang mở được"]}
+        return {"capture": {"final_plan": plan, "full_diff": diff_of({"public/n.html": "<p>x</p>"})}}
+
+    rec = feature_driver.run(case, 1, runner=runner)
+    assert seen[0]["files"] == ["public/n.html"]
+    assert seen[1]["thread"][-1] == {"role": "requester", "body": "đáp"}
+    assert "public/n.html" in rec["diff"] and rec["clarify_log"][0]["reply"] == "đáp"
+    assert rec["criteria"] == {"acceptance": ["trang mở được"], "checks": [{"primitive": "http_status", "path": "/n.html", "status": 200}]}
+
+
+def test_trial_request_carries_thread():
+    from evaluation.suite import trial
+    task = {"id": "i", "title": "t", "detail": "d", "thread": [{"role": "admin", "body": "q"}]}
+    assert trial.request_of(task)["thread"] == [{"role": "admin", "body": "q"}]
+    assert trial.request_of({"id": "i", "title": "t", "detail": "d"})["thread"] == []

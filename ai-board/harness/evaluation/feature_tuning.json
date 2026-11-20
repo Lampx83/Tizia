@@ -1,0 +1,875 @@
+{
+ "set": "tuning",
+ "note": "tuning set; validation set is written by an independent session",
+ "cases": [
+  {
+   "id": "tt-01-faq-page",
+   "request": "Thêm một trang hỏi đáp thường gặp cho Tizia và đặt nút dẫn tới nó ở trang 404.",
+   "answers": [
+    "Tên trang là \"Hỏi đáp thường gặp\", file hoi-dap.html, có ít nhất ba câu hỏi gấp mở được.",
+    "Nút đặt trong dãy nút của trang 404."
+   ],
+   "files": [
+    {
+     "path": "public/404.html",
+     "region": {
+      "after": "<nav class=\"links\">\n",
+      "before": "</nav>"
+     },
+     "must": [
+      "href=\"/hoi-dap\\.html\""
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    },
+    {
+     "path": "public/hoi-dap.html",
+     "new": {
+      "must": [
+       "<h1>Hỏi đáp thường gặp</h1>",
+       "<details"
+      ],
+      "forbid": [
+       "<script"
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/hoi-dap.html",
+     "text": "Hỏi đáp thường gặp"
+    },
+    {
+     "primitive": "selector_exists",
+     "path": "/hoi-dap.html",
+     "selector": "details"
+    },
+    {
+     "primitive": "selector_exists",
+     "path": "/404.html",
+     "selector": "a[href=\"/hoi-dap.html\"]"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/404.html",
+     "edits": [
+      [
+       "<nav class=\"links\">\n    <a href=\"/\" class=\"primary\">🏠 Trang chủ</a>\n    <a href=\"/school.html\">🏫 Trường ảo</a>\n    <a href=\"/apps.html\">🧩 Ứng dụng</a>\n    <a href=\"/pricing.html\">💎 Bảng giá</a>\n    <a href=\"/kham-pha.html\">🌌 Khám phá</a>\n  </nav>",
+       "<nav class=\"links\">\n    <a href=\"/\" class=\"primary\">🏠 Trang chủ</a>\n    <a href=\"/school.html\">🏫 Trường ảo</a>\n    <a href=\"/apps.html\">🧩 Ứng dụng</a>\n    <a href=\"/pricing.html\">💎 Bảng giá</a>\n    <a href=\"/kham-pha.html\">🌌 Khám phá</a>\n      <a href=\"/hoi-dap.html\">❓ Hỏi đáp</a>\n  </nav>"
+      ]
+     ]
+    },
+    {
+     "path": "public/hoi-dap.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Hỏi đáp thường gặp · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Hỏi đáp thường gặp</h1>\n<details><summary>Tizia là gì?</summary><p>Nền tảng học mô phỏng.</p></details>\n<details><summary>Học miễn phí được không?</summary><p>Có gói miễn phí.</p></details>\n<details><summary>Liên hệ ở đâu?</summary><p>Trang liên hệ.</p></details>\n</main>\n</body>\n</html>\n"
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-02-contact-page",
+   "request": "Làm trang liên hệ có địa chỉ email hỗ trợ và thêm liên kết tới nó trong dãy nút của trang 404.",
+   "answers": [
+    "Email hỗ trợ là hotro@tizia.vn, bấm vào mở thư.",
+    "Trang tên lien-he.html, tiêu đề Liên hệ."
+   ],
+   "files": [
+    {
+     "path": "public/404.html",
+     "region": {
+      "after": "<nav class=\"links\">\n",
+      "before": "</nav>"
+     },
+     "must": [
+      "href=\"/lien-he\\.html\""
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    },
+    {
+     "path": "public/lien-he.html",
+     "new": {
+      "must": [
+       "mailto:hotro@tizia\\.vn",
+       "<h1>Liên hệ</h1>"
+      ],
+      "forbid": [
+       "<script"
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "selector_exists",
+     "path": "/lien-he.html",
+     "selector": "a[href=\"mailto:hotro@tizia.vn\"]"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/lien-he.html",
+     "text": "Liên hệ"
+    },
+    {
+     "primitive": "selector_exists",
+     "path": "/404.html",
+     "selector": "a[href=\"/lien-he.html\"]"
+    }
+   ],
+   "must_state": [
+    {
+     "id": "email",
+     "pattern": "hotro@tizia"
+    }
+   ],
+   "criteria_sample": [],
+   "fix": [
+    {
+     "path": "public/404.html",
+     "edits": [
+      [
+       "<nav class=\"links\">\n    <a href=\"/\" class=\"primary\">🏠 Trang chủ</a>\n    <a href=\"/school.html\">🏫 Trường ảo</a>\n    <a href=\"/apps.html\">🧩 Ứng dụng</a>\n    <a href=\"/pricing.html\">💎 Bảng giá</a>\n    <a href=\"/kham-pha.html\">🌌 Khám phá</a>\n  </nav>",
+       "<nav class=\"links\">\n    <a href=\"/\" class=\"primary\">🏠 Trang chủ</a>\n    <a href=\"/school.html\">🏫 Trường ảo</a>\n    <a href=\"/apps.html\">🧩 Ứng dụng</a>\n    <a href=\"/pricing.html\">💎 Bảng giá</a>\n    <a href=\"/kham-pha.html\">🌌 Khám phá</a>\n      <a href=\"/lien-he.html\">✉️ Liên hệ</a>\n  </nav>"
+      ]
+     ]
+    },
+    {
+     "path": "public/lien-he.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Liên hệ · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Liên hệ</h1>\n<p>Gửi thư tới <a href=\"mailto:hotro@tizia.vn\">hotro@tizia.vn</a> để được hỗ trợ.</p>\n</main>\n</body>\n</html>\n"
+    }
+   ]
+  },
+  {
+   "id": "tt-03-feature-card",
+   "request": "Thêm tính năng Lịch học tuần: một trang mới và một thẻ giới thiệu nó trong danh sách tính năng.",
+   "answers": [
+    "Trang lich-hoc.html, tiêu đề Lịch học tuần, thẻ đặt đầu nhóm Trục A.",
+    "Thẻ theo đúng kiểu các thẻ khác (biểu tượng, tên, mô tả, nút Mở)."
+   ],
+   "files": [
+    {
+     "path": "public/tinh-nang.html",
+     "region": {
+      "after": "Auto-refill hearts 30 phút.</div><div class=\"go\">Mở →</div></a>\n",
+      "before": "    <a class=\"feat\" href=\"/league.html\">"
+     },
+     "must": [
+      "class=\"feat\"\\s+href=\"/lich-hoc\\.html\"",
+      "Lịch học tuần"
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    },
+    {
+     "path": "public/lich-hoc.html",
+     "new": {
+      "must": [
+       "Lịch học tuần"
+      ],
+      "forbid": [
+       "<script"
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "selector_exists",
+     "path": "/tinh-nang.html",
+     "selector": "a.feat[href=\"/lich-hoc.html\"]"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/tinh-nang.html",
+     "text": "Lịch học tuần"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/lich-hoc.html",
+     "text": "Lịch học tuần"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/tinh-nang.html",
+     "edits": [
+      [
+       "Auto-refill hearts 30 phút.</div><div class=\"go\">Mở →</div></a>\n    <a class=\"feat\" href=\"/league.html\">",
+       "Auto-refill hearts 30 phút.</div><div class=\"go\">Mở →</div></a>\n    <a class=\"feat\" href=\"/lich-hoc.html\"><div class=\"ic\">📅</div><div class=\"nm\">Lịch học tuần</div><div class=\"desc\">Xếp lịch học theo tuần, nhắc việc cần làm.</div><div class=\"go\">Mở →</div></a>\n    <a class=\"feat\" href=\"/league.html\">"
+      ]
+     ]
+    },
+    {
+     "path": "public/lich-hoc.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Lịch học tuần · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Lịch học tuần</h1>\n<p>Xếp lịch học theo tuần.</p>\n</main>\n</body>\n</html>\n"
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-04-subtitle",
+   "request": "Trang Khám phá cần một dòng mô tả ngắn ngay dưới tiêu đề.",
+   "answers": [
+    "Dòng chữ là: Tất cả tính năng, gom theo cấp độ.",
+    "Dùng thẻ p có class sub, nằm trong thanh đầu trang."
+   ],
+   "files": [
+    {
+     "path": "public/kham-pha.html",
+     "region": {
+      "after": "<h1>🌌 Tính năng toàn vũ trụ Tizia</h1>\n",
+      "before": "</div>\n\n<div class=\"wrap\" id=\"wrap\">"
+     },
+     "must": [
+      "<p class=\"sub\">Tất cả tính năng, gom theo cấp độ\\.</p>"
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/kham-pha.html",
+     "text": "Tất cả tính năng, gom theo cấp độ."
+    },
+    {
+     "primitive": "selector_exists",
+     "path": "/kham-pha.html",
+     "selector": ".top p.sub"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/kham-pha.html",
+     "edits": [
+      [
+       "<h1>🌌 Tính năng toàn vũ trụ Tizia</h1>\n</div>\n\n<div class=\"wrap\" id=\"wrap\">",
+       "<h1>🌌 Tính năng toàn vũ trụ Tizia</h1>\n  <p class=\"sub\">Tất cả tính năng, gom theo cấp độ.</p>\n</div>\n\n<div class=\"wrap\" id=\"wrap\">"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-05-form-field",
+   "request": "Form kháng nghị cần thêm một ô nhập ghi chú.",
+   "answers": [
+    "Ô nhập một dòng, nhãn Ghi chú thêm (tuỳ chọn), id là note, tối đa 200 ký tự.",
+    "Đặt giữa ô tiêu đề và ô chi tiết đề xuất."
+   ],
+   "files": [
+    {
+     "path": "public/appeal.html",
+     "region": {
+      "after": "<label>Tiêu đề đề xuất sửa (tuỳ chọn)<input id=\"ptitle\" maxlength=\"200\"></label>\n        ",
+      "before": "<label>Chi tiết đề xuất sửa (tuỳ chọn)"
+     },
+     "must": [
+      "id=\"note\"",
+      "Ghi chú thêm"
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "selector_exists",
+     "path": "/appeal.html",
+     "selector": "form#appeal input#note"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/appeal.html",
+     "text": "Ghi chú thêm (tuỳ chọn)"
+    }
+   ],
+   "must_state": [
+    {
+     "id": "limit",
+     "pattern": "200"
+    }
+   ],
+   "criteria_sample": [
+    "ô note giới hạn 200 ký tự"
+   ],
+   "fix": [
+    {
+     "path": "public/appeal.html",
+     "edits": [
+      [
+       "<label>Tiêu đề đề xuất sửa (tuỳ chọn)<input id=\"ptitle\" maxlength=\"200\"></label>\n        <label>Chi tiết đề xuất sửa (tuỳ chọn)",
+       "<label>Tiêu đề đề xuất sửa (tuỳ chọn)<input id=\"ptitle\" maxlength=\"200\"></label>\n        <label>Ghi chú thêm (tuỳ chọn)<input id=\"note\" maxlength=\"200\"></label>\n        <label>Chi tiết đề xuất sửa (tuỳ chọn)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tt-06-button-label",
+   "request": "Đổi chữ trên nút gửi của form kháng nghị cho ngắn gọn hơn.",
+   "answers": [
+    "Chữ mới là Gửi ngay."
+   ],
+   "files": [
+    {
+     "path": "public/appeal.html",
+     "region": {
+      "after": "<textarea id=\"pdetail\" maxlength=\"4000\"></textarea></label>\n        ",
+      "before": "</form>"
+     },
+     "must": [
+      "Gửi ngay"
+     ],
+     "forbid": [
+      "javascript:"
+     ],
+     "gone": [
+      "<button>Gửi kháng nghị</button>"
+     ]
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/appeal.html",
+     "text": "<button>Gửi ngay</button>"
+    },
+    {
+     "primitive": "text_absent",
+     "path": "/appeal.html",
+     "text": "<button>Gửi kháng nghị</button>"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/appeal.html",
+     "edits": [
+      [
+       "<button>Gửi kháng nghị</button>",
+       "<button>Gửi ngay</button>"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-07-primary-button-colour",
+   "request": "Nút chính ở trang 404 đổi sang màu cam cho nổi hơn.",
+   "answers": [
+    "Màu cam #f97316, đổi cả nền và viền của nút."
+   ],
+   "files": [
+    {
+     "path": "public/404.html",
+     "edit": {
+      "kind": "css_color",
+      "rule": {
+       "selector": "a.primary",
+       "set": {
+        "background": "#f97316",
+        "border-color": "#f97316"
+       }
+      }
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "computed_style",
+     "path": "/404.html",
+     "selector": "a.primary",
+     "prop": "background",
+     "value": "rgb(249, 115, 22)"
+    },
+    {
+     "primitive": "computed_style",
+     "path": "/404.html",
+     "selector": "a.primary",
+     "prop": "border-color",
+     "value": "rgb(249, 115, 22)"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/404.html",
+     "edits": [
+      [
+       "a.primary { background: #fbbf24; color: #0f172a; border-color: #fbbf24; }",
+       "a.primary { background: #f97316; color: #0f172a; border-color: #f97316; }"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-08-heading-text",
+   "request": "Tiêu đề khối thêm con ở trang Gia đình nên nói rõ hơn là tài khoản.",
+   "answers": [
+    "Đổi thành Thêm tài khoản con."
+   ],
+   "files": [
+    {
+     "path": "public/family.html",
+     "edit": {
+      "kind": "replace_text",
+      "zones": [
+       {
+        "find": "<h3 style=\"margin: 0 0 12px; font-size: 16px;\">Thêm con</h3>",
+        "span": "Thêm con",
+        "new": "Thêm tài khoản con"
+       }
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/family.html",
+     "text": "Thêm tài khoản con"
+    },
+    {
+     "primitive": "text_absent",
+     "path": "/family.html",
+     "text": ">Thêm con</h3>"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/family.html",
+     "edits": [
+      [
+       "<h3 style=\"margin: 0 0 12px; font-size: 16px;\">Thêm con</h3>",
+       "<h3 style=\"margin: 0 0 12px; font-size: 16px;\">Thêm tài khoản con</h3>"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-09-it-experience",
+   "request": "Thêm trải nghiệm Giải mã Caesar vào trường IT, gắn vào môn An toàn thông tin.",
+   "answers": [
+    "Trang it-giai-ma-caesar.html, chế độ 2d, biểu tượng khoá, gắn vào module I3.8 cạnh ScoreUp.",
+    "Khai báo ở danh mục PAGES với khoá caesar."
+   ],
+   "files": [
+    {
+     "path": "public/js/domains/it/experiences.js",
+     "regions": [
+      {
+       "after": "bad:Cần FeedBackMe chạy'],\n  },\n",
+       "before": "};\n\n/** @type {Record",
+       "must": [
+        "caesar:\\s*\\{",
+        "it-giai-ma-caesar\\.html"
+       ]
+      },
+      {
+       "after": "'I3.8': [PAGES.scoreup]",
+       "before": ",                 // An toàn thông tin",
+       "must": [
+        ",\\s*PAGES\\.caesar\\s*$"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "public/it-giai-ma-caesar.html",
+     "new": {
+      "must": [
+       "Giải mã Caesar"
+      ],
+      "forbid": []
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/js/domains/it/experiences.js",
+     "text": "PAGES.caesar"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/js/domains/it/experiences.js",
+     "text": "it-giai-ma-caesar.html"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/it-giai-ma-caesar.html",
+     "text": "Giải mã Caesar"
+    }
+   ],
+   "must_state": [
+    {
+     "id": "wire",
+     "pattern": "I3\\.8|An toàn thông tin|PAGES\\.caesar"
+    }
+   ],
+   "criteria_sample": [
+    "module I3.8 hiển thị trải nghiệm Caesar"
+   ],
+   "fix": [
+    {
+     "path": "public/js/domains/it/experiences.js",
+     "edits": [
+      [
+       "bad:Cần FeedBackMe chạy'],\n  },\n};\n\n/** @type {Record",
+       "bad:Cần FeedBackMe chạy'],\n  },\n  caesar: {\n    mode: '2d', icon: '🔐', label: 'Giải mã Caesar', tech: 'Mật mã cổ điển', url: 'it-giai-ma-caesar.html',\n    desc: 'Tự giải mã thông điệp Caesar, thử các khoá dịch chuyển.',\n    specs: ['ok:Thực hành ngay', 'Không cần cài đặt'],\n  },\n};\n\n/** @type {Record"
+      ],
+      [
+       "'I3.8': [PAGES.scoreup],                 // An toàn thông tin",
+       "'I3.8': [PAGES.scoreup], PAGES.caesar,                 // An toàn thông tin"
+      ]
+     ]
+    },
+    {
+     "path": "public/it-giai-ma-caesar.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Giải mã Caesar · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Giải mã Caesar</h1>\n<p>Thử các khoá dịch chuyển.</p>\n</main>\n</body>\n</html>\n"
+    }
+   ]
+  },
+  {
+   "id": "tt-10-it-module",
+   "request": "Thêm module thực hành SQL Bài tập vào trường IT, mở thẳng một trang bài tập mới.",
+   "answers": [
+    "Module IP05 thuộc nhóm practice, mở /it-sql-bai-tap.html, cần 12 sao để mở khoá.",
+    "Trang có tiêu đề Bài tập SQL."
+   ],
+   "files": [
+    {
+     "path": "public/js/domains/it/modules.js",
+     "region": {
+      "after": "icon: '🐙' },\n",
+      "before": "\n  // ──────────── CAREER"
+     },
+     "must": [
+      "id:\\s*'IP05'",
+      "directHref:\\s*'/it-sql-bai-tap\\.html'",
+      "minStarsToUnlock:\\s*12"
+     ],
+     "forbid": []
+    },
+    {
+     "path": "public/it-sql-bai-tap.html",
+     "new": {
+      "must": [
+       "Bài tập SQL"
+      ],
+      "forbid": []
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_present",
+     "path": "/js/domains/it/modules.js",
+     "text": "IP05"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/js/domains/it/modules.js",
+     "text": "/it-sql-bai-tap.html"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/it-sql-bai-tap.html",
+     "text": "Bài tập SQL"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/js/domains/it/modules.js",
+     "edits": [
+      [
+       "icon: '🐙' },\n\n  // ──────────── CAREER",
+       "icon: '🐙' },\n  { category: 'practice', id: 'IP05', title: 'SQL Bài tập', subject: 'sql-practice', scenarioIds: [], directHref: '/it-sql-bai-tap.html', minStarsToUnlock: 12, icon: '🗄️' },\n\n  // ──────────── CAREER"
+      ]
+     ]
+    },
+    {
+     "path": "public/it-sql-bai-tap.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Bài tập SQL · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Bài tập SQL</h1>\n<p>Luyện truy vấn cơ bản.</p>\n</main>\n</body>\n</html>\n"
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-11-stat-colour",
+   "request": "Số liệu lớn ở dải thống kê trang Tính năng đổi sang màu xanh lá.",
+   "answers": [
+    "Xanh lá #22c55e, chỉ đổi chữ số."
+   ],
+   "files": [
+    {
+     "path": "public/tinh-nang.html",
+     "edit": {
+      "kind": "css_color",
+      "rule": {
+       "selector": ".stat-row .v",
+       "set": {
+        "color": "#22c55e"
+       }
+      }
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "computed_style",
+     "path": "/tinh-nang.html",
+     "selector": ".stat-row .v",
+     "prop": "color",
+     "value": "rgb(34, 197, 94)"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/tinh-nang.html",
+     "edits": [
+      [
+       ".stat-row .v { font-size:28px; font-weight:800; color:var(--accent); }",
+       ".stat-row .v { font-size:28px; font-weight:800; color:#22c55e; }"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-12-hero-size",
+   "request": "Đoạn mô tả đầu trang Tính năng hơi to, thu nhỏ lại.",
+   "answers": [
+    "Cỡ chữ 14px."
+   ],
+   "files": [
+    {
+     "path": "public/tinh-nang.html",
+     "edit": {
+      "kind": "size_hide",
+      "rule": {
+       "selector": ".hero p",
+       "set": {
+        "font-size": "14px"
+       }
+      }
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "computed_style",
+     "path": "/tinh-nang.html",
+     "selector": ".hero p",
+     "prop": "font-size",
+     "value": "14px"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/tinh-nang.html",
+     "edits": [
+      [
+       ".hero p { font-size:16px;",
+       ".hero p { font-size:14px;"
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-13-remove-card",
+   "request": "Bỏ thẻ Pet đồng hành khỏi danh sách tính năng.",
+   "answers": [
+    "Chỉ bỏ thẻ đó, các thẻ khác giữ nguyên."
+   ],
+   "files": [
+    {
+     "path": "public/tinh-nang.html",
+     "edit": {
+      "kind": "remove_element",
+      "zones": [
+       {
+        "find": "<a class=\"feat\" href=\"javascript:void(window.__tziaPetWidget?.openDrawer?.())\"><div class=\"ic\">🦉</div><div class=\"nm\">Pet đồng hành</div><div class=\"desc\">Bubble góc trái, 6 pet, 3 stage tiến hoá, feed bằng coin.</div><div class=\"go\">Mở drawer</div></a>"
+       }
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "text_absent",
+     "path": "/tinh-nang.html",
+     "text": "Pet đồng hành"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/tinh-nang.html",
+     "text": "Cửa hàng skin"
+    }
+   ],
+   "must_state": [],
+   "fix": [
+    {
+     "path": "public/tinh-nang.html",
+     "edits": [
+      [
+       "<a class=\"feat\" href=\"javascript:void(window.__tziaPetWidget?.openDrawer?.())\"><div class=\"ic\">🦉</div><div class=\"nm\">Pet đồng hành</div><div class=\"desc\">Bubble góc trái, 6 pet, 3 stage tiến hoá, feed bằng coin.</div><div class=\"go\">Mở drawer</div></a>",
+       ""
+      ]
+     ]
+    }
+   ],
+   "criteria_sample": []
+  },
+  {
+   "id": "tt-14-page-with-module",
+   "request": "Làm trang Hướng dẫn nhanh liệt kê ba bước làm quen, danh sách do một file JS riêng dựng lên.",
+   "answers": [
+    "Ba bước: Đăng nhập, Chọn trường, Học bài đầu tiên. Trang huong-dan-nhanh.html, module js/huong-dan-nhanh.js.",
+    "Danh sách là ol có id steps."
+   ],
+   "files": [
+    {
+     "path": "public/huong-dan-nhanh.html",
+     "new": {
+      "must": [
+       "<ol id=\"steps\"",
+       "<script[^>]*type=\"module\"[^>]*src=\"js/huong-dan-nhanh\\.js\""
+      ],
+      "forbid": []
+     }
+    },
+    {
+     "path": "public/js/huong-dan-nhanh.js",
+     "new": {
+      "must": [
+       "getElementById\\('steps'\\)",
+       "Học bài đầu tiên"
+      ],
+      "forbid": [
+       "eval\\("
+      ]
+     }
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "selector_exists",
+     "path": "/huong-dan-nhanh.html",
+     "selector": "ol#steps"
+    },
+    {
+     "primitive": "selector_exists",
+     "path": "/huong-dan-nhanh.html",
+     "selector": "script[src=\"js/huong-dan-nhanh.js\"]"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/js/huong-dan-nhanh.js",
+     "text": "Học bài đầu tiên"
+    }
+   ],
+   "must_state": [
+    {
+     "id": "steps",
+     "pattern": "ba bước|3 bước|Đăng nhập"
+    }
+   ],
+   "criteria_sample": [
+    "danh sách có ba bước, bắt đầu bằng Đăng nhập"
+   ],
+   "fix": [
+    {
+     "path": "public/huong-dan-nhanh.html",
+     "create": "<!DOCTYPE html>\n<html lang=\"vi\">\n<head>\n<meta charset=\"UTF-8\" />\n<title>Hướng dẫn nhanh · Tizia</title>\n</head>\n<body>\n<main>\n<h1>Hướng dẫn nhanh</h1>\n<ol id=\"steps\"></ol>\n<script type=\"module\" src=\"js/huong-dan-nhanh.js\"></script>\n</main>\n</body>\n</html>\n"
+    },
+    {
+     "path": "public/js/huong-dan-nhanh.js",
+     "create": "const steps = ['Đăng nhập', 'Chọn trường', 'Học bài đầu tiên'];\nconst list = document.getElementById('steps');\nfor (const s of steps) {\n  const li = document.createElement('li');\n  li.textContent = s;\n  list.append(li);\n}\n"
+    }
+   ]
+  },
+  {
+   "id": "tt-15-vague-share",
+   "request": "Thêm nút chia sẻ vào trang Gia đình.",
+   "answers": [
+    "Nút sao chép liên kết của trang vào bộ nhớ tạm, chữ Sao chép liên kết, id share-btn.",
+    "Đặt ngay dưới dòng mô tả dưới tiêu đề."
+   ],
+   "files": [
+    {
+     "path": "public/family.html",
+     "region": {
+      "after": "để chia sẻ gói cước.</p>\n",
+      "before": "\n  <div class=\"plan-card\""
+     },
+     "must": [
+      "id=\"share-btn\"",
+      "Sao chép liên kết"
+     ],
+     "forbid": [
+      "javascript:"
+     ]
+    }
+   ],
+   "browser": [
+    {
+     "primitive": "selector_exists",
+     "path": "/family.html",
+     "selector": "button#share-btn"
+    },
+    {
+     "primitive": "text_present",
+     "path": "/family.html",
+     "text": "Sao chép liên kết"
+    }
+   ],
+   "must_state": [
+    {
+     "id": "copy",
+     "pattern": "sao chép|copy"
+    }
+   ],
+   "criteria_sample": [
+    "nút sao chép liên kết trang"
+   ],
+   "fix": [
+    {
+     "path": "public/family.html",
+     "edits": [
+      [
+       "để chia sẻ gói cước.</p>\n\n  <div class=\"plan-card\"",
+       "để chia sẻ gói cước.</p>\n  <button type=\"button\" id=\"share-btn\" class=\"primary\">🔗 Sao chép liên kết</button>\n\n  <div class=\"plan-card\""
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

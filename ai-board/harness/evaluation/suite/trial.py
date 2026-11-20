@@ -91,7 +91,7 @@ def recording(base: Deps, seed: int | None = None) -> RecordingDeps:
 def request_of(task: dict, variant: str | None = None) -> dict:
     """What a requester wrote: title + detail. `verify` and the gold are never shown to the planner."""
     text = strip_diacritics if "nodia" in (variant or "").split("+") else (lambda t: t)
-    return {"id": task["id"], "domain": "", "type": "feature", "subject": text(task["title"]), "body": text(task["detail"]), "thread": [], "votes": 0,
+    return {"id": task["id"], "domain": "", "type": "feature", "subject": text(task["title"]), "body": text(task["detail"]), "thread": list(task.get("thread") or []), "votes": 0,
             "grounding_required": True}
 
 
