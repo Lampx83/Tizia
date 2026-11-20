@@ -8,18 +8,29 @@ import random
 from collections import Counter
 from pathlib import Path
 
-VERDICTS = ("correct", "partial", "wrong", "no_candidate")
+VERDICTS = ("pass", "fail")
+LEGACY_PASS = ("correct", "equivalent")
+LEGACY_FAIL = ("partial", "wrong", "no_candidate", "different")
+OLD_DIFF_CAP = 6000
 
 PROMPT = """You grade code changes written by a small AI model for a Vietnamese education website (static HTML/CSS/JS pages plus a Node server).
-For each item you get the user's request and the unified diff the model produced against the base commit. Judge ONLY whether the diff, once shipped,
+For each item you get the user's request and the complete unified diff the model produced against the base commit. Judge ONLY whether the diff, once shipped,
 satisfies the request. Use the base code in the repository when you need to check that files, functions, element ids or classes the diff refers to exist.
-An alternative implementation that plainly satisfies the request is correct. Verdicts:
-- correct: satisfies the request, no broken references, no syntax errors.
-- partial: right direction but incomplete or one defect breaks part of the behaviour.
-- wrong: does not do the request, refers to things that do not exist, breaks syntax, or changes nothing useful.
-- no_candidate: the diff is empty or missing.
-Do not guess when the diff is truncated at 6000 characters: say so in the reason and grade what is visible.
+An alternative implementation that plainly satisfies the request passes. Binary verdicts:
+- pass: satisfies the request, no broken references, no syntax errors, and nothing else visible in the diff is broken.
+- fail: anything else, including an almost-right diff that is incomplete or has one defect breaking part of the behaviour (say which in the reason), a diff that does not do the request, refers to things that do not exist, breaks syntax, changes nothing useful, or is empty or missing.
+An item with "diff_truncated": true was cut by an old size cap, so the rest is unseen: do not assume it is complete; fail it and start the reason with "truncated" unless the visible part already fails.
 Output a JSON array of {"blind_id", "verdict", "reason"} with reason at most 200 characters. You do not know which model setting produced a diff."""
+
+
+def binary(verdict) -> str | None:
+    """pass|fail from a verdict (case/space-insensitive, bool, legacy and judge vocab; partial is fail); unknown None."""
+    if isinstance(verdict, bool):
+        return "pass" if verdict else "fail"
+    if not isinstance(verdict, str):
+        return None
+    verdict = verdict.strip().lower()
+    return verdict if verdict in VERDICTS else "pass" if verdict in LEGACY_PASS else "fail" if verdict in LEGACY_FAIL else None
 
 
 def _rows(run_dir: Path) -> list[dict]:
@@ -43,8 +54,9 @@ def collect(run_dirs: list[Path], pack: list[dict], out_dir: Path, seed: int = 2
         blind = f"g{index:04d}"
         entry, row = item["entry"], item["row"]
         batch.append({"blind_id": blind, "request": {"title": entry["title"], "detail": entry["detail"], "verify": [s["verify"] for s in entry["subtasks"]]},
-                      "files": entry["files"], "base_sha": entry["base_sha"], "diff": row.get("diff")})
-        key[blind] = {"run": item["run"], "id": row["id"], "oracle": bool(row.get("resolved")), "mode": row.get("mode")}
+                      "files": entry["files"], "base_sha": entry["base_sha"], "diff": row.get("diff"),
+                      "diff_truncated": len(row.get("diff") or "") == OLD_DIFF_CAP})
+        key[blind] = {"run": item["run"], "id": row["id"], "oracle": bool(row.get("resolved")), "mode": row.get("mode"), "repeat": row.get("repeat")}
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "batch.json").write_text(json.dumps({"prompt": PROMPT, "items": batch}, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -127,37 +139,37 @@ def score_plans(grades: list[dict], key: dict, run_dirs: list[Path]) -> dict:
 
 
 def score(grades: list[dict], key: dict) -> dict:
-    """Per run: verdict counts, correct+partial share, agreement of 'correct' with the oracle. Also verdict flips per task across runs."""
+    """Per run: verdict counts, pass count, agreement of 'pass' with the oracle. Also verdict flips per task across runs."""
     runs: dict[str, dict] = {}
     per_task: dict[str, dict[str, str]] = {}
     for grade in grades:
         meta = key.get(grade.get("blind_id"))
-        if not meta or grade.get("verdict") not in VERDICTS:
+        verdict = binary(grade.get("verdict"))
+        if not meta or verdict is None:
             continue
         run = runs.setdefault(meta["run"], {"verdicts": Counter(), "agree": 0, "oracle_true": 0, "n": 0})
-        run["verdicts"][grade["verdict"]] += 1
+        run["verdicts"][verdict] += 1
         run["n"] += 1
-        run["agree"] += (grade["verdict"] == "correct") == meta["oracle"]
+        run["agree"] += (verdict == "pass") == meta["oracle"]
         run["oracle_true"] += meta["oracle"]
-        per_task.setdefault(meta["id"], {})[meta["run"]] = grade["verdict"]
+        per_task.setdefault(meta["id"], {})[meta["run"]] = verdict
     report = {}
     for name, run in sorted(runs.items()):
-        usable = run["verdicts"]["correct"] + run["verdicts"]["partial"]
-        report[name] = {"n": run["n"], "verdicts": dict(run["verdicts"]), "correct_or_partial": usable,
+        report[name] = {"n": run["n"], "verdicts": dict(run["verdicts"]), "passed": run["verdicts"]["pass"],
                         "oracle_agreement": f"{run['agree']}/{run['n']}", "oracle_resolved": run["oracle_true"]}
     return {"runs": report, "tasks_graded": len(per_task)}
 
 
 def paired(grades: list[dict], key: dict, baseline: str, candidate: str) -> dict:
-    """Task-level change between two runs on the usable (correct or partial) scale. Repeats of a task are summed, so a task counts as gained
-    when the candidate had more usable repeats than the baseline."""
-    usable: dict[str, dict[str, int]] = {}
+    """Task-level change between two runs on pass counts. Repeats of a task are summed, so a task counts as gained
+    when the candidate had more passing repeats than the baseline."""
+    passed: dict[str, dict[str, int]] = {}
     for grade in grades:
         meta = key.get(grade.get("blind_id"))
-        if meta and grade.get("verdict") in VERDICTS and meta["run"] in (baseline, candidate):
-            bucket = usable.setdefault(meta["id"], {baseline: 0, candidate: 0})
-            bucket[meta["run"]] += grade["verdict"] in ("correct", "partial")
-    gained = sum(v[candidate] > v[baseline] for v in usable.values())
-    lost = sum(v[candidate] < v[baseline] for v in usable.values())
-    return {"tasks": len(usable), "gained_usable": gained, "lost_usable": lost, "net": gained - lost,
-            "usable_trials_delta": sum(v[candidate] - v[baseline] for v in usable.values())}
+        if meta and binary(grade.get("verdict")) and meta["run"] in (baseline, candidate):
+            bucket = passed.setdefault(meta["id"], {baseline: 0, candidate: 0})
+            bucket[meta["run"]] += binary(grade["verdict"]) == "pass"
+    gained = sum(v[candidate] > v[baseline] for v in passed.values())
+    lost = sum(v[candidate] < v[baseline] for v in passed.values())
+    return {"tasks": len(passed), "gained": gained, "lost": lost, "net": gained - lost,
+            "passed_trials_delta": sum(v[candidate] - v[baseline] for v in passed.values())}

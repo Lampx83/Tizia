@@ -255,7 +255,7 @@ def run_trial(task, deps, root, source, *, runtime=None, wall_s=300, budget=None
             'prod': 'skipped', 'ended': result['outcome'], 'error': result['error'], 'reason': result['error'] or result['outcome'],
             'infra_error': bool(result['error']) or result['cleanup_pending'], 'cleanup_pending': result['cleanup_pending'],
             **{key: result[key] for key in ('budget', 'model_calls', 'tokens_in', 'tokens_out', 'cost_status', 'upstream')},
-            'wall_s': round(time.monotonic() - started, 3), 'diff': ''.join(diff)[:6000] or None,
+            'wall_s': round(time.monotonic() - started, 3), 'diff': ''.join(diff) or None,
             'trajectory': str(trajectory), 'trajectory_sha256': hashlib.sha256(trajectory.read_bytes()).hexdigest() if trajectory.exists() else None,
             'served': result['served'], 'incomparable': result['incomparable'],
             'providers': ['vllm'], 'retries': 0, 'stuck': False, 'truncated': result['truncated'], 'loop_tools': [], 'loop_errors': []}

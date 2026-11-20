@@ -356,6 +356,6 @@ def run_trial(task: dict, mode: str, base_deps: Deps, root: Path, source, fast: 
         "providers": sorted({(b.get("_route") or {}).get("provider") or b.get("_provider") for b in deps.ledger} - {None}),
         "served": sorted({b.get("model") for b in deps.ledger if isinstance(b.get("model"), str)}),
         "reasoning_chars": sum(b.get("_reasoning_chars") or 0 for b in deps.ledger),
-        "diff": (row.get("diff") or "")[:6000] or None, "recall": (rec.get("seen") or {}).get("recall"),
+        "diff": row.get("diff") or None, "recall": (rec.get("seen") or {}).get("recall"),
         "ref_errors": ref_errors(row.get("diff") or "", repo, task["base_sha"], plan), "schema_fallbacks": gate3_guards.fallbacks(reset=True),
     }

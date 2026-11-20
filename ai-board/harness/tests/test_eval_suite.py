@@ -548,11 +548,26 @@ def test_blind_grading_hides_arms_and_scores_per_run_with_oracle_agreement(tmp_p
     batch = json.loads((out / "batch.json").read_text(encoding="utf-8"))
     assert "runA" not in json.dumps(batch) and "runB" not in json.dumps(batch)
     blind_map = json.loads((out / "blindmap.json").read_text(encoding="utf-8"))
-    verdict = {("runA", "t1"): "correct", ("runA", "t2"): "wrong", ("runB", "t1"): "partial", ("runB", "t2"): "no_candidate"}
+    verdict = {("runA", "t1"): "pass", ("runA", "t2"): "fail", ("runB", "t1"): "partial", ("runB", "t2"): "fail"}
     grades = [{"blind_id": b, "verdict": verdict[(m["run"], m["id"])], "reason": ""} for b, m in blind_map.items()]
     report = grading.score(grades, blind_map)
-    assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["correct_or_partial"] == 1
-    assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained_usable": 0, "lost_usable": 0, "net": 0, "usable_trials_delta": 0}
+    assert report["runs"]["runA"]["oracle_agreement"] == "2/2" and report["runs"]["runB"]["passed"] == 0
+    assert grading.paired(grades, blind_map, "runA", "runB") == {"tasks": 2, "gained": 0, "lost": 1, "net": -1, "passed_trials_delta": -1}
+
+
+def test_blind_batch_keeps_full_diff_and_prompt_is_binary(tmp_path):
+    import json
+    from evaluation.suite import grading
+    pack = [{"id": "t1", "title": "T", "detail": "D", "files": ["a.html"], "base_sha": "abc", "subtasks": [{"verify": "V"}]}]
+    (tmp_path / "runA").mkdir()
+    (tmp_path / "runA" / "results.jsonl").write_text(json.dumps({"id": "t1", "mode": "gold", "resolved": True, "diff": "x" * 20000}), encoding="utf-8")
+    grading.collect([tmp_path / "runA"], pack, tmp_path / "out")
+    batch = json.loads((tmp_path / "out" / "batch.json").read_text(encoding="utf-8"))
+    assert len(batch["items"][0]["diff"]) == 20000
+    assert batch["items"][0]["diff_truncated"] is False and "- pass:" in batch["prompt"] and "- fail:" in batch["prompt"]
+    (tmp_path / "runA" / "results.jsonl").write_text(json.dumps({"id": "t1", "mode": "gold", "resolved": True, "diff": "x" * 6000}), encoding="utf-8")
+    grading.collect([tmp_path / "runA"], pack, tmp_path / "out")
+    assert json.loads((tmp_path / "out" / "batch.json").read_text(encoding="utf-8"))["items"][0]["diff_truncated"] is True
 
 
 def test_plan_cards_are_matched_and_hide_arm_outcome_and_gold(tmp_path):
