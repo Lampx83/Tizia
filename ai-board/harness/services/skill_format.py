@@ -1,47 +1,69 @@
-"""Unified skill format: description with exclusion, Look, <=7 steps, Done means, one example."""
+"""Unified skill format (admin-skill frontmatter): description with exclusion, Look, <=7 steps, Done means, one example."""
 import re
 
+from services import file_context
+
 MAX_STEPS = 7
-_STEP = re.compile(r'^\d+\. ', re.M)
-_SPECIFIC = re.compile(r'[\w./-]+\.(?:html|css|jsx?|mjs|tsx?|py|json|md|sql)\b|"[^"\n]+"|(?<![\w/])/[a-z][\w-]*(?:/[\w-]+)*', re.I)
+_STEP = re.compile(r'^\s*\d+[.)]\s', re.M)
+_EXT = r'(?:html?|css|scss|sass|less|jsx?|mjs|cjs|tsx?|vue|py|json|ya?ml|toml|ini|md|sql|sh|txt)'
+_GENERIC = r'(?:a|an|the|each|every|any|that|this|one|same|new|existing|changed|public|web|target)'
+_SPECIFIC = re.compile(
+    rf'[\w./-]+\.{_EXT}\b|\bDockerfile\b|(?<![\w/])/[a-z][\w-]*(?:/[\w-]+)*|(?<![\w&])#[a-z][\w-]+'
+    rf'|\b(?!{_GENERIC}\b)[\w-]+ page\b'
+    r'|"(?![a-z]{1,8}")[^"\n]+"|(?<!\w)\'[^\'\n]+\'(?!\w)|`[^`\n]+`|“[^”\n]+”', re.I)
 _EXCLUSION = re.compile(r',\s*not when\b|;\s*not for\b', re.I)
 _STOP = frozenset('a an the and or of to for in on it its is are be step only just when use that this with my i how after against new old'.split())
 _MIN_SHARED = 2
+_DESC = re.compile(r'^description:\s*(?:"(.*)"|(.*))\s*$', re.M)
+
+
+def is_unified(text):
+    """True when the SKILL.md body starts with a Facts or Look section."""
+    parts = text.split('---\n', 2)
+    return len(parts) == 3 and parts[2].lstrip().startswith(('Facts:\n', 'Look:'))
 
 
 def _split(body):
-    """(facts, rules, example) text parts of a unified body."""
+    """(facts, rules, example) of a unified body; facts/example None when absent."""
     head, sep, example = body.partition('\nExample:\n')
-    facts = ''
+    facts = None
     if head.startswith('Facts:\n'):
         facts, found, rest = head[len('Facts:\n'):].partition('\nLook:')
-        facts, head = (facts, 'Look:' + rest) if found else ('', facts)
-    return facts.strip(), head, example if sep else None
+        head = 'Look:' + rest if found else ''
+    return facts, head, example if sep else None
 
 
 def check(text):
-    """Unified-format violations for a SKILL.md text; [] when valid."""
+    """Unified-format violations for an admin-format SKILL.md (default_skills.parse frontmatter); [] when valid."""
     from services import default_skills
     try:
         skill = default_skills.parse(text)
     except ValueError as e:
-        return [str(e)]
+        return [f'not a valid admin-format skill: {e}']
     errors = []
     if not _EXCLUSION.search(skill.description):
         errors.append('description needs an exclusion (", not when ..." or "; not for ...")')
     body = skill.body
+    if not body.startswith(('Facts:\n', 'Look:')):
+        errors.append('body must start with Facts: or Look:')
     if body.count('\nExample:\n') + body.startswith('Example:\n') != 1:
         errors.append('exactly one Example section required')
     facts, rules, example = _split(body)
-    if len(re.findall(r'^Look:', rules, re.M)) != 1:
+    if facts is not None and any(not line.startswith('- ') for line in facts.splitlines() if line.strip()):
+        errors.append('Facts holds bullet lines only; Look, steps and Done means come after')
+    look, done = list(re.finditer(r'^Look:', rules, re.M)), list(re.finditer(r'^Done means:', rules, re.M))
+    if len(look) != 1:
         errors.append('exactly one Look line required')
-    if len(re.findall(r'^Done means:', rules, re.M)) != 1:
+    if len(done) != 1:
         errors.append('exactly one Done means line required')
-    if not 1 <= len(_STEP.findall(rules)) <= MAX_STEPS:
+    steps = list(_STEP.finditer(rules))
+    if not 1 <= len(steps) <= MAX_STEPS:
         errors.append(f'1 to {MAX_STEPS} numbered steps required')
+    if len(look) == len(done) == 1 and steps and not look[0].start() < steps[0].start() <= steps[-1].start() < done[0].start():
+        errors.append('order must be Look, steps, Done means')
     if example is not None and not example.strip():
         errors.append('Example is empty')
-    if _SPECIFIC.search(facts + '\n' + rules):
+    if _SPECIFIC.search((facts or '') + '\n' + rules):
         errors.append('rules name a specific file, string or page; move it to the Example')
     return errors
 
@@ -51,16 +73,19 @@ def render(body):
     if not body.startswith('Facts:\n'):
         return body
     facts, rules, example = _split(body)
-    return f'Facts (true for every task):\n{facts}\n\n{rules}' + (f'\nExample:\n{example}' if example is not None else '')
+    return f'Facts (true for every task):\n{facts.strip()}\n\n{rules}' + (f'\nExample:\n{example}' if example is not None else '')
 
 
 def _stems(text):
-    return {w.rstrip('s')[:5] for w in re.findall(r'[a-z]+', text.lower()) if w not in _STOP and len(w) > 2}
+    return {w.rstrip('s')[:5] for w in re.findall(r'[a-z]+', file_context.fold(text)) if w not in _STOP and len(w) > 2}
 
 
 def routes(sentence, text):
-    """Offline keyword router: sentence matches the description trigger and not its exclusion."""
-    desc = re.search(r'^description:\s*"(.*)"\s*$', text, re.M).group(1)
+    """Offline router: sentence shares >=2 stems with the description's Use-when clause and <2 with its exclusion."""
+    match = _DESC.search(text)
+    desc = (match.group(1) or match.group(2) or '') if match else ''
+    if 'Use when' not in desc:
+        return False
     trigger = desc.split('Use when', 1)[1]
     cut = _EXCLUSION.search(trigger)
     trigger, excluded = (trigger[:cut.start()], trigger[cut.end():]) if cut else (trigger, '')
