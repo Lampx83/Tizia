@@ -50,15 +50,32 @@ def wall_clock_factor(task: dict) -> int:
     return 2 if _doubled(task) else 1
 
 
-def _check_shape(index: int, raw) -> None:
+def _check_shape(index: int, raw, key: str = "files") -> None:
     if not isinstance(raw, list) or not raw:
-        raise ValueError(f"subtask[{index}].files phải là mảng chuỗi không rỗng")
+        raise ValueError(f"subtask[{index}].{key} phải là mảng chuỗi không rỗng")
     for item in raw:
         if not isinstance(item, str) or not item.strip():
-            raise ValueError(f"subtask[{index}].files phải là mảng chuỗi không rỗng")
+            raise ValueError(f"subtask[{index}].{key} phải là mảng chuỗi không rỗng")
         if (PurePosixPath(item).is_absolute() or PureWindowsPath(item).is_absolute()
                 or ".." in re.split(r"[\/]", item) or "\x00" in item):
-            raise ValueError(f"subtask[{index}].files path không hợp lệ: {item!r}")
+            raise ValueError(f"subtask[{index}].{key} path không hợp lệ: {item!r}")
+
+
+def _declared_extras(index: int, task: dict) -> list[str] | None:
+    """Extras implied by `allowed_scope` (primary must be listed); None when undeclared."""
+    if "allowed_scope" not in task:
+        return None
+    _check_shape(index, task["allowed_scope"], "allowed_scope")
+    scope = list(dict.fromkeys(_norm(item) for item in task["allowed_scope"]))
+    primary = _norm(str(task.get("file") or ""))
+    if primary not in scope:
+        raise ValueError(f"subtask[{index}].allowed_scope phải gồm file chính '{primary}'")
+    extras = [path for path in scope if path != primary]
+    if "files" in task:
+        _check_shape(index, task["files"])
+    if "files" in task and {_norm(item) for item in task["files"] if isinstance(item, str)} - {primary} != set(extras):
+        raise ValueError(f"subtask[{index}].files không khớp allowed_scope")
+    return extras
 
 
 def validate(plan: dict) -> None:
@@ -70,7 +87,10 @@ def validate(plan: dict) -> None:
         return
     owner: dict[str, int] = {}
     for index, task in enumerate(tasks):
-        if "files" in task:
+        declared = _declared_extras(index, task)
+        if declared is not None:
+            task["files"] = declared
+        if "files" in task and declared is None:
             _check_shape(index, task["files"])
         extras = _extras(task)
         if extras:
@@ -79,6 +99,8 @@ def validate(plan: dict) -> None:
             task.pop("files", None)
         if 1 + len(extras) > limit():
             raise ValueError(f"subtask[{index}] có {1 + len(extras)} file, tối đa {limit()}")
+        if declared is not None:
+            task["allowed_scope"] = files_of(task)
         for path in files_of(task):
             if path in owner and owner[path] != index:
                 raise ValueError(f"file '{path}' thuộc 2 subtask ({owner[path]} và {index}) — gộp thành 1")
