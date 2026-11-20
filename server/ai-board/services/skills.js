@@ -136,7 +136,7 @@ function defaults() {
   });
 }
 
-export function createSkillService(repo, { reviewText = reviewSkillText } = {}) {
+export function createSkillService(repo, { reviewText = reviewSkillText, labelsOn = () => false } = {}) {
   /** Same deterministic guardrail as request text; blocked skill text is never stored, approved or served. */
   const guardSkillText = (text, status = 400) => {
     const verdict = checkSkillText(text);
@@ -259,6 +259,7 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
       const now = Date.now();
       await repo.markApproved(version.id, actor.id, now);
       await repo.activateSkill(id, version.id, lint.task_types, actor.id, now);
+      await productionReceipt(item, version.id, actor.id, 'set', input.reason, now);
       if (version.proposal_id) await repo.acceptProposal(version.proposal_id, now);
       return read(id);
     });
@@ -335,9 +336,54 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
       if (!version.approved_at) throw bad('Only a previously approved version can be restored', 'version_not_approved', 409);
       if (item.active_version_id === version.id && item.status === 'approved') throw bad('Version is already active', 'already_active', 409);
       const lint = servable(item, version);
-      await repo.activateSkill(id, version.id, lint.task_types, actor.id, Date.now());
+      const now = Date.now();
+      await repo.activateSkill(id, version.id, lint.task_types, actor.id, now);
+      await productionReceipt(item, version.id, actor.id, 'rollback', input.reason, now);
       return read(id);
     });
+  }
+  const cleanReason = value => String(value ?? '').slice(0, 500);
+  async function productionReceipt(item, to, actorId, kind, reason, now) {
+    if (!labelsOn()) return;
+    const from = item.status === 'approved' ? item.active_version_id : null;
+    if (from !== to) await repo.insertLabelReceipt({ skillId: item.id, label: 'production', from, to, kind, actorId, reason: cleanReason(reason), now });
+  }
+  async function labels(id) {
+    if (!validId(id)) throw bad('Invalid skill id');
+    const item = await skill(id);
+    return { labels: { production: item.status === 'approved' ? item.active_version_id : null, staging: (await repo.stagingRow(item.id))?.version_id ?? null },
+      receipts: await repo.labelReceipts(item.id) };
+  }
+  async function moveStaging(actor, id, to, kind, reason, expectedFrom) {
+    return repo.tx(async () => {
+      await requireCurrentAdmin(actor);
+      await repo.lockSkill(id);
+      const item = await skill(id);
+      const from = (await repo.stagingRow(item.id, { locked: true }))?.version_id ?? null;
+      if (expectedFrom !== undefined && expectedFrom !== from) throw bad('Staging label moved since the diff was shown', 'skill_label_stale', 409);
+      const version = await repo.versionOf(item.id, to);
+      if (!version) throw bad('Unknown version', 'skill_version_unknown', 404);
+      if (version.rejected_at) throw bad('Version was rejected', 'version_rejected', 409);
+      if (from === version.id) return labels(id);
+      const now = Date.now();
+      await repo.setStaging(item.id, version.id, actor.id, now);
+      await repo.insertLabelReceipt({ skillId: item.id, label: 'staging', from, to: version.id, kind, actorId: actor.id, reason: cleanReason(reason), now });
+      return labels(id);
+    });
+  }
+  async function setStaging(actor, id, input) {
+    if (input.confirmed !== true) throw bad('Label confirmation required', 'confirmation_required');
+    const from = input.from;
+    if (!validId(id) || !validId(input.version_id) || !(from === null || validId(from))) throw bad('Invalid label change', 'skill_label_invalid');
+    return moveStaging(actor, id, Number(input.version_id), 'set', input.reason, from === null ? null : Number(from));
+  }
+  async function rollbackStaging(actor, id, input) {
+    if (input.confirmed !== true) throw bad('Rollback confirmation required', 'confirmation_required');
+    if (!validId(id)) throw bad('Invalid skill id');
+    const last = await repo.lastLabelReceipt(Number(id), 'staging');
+    const current = (await repo.stagingRow(Number(id)))?.version_id ?? null;
+    if (!last || !last.from_version_id || last.to_version_id !== current) throw bad('No previous staging version', 'skill_label_no_previous', 409);
+    return moveStaging(actor, id, last.from_version_id, 'rollback', input.reason, current);
   }
   async function checkRewriteLimits(actor, versionId, now) {
     const versionRows = await repo.rewriteRequestTimes('version_id', versionId, now - REWRITE_LIMITS.hour_ms);
@@ -605,5 +651,5 @@ export function createSkillService(repo, { reviewText = reviewSkillText } = {}) 
       return { summary, results };
     });
   }
-  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro, importBundle };
+  return { upload, read, approve, disable, active, list, countTokens, requestRewrite, promoteLegacyRewrite, reject, edit, rollback, labels, setStaging, rollbackStaging, claimRewrite, reportRewrite, createProposal, proposals, claimRetro, reportRetro, importBundle };
 }

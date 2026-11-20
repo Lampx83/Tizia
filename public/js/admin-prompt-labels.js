@@ -1,5 +1,5 @@
 // Prompts sub-tab of Skills & Tools: set production/staging labels against a shown diff, roll back, read receipts.
-import { lineDiff } from './admin-skills.js?v=skills-import1';
+import { lineDiff } from './admin-skills.js?v=skills-labels1';
 import { fmt } from './ai-board-clock.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

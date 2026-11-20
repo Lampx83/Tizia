@@ -2,9 +2,10 @@ import { createSkillService } from '../services/skills.js';
 import { createSkillRepository } from '../repositories/skills.js';
 import { WorkerContractError } from '../repositories/store-contract.js';
 import { asyncRoutes } from './async-routes.js';
+import { getSettings } from '../settings.js';
 
 export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, requireStrictCsrf, classifySkillText }) {
-  const route = asyncRoutes(router), skills = createSkillService(createSkillRepository(store.db), { reviewText: classifySkillText });
+  const route = asyncRoutes(router), skills = createSkillService(createSkillRepository(store.db), { reviewText: classifySkillText, labelsOn: () => getSettings().promptLabels });
   const actor = req => ({ id:req.user.id, role:req.user.role, sessionToken:req.user.token });
   const handle = fn => async (req,res,next) => {
     try { res.json(await fn(req)); }
@@ -19,6 +20,10 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
   for (const action of ['approve','disable']) route.post(`/api/admin/ai-board/skills/:id/${action}`, requireAuth, requireAdmin, requireStrictCsrf,
     handle(req => skills[action](actor(req),req.params.id,req.body || {})));
   route.post('/api/admin/ai-board/skills/:id/rollback', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.rollback(actor(req),req.params.id,req.body || {})));
+  const labelsOn = (_req, res, next) => getSettings().promptLabels ? next() : res.status(404).json({ error:'skill_labels_disabled' });
+  route.get('/api/admin/ai-board/skills/:id/labels', requireAuth, requireAdmin, labelsOn, handle(req => skills.labels(req.params.id)));
+  route.post('/api/admin/ai-board/skills/:id/labels/staging/set', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, handle(req => skills.setStaging(actor(req),req.params.id,req.body || {})));
+  route.post('/api/admin/ai-board/skills/:id/labels/staging/rollback', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, handle(req => skills.rollbackStaging(actor(req),req.params.id,req.body || {})));
   for (const [action,method] of [['rewrite','requestRewrite'],['reject','reject'],['edit','edit']]) route.post(`/api/admin/ai-board/skills/:id/versions/:versionId/${action}`,
     requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills[method](actor(req),req.params.id,req.params.versionId,req.body || {})));
 }

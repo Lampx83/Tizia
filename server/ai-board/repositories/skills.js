@@ -56,6 +56,13 @@ export function createSkillRepository(db) {
     insertVersion: row => db.insert(`INSERT INTO ai_skill_versions(skill_id,version,task_types_json,original_text,hash,token_count,lint_json,parent_version_id,created_by,created_at,eval_json,proposal_id,proposal_source,proposal_reason)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [row.skillId, row.version, JSON.stringify(row.taskTypes), row.text, row.hash, row.tokenCount, JSON.stringify(row.lint),
       row.parentId, row.actorId, row.now, row.evaluation, row.proposalId, row.source, row.reason]),
+    stagingRow: (skillId, { locked = false } = {}) => one(`SELECT version_id FROM ai_skill_labels WHERE skill_id=? AND label='staging'${locked ? lock() : ''}`, [skillId]),
+    setStaging: (skillId, versionId, actorId, now) => exec(`INSERT INTO ai_skill_labels(skill_id,label,version_id,updated_by,updated_at) VALUES(?,'staging',?,?,?)
+      ON CONFLICT(skill_id,label) DO UPDATE SET version_id=excluded.version_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`, [skillId, versionId, actorId, now]),
+    insertLabelReceipt: r => exec('INSERT INTO ai_skill_label_receipts(skill_id,label,from_version_id,to_version_id,kind,actor,reason,created_at) VALUES(?,?,?,?,?,?,?,?)',
+      [r.skillId, r.label, r.from ?? null, r.to, r.kind, r.actorId, r.reason, r.now]),
+    lastLabelReceipt: (skillId, label) => one('SELECT from_version_id,to_version_id FROM ai_skill_label_receipts WHERE skill_id=? AND label=? ORDER BY id DESC LIMIT 1', [skillId, label]),
+    labelReceipts: skillId => many('SELECT label,from_version_id,to_version_id,kind,actor,reason,created_at FROM ai_skill_label_receipts WHERE skill_id=? ORDER BY id DESC LIMIT 100', [skillId]),
     markApproved: (versionId, actorId, now) => exec('UPDATE ai_skill_versions SET approved_by=COALESCE(approved_by,?),approved_at=COALESCE(approved_at,?) WHERE id=?', [actorId, now, versionId]),
     markRejected: (versionId, actorId, now) => exec('UPDATE ai_skill_versions SET rejected_by=COALESCE(rejected_by,?),rejected_at=COALESCE(rejected_at,?) WHERE id=?', [actorId, now, versionId]),
     markOrigin: (versionId, origin) => exec('UPDATE ai_skill_versions SET origin=? WHERE id=?', [origin, versionId]),

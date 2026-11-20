@@ -1,6 +1,7 @@
 import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel, tokenShareText, estimateTokens } from './admin-skills-state.js?v=skills-ux2';
 import { fmt } from './ai-board-clock.js';
 import { createPoll } from './poll.js';
+import { mountSkillLabels } from './admin-skill-labels.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 // Native dialogs are suppressed in the in-app browser; an in-page <dialog> works everywhere.
@@ -219,7 +220,8 @@ export async function mountSkillsTab(host, { api, toast, openId } = {}) {
               <div class="toolbar"><button class="btn primary" type="submit">Lưu phiên bản mới</button><button class="btn" type="button" data-edit-cancel>Đóng</button></div></form>` : ''}
           </div>
         </li>`;
-      }).join('')}</ol>`;
+      }).join('')}</ol><div data-skill-labels></div>`;
+    if (admin && item.id) mountSkillLabels(details.querySelector('[data-skill-labels]'), { api, toast, item, versions:data.versions, refresh, lineDiff }).catch(() => {});
     paintLive(details.querySelector('[data-live-status]'), data.versions);
     paintRow(item.id ?? item.name, data.versions);
     if (restore) {
