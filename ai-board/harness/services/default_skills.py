@@ -12,7 +12,8 @@ from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[1] / 'skills'
 REVIEW_AXES = ROOT / 'proposed' / 'review-two-axes' / 'SKILL.md'
-VARIANTS = {'review-two-axes': REVIEW_AXES, **{f'{n}-frame': ROOT / 'proposed' / f'{n}-frame' / 'SKILL.md' for n in ('test', 'review', 'all')}}
+VARIANTS = {'review-two-axes': REVIEW_AXES, **{f'{n}-frame': ROOT / 'proposed' / f'{n}-frame' / 'SKILL.md' for n in ('test', 'review', 'all')},
+            'test-unified': ROOT / 'proposed' / 'test-unified' / 'SKILL.md'}
 TASK_TYPES = {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'}
 FIELDS = {'name', 'description', 'task_type', 'source', 'version', 'max_tokens'}
 # Rubric tham chiếu (soát elevation) có hash trong lock nhưng không thuộc catalog chọn theo task_type.
@@ -203,7 +204,8 @@ def review_axes_block(selected=None):
     """Biến thể trong node đã chọn thành block advisory; '' khi không bật."""
     if selected is None:
         selected = select('gate4_review', {})
-    return ''.join('\n\n' + admin_text(s) for s in selected if s.name in VARIANTS)
+    from services import skill_format
+    return ''.join('\n\n' + admin_text(replace(s, body=skill_format.render(s.body))) for s in selected if s.name in VARIANTS)
 
 
 def pin(role, context=None):

@@ -153,6 +153,7 @@ class Settings(BaseSettings):
     gate25_fixes: Annotated[frozenset[str], NoDecode] = DEFAULT_GATE25_FIXES
     gate3_guards: Annotated[frozenset[str], NoDecode] = frozenset()
     skill_variant: Annotated[tuple[str, ...], NoDecode] = ()
+    unified_skill_format: bool = False
     backend_contexts_surface_list: Annotated[frozenset[str], NoDecode] = APPROVED_SURFACE_CONTEXTS
 
     # model, URL, đường dẫn

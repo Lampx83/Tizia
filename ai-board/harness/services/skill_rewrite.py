@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 from runtime import meter, prompt_roles
 from runtime.budget import Budget, BudgetExhausted
-from services import default_skills, skill_frontmatter
+from services import default_skills, skill_format, skill_frontmatter
+from settings import get_settings
 
 CLAIM = '/api/ai-board/worker/skill-rewrite/claim'
 REPORT = '/api/ai-board/worker/skill-rewrite/report'
@@ -108,10 +109,13 @@ def extract(deps, budget, block, system):
 
 
 def smoke(deps, budget, system, rewritten, job):
+    unified = get_settings().unified_skill_format and (skill_format.is_unified(rewritten) or skill_format.is_unified(job.get('original_text') or ''))
     try:
         parsed = default_skills.parse(rewritten)
     except ValueError:
-        return []
+        return [{'kind': 'format', 'ok': False, 'tokens': None, 'reason': 'rewrite is not a valid skill'}] if unified else []
+    if unified and (errors := skill_format.check(rewritten)):
+        return [{'kind': 'format', 'ok': False, 'tokens': None, 'reason': '; '.join(errors)}]
     block = default_skills.admin_text(SimpleNamespace(name=parsed.name, version=job['version'], body=parsed.body))
     kinds = [k for k in job['task_types'] if k != 'all'][:MAX_SMOKE_KINDS] or ['backend']
     results = []
