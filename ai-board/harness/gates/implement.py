@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import services.context as repo_context
 from services import file_context
 import path_policy
-from gates import change_class, gate3_guards, plan_rules, subtask_contract
+from gates import change_class, gate3_guards, plan_rules, subtask_context, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, model_json, network_request, state_file, subtask_files, tool_loop
@@ -705,7 +705,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
     if dep_lines := _dep_file_context(subtask, state, repo):
         context = f"{context}\n{dep_lines}" if context else dep_lines.lstrip("\n")
     trace = getattr(deps, "trace", None)
-    contract = (subtask_contract.block(state.get("plan") or {}) or "") + subtask_contract.warnings_block(state.get("form_warnings")) + plan_rules.session_block(state) + state_file.block(state) or None
+    contract = (subtask_contract.block(state.get("plan") or {}) or "") + subtask_contract.warnings_block(state.get("form_warnings")) + plan_rules.session_block(state) + state_file.block(state) + subtask_context.block(state, subtask) or None
     prompt = build_prompt(subtask, state.get("repair_reason"), context, lessons,
                              produced=sorted((state.get("produced") or {}).keys()), contract=contract)
     feedback = ""
@@ -885,7 +885,7 @@ def _fan_out(tasks: list[tuple], *, state: dict, deps, budget, texts: dict, repo
         except BudgetExhausted as error:  # root allowance cạn giữa lượt: không để cả gate văng lỗi
             return _budget_stop(subtask, error)
 
-    if len(tasks) <= 1 or fanout_limit() == 1:
+    if len(tasks) <= 1 or fanout_limit() == 1 or subtask_context.enabled():
         return {order: guarded(child, subtask) for order, child, subtask in tasks}
     results = {}
     with ThreadPoolExecutor(max_workers=min(fanout_limit(), len(tasks)), thread_name_prefix="gate3") as pool:
@@ -967,6 +967,10 @@ def run(state: dict, deps, budget, *, repo_dir: str | Path | None = None,
             "commit": repo_at_commit.resolve(repo),
         })
         diff_child.append(child)
+        if subtask_context.enabled():
+            entry = subtask_context.record(state, subtask, out)
+            if trace:
+                trace.note("tool", "subtask done", f"{len(state['subtask_summaries'])}/{len(prepared)} | {entry['summary']}")
         state.setdefault("produced", {})[subtask["file"]] = _progress_entry(
             {"test_file": out["test_file"], "code": out["code"], "test": out["test"],
              **({"extra_files": out["extra_files"]} if out.get("extra_files") else {})}, model)
