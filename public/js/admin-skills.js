@@ -1,4 +1,4 @@
-import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel, tokenShareText, estimateTokens } from './admin-skills-state.js?v=skills-ux2';
+import { NOTE_MAX, POLL_MS, REWRITE, errorText, hasActiveRewrite, liveVersion, rewriteStatus, rowPill, shouldPoll, tokenLabel, tokenShareText, estimateTokens } from './admin-skills-state.js?v=skills-ux3';
 import { fmt } from './ai-board-clock.js';
 import { createPoll } from './poll.js';
 import { mountSkillLabels } from './admin-skill-labels.js';

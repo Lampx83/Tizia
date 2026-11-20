@@ -77,9 +77,23 @@ const SERVER_TEXT = {
 };
 // Message from the server only when it is already Vietnamese (guardrail and rate-limit texts); otherwise a mapped or caller text.
 export const errorText = (done, fallback) => {
+  if (done?.data?.error === 'prompt_promotion_refused') {
+    const why = done.data.message;
+    return (why === 'no_eval_receipt' ? 'Chưa có receipt eval đạt cho phiên bản này so với baseline hiện tại.' : `Eval không đạt: ${why}.`) + ' Nhãn production giữ nguyên.';
+  }
   const mapped = SERVER_TEXT[done?.data?.error];
   if (mapped) return mapped;
   const message = done?.data?.message;
   return typeof message === 'string' && /[^\x00-\x7f]/.test(message) ? message : fallback;
 };
 export const toastMs = (message, kind) => Math.min(10000, Math.max(kind === 'err' ? 6000 : 2400, 1500 + String(message ?? '').length * 55));
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const sh = hash => hash ? hash.slice(0, 12) : '(chưa đặt)';
+/** Eval receipts and refused promotions as two collapsible lists; '' when both empty. */
+export const evalEvidenceHtml = ({ eval_receipts = [], refusals = [] }, fmt) => {
+  const evals = eval_receipts.map(r => `<li>${esc(fmt(r.created_at))} · ${esc(r.name)}: ${esc(sh(r.prompt_hash))} so với ${esc(sh(r.baseline_hash))} · ${r.passed ? 'đạt' : 'không đạt'}${r.reasons ? ' · ' + esc(r.reasons) : ''}</li>`);
+  const refused = refusals.map(r => `<li>${esc(fmt(r.created_at))} · ${esc(r.name)}/${esc(r.label)}: ${esc(sh(r.from_hash))} → ${esc(sh(r.to_hash))} · bị từ chối: ${esc(r.reason)}</li>`);
+  return (evals.length ? `<details><summary>Receipt eval (${evals.length})</summary><ul>${evals.join('')}</ul></details>` : '')
+    + (refused.length ? `<details><summary>Từ chối (${refused.length})</summary><ul>${refused.join('')}</ul></details>` : '');
+};

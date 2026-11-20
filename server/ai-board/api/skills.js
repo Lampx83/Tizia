@@ -22,6 +22,7 @@ export function attachSkillRoutes(router, { store, requireAuth, requireAdmin, re
   route.post('/api/admin/ai-board/skills/:id/rollback', requireAuth, requireAdmin, requireStrictCsrf, handle(req => skills.rollback(actor(req),req.params.id,req.body || {})));
   const labelsOn = (_req, res, next) => getSettings().promptLabels ? next() : res.status(404).json({ error:'skill_labels_disabled' });
   route.get('/api/admin/ai-board/skills/:id/labels', requireAuth, requireAdmin, labelsOn, handle(req => skills.labels(req.params.id)));
+  route.post('/api/admin/ai-board/skills/:id/labels/eval-receipts', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, handle(req => skills.recordEval(actor(req),req.params.id,req.body || {})));
   route.post('/api/admin/ai-board/skills/:id/labels/staging/set', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, handle(req => skills.setStaging(actor(req),req.params.id,req.body || {})));
   route.post('/api/admin/ai-board/skills/:id/labels/staging/rollback', requireAuth, requireAdmin, requireStrictCsrf, labelsOn, handle(req => skills.rollbackStaging(actor(req),req.params.id,req.body || {})));
   for (const [action,method] of [['rewrite','requestRewrite'],['reject','reject'],['edit','edit']]) route.post(`/api/admin/ai-board/skills/:id/versions/:versionId/${action}`,

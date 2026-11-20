@@ -109,3 +109,20 @@ test('toastMs keeps errors and long messages on screen longer, capped at 10 s', 
   assert.ok(toastMs('x'.repeat(100), 'ok') > 2400);
   assert.equal(toastMs('x'.repeat(500), 'err'), 10000);
 });
+
+test('promotion refusal text names the missing or failing receipt and says the label stayed', async () => {
+  const { errorText: text, evalEvidenceHtml } = await import('../public/js/admin-skills-state.js');
+  const none = text({ data: { error: 'prompt_promotion_refused', message: 'no_eval_receipt' } }, 'x');
+  assert.match(none, /Chưa có receipt eval đạt/);
+  assert.match(none, /giữ nguyên/);
+  const failed = text({ data: { error: 'prompt_promotion_refused', message: 'confirm_false_block_0.06_not_below_0.05' } }, 'x');
+  assert.match(failed, /confirm_false_block_0\.06_not_below_0\.05/);
+  assert.equal(text({ data: { error: 'other' } }, 'fallback'), 'fallback');
+  const html = evalEvidenceHtml({ eval_receipts: [{ name: 'a<b', prompt_hash: 'a'.repeat(64), baseline_hash: 'b'.repeat(64), passed: false, reasons: 'tune_x', created_at: 1 }],
+    refusals: [{ name: 'a<b', label: 'production', from_hash: null, to_hash: 'c'.repeat(64), reason: 'no_eval_receipt', created_at: 2 }] }, () => 'T');
+  assert.match(html, /Receipt eval \(1\)/);
+  assert.match(html, /Từ chối \(1\)/);
+  assert.match(html, /không đạt/);
+  assert.ok(!html.includes('a<b'), 'names are escaped');
+  assert.equal(evalEvidenceHtml({ eval_receipts: [], refusals: [] }, () => 'T'), '');
+});
