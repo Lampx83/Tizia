@@ -2,7 +2,7 @@
 import dataclasses
 import subprocess
 
-from verification import functional
+from gate5 import functional
 from runtime import meter
 import pytest
 import tools

@@ -2,7 +2,7 @@
 import json
 
 from evaluation import replay_suspect_checks as replay
-from verification import checks
+from gate5 import checks
 
 STYLE = {"primitive": "computed_style", "path": "/x.html", "selector": "h1", "prop": "color", "value": "#ff0000"}
 TEXT = {"primitive": "text_present", "path": "/x.html", "text": "Mua ngay"}

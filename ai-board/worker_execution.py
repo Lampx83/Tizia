@@ -16,7 +16,7 @@ from runtime import feedback_cap, loop_guard, progress, stop_report  # noqa: E40
 from runtime.limits import config_sha256, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
 from gates import ready_oracle  # noqa: E402
-from verification import checks  # noqa: E402
+from gate5 import checks  # noqa: E402
 import path_policy  # noqa: E402
 
 

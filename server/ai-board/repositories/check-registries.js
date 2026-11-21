@@ -8,7 +8,7 @@ const fail = (code, status = 409) => { throw new WorkerContractError(code, statu
 const sorted = (value) => Array.isArray(value) ? value.map(sorted)
   : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])])) : value;
 
-/** Same bytes as runtime canonical_hash in verification/check_registry.py: sorted keys, compact separators, raw UTF-8. */
+/** Same bytes as runtime canonical_hash in gate5/check_registry.py: sorted keys, compact separators, raw UTF-8. */
 export const canonicalHash = (registry) => createHash('sha256').update(JSON.stringify(sorted(registry)), 'utf8').digest('hex');
 
 function check(registry) {

@@ -32,7 +32,7 @@ from pathlib import Path
 
 from repositories import repo_at_commit
 from services import context
-from verification import functional
+from gate5 import functional
 import path_policy
 from gates import acceptance_structure, best_match, grounding_paths, plan_rules, react_plan, subtask_contract
 from gates.scope_check import load_capability_names

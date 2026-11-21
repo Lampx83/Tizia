@@ -1,6 +1,6 @@
 import re
 
-from verification import functional as f
+from gate5 import functional as f
 
 FAQ = {"request_title": "Thêm trang FAQ cơ sở dữ liệu", "request_detail": "Trang mới có ô tìm kiếm câu hỏi, ô tìm kiếm hoạt động"}
 SEARCH_HISTORY = {"request_title": "Lịch sử tìm kiếm", "request_detail": "Hiển thị lịch sử tìm kiếm gần đây"}

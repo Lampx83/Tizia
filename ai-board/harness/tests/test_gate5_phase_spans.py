@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from gates import verify
+from gate5 import verify
 from test_gate5_check_spans import Trace
 from test_gate_5_verify import FakeRunner, checkout, state
-from verification import functional
+from gate5 import functional
 from verification import sandbox as sandbox_verify
 
 GUEST_ORDER = ["gate5 setup config", "gate5 setup build", "gate5 setup app_up", "gate5 setup ready",

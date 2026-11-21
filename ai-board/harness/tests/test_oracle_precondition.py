@@ -1,7 +1,7 @@
 import sys
 import types
 
-from verification import functional
+from gate5 import functional
 
 
 class _Page:

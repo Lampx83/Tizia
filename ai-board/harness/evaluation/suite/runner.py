@@ -41,7 +41,7 @@ def provenance(root_repo: Path, model: str, router) -> dict:  # router None = in
     git = lambda *a: subprocess.run(["git", "-C", str(root_repo), *a], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()  # noqa: E731
     harness = root_repo / "ai-board" / "harness"
     suite_files = sorted(HERE.glob("*.py")) + [HERE / "queue_fixture_sqlite.mjs"]
-    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").glob("*.py")) + sorted((harness / "verification").glob("*.py"))
+    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").glob("*.py")) + sorted((harness / "verification").glob("*.py")) + sorted((harness / "gate5").glob("*.py"))
     return {
         "ref": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain", "--untracked-files=no")),
         "model": model, "routing_catalog": _sha(root_repo / "server" / "ai-board" / "model-routing.json"),

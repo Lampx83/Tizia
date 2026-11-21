@@ -4,7 +4,7 @@ from dataclasses import replace
 from gates import static_check
 from runtime import pipeline as main
 from runtime import repair_class
-from verification import functional
+from gate5 import functional
 
 
 def ask(text):

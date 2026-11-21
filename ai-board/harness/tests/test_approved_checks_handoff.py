@@ -10,7 +10,7 @@ import pytest
 
 import worker
 from repositories import plan_session
-from verification import checks
+from gate5 import checks
 
 CHECK = {"primitive": "text_present", "path": "/x.html", "text": "Chào"}
 PLAN = {"capabilities": ["public.ui"],

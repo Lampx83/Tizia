@@ -3,7 +3,7 @@ import pytest
 
 from runtime import limits, sandbox_tool
 from settings import get_settings
-from verification import db_check
+from gate5 import db_check
 from verification.sandbox import SandboxError
 
 SQL = "CREATE TABLE IF NOT EXISTS faq_items (id bigserial PRIMARY KEY);"

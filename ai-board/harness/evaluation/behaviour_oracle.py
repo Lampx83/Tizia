@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from evaluation import eval_corpus
-from verification import checks as gate_checks
+from gate5 import checks as gate_checks
 
 PREFIX = "oracle-"
 
@@ -50,7 +50,7 @@ class Unrunnable(RuntimeError):
 
 def verdict(items: list[dict], file: str, html: str | None, dom_probe=None) -> bool:
     """All checks green on one served page, run by the Gate 5 interpreter. html None = page absent (404)."""
-    from gates import verify
+    from gate5 import verify
     with tempfile.TemporaryDirectory(prefix="oracle-site-") as tmp:
         site = Path(tmp)
         if html is not None:

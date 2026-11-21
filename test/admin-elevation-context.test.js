@@ -276,7 +276,7 @@ test('the queue carries a read-only card for a waiting ticket and the registry l
     assert.match(card.why, /money/);
     assert.ok(card.evidence.some((e) => e.source === 'guard:money'));
 
-    const registry = JSON.parse(readFileSync(new URL('../ai-board/harness/verification/check_registry.json', import.meta.url), 'utf8'));
+    const registry = JSON.parse(readFileSync(new URL('../ai-board/harness/gate5/check_registry.json', import.meta.url), 'utf8'));
     await createCheckRegistryStore(db.d).report(registry, 'w1');
     const { registries } = await (await srv.get('/api/admin/ai-board/check-registries')).json();
     assert.deepEqual(registries[0].card.options.map((o) => [o.label, o.available]), [['duyệt', true], ['từ chối', false], ['sửa rồi duyệt', false]]);

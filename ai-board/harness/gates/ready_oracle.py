@@ -5,8 +5,8 @@ from pathlib import Path
 
 from gates import acceptance_structure, gate3_guards, static_check
 from runtime import subtask_files
-from verification import functional
-from verification.guest_inputs import GuestInputMissing
+from gate5 import functional
+from gate5.guest_inputs import GuestInputMissing
 
 NO_ORACLE = "no deterministic check: the request pins no literal text"
 

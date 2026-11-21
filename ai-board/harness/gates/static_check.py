@@ -24,7 +24,7 @@ import path_policy
 
 from services import candidate
 from security import classifier, spotlight
-from verification import functional
+from gate5 import functional
 from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings

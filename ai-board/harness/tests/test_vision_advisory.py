@@ -6,10 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from gates import verify, vision_advisory
+from gates import vision_advisory
+from gate5 import verify
 from runtime.budget import BudgetExhausted
 from test_gate_5_verify import FakeRunner, checkout, state
-from verification import functional
+from gate5 import functional
 
 REQUEST = 'Đổi nút #sgf-send từ "Gửi tới Ban điều hành" thành "Gửi yêu cầu"'
 DIFF = "SECRET_DIFF_LINE_xyz"

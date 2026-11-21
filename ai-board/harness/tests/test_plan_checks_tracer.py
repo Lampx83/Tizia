@@ -1,8 +1,8 @@
 """Check do plan (LF/213, LF/214): soát tham số ở gate 2.5; gate 5 đỏ→xanh base/candidate; cờ tắt thì không đổi gì."""
 import pytest
 
-from gates import verify
-from verification import checks
+from gate5 import verify
+from gate5 import checks
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 
 BASE_PAGE = b"<h1>cu</h1>\n"
@@ -17,7 +17,7 @@ def flag_on(monkeypatch):
 
 @pytest.fixture
 def pages(monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(verify, "_shot_pages", lambda *_: [])
     monkeypatch.setattr(functional, "run", lambda *_, **__: {"probe_id": functional.QUEUE_PROBE, "passed": True})
 
@@ -219,7 +219,7 @@ def test_node_test_red_on_candidate_without_base_is_needs_review_not_block(tmp_p
 
 
 def _guest_state(tmp_path, monkeypatch, flag):
-    from verification import guest_inputs
+    from gate5 import guest_inputs
     root = make_checkout(tmp_path)
     worker = make_state(root, visual=True)
     worker["plan"] = {"subtasks": [{"file": "public/x.html", "checks": [TEXT]}]}

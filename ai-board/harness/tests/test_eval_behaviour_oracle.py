@@ -11,7 +11,7 @@ import pytest
 from evaluation import behaviour_oracle as bo
 from evaluation import eval_corpus
 from evaluation import gold as eval_gold
-from verification import guest_inputs
+from gate5 import guest_inputs
 from test_eval_gold import GOOD, EditModels
 from runtime.pipeline import Deps
 

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from runtime import pipeline as main
-from gates import verify
+from gate5 import verify
 REAL_HTTP_PROBE = verify.probe_http
 
 
@@ -19,7 +19,7 @@ REAL_HTTP_PROBE = verify.probe_http
 def served(monkeypatch):
     """Default isolated container serves every fixture public file as checked out."""
     monkeypatch.setattr(verify, "probe_http", lambda _url: (200, b"<h1>changed</h1>\n// x\n"))
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: {'probe_id': functional.QUEUE_PROBE, 'passed': True})
 
 
@@ -739,7 +739,7 @@ def test_js_change_shoots_the_pages_that_load_it(tmp_path):
 
 
 def test_oracle_gets_the_request_and_the_pages_to_look_at(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     seen = []
     monkeypatch.setattr(functional, 'run', lambda base, probe, fixture=None, state=None, pages=(): seen.append((probe, state, list(pages)))
                         or {'probe_id': probe, 'passed': True})
@@ -765,7 +765,7 @@ def test_failing_generated_test_is_advisory_when_a_harness_oracle_decides(tmp_pa
 
 
 def test_oracle_failure_still_blocks_even_when_the_generated_test_also_failed(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, "run", lambda *_, **__: {"probe_id": functional.TEXT_PROBE, "passed": False,
                                                               "reason": "Chữ người dùng yêu cầu không hiển thị trên trang: 'Xin chào'"})
     out = verify.run(_oracle_state(tmp_path), runner=FakeRunner(fail="generated_test"))
@@ -946,7 +946,7 @@ def _defer_state(tmp_path, *, detail="Kiểm tra: node --test test/generated.tes
 
 
 def test_oracle_fail_with_user_acceptance_generated_tests_and_smoke_green_is_needs_review(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(ORACLE_FAIL))
     out = verify.run(_defer_state(tmp_path), runner=FakeRunner())
     assert out["blocked"] is False
@@ -955,7 +955,7 @@ def test_oracle_fail_with_user_acceptance_generated_tests_and_smoke_green_is_nee
 
 
 def test_oracle_fail_still_blocks_without_user_stated_acceptance_or_when_acceptance_fails(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(ORACLE_FAIL))
     for index, kwargs in enumerate(({"detail": "không nêu lệnh"}, {"acceptance": ()})):
         (tmp_path / str(index)).mkdir()
@@ -982,7 +982,7 @@ def _no_oracle_state(tmp_path, **extra):
 
 
 def test_no_oracle_with_green_generated_tests_smoke_and_acceptance_is_needs_review(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
     out = verify.run(_no_oracle_state(tmp_path), runner=FakeRunner())
     assert out["blocked"] is False and out["failure_class"] is None
@@ -993,7 +993,7 @@ def test_no_oracle_with_green_generated_tests_smoke_and_acceptance_is_needs_revi
 
 
 def test_no_oracle_still_blocks_when_generated_tests_or_smoke_fail(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
     for fail in ("generated_test", "smoke"):
         (tmp_path / fail).mkdir()
@@ -1015,7 +1015,7 @@ def _no_test_state(tmp_path, **extra):
 
 
 def test_no_oracle_without_generated_test_is_needs_review_when_flag_on(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
     monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "1")
     out = verify.run(_no_test_state(tmp_path), runner=FakeRunner())
@@ -1025,14 +1025,14 @@ def test_no_oracle_without_generated_test_is_needs_review_when_flag_on(tmp_path,
 
 
 def test_no_oracle_without_generated_test_still_blocks_when_flag_off(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
     monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "0")
     assert verify.run(_no_test_state(tmp_path), runner=FakeRunner())["blocked"] is True
 
 
 def test_no_oracle_flag_on_still_blocks_on_smoke_or_generated_test_failure(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, 'run', lambda *_, **__: dict(NO_ORACLE))
     monkeypatch.setenv("AI_BOARD_NO_ORACLE_REVIEW_ANY", "1")
     (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir()
@@ -1153,7 +1153,7 @@ def server_only(tmp_path, diff=ROUTE_DIFF):
 
 
 def test_server_only_diff_with_a_new_route_is_probed_over_http(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     seen = []
     monkeypatch.setattr(functional, "_fetch", lambda method, url: seen.append((method, url)) or (200, b'{"ok":true}'))
     runner = FakeRunner()
@@ -1166,7 +1166,7 @@ def test_server_only_diff_with_a_new_route_is_probed_over_http(tmp_path, monkeyp
 
 
 def test_server_only_route_that_does_not_answer_blocks(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, "_fetch", lambda method, url: (404, b"nope"))
     s = server_only(tmp_path)
     out = verify.run(s, runner=FakeRunner(), functional_probe=lambda base, _: functional.run_route(base, s))
@@ -1174,7 +1174,7 @@ def test_server_only_route_that_does_not_answer_blocks(tmp_path, monkeypatch):
 
 
 def test_server_only_route_probe_that_cannot_run_is_a_plan_failure(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
 
     def refuse(method, url):
         raise OSError("refused")
@@ -1192,7 +1192,7 @@ def test_server_only_diff_without_a_route_is_still_a_plan_failure_before_docker(
 
 
 def test_server_only_route_probe_keeps_isolation_secret_check_and_teardown(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, "_fetch", lambda method, url: (200, b"{}"))
     leaky = FakeRunner(container_env="NODE_ENV=production\nOLLAMA_SECKEY=do-not-log\n")
     s = server_only(tmp_path)
@@ -1207,7 +1207,7 @@ def test_server_only_route_probe_keeps_isolation_secret_check_and_teardown(tmp_p
 
 
 def test_server_only_route_is_probed_when_the_request_names_a_text_oracle(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, "_fetch", lambda method, url: (200, b"{}"))
     s = server_only(tmp_path)
     s["request_detail"] = "Thêm API trả 'Tizia cập nhật' cho chân trang"
@@ -1219,7 +1219,7 @@ def test_server_only_route_is_probed_when_the_request_names_a_text_oracle(tmp_pa
 def test_opened_context_runs_its_related_test_and_route_probe(tmp_path, monkeypatch):
     import settings
     from runtime import levels
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE", "1")
     monkeypatch.setenv("AI_BOARD_BACKEND_CONTEXTS_SURFACE_LIST", "x")
     settings.reset_settings()

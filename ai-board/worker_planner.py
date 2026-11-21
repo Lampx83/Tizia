@@ -155,7 +155,7 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
 
 def _checks_by_file(plan: dict) -> dict[str, list[dict]]:
     """Plan checks per normalised file, read before the same-file merge (it keeps only the first subtask's)."""
-    from verification import checks
+    from gate5 import checks
     out: dict[str, list[dict]] = {}
     for subtask in plan.get("subtasks") or []:
         if isinstance(subtask, dict) and subtask.get("file"):

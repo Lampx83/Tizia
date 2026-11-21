@@ -80,7 +80,8 @@ def request_type(pr: dict) -> str | None:
 def check(tuple_: dict, number: int, request_type: str | None = None) -> dict:
     """Gate 4 guard + gate 5 smoke on the built candidate. Return JSON-safe results.
     request_type 'self': guard theo vùng tự sửa; không Docker smoke (cổng 5 của self là eval, bằng chứng trong PR)."""
-    from gates import guard, static_check, verify
+    from gates import guard, static_check
+    from gate5 import verify
 
     checkout = tuple_["checkout"]
     diff = _git(checkout, "diff", "--no-ext-diff", tuple_["base_sha"], "HEAD")

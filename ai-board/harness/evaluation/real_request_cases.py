@@ -19,7 +19,7 @@ from pathlib import Path
 from evaluation import behaviour_oracle as bo
 from evaluation import eval_corpus, failed_cases
 from gates import guard
-from verification import checks as gate_checks
+from gate5 import checks as gate_checks
 
 PENDING, APPROVED = "pending_approval", "approved"
 PIN = re.compile(r"[0-9a-f]{40}")

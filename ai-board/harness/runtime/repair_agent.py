@@ -53,7 +53,7 @@ def routable(failure_class) -> bool:
 
 
 def visual(result: dict) -> bool:
-    """Gate 5 blocked because the new UI is worse than the base (reason prefix of gates/verify.py)."""
+    """Gate 5 blocked because the new UI is worse than the base (reason prefix of gate5/verify.py)."""
     return "giao diện tệ hơn" in str(result.get("reason") or "")
 
 

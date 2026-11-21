@@ -79,7 +79,7 @@ RUNNABLE_TABLE = [
 
 @pytest.mark.parametrize("text,on,off", RUNNABLE_TABLE)
 def test_one_verify_classifier_for_every_consumer(monkeypatch, text, on, off):
-    from gates import verify
+    from gate5 import verify
     for flag, want in ((True, on), (False, off)):
         _flag(monkeypatch, flag)
         assert brainstorm.is_runnable(text) is want
@@ -88,7 +88,7 @@ def test_one_verify_classifier_for_every_consumer(monkeypatch, text, on, off):
 
 
 def test_gate5_keeps_grep_acceptance_gate1_accepted(monkeypatch):
-    from gates import verify
+    from gate5 import verify
     _flag(monkeypatch, True)
     item = "grep -q 'x' public/a.html"
     assert verify.acceptance_commands({"acceptance": [item, "mô tả"]}) == [item]

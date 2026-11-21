@@ -12,7 +12,7 @@ if str(AI_BOARD_DIR) not in sys.path:
 import worker_execution  # noqa: E402
 import worker_planner  # noqa: E402
 from runtime import stop_report  # noqa: E402
-from verification import checks  # noqa: E402
+from gate5 import checks  # noqa: E402
 from test_gate_feedback_cap import _execution  # noqa: E402
 
 CHECK = {"primitive": "text_present", "path": "/x.html", "text": "Liên hệ"}

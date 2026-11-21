@@ -2,7 +2,7 @@
 import re
 
 from settings import get_settings
-from verification import functional
+from gate5 import functional
 
 _RULE_OPEN = re.compile(r'^\s*([^{}@:]+?)\s*\{\s*$')
 _RULE_CLOSE = re.compile(r'^\s*\}\s*$')
@@ -96,8 +96,8 @@ def run_style(base, state, fixture, pages):
     if fixture is None:
         return unavailable('Session fixture unavailable')
     from playwright.sync_api import sync_playwright
-    from gates import visual
-    from gates.verify import _launch
+    from gate5 import visual
+    from gate5.verify import _launch
     observed = [[0, 0] for _ in checks]
     with sync_playwright() as p:
         browser = _launch(p)

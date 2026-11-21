@@ -16,9 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from gates.gate5_session import missing_tool  # noqa: E402
+from gate5.session import missing_tool  # noqa: E402
 from runtime import loop_guard  # noqa: E402
-from verification import checks  # noqa: E402
+from gate5 import checks  # noqa: E402
 from worker_execution import near_identical  # noqa: E402
 
 INFRA, SUSPECT, NEAR, WRONG = checks.INFRA, checks.CHECK_SUSPECT, "near_identical", checks.CANDIDATE_WRONG

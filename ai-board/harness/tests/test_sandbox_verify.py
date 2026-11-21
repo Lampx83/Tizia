@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from verification import guest_inputs, sandbox as sandbox_verify
+from verification import sandbox as sandbox_verify
+from gate5 import guest_inputs
 from gates import gate5_guest
-from gates import verify as gate_verify
+from gate5 import verify as gate_verify
 from verification.sandbox import SandboxError
 
 
@@ -437,7 +438,7 @@ def test_every_state_key_the_guest_gate_reads_is_uploaded():
     import re
     root = Path(__file__).resolve().parents[1]
     read = set()
-    for rel in ("gates/verify.py", "verification/functional.py", "gates/visual.py"):
+    for rel in ("gate5/verify.py", "gate5/functional.py", "gate5/visual.py"):
         text = (root / rel).read_text(encoding="utf-8")
         read |= set(re.findall(r"""state(?:\.get\(|\[)["']([a-z_]+)["']""", text))
         read |= set(re.findall(r"""guest_input\(state, ["']([a-z_]+)["']""", text))

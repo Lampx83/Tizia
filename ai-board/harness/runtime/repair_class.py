@@ -7,7 +7,7 @@ import shlex
 
 from runtime import network_request
 from settings import get_settings
-from verification import checks
+from gate5 import checks
 
 REPAIR_CODE, REPLAN, STOP_ADMIN, RETRY = "repair_code", "replan", "stop_admin", "retry"
 _SCOPE = re.compile(r"out of scope|ngoài scope|ScopeViolation|allowed_scope|import cấm", re.I)

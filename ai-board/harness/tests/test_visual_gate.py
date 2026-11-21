@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from gates import visual
+from gate5 import visual
 
 pytestmark = pytest.mark.slow
 
@@ -209,7 +209,7 @@ def test_settle_waits_for_the_load_event_before_the_audit_measures():
 
 def test_capture_screenshot_sends_the_student_session_cookie(tmp_path):
     pytest.importorskip("playwright.sync_api")
-    from gates import verify
+    from gate5 import verify
 
     seen = []
 
@@ -252,7 +252,7 @@ def _png_size(path):
 
 def test_capture_screenshot_frames_the_changed_element_far_below_the_fold(tmp_path):
     pytest.importorskip("playwright.sync_api")
-    from gates import verify
+    from gate5 import verify
 
     html = ("<meta charset=utf-8><style>body{margin:0}</style><div style='height:2500px'></div>"
             "<h2 id=t style='margin:0;padding:10px;background:#fc0'>Tiến độ học tập</h2><div style='height:600px'></div>").encode()
@@ -284,7 +284,7 @@ def test_capture_screenshot_frames_the_changed_element_far_below_the_fold(tmp_pa
 def test_logged_in_shots_do_not_open_the_welcome_popups(tmp_path):
     pytest.importorskip("playwright.sync_api")
     import datetime
-    from gates import verify
+    from gate5 import verify
 
     seen = []
 
@@ -340,7 +340,7 @@ def test_changed_texts_are_the_visible_words_of_the_html_lines_added_or_removed(
 
 def test_capture_screenshot_frames_a_text_edit_that_has_no_id_or_class(tmp_path):
     pytest.importorskip("playwright.sync_api")
-    from gates import verify
+    from gate5 import verify
 
     html = ("<meta charset=utf-8><style>body{margin:0}</style><div style='height:2500px'></div>"
             "<p>Vũ trụ giáo dục · <a href='#'>← Về trang chọn trường</a></p><div style='height:600px'></div>").encode()

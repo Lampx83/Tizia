@@ -60,7 +60,7 @@ from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
 from security import spotlight
 from settings import DEFAULT_GATE25_FIXES, get_settings
-from verification import checks
+from gate5 import checks
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_validate.md").read_text(encoding="utf-8")
 # Request keys this gate reads (LF/125). plan_repair is planner-only and must stay out of this list.
@@ -1099,7 +1099,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
     if request.get('grounding_required'):
         validation = {**validation, 'grounding': filled_grounding(validation, plan, files, asserted)}
         try:
-            from verification import functional
+            from gate5 import functional
             targets = {task['file'] for task in plan['subtasks']}
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
             if required and not required.intersection(targets):

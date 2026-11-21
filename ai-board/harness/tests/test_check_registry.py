@@ -1,11 +1,11 @@
 """Registry primitive check (LF/215): dữ liệu có version và hash; worker lệch bị chặn trước khi chạy check."""
 import pytest
 
-from gates import verify
+from gate5 import verify
 from repositories import server_hsm
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
-from verification import check_registry, checks
-from verification import functional
+from gate5 import check_registry, checks
+from gate5 import functional
 
 BODY = b"// x\nChu moi\n"
 CHECK = {"primitive": "text_present", "path": "/x.html", "text": "Chu moi"}

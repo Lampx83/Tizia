@@ -16,7 +16,7 @@ SESSION_BLOCK = ("\n\nPLANNING SESSION (what the planner read before writing thi
 def violations(text: str, request: dict, source, sha: str | None) -> list[str]:
     """Rule breaks of a plan JSON (gate 1 shape, files, new pages, step checks, requested files); [] when it passes."""
     from gates import acceptance_structure, brainstorm, plan_validate
-    from verification import checks
+    from gate5 import checks
     role = request.get("requester_role") or "student"
     try:
         plan = brainstorm.parse_plan(text, request=request)

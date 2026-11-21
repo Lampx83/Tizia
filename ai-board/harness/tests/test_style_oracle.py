@@ -1,7 +1,7 @@
 import pytest
 
-from verification import functional
-from verification import style
+from gate5 import functional
+from gate5 import style
 
 SIZE_TITLE = 'Đổi cỡ chữ của .feedback từ 22px thành 29px'
 SIZE_DIFF = ('public/dem-ngon-tay.html', '@@ -3,5 +3,5 @@\n .feedback {\n-  font-size: 22px;\n+  font-size: 29px;\n   color: #111;\n }\n')

@@ -6,7 +6,7 @@ import re
 import unicodedata
 
 from settings import get_settings
-from verification import checks
+from gate5 import checks
 
 SOURCE = "structured"
 ACTIONS = ("see", "not_see", "style")
