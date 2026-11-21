@@ -1,0 +1,4 @@
+DECISION LEDGER. Every TOOL RESULT above is headed [step N]. Put "decisions" in the arguments of finish: {"tool": "finish", "arguments": {"decisions": [...]}}.
+Log where you wired new code in and where you placed an edit: {"decision": "new_file" | "wiring" | "placement", "target": "<path>", "evidence": [...], "rejected": [{"target": "<option not taken>", "reason": "<why>"}]}
+- evidence, 1-3 items, only from the [step N] results above: {"step_id": N, "file": "<path that step read>", "lines": "<a>-<b> inside the Lnn range it showed"} or {"step_id": N, "tool_output_excerpt": "<text copied verbatim from that step>"}.
+A new file needs a new_file decision whose evidence comes from a step that read an existing file showing where it is wired in (router, index, page link): read that file first. Your own knowledge is not evidence. Wrong evidence rejects finish.

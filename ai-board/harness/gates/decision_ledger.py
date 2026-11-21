@@ -8,9 +8,11 @@ from pathlib import Path
 from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_ledger.md").read_text(encoding="utf-8")
+GATE3_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "gate3_ledger.md").read_text(encoding="utf-8")
 KINDS = ("choose_file", "new_file", "placement", "wiring", "skip_alternative")
 AMBIGUITY = "ambiguity"
 MAX_EVIDENCE, MAX_REJECTED, MAX_READING = 3, 2, 200
+MAX_ARG_BYTES = 6000  # finish.decisions size; the manifest cap on finish stays 100
 _NUMBERED = re.compile(r"^L(\d+)\| ?", re.M)
 _RANGE = re.compile(r"^\s*(\d+)\s*(?:-\s*(\d+))?\s*$")
 
@@ -139,14 +141,14 @@ def coverage(plan: dict, decisions: list[dict], log: StepLog, exists) -> list[st
     return problems
 
 
-def _new_file_problems(path: str, mine: list[dict], log: StepLog, exists) -> list[str]:
+def _new_file_problems(path: str, mine: list[dict], log: StepLog, exists, need_rejected: bool = True) -> list[str]:
     made = [d for d in mine if d["decision"] == "new_file"]
     if not made:
         return [f"file mới {path} cần quyết định new_file"]
     wired = any((step := log.steps.get(e.get("step_id"))) and step["file"] and step["file"] != path and exists(step["file"])
                 for d in made for e in d["evidence"])
     out = [] if wired else [f"new_file {path} cần bằng chứng nối: một bước đã đọc file có sẵn khác (router, index, link trang)"]
-    if not any(exists(r["target"]) for d in made for r in d["rejected"]):
+    if need_rejected and not any(exists(r["target"]) for d in made for r in d["rejected"]):
         out.append(f"new_file {path} cần ít nhất một file có sẵn trong rejected, kèm lý do")
     return out
 
@@ -177,3 +179,16 @@ def ambiguity_question(decisions: list[dict] | None, request: dict, limit: int) 
             if question not in asked:
                 return question
     return None
+
+
+def finish_ledger(args: dict, log: StepLog, new_paths: list[str], exists) -> list[dict]:
+    """Sổ gate 3 trong finish: tuỳ chọn khi chỉ sửa file có sẵn, bắt buộc có new_file kèm bằng chứng nối cho mỗi file mới. Raise ValueError."""
+    given = args.get("decisions")
+    if given is None and not new_paths:
+        return []
+    decisions = pop({"decisions": given}, log)
+    problems = [p for path in new_paths for p in _new_file_problems(
+        path, [d for d in decisions if d["target"] == path and d["decision"] != AMBIGUITY], log, exists, need_rejected=False)]
+    if problems:
+        raise ValueError("; ".join(problems))
+    return decisions
