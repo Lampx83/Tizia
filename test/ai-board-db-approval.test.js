@@ -267,6 +267,10 @@ test('flag on: public-only goes straight on, admin is unchanged, test-pattern pa
   const adminDb = await heldRoot(passing({ db_change: DB_CHANGE }), 9);
   assert.deepEqual(adminDb.stored.hold_kinds, ['db'], 'admin DB change is still held');
   adminDb.db.close();
+  const loaded = await heldRoot(passing({ candidate: candidate(['public/js/pharmacy/score.js']),
+    backend_change: { files: ['public/js/pharmacy/score.js'], diff: 'diff --git a/public/js/pharmacy/score.js b/public/js/pharmacy/score.js' } }));
+  assert.deepEqual(loaded.stored.hold_kinds, ['backend'], 'public module the server loads, as the worker reported it');
+  loaded.db.close();
   const tests = await heldRoot(passing({ candidate: candidate(['server/contexts/teacher/tests/a.test.js']) }));
   assert.deepEqual(tests.stored.hold_kinds, ['backend']);
   tests.db.close();

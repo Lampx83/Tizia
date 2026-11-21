@@ -245,7 +245,9 @@ class HttpWorker:
             text = diff(cand)
         except OSError as error:
             return f"db_approval_required: candidate diff failed: {str(error)[:200]}"
-        kind = db_approval.push_hold([{"diff": text}], snapshot.get("requester_role") or "student")
+        repo = getattr(self.candidates, "repo", None)
+        server_public = db_approval.server_imported_public(str(repo), cand["base_sha"]) if repo else None
+        kind = db_approval.push_hold([{"diff": text}], snapshot.get("requester_role") or "student", server_public)
         if kind is None or (snapshot.get("db_publish") or {}).get("head_sha") == cand.get("head_sha"):
             return None
         return f"db_approval_required: {cand.get('head_sha')} needs admin approval ({kind}) before any push"

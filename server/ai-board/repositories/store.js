@@ -1878,8 +1878,10 @@ function resumeSummary(journal) {
     const fullstack = getSettings().requesterFullstackDb;
     const ownerRole = (await db.get('SELECT u.role FROM requests r LEFT JOIN users u ON u.id=r.owner_user_id WHERE r.id=?',
       [root.source_request_id]))?.role;
-    // Non-admin change outside public/ (and top-level tests): held like a DB change; admins and FE-only go straight on.
-    const backendFiles = changed.filter((f) => !/^(public|tests?)\//.test(f));
+    // Non-admin change that runs on the server: outside public/ and top-level tests, plus what the worker found by import
+    // graph (public modules the server loads, tests issuing SQL). Admins and FE-only go straight on.
+    const backendFiles = [...new Set([...changed.filter((f) => !/^(public|tests?)\//.test(f)),
+      ...(verdict.backend_change?.files || [])])];
     const holdKinds = verdict.outcome === 'blocked' ? [] : [
       ...(verdict.db_change || (fullstack && sqlFiles.length) ? ['db'] : []),
       ...(fullstack && ownerRole !== 'admin' && backendFiles.length ? ['backend'] : []),

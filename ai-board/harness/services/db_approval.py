@@ -1,7 +1,9 @@
 """DB change of a candidate (flag requester_fullstack_db): migrations, additive + idempotent rules, sandbox PostgreSQL run."""
 from __future__ import annotations
 
+import posixpath
 import re
+from functools import lru_cache
 
 import path_policy
 from gates import change_class
@@ -99,16 +101,75 @@ def review(diffs: list[dict], role: str = "student") -> dict | None:
 
 DIFF_CAP = 20_000
 _FRONTEND_ONLY = re.compile(r"^(?:public|tests?)/")
+_PUBLIC_CODE = re.compile(r"^public/.+\.[cm]?js$")
+_SERVER_CODE = re.compile(r"^server/.+\.[cm]?js$")
+_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"]([^'"]+)['"]""")
+_PATH_LITERAL = re.compile(r"""['"]((?:\.\.?/)+[^'"\s]+)['"]""")
+_DML = re.compile(r"(?<!\w)(?:insert\s+into|update\s+[\w.\"]+\s+set|delete\s+from)\b", re.I)
 ADMIN_ROLE = path_policy.ADMIN_ROLE
 
 
-def backend_change(diffs: list[dict]) -> dict | None:
-    """Files outside public/ and top-level test/ with their diff text (clipped); None for a frontend-only diff."""
+def _imports(path: str, text: str):
+    """Repo paths a module imports through literal relative specifiers (static, import(), require)."""
+    for spec in _IMPORT.findall(text):
+        if spec.startswith("."):
+            yield posixpath.normpath(posixpath.join(posixpath.dirname(path), spec))
+
+
+@lru_cache(maxsize=8)
+def server_imported_public(source: str, sha: str) -> frozenset[str] | None:
+    """public/ modules server/** code loads at base, transitively; None when the tree cannot be read (callers fail closed)."""
+    from repositories import repo_at_commit
+    try:
+        tree = repo_at_commit.at(source, sha)
+        files = tree.files()
+        server = sorted(f for f in files if _SERVER_CODE.match(f))
+        seen, found = set(server), set()
+        public_code = sorted(f for f in files if _PUBLIC_CODE.match(f))
+        # Computed loads (resolve(__dirname, '../../public/x') then import()): any relative literal naming a public file or folder.
+        for path, body in tree.read_many(server).items():
+            for spec in _PATH_LITERAL.findall((body or b"").decode("utf-8", "replace")):
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(path), spec)).rstrip("/")
+                if target.startswith("public/"):
+                    found.update(f for f in public_code if f == target or f.startswith(target + "/"))
+        todo = server + sorted(found)
+        seen |= found
+        while todo:
+            blobs = tree.read_many(todo)
+            todo = []
+            for path, body in blobs.items():
+                for target in _imports(path, (body or b"").decode("utf-8", "replace")):
+                    if target.startswith("public/") and target in files and target not in seen:
+                        seen.add(target)
+                        found.add(target)
+                        todo.append(target)
+        return frozenset(found)
+    except Exception:  # noqa: BLE001 - unreadable base: every public module counts as server code
+        return None
+
+
+def _runs_on_server(path: str, added: list[str], server_public) -> bool:
+    """Diff section counts as backend: outside public/ and top-level tests, a public module the server loads,
+    a public module that newly imports outside public/, or a top-level test that issues DB statements."""
+    if path.startswith("public/"):
+        if not _PUBLIC_CODE.match(path):
+            return False
+        if server_public is None or path in server_public:
+            return True
+        return any(not target.startswith("public/") for line in added for target in _imports(path, line))
+    if _FRONTEND_ONLY.match(path):
+        return any(_INLINE.search(line) or _DML.search(line) for line in added)
+    return True
+
+
+def backend_change(diffs: list[dict], server_public: frozenset[str] | None = frozenset()) -> dict | None:
+    """Files that run on the server with their diff text (clipped); None for a frontend-only diff."""
     files, parts = [], []
     for item in diffs:
         for section in ("diff --git " + chunk for chunk in item.get("diff", "").split("diff --git ")[1:]):
             path = section.split("\n", 1)[0].split(" b/", 1)[-1].replace("\\", "/")
-            if not _FRONTEND_ONLY.match(path):
+            added = [line[1:] for line in section.splitlines() if line.startswith("+") and not line.startswith("+++")]
+            if _runs_on_server(path, added, server_public):
                 files.append(path)
                 parts.append(section)
     if not files:
@@ -116,10 +177,11 @@ def backend_change(diffs: list[dict]) -> dict | None:
     return {"files": sorted(set(files)), "diff": "".join(parts)[:DIFF_CAP]}
 
 
-def push_hold(diffs: list[dict], role: str) -> str | None:
+def push_hold(diffs: list[dict], role: str, server_public: frozenset[str] | None = frozenset()) -> str | None:
     """Kind of admin approval the real diff needs before any push: db, backend, both; None = push freely."""
     kinds = [kind for kind, needed in (("db", review(diffs, role) is not None),
-                                       ("backend", role != ADMIN_ROLE and backend_change(diffs) is not None)) if needed]
+                                       ("backend", role != ADMIN_ROLE and backend_change(diffs, server_public) is not None))
+             if needed]
     return "both" if len(kinds) == 2 else kinds[0] if kinds else None
 
 

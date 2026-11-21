@@ -593,7 +593,9 @@ class _Execution:
     def _db_gate(self, state: dict) -> None:
         """DB change in the passing attempt: non-additive or failed sandbox run blocks the last gate; passed is held for the admin."""
         from services import db_approval
-        self.backend_change = db_approval.backend_change(state.get("full_diff") or [])
+        source, base = state.get("checkout_repo") or str(self.checkout_source), state.get("base_sha")
+        server_public = db_approval.server_imported_public(str(source), base) if base else None
+        self.backend_change = db_approval.backend_change(state.get("full_diff") or [], server_public)
         try:
             outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
         except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup

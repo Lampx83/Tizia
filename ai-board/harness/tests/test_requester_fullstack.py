@@ -425,3 +425,68 @@ def test_approval_for_another_head_publishes_nothing(flag):
     assert out["publish"] == "failed" and candidates.published == []
     (done,) = [c[2] for c in transport.calls if c[1].endswith("/db-publish")]
     assert done["ok"] is False and done["detail"].startswith("db_approval_required")
+
+
+# ── public modules the server loads ──
+
+def _git_repo(tmp_path, files: dict[str, str]):
+    repo = tmp_path / "graph"
+    for rel, body in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(body, encoding="utf-8")
+    run = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    run("init", "-q")
+    run("add", "-A")
+    run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base")
+    return str(repo), run("rev-parse", "HEAD")
+
+
+GRAPH = {
+    "server/pharmacy.js": "import { score } from '../public/js/pharmacy/score.js';\n",
+    "server/ai.js": "const db = await import('../public/js/engine/case-db.js');\n",
+    "server/scripts/seed.mjs": "const url = (p) => pathToFileURL(resolve(__dirname, '../../public/js/scenarios/_data', p)).href;\n",
+    "public/js/pharmacy/score.js": "import { w } from './weights.js';\nexport const score = () => w;\n",
+    "public/js/pharmacy/weights.js": "export const w = 1;\n",
+    "public/js/engine/case-db.js": "export const cases = [];\n",
+    "public/js/scenarios/_data/a.js": "export default [];\n",
+    "public/js/free.js": "export const x = 1;\n",
+}
+
+
+def test_server_loaded_public_modules_are_found_transitively(flag, tmp_path):
+    source, sha = _git_repo(tmp_path, GRAPH)
+    assert db_approval.server_imported_public(source, sha) == frozenset({
+        "public/js/pharmacy/score.js", "public/js/pharmacy/weights.js", "public/js/engine/case-db.js",
+        "public/js/scenarios/_data/a.js"})
+
+
+def test_editing_a_server_loaded_public_module_is_backend(flag, tmp_path):
+    source, sha = _git_repo(tmp_path, GRAPH)
+    server_public = db_approval.server_imported_public(source, sha)
+    probe = _edit("public/js/pharmacy/score.js", ["import('../../../server/db.js').then(m => m.default.run('UPDATE users SET role=1'));"])
+    for diff in (probe, _edit("public/js/pharmacy/weights.js", ["export const w = 2;"]),
+                 _edit("public/js/engine/case-db.js", ["export const cases = [1];"])):
+        assert db_approval.push_hold([{"diff": diff}], "student", server_public) == "backend"
+    assert db_approval.push_hold([{"diff": probe}], "admin", server_public) is None
+    assert db_approval.push_hold([{"diff": _edit("public/js/free.js", ["export const x = 2;"])}], "student", server_public) is None
+    reach = _edit("public/js/free.js", ["import { db } from '../../server/db.js';"])
+    assert db_approval.push_hold([{"diff": reach}], "student", server_public) == "backend", "new import outside public/"
+    assert db_approval.push_hold([{"diff": _edit("public/js/free.js", ["export const x = 2;"])}], "student", None) == "backend", \
+        "unreadable base: every public module counts"
+
+
+def test_real_repo_server_loads_pharmacy_and_case_db(flag):
+    repo = Path(__file__).resolve().parents[3]
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    found = db_approval.server_imported_public(str(repo), sha)
+    assert {"public/js/pharmacy/score.js", "public/js/pharmacy/scenarios.js", "public/js/engine/case-db.js"} <= found
+
+
+def test_top_level_tests_with_sql_are_backend(flag):
+    sql_test = _new_file("test/notes.test.js", "await db.run('UPDATE users SET role = 1');")
+    assert db_approval.backend_change([{"diff": sql_test}])["files"] == ["test/notes.test.js"]
+    assert db_approval.push_hold([{"diff": sql_test}], "student") == "backend"
+    ddl_test = _new_file("tests/x.test.js", "await db.exec('CREATE TABLE IF NOT EXISTS t (id int)');")
+    assert db_approval.push_hold([{"diff": ddl_test}], "student") == "backend"
+    plain = _new_file("test/notes.test.js", "import test from 'node:test';")
+    assert db_approval.push_hold([{"diff": plain}], "student") is None
