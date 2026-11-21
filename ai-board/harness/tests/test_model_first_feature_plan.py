@@ -112,3 +112,16 @@ def test_flag_on_anchored_edit_request_still_refuses_new_page(fullstack, monkeyp
     assert not best_match.unanchored_feature(quoted, {PAGE, f"{CTX}/quick-notes.js"}, str(REPO), _sha())
     assert best_match.new_page_refusal(quoted, {PAGE, f"{CTX}/quick-notes.js"}, str(REPO), _sha())
     assert best_match.new_page_refusal(REQUEST, {PAGE}, str(REPO), _sha()), "a lone new page is still an edit-request refusal"
+
+
+def test_new_paths_widen_only_with_the_flag(fullstack, monkeypatch):
+    style, nested = "public/css/ghi-chu-nhanh.css", f"{CTX}/notes/routes.js"
+    monkeypatch.delenv("AI_BOARD_MODEL_FIRST", raising=False)
+    assert not brainstorm.new_path_ok(style) and not brainstorm.new_path_ok(nested, "teacher")
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    assert brainstorm.new_path_ok(style) and brainstorm.new_path_ok(nested, "teacher")
+    for refused in ("server/contexts/identity/notes/x.js", "server/contexts/_ai-board/x/y.js", "public/Bad Name.css"):
+        assert not brainstorm.new_path_ok(refused, "teacher"), refused
+    plan = {"subtasks": [{"title": "t", "file": "server/contexts/ghi-chu/notes/routes.js", "verify": "node --test", "size": "small"}]}
+    with pytest.raises(ValueError, match="không có trong repo"):
+        brainstorm.check_files(plan, str(REPO), _sha(), role="teacher")
