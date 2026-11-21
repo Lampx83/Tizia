@@ -7,7 +7,6 @@ import { DOMAIN_META } from './engine/domain.js';
 import { morph } from './dom-morph.js';
 import { askConfirm } from './confirm-dialog.js';
 import { mountSkillsTab } from './admin-skills.js?v=skills-labels2';
-import { mountPromptLabels } from './admin-prompt-labels.js';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 import { createPoll } from './poll.js';
 import { escalationCard } from './escalation-card.js?v=escalation1';
@@ -2316,7 +2315,6 @@ async function loadSkillsTools(view = skillsSubtab) {
     <div class="st-tabs" role="tablist" aria-label="Chọn mục">
       <button type="button" role="tab" class="st-tab" data-st-view="skills" aria-selected="${view === 'skills'}">Skills</button>
       <button type="button" role="tab" class="st-tab" data-st-view="tools" aria-selected="${view === 'tools'}">Tools</button>
-      <button type="button" role="tab" class="st-tab" data-st-view="prompts" aria-selected="${view === 'prompts'}">Prompts</button>
     </div>
     <div id="st-view"></div>
   </section>`;
@@ -2324,7 +2322,6 @@ async function loadSkillsTools(view = skillsSubtab) {
     button.addEventListener('click', () => loadSkillsTools(button.dataset.stView));
   const viewHost = host.querySelector('#st-view');
   if (view === 'skills') return mountSkillsTab(viewHost, { api, toast });
-  if (view === 'prompts') return mountPromptLabels(viewHost, { api, toast });
   const [tm, cr] = await Promise.all([api('/api/admin/ai-board/tool-manifests'), api('/api/admin/ai-board/check-registries')]);
   viewHost.innerHTML = (tm.ok
     ? hashSection(HASH_KINDS.manifest, tm.data.manifests)
