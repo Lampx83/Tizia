@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { cleanLedger, ledgerRows } from '../server/ai-board/ledger.js';
 import { elevationCard } from '../server/ai-board/services/escalation-card.js';
 import { buildElevationContext } from '../server/ai-board/elevation-context.js';
-import { renderLedger, stepLink } from '../public/js/ai-board-ledger.js';
+import { renderLedger, stepLink, gate3Decisions } from '../public/js/ai-board-ledger.js';
 
 process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = '1';
 const { validatePlan } = await import('../server/ai-board/security/policy.js');
@@ -63,4 +63,20 @@ test('request page renderer escapes text, links each step to its gate node, and 
   assert.equal(renderLedger(undefined), '');
   assert.equal(renderLedger([]), '');
   assert.match(stepLink(2.5, 9), /data-node="gate_2_5" data-step="9"/);
+});
+
+test('gate 3 ledger comes from the latest gate_3 journal row, tagged with gate 3, and renders as its own block', () => {
+  const row = { decision: 'wiring', target: 'public/a.html', evidence: [{ step_id: 2, file: 'public/index.html', lines: '1-4' }], rejected: [] };
+  const journal = [
+    { node: 'gate_3', created_at: 1, state: { ledger_gate3: { 'public/old.html': [row] } } },
+    { node: 'gate_4', created_at: 3, state: {} },
+    { node: 'gate_3', created_at: 2, state: { ledger_gate3: { 'public/a.html': [row, null], 'public/b.html': [{ ...row, target: 'public/b.html' }] } } },
+  ];
+  const rows = gate3Decisions(journal);
+  assert.deepEqual(rows.map((d) => [d.target, d.gate]), [['public/a.html', 3], ['public/b.html', 3]]);
+  const html = renderLedger(rows, { gate3: true });
+  assert.match(html, /Sổ quyết định cổng 3 \(2\)/);
+  assert.match(html, /data-node="gate_3" data-step="2"/);
+  assert.deepEqual(gate3Decisions(undefined), []);
+  assert.deepEqual(gate3Decisions([{ node: 'gate_3', state: {} }]), []);
 });

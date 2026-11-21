@@ -425,6 +425,8 @@ class _Execution:
         }
         if node == "gate_3":  # the full generated code is only needed once per attempt; other nodes cost little
             entry["produced"] = produced
+            if state.get("ledger_gate3"):
+                entry["ledger_gate3"] = state["ledger_gate3"]
         if len(json.dumps(entry, ensure_ascii=False, default=str)) > 190_000:
             entry.pop("produced", None)  # qua lon: journal van ghi, nhung khong du de resume
             entry["resumable"] = False

@@ -142,6 +142,20 @@ def test_journal_keeps_the_code_gate_3_wrote_into_the_attempt_state():
     assert seen[0]["state"]["base_sha"] == "a" * 40
 
 
+def test_journal_carries_the_gate_3_ledger_only_on_gate_3():
+    seen = []
+    instance = _Execution(PLAN, ticket_id=7, checkout_source=".", deps=object(), budget=Budget(), run_gate=None,
+                          cleanup=None, catalog=None, request_detail=None, memory_path=None, should_stop=None,
+                          candidate_opts=None, request_type=None, eval_tasks=None, preview_capture=None,
+                          checkpoint=None, plan_hash=None, journal_hook=lambda node, outcome, snap: seen.append(snap))
+    rows = [{"decision": "new_file", "target": "public/a.html", "evidence": [], "rejected": []}]
+    instance.state = {"produced": {}, "ledger_gate3": {"public/a.html": rows}}
+    instance.journal("gate_3", "passed")
+    instance.journal("gate_4", "passed")
+    assert seen[0]["state"]["ledger_gate3"] == {"public/a.html": rows}
+    assert "ledger_gate3" not in seen[1]["state"]
+
+
 PRODUCED = {"public/a.html": {"model": "light", "test_file": "test/a.test.js", "code": "<!doctype html>",
                               "test": "import test from 'node:test';\n// public/a.html\n"}}
 

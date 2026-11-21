@@ -25,11 +25,19 @@ function decisionItem(d) {
     + `${rejected.length ? `<ul class="ledger-rej">${rejected.join('')}</ul>` : ''}</li>`;
 }
 
-/** Ledger block for the request page; '' when there is none. */
-export function renderLedger(decisions) {
+/** Gate 3 rows (tagged gate 3) from the latest gate_3 journal row; the file names the subtask each belongs to. */
+export function gate3Decisions(journal) {
+  const rows = (Array.isArray(journal) ? journal : []).filter((j) => j?.node === 'gate_3' && j.state?.ledger_gate3);
+  const latest = rows.sort((a, b) => Number(a.created_at) - Number(b.created_at)).at(-1);
+  return Object.values(latest?.state.ledger_gate3 || {}).flatMap((list) => (Array.isArray(list) ? list : []))
+    .filter((d) => d && typeof d === 'object').map((d) => ({ ...d, gate: 3 }));
+}
+
+/** Ledger block for the request page; '' when there is none. gate3 titles it as the code gate's ledger. */
+export function renderLedger(decisions, { gate3 = false } = {}) {
   const rows = Array.isArray(decisions) ? decisions.filter((d) => d && typeof d === 'object') : [];
   if (!rows.length) return '';
-  return `<details class="g-ledger" data-k="ledger" data-dopen><summary>Sổ quyết định (${esc(rows.length)})</summary>`
+  return `<details class="g-ledger" data-k="${gate3 ? 'ledger3' : 'ledger'}" data-dopen><summary>Sổ quyết định${gate3 ? ' cổng 3' : ''} (${esc(rows.length)})</summary>`
     + `<p class="meta">Bằng chứng do harness kiểm: bước tồn tại, đã đọc file, dòng nằm trong phần đã đọc. Bằng chứng có đỡ quyết định không là việc của reviewer và admin.</p>`
     + `<ol class="ledger-list">${rows.map(decisionItem).join('')}</ol></details>`;
 }
