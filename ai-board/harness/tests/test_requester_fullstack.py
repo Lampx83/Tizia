@@ -446,7 +446,9 @@ def _git_repo(tmp_path, files: dict[str, str]):
 GRAPH = {
     "server/pharmacy.js": "import { score } from '../public/js/pharmacy/score.js';\n",
     "server/ai.js": "const db = await import('../public/js/engine/case-db.js');\n",
-    "server/scripts/seed.mjs": "const url = (p) => pathToFileURL(resolve(__dirname, '../../public/js/scenarios/_data', p)).href;\n",
+    "server/scripts/seed.mjs": ("const url = (p) => pathToFileURL(resolve(__dirname, '../../public/js/scenarios/_data', p)).href;\n"
+                                "const REGISTRY = [{ file: '../../lab.js' }, { file: 'a.js' }];\n"),
+    "public/js/lab.js": "export const RECIPES = [];\n",
     "public/js/pharmacy/score.js": "import { w } from './weights.js';\nexport const score = () => w;\n",
     "public/js/pharmacy/weights.js": "export const w = 1;\n",
     "public/js/engine/case-db.js": "export const cases = [];\n",
@@ -459,7 +461,7 @@ def test_server_loaded_public_modules_are_found_transitively(flag, tmp_path):
     source, sha = _git_repo(tmp_path, GRAPH)
     assert db_approval.server_imported_public(source, sha) == frozenset({
         "public/js/pharmacy/score.js", "public/js/pharmacy/weights.js", "public/js/engine/case-db.js",
-        "public/js/scenarios/_data/a.js"})
+        "public/js/scenarios/_data/a.js", "public/js/lab.js"})
 
 
 def test_editing_a_server_loaded_public_module_is_backend(flag, tmp_path):
@@ -492,3 +494,29 @@ def test_top_level_tests_with_sql_are_backend(flag):
     assert db_approval.push_hold([{"diff": ddl_test}], "student") == "backend"
     plain = _new_file("test/notes.test.js", "import test from 'node:test';")
     assert db_approval.push_hold([{"diff": plain}], "student") is None
+
+
+def test_backtick_literal_imports_are_read(flag, tmp_path):
+    source, sha = _git_repo(tmp_path, GRAPH)
+    server_public = db_approval.server_imported_public(source, sha)
+    tick = _edit("public/js/free.js", ["await import(`../../server/db.js`);"])
+    assert db_approval.push_hold([{"diff": tick}], "student", server_public) == "backend"
+    computed = _edit("public/js/free.js", ["await import(`./${name}.js`);"])
+    assert db_approval.push_hold([{"diff": computed}], "student", server_public) is None
+
+
+def test_held_file_pulling_in_a_public_module_shows_its_full_content(flag, tmp_path):
+    source, sha = _git_repo(tmp_path, GRAPH)
+    server_public = db_approval.server_imported_public(source, sha)
+    current = {"public/js/helper.js": "import { deep } from './deep.js';\nawait import(`../../server/db.js`);\n",
+               "public/js/deep.js": "export const deep = 'x'.repeat(10);\n"}
+    step2 = _edit("public/js/pharmacy/score.js", ["import '../helper.js';"])
+    change = db_approval.backend_change([{"diff": step2}], server_public, current.get)
+    assert change["files"] == ["public/js/deep.js", "public/js/helper.js", "public/js/pharmacy/score.js"]
+    assert "pulled in by an added import" in change["diff"] and "await import(`../../server/db.js`)" in change["diff"]
+    assert "export const deep" in change["diff"]
+    big = {"public/js/helper.js": "x" * 30_000}
+    clipped = db_approval.backend_change([{"diff": step2}], server_public, big.get)
+    assert clipped["diff"].endswith("# --- clipped at 20000 characters ---\n")
+    assert db_approval.backend_change([{"diff": _edit("public/js/free.js", ["import './helper.js';"])}], server_public,
+                                      current.get) is None, "frontend-only file pulling a module stays frontend"

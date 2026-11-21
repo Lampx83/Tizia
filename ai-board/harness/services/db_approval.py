@@ -103,15 +103,19 @@ DIFF_CAP = 20_000
 _FRONTEND_ONLY = re.compile(r"^(?:public|tests?)/")
 _PUBLIC_CODE = re.compile(r"^public/.+\.[cm]?js$")
 _SERVER_CODE = re.compile(r"^server/.+\.[cm]?js$")
-_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"]([^'"]+)['"]""")
-_PATH_LITERAL = re.compile(r"""['"]((?:\.\.?/)+[^'"\s]+)['"]""")
+# Literal specifiers only: quotes, or a backtick template without ${}.
+_SPEC = r"""(?:'([^']+)'|"([^"]+)"|`([^`$]+)`)"""
+_IMPORT = re.compile(rf"(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*){_SPEC}")
+_PATH_LITERAL = re.compile(r"""(?:'([^'\s]+)'|"([^"\s]+)"|`([^`$\s]+)`)""")
+PULLED_NOTE = "\n# --- pulled in by an added import (full current content, not part of the diff): {path}\n"
+CLIP_NOTE = "\n# --- clipped at {cap} characters ---\n"
 _DML = re.compile(r"(?<!\w)(?:insert\s+into|update\s+[\w.\"]+\s+set|delete\s+from)\b", re.I)
 ADMIN_ROLE = path_policy.ADMIN_ROLE
 
 
 def _imports(path: str, text: str):
     """Repo paths a module imports through literal relative specifiers (static, import(), require)."""
-    for spec in _IMPORT.findall(text):
+    for spec in ("".join(groups) for groups in _IMPORT.findall(text)):
         if spec.startswith("."):
             yield posixpath.normpath(posixpath.join(posixpath.dirname(path), spec))
 
@@ -126,12 +130,22 @@ def server_imported_public(source: str, sha: str) -> frozenset[str] | None:
         server = sorted(f for f in files if _SERVER_CODE.match(f))
         seen, found = set(server), set()
         public_code = sorted(f for f in files if _PUBLIC_CODE.match(f))
-        # Computed loads (resolve(__dirname, '../../public/x') then import()): any relative literal naming a public file or folder.
+        # Computed loads (resolve(__dirname, '../../public/x', p) then import()): a relative literal naming a public file or
+        # folder counts, and other literals in the same file also resolve against each such public folder (seed registries).
         for path, body in tree.read_many(server).items():
-            for spec in _PATH_LITERAL.findall((body or b"").decode("utf-8", "replace")):
+            specs = ["".join(groups) for groups in _PATH_LITERAL.findall((body or b"").decode("utf-8", "replace"))]
+            folders = []
+            for spec in specs:
+                if not spec.startswith("."):
+                    continue
                 target = posixpath.normpath(posixpath.join(posixpath.dirname(path), spec)).rstrip("/")
                 if target.startswith("public/"):
                     found.update(f for f in public_code if f == target or f.startswith(target + "/"))
+                    if target not in files:
+                        folders.append(target)
+            for folder in folders:
+                found.update(t for spec in specs if (t := posixpath.normpath(posixpath.join(folder, spec))) in files
+                             and _PUBLIC_CODE.match(t))
         todo = server + sorted(found)
         seen |= found
         while todo:
@@ -162,19 +176,41 @@ def _runs_on_server(path: str, added: list[str], server_public) -> bool:
     return True
 
 
-def backend_change(diffs: list[dict], server_public: frozenset[str] | None = frozenset()) -> dict | None:
-    """Files that run on the server with their diff text (clipped); None for a frontend-only diff."""
-    files, parts = [], []
+def _pulled(roots: dict[str, list[str]], diffed: set[str], read) -> dict[str, str]:
+    """Public modules a held file newly imports, transitively, with full current content; files already in the diff skipped."""
+    out: dict[str, str] = {}
+    todo = [t for path, added in roots.items() for line in added for t in _imports(path, line) if _PUBLIC_CODE.match(t)]
+    while todo:
+        path = todo.pop()
+        if path in out or path in diffed:
+            continue
+        text = read(path) if read else None
+        out[path] = text if text is not None else "(không đọc được nội dung)"
+        todo += [t for t in _imports(path, text or "") if _PUBLIC_CODE.match(t)]
+    return out
+
+
+def backend_change(diffs: list[dict], server_public: frozenset[str] | None = frozenset(), read=None) -> dict | None:
+    """Files that run on the server with their diff text, plus modules they newly pull in (full content); clipped.
+    read(path) -> current text at the candidate head, or None."""
+    files, parts, roots, diffed = [], [], {}, set()
     for item in diffs:
         for section in ("diff --git " + chunk for chunk in item.get("diff", "").split("diff --git ")[1:]):
             path = section.split("\n", 1)[0].split(" b/", 1)[-1].replace("\\", "/")
+            diffed.add(path)
             added = [line[1:] for line in section.splitlines() if line.startswith("+") and not line.startswith("+++")]
             if _runs_on_server(path, added, server_public):
                 files.append(path)
                 parts.append(section)
+                roots[path] = added
     if not files:
         return None
-    return {"files": sorted(set(files)), "diff": "".join(parts)[:DIFF_CAP]}
+    pulled = _pulled(roots, diffed, read)
+    parts += [PULLED_NOTE.format(path=path) + text for path, text in sorted(pulled.items())]
+    text = "".join(parts)
+    if len(text) > DIFF_CAP:
+        text = text[:DIFF_CAP] + CLIP_NOTE.format(cap=DIFF_CAP)
+    return {"files": sorted(set(files) | set(pulled)), "diff": text}
 
 
 def push_hold(diffs: list[dict], role: str, server_public: frozenset[str] | None = frozenset()) -> str | None:
