@@ -60,12 +60,12 @@ _SAFE_PATH = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      rf"|{_GEN}[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
                      rf"|{_GEN}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
-# Cờ requester_fullstack: file mới chỉ trong context đã có ở base; context mới không bao giờ được mount.
+# Cờ requester_fullstack_db: file mới chỉ trong context đã có ở base; context mới không bao giờ được mount.
 _CONTEXT_NEW = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/(?:[a-z0-9][\w-]*\.(?:js|mjs|json)|migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
 
 
 def db_migration(file: str, role: str = "student") -> bool:
-    """Migration mới hợp lệ: _ai-generated/<name>/migrations, hoặc context/<name>/migrations khi cờ requester_fullstack."""
+    """Migration mới hợp lệ: _ai-generated/<name>/migrations, hoặc context/<name>/migrations khi cờ requester_fullstack_db."""
     return bool(DB_MIGRATION.match(file)) or path_policy.context_migration(file, role)
 
 

@@ -1,9 +1,9 @@
-// Plan guardrail under AI_BOARD_REQUESTER_FULLSTACK: context.write opens mounted contexts, refused areas stay shut.
+// Plan guardrail under AI_BOARD_REQUESTER_FULLSTACK_DB: context.write opens mounted contexts, refused areas stay shut.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
-process.env.AI_BOARD_REQUESTER_FULLSTACK = '1';
+process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = '1';
 const { validatePlan, CAPABILITY_POLICY } = await import('../server/ai-board/security/policy.js');
 
 const step = (order, file, layer, capability = 'context.write') => ({
@@ -42,7 +42,7 @@ test('flag on: refused contexts and files stay shut for context.write', () => {
 
 test('flag off: no context.write, a context backend step is refused as before', () => {
   const env = { ...process.env };
-  delete env.AI_BOARD_REQUESTER_FULLSTACK;
+  delete env.AI_BOARD_REQUESTER_FULLSTACK_DB;
   const script = `const m = await import('./server/ai-board/security/policy.js');
     const out = { has: 'context.write' in m.CAPABILITY_POLICY, hash: m.CAPABILITY_POLICY_HASH };
     try { m.validatePlan(${JSON.stringify(plan([step(1, 'server/contexts/teacher/x.js', 'backend', 'content.write')]))}, 'pharmacy'); out.err = null; }

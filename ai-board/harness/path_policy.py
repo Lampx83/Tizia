@@ -52,7 +52,7 @@ def denied(path, op: str = "read") -> bool:
 ADMIN_ROLE = "admin"
 MANIFESTS = ("package.json", "package-lock.json")
 _ZONE_FORBIDDEN = ("billing", "payment", "economy", "security", "identity", "auth", "session")
-# Vùng cấm mọi vai khi cờ admin_backend_zone hoặc requester_fullstack bật: tiền, đăng nhập, bộ máy AI Board, hạ tầng.
+# Vùng cấm mọi vai khi cờ admin_backend_zone hoặc requester_fullstack_db bật: tiền, đăng nhập, bộ máy AI Board, hạ tầng.
 _REFUSED = tuple(re.compile(p, re.I) for p in (
     r"^server/index\.js$", r"^server/db(\.js|/)", r"^server/ai-board/", r"^ai-board/",
     rf"^server/contexts/({'|'.join(_ZONE_FORBIDDEN)})/",
@@ -64,15 +64,15 @@ _ZONE_ALLOWED = tuple(re.compile(p) for p in (r"^server/contexts/[^/]+/.+", r"^p
 
 
 def zone_on(role: str = ADMIN_ROLE) -> bool:
-    """Vùng sửa backend mở cho role: admin theo admin_backend_zone, mọi vai theo requester_fullstack."""
+    """Vùng sửa backend mở cho role: admin theo admin_backend_zone, mọi vai theo requester_fullstack_db."""
     from settings import get_settings
     settings = get_settings()
-    return bool(settings.requester_fullstack or settings.admin_backend_zone and role == ADMIN_ROLE)
+    return bool(settings.requester_fullstack_db or settings.admin_backend_zone and role == ADMIN_ROLE)
 
 
 def fullstack_on() -> bool:
     from settings import get_settings
-    return bool(get_settings().requester_fullstack)
+    return bool(get_settings().requester_fullstack_db)
 
 
 def _context_name(normalized: str) -> str | None:
@@ -81,8 +81,8 @@ def _context_name(normalized: str) -> str | None:
 
 
 def refused(path, role: str = "student") -> bool:
-    """Vùng cấm (cờ admin_backend_zone hoặc requester_fullstack bật): không bao giờ elevation.
-    Vai không phải admin khi requester_fullstack bật: thêm deny_paths, context cấm và context gạch dưới."""
+    """Vùng cấm (cờ admin_backend_zone hoặc requester_fullstack_db bật): không bao giờ elevation.
+    Vai không phải admin khi requester_fullstack_db bật: thêm deny_paths, context cấm và context gạch dưới."""
     normalized = normalize(path)
     if normalized is None or not (zone_on() or fullstack_on()):
         return False
@@ -109,7 +109,7 @@ _CONTEXT_MIGRATION = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/migratio
 
 
 def context_migration(path, role: str = "student") -> bool:
-    """Migration riêng của context (cờ requester_fullstack): server/contexts/<name>/migrations/<file>.sql, ngoài vùng cấm."""
+    """Migration riêng của context (cờ requester_fullstack_db): server/contexts/<name>/migrations/<file>.sql, ngoài vùng cấm."""
     normalized = normalize(path)
     return (fullstack_on() and normalized is not None and bool(_CONTEXT_MIGRATION.match(normalized))
             and not refused(normalized, role))

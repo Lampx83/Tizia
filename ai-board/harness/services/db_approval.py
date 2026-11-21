@@ -1,4 +1,4 @@
-"""DB change of a candidate (flag requester_fullstack): migrations, additive + idempotent rules, sandbox PostgreSQL run."""
+"""DB change of a candidate (flag requester_fullstack_db): migrations, additive + idempotent rules, sandbox PostgreSQL run."""
 from __future__ import annotations
 
 import re

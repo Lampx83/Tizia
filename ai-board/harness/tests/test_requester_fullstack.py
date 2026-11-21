@@ -1,4 +1,4 @@
-"""AI_BOARD_REQUESTER_FULLSTACK: every role edits mounted contexts and public/, refused areas stay shut, a candidate with a DB
+"""AI_BOARD_REQUESTER_FULLSTACK_DB: every role edits mounted contexts and public/, refused areas stay shut, a candidate with a DB
 change runs on the sandbox Postgres and waits for an admin before any push. Flag off = unchanged."""
 import subprocess
 from pathlib import Path
@@ -12,7 +12,7 @@ from services import db_approval
 from test_http_worker import FakeTransport, PASSING, PublishingCandidates, _publishing_worker
 from worker import HttpWorker, WorkerClient, execute_pre_pr
 
-FLAG = "AI_BOARD_REQUESTER_FULLSTACK"
+FLAG = "AI_BOARD_REQUESTER_FULLSTACK_DB"
 CONTEXT = "server/contexts/teacher/quick-notes.js"
 MIGRATION = "server/contexts/teacher/migrations/001-ghi-chu-nhanh.sql"
 GOOD_SQL = ("CREATE TABLE IF NOT EXISTS ghi_chu_nhanh (id SERIAL PRIMARY KEY, noi_dung TEXT NOT NULL, "
@@ -54,7 +54,7 @@ DB_DIFF = FE_BE_DIFF + _new_file(MIGRATION, GOOD_SQL)
 
 def test_flag_defaults_off():
     from settings import Settings
-    assert Settings().requester_fullstack is False
+    assert Settings().requester_fullstack_db is False
 
 
 def test_flag_off_student_keeps_generated_only(monkeypatch):

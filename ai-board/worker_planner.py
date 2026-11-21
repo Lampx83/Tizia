@@ -305,7 +305,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
     return check
 
 
-FULLSTACK_CAPABILITY = "context.write"  # server catalog has it only when AI_BOARD_REQUESTER_FULLSTACK is on
+FULLSTACK_CAPABILITY = "context.write"  # server catalog has it only when AI_BOARD_REQUESTER_FULLSTACK_DB is on
 
 
 class HarnessPlanner:

@@ -19,7 +19,7 @@ export function getSettings(env = environment()) {
     modelRouting: truthy(env.AI_BOARD_MODEL_ROUTING),
     promptLabels: truthy(env.AI_BOARD_PROMPT_LABELS),
     // Requesters edit mounted contexts; a candidate with a DB change waits for an admin before any push.
-    requesterFullstack: truthy(env.AI_BOARD_REQUESTER_FULLSTACK),
+    requesterFullstackDb: truthy(env.AI_BOARD_REQUESTER_FULLSTACK_DB),
     tokenizerFile: text(env, 'AI_BOARD_QWEN_TOKENIZER'),
     workerKey: text(env, 'AI_BOARD_WORKER_KEY'),
     shots: {

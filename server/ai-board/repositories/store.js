@@ -1873,7 +1873,7 @@ function resumeSummary(journal) {
     if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
     // Fail closed: a worker DB marker always holds; inferring one from .sql files is the flag's extra layer.
     const sqlFiles = [...new Set((verdict.candidate?.commits || []).flatMap((c) => c.files || []).filter((f) => /\.sql$/i.test(f)))];
-    if (verdict.outcome !== 'blocked' && (verdict.db_change || (getSettings().requesterFullstack && sqlFiles.length))) {
+    if (verdict.outcome !== 'blocked' && (verdict.db_change || (getSettings().requesterFullstackDb && sqlFiles.length))) {
       verdict.db_hold = true;
       verdict.db_change ??= { migrations: [], files: sqlFiles,
         sandbox: { status: null, schema_diff: null, checks: [], tests: [], error: 'worker sent no DB report' } };

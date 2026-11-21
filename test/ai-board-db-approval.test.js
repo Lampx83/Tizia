@@ -143,14 +143,14 @@ test('reject stops the run with the reason for the requester and no PR', async (
 });
 
 test('flag off: a verdict without a DB marker is not held; flag on infers the hold from a .sql file', async () => {
-  const before = process.env.AI_BOARD_REQUESTER_FULLSTACK;
+  const before = process.env.AI_BOARD_REQUESTER_FULLSTACK_DB;
   try {
-    delete process.env.AI_BOARD_REQUESTER_FULLSTACK;
+    delete process.env.AI_BOARD_REQUESTER_FULLSTACK_DB;
     const off = await heldRoot(passing());
     assert.equal(off.stored.db_hold, undefined);
     assert.equal((await root(off.db, off.ticket.id)).phase, 'pre_pr_ready');
     off.db.close();
-    process.env.AI_BOARD_REQUESTER_FULLSTACK = '1';
+    process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = '1';
     const on = await heldRoot(passing());
     assert.equal(on.stored.db_hold, true);
     assert.deepEqual(on.stored.db_change.files, [MIGRATION]);
@@ -160,7 +160,7 @@ test('flag off: a verdict without a DB marker is not held; flag on infers the ho
     assert.equal((await root(plain.db, plain.ticket.id)).phase, 'pre_pr_ready', 'FE-only candidate follows the normal flow');
     plain.db.close();
   } finally {
-    if (before === undefined) delete process.env.AI_BOARD_REQUESTER_FULLSTACK; else process.env.AI_BOARD_REQUESTER_FULLSTACK = before;
+    if (before === undefined) delete process.env.AI_BOARD_REQUESTER_FULLSTACK_DB; else process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = before;
   }
 });
 
