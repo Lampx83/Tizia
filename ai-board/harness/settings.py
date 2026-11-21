@@ -2,13 +2,14 @@
 Giới hạn số (budget, loop, thời gian) ở server/ai-board/contract.json qua runtime/limits.py, không ở đây."""
 from __future__ import annotations
 
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Mapping
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_GATE25_FIXES = frozenset({"quotes", "ellipsis"})
@@ -121,6 +122,7 @@ class Settings(BaseSettings):
     form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
     plan_objections_advisory: bool = False  # cổng 1/2.5: phản đối grounding (best_match, file chứa chữ cũ, trang mới, trích dẫn) thành góp ý cho bước code; path/scope/budget/intake vẫn chặn
     session_plan_execute: bool = False  # cổng 1: một phiên đọc repo, viết plan, nhận luật plan tất định như observation, rồi chuyển lịch sử đọc sang bước sửa
+    two_level_plan: bool = False  # cổng 1 chỉ chia subtask + tiêu chí chốt; mỗi subtask context mới tự lập plan, thực thi, check + reviewer, sửa; cần plan_checks
     subtask_fresh_context: bool = False  # cổng 3: mỗi subtask là phiên con context mới, nhận plan + file đã tạo + tóm tắt subtask trước; chạy tuần tự
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     deterministic_ready_oracle: bool = False  # ready_for_pr cần check tất định (literal nguyên văn + chỉ file được nêu); thiếu thì needs_review; loop dừng chưa qua = needs_review
@@ -188,6 +190,12 @@ class Settings(BaseSettings):
 
     # secret; worker.take_secret vẫn đọc-rồi-xoá key của chính nó khỏi môi trường
     internal_key: SecretStr = SecretStr("")
+
+    @model_validator(mode="after")
+    def _two_level_needs_checks(self):
+        if self.two_level_plan and not self.plan_checks:
+            logging.getLogger(__name__).warning("AI_BOARD_TWO_LEVEL_PLAN is set without AI_BOARD_PLAN_CHECKS: two-level plan stays off")
+        return self
 
     @field_validator("gate1_probe_timeout_s")
     @classmethod

@@ -111,6 +111,8 @@ def apply(plan: dict) -> dict:
     items, subtasks = plan.get("criteria"), plan.get("subtasks") or []
     if not items or not subtasks or not get_settings().plan_checks or problems(plan):
         return plan
+    if any(task.get("checks_source") == "two_level" for task in subtasks):
+        return plan  # each subtask already owns the criteria the planner gave it
     for task in subtasks:
         task.pop("checks", None)
         task.pop("checks_source", None)

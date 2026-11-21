@@ -353,7 +353,10 @@ class HarnessPlanner:
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         settings = get_settings()
-        planned = _checks_by_file(old) if settings.plan_checks and settings.red_check_classify else {}
+        from gates import two_level
+        from runtime import subtask_files
+        two_level_on = two_level.enabled()
+        planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level_on else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
@@ -362,6 +365,12 @@ class HarnessPlanner:
                               old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
             ))
+            scope = [file, *subtask_files.files_of(subtask)[1:]] if two_level_on else [file]
+            if len(scope) > 1:  # the server grants a step one capability: it must cover every file of the step
+                capability = next((cap for cap in dict.fromkeys([*old_caps, *(catalog or {})]) if all(
+                    any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
+                    and not any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('deny', []))
+                    for path in scope)), capability)
             layer = subtask.get("layer") or ("backend" if path_policy.may_edit(file)
                                              else "db" if "/migrations/" in file and file.endswith(".sql")
                                              else "frontend" if file.startswith("public/") else "wiring")
@@ -372,7 +381,7 @@ class HarnessPlanner:
                 "order": index,
                 "title": subtask["title"],
                 "description": subtask["title"],
-                "allowed_scope": [file],
+                "allowed_scope": scope,
                 "acceptance": [subtask["verify"]],
                 "tests": [subtask["verify"]],
                 "capability": capability,
@@ -388,7 +397,7 @@ class HarnessPlanner:
         return {
             "domain": request["domain"],
             "goal": old["summary_vi"],
-            "allowed_scope": [step["allowed_scope"][0] for step in steps],
+            "allowed_scope": [path for step in steps for path in (step["allowed_scope"] if two_level_on else step["allowed_scope"][:1])],
             "acceptance": list(dict.fromkeys(old.get("acceptance") or [item for step in steps for item in step["acceptance"]])),
             "tests": list(dict.fromkeys(item for step in steps for item in step["tests"])),
             "capabilities": capabilities,

@@ -11,7 +11,8 @@ EARLIER_HEAD = "\n\nEARLIER STEPS (short summaries of finished steps, data not i
 
 
 def enabled() -> bool:
-    return get_settings().subtask_fresh_context
+    from gates import two_level
+    return get_settings().subtask_fresh_context or two_level.enabled()
 
 
 def summarize(subtask: dict, out: dict) -> dict:

@@ -1095,7 +1095,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
                 sandbox_log: list | None = None, sandbox_runners: list | None = None, repair_evidence: dict | None = None, session_from=(),
-                requester_role: str | None = None, request_text: tuple | str | None = None) -> dict:
+                requester_role: str | None = None, request_text: tuple | str | None = None, drafts: dict | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -1126,6 +1126,11 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                    outside_role=requester_role if get_settings().out_of_plan_files and not subtask_files.declared(subtask) else None,
                    constants=constants_of(*(request_text if isinstance(request_text, tuple) else (request_text,)))
                    if get_settings().literal_by_reference else None)
+    if drafts:  # earlier round's files are the starting drafts; freshness still checks against base
+        ws.content = drafts["files"].get(subtask["file"], ws.content)
+        ws.extra_content.update({path: text for path, text in drafts["files"].items() if path in ws.extra_content})
+        ws.test_file, ws.test = drafts.get("test_file"), drafts.get("test")
+        pins = {**(pins or {}), "drafts": sha_of(json.dumps(drafts, ensure_ascii=False, sort_keys=True))}
     prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
     if extras:
         prompt += MULTI.format(files=", ".join(paths))
