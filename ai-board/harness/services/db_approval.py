@@ -7,7 +7,7 @@ from functools import lru_cache
 
 import path_policy
 from gates import change_class
-from verification import db_check
+from gate5 import db_check
 
 _GENERATED_MIGRATION = re.compile(rf"^{re.escape(path_policy.GENERATED_ROOT)}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 _INLINE = re.compile(rf"{change_class._DDL.pattern}|(?<!\w)truncate\s+(?:table\s+)?[\w.\"]+", re.I)
@@ -226,7 +226,7 @@ def push_hold(diffs: list[dict], role: str, server_public: frozenset[str] | None
 
 
 def run_sandbox(sql: str, should_stop=None) -> dict:
-    """db_check profile on the sandbox runner; report of verification.db_check.run_db_check."""
+    """db_check profile on the sandbox runner; report of gate5.db_check.run_db_check."""
     from settings import get_settings
     from verification.sandbox import SandboxSession
     lease_ok = (lambda: not should_stop()) if should_stop else None
