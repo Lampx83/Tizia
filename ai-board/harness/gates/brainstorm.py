@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from gate5 import functional
 import path_policy
-from gates import acceptance_structure, best_match, data_kinds, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
+from gates import acceptance_structure, best_match, data_kinds, decision_ledger, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -433,10 +433,17 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
         react, evidence = None, ""
         session = get_settings().session_plan_execute
-        if not attempt and (react_plan.enabled() or session):
-            react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
-                                   db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
-                                   **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}))
+        if not attempt and (react_plan.enabled() or session or decision_ledger.enabled()):
+            try:
+                react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
+                                       db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
+                                       **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}),
+                                       **({"ledger": True} if decision_ledger.enabled() else {}))
+            except decision_ledger.LedgerInvalid as error:
+                judge("decision ledger", False, str(error))
+                return {"gate": 1, "blocked": True, "reason": f"sổ quyết định không hợp lệ: {error}", "plan": None,
+                        "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
+                        "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match")}
         elif not attempt and react_plan.exploration_enabled() and react_plan.warranted(request, ctx):
             # Hard request (see react_plan.warranted): one bounded read-only pass puts real source lines in front of
             # the planner; a pass that fails or reads nothing leaves `ask` byte-identical to the one-shot prompt.
@@ -541,6 +548,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 'form_warnings': list(form_warnings),
                 **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
                 **({'react_quotes': react['quotes']} if react else {}),
+                **({'ledger': react['ledger']} if react and 'ledger' in react else {}),
                 **({'plan_session': react['session'], 'plan_tier': plan_rules.tier(plan)} if react and 'session' in react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
