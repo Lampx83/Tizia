@@ -84,11 +84,65 @@ def request_text(state):
     return text
 
 
-_PAIR_GAP = re.compile(r'\s*(?:thành|bằng|→|->|to)\s*', re.I)
+_PAIR_GAP = re.compile(r'\s*(?:(?:đổi|thay|chuyển)\s+)?(?:thành|bằng|→|->|to)\s*', re.I)
+_PAIR_CUE = re.compile(r'\b(?:thành|bằng|to)\b|→|->', re.I)
 _ANCHOR_CUE = re.compile(r'\b(?:sau|dưới|after|below)\s+(?:the\s+)?(?:dòng|câu|chữ|line|text)\s*$', re.I)
 # "Thêm dòng … : <text>": the text after the colon is the literal, to the end of the line, punctuation included
 _COLON_LITERAL = re.compile(r'^[^\S\n]*(?:thêm|chèn|add|insert)\b[^:\n]*?\b(?:dòng|câu|chữ|đoạn|line|text|sentence)\b'
                             r'[^:\n]*:[^\S\n]*([^\n\'"“”‘’«»]{2,120}?)[^\S\n]*$', re.I | re.M)
+# "Đổi … thành: <text>": the colon directly follows thành/bằng; "10:30" or "lưu ý:" later in the sentence is not a cue
+_CUE = r'\b(?:đổi|thay|rename|change|replace)\b([^\n:]*?)\b(?:thành|bằng|to|into)\s*:[^\S\n]+'
+_REPLACE_COLON = re.compile(_CUE + r'([^\n]+)', re.I)
+_NEXT_CUE = re.compile(r'(?<=[.!?…])\s+(?:và\s+)?\b(?:đổi|thay|rename|change|replace)\b[^\n:]*?\b(?:thành|bằng|to|into)\s*:', re.I)
+_ANY_CUE = re.compile(r'\b(?:thành|bằng|to|into)\s*:', re.I)
+_STYLE_WORDS = re.compile(r'màu|colou?r|cỡ chữ|font|kích thước chữ|background|font-size', re.I)
+_STYLE_VALUE = re.compile(r'#[0-9a-f]{3,8}\b|\b\d+(?:\.\d+)?\s?(?:px|rem|em|pt|%)|://|\bwww\.', re.I)
+_PARTICLE = re.compile(r'(?:^|[\s,])(?:nha|nhé|nhe|nhá|ạ|cảm ơn|cám ơn|thanks|please)[\s.!…]*$', re.I)
+_BOUNDARY = re.compile(r'[.!?…]+\s+(?=[A-ZÀ-Ỹ])')
+
+
+def _line_literals(line):
+    """[literal] after each 'thành:' of a line; None when a reading is uncertain (inner boundary, style/URL value, second cue)."""
+    found, pos = [], 0
+    while (m := _REPLACE_COLON.search(line, pos)):
+        if _STYLE_WORDS.search(m.group(1)):
+            return None
+        rest = m.group(2)
+        nxt = _NEXT_CUE.search(rest)
+        piece = rest[:nxt.start()] if nxt else rest
+        pos = m.start(2) + len(piece)
+        lit = piece.strip()
+        if not 2 <= len(lit) <= 120 or _ANY_CUE.search(lit) or _STYLE_VALUE.search(lit) or _PARTICLE.search(lit):
+            return None
+        found.append((lit, bool(_BOUNDARY.search(lit))))
+    return found
+
+
+def _replace_colon_literal(raw):
+    """New texts written after 'thành:'; the title's reading wins over the detail's. A multi-sentence reading
+    (inner sentence boundary), a style/URL value or a second cue is unsure -> []."""
+    for part in raw.partition(chr(10))[::2]:
+        lines = [_line_literals(line) for line in part.split(chr(10))]
+        if None in lines:
+            return []
+        found = [item for line in lines for item in line]
+        if any(inner for _, inner in found):
+            return []
+        if found:
+            return list(dict.fromkeys(lit for lit, _ in found))
+    return []
+
+
+def _colon_replace(raw):
+    words = raw.lower()
+    if not _REPLACE.search(words) or _QUOTED.search(raw) or _REMOVE.search(words):
+        return []
+    return _replace_colon_literal(raw)
+
+
+def colon_replace(state):
+    """Unquoted new texts of a 'đổi … thành: X' request; [] unless the reading is certain."""
+    return _colon_replace(_request_raw(state))
 
 
 def _request_raw(state):
@@ -107,10 +161,36 @@ def _pairs(raw, loose=False):
     return list(dict.fromkeys((text(a), text(b)) for a, b in zip(found[::2], found[1::2])))
 
 
+_ALL_PAGES = re.compile(r'\b(?:mọi|tất cả(?: các)?|toàn bộ(?: các)?)\s+(?:trang|site|website|nơi|chỗ|chữ)\b(?!\s+khác)'
+                        r'|\btrên toàn (?:site|website)\b|\bkhắp nơi\b|\bcả (?:hai|ba|bốn) trang\b|\beverywhere\b'
+                        r'|\b(?:every|all)(?: the)? pages\b(?!\s+else)', re.I)
+_COORD_PAGES = re.compile(r'\b(?:trang|page)\b[^.,;\n]{0,40}\s(?:và|lẫn|cùng|and|with)\s+(?:trang|page)\b', re.I)
+
+
+def all_pages(state):
+    """Request asks for the change in several places, in the user's own words: every page, everywhere or pages joined by và/and (named pages are resolved against the repo by the plan gate)."""
+    raw = _QUOTED.sub(' ', _request_raw(state))
+    return bool(_ALL_PAGES.search(raw) or _COORD_PAGES.search(raw))
+
+
 def replace_pairs(state):
-    """[(old, new)] quoted in a replace request, keep-as-is quotes around them ignored; [] when no replace verb."""
+    """[(old, new)] quoted in a replace request, keep-as-is quotes around them ignored; one absent + one present quote
+    when words sit between the old quote and 'thành'; [] when no replace verb."""
     raw = _request_raw(state)
-    return _pairs(raw, loose=True) if _REPLACE.search(raw.lower()) else []
+    if not _REPLACE.search(raw.lower()):
+        return []
+    found = _pairs(raw, loose=True)
+    if found:
+        return found
+    text = lambda m: next(g for g in m.groups() if g)
+    quotes = list(_QUOTED.finditer(raw))
+    if len({text(m) for m in quotes}) != 2:
+        return []
+    a = quotes[0]
+    b = next((m for m in quotes if text(m) != text(a)), None)
+    if b is None or not _PAIR_CUE.search(raw[a.end():b.start()]) or _PAIR_CUE.search(raw[:a.start()]):
+        return []
+    return [(text(a), text(b))]
 
 
 def anchor(state):
@@ -133,7 +213,10 @@ def text_expectation(state):
         return none
     if not quotes:
         colon = list(dict.fromkeys(m.group(1) for m in _COLON_LITERAL.finditer(raw)))
-        return {'present': colon, 'absent': []} if add and colon and not _QUOTED.search(raw) else none
+        if add and colon and not _QUOTED.search(raw):
+            return {'present': colon, 'absent': []}
+        unquoted = _colon_replace(raw)
+        return {'present': unquoted, 'absent': []} if unquoted else none
     shown = lambda items: [t for t in items if t not in ignored]
     cut = _INSTEAD.search(raw.lower())  # "show 'X' instead of 'Y'": Y must go, not show
     if cut and not remove:

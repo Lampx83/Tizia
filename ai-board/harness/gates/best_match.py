@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import re
 
-from services import file_context, target_confidence
+import tools
+from repositories import code_index
+from services import context, file_context, target_confidence
 from settings import get_settings
 from gate5 import functional
 
@@ -58,12 +60,61 @@ def new_page_refusal(request: dict, added, source, sha: str | None) -> str:
             + (f"; chữ trong nháy có ở {', '.join(homes)}" if homes else ""))
 
 
+_PAGE_LINE = re.compile(r"^\[Trang: .*\] (/\S+)[ \t]*$", re.M)
+_PAGE_STEM = re.compile(r"\btrang ([a-z0-9]+)\b")
+
+
+_LINK_TARGET = re.compile(r"\b(?:tới|đến|href|to)\b[=:\s\"\']*\S+\.html?\S*", re.I)
+_CLAUSE = re.compile(r"(?=\b(?:trang|page)\b)", re.I)
+
+
+def requested_page(request: dict, homes: list[str], source, sha: str) -> tuple[str | None, bool]:
+    """(the one home the request points at, request names several homes). The user's own words come first (paths, pages named
+    by title or link label, 'trang <first word of a file name>'); the [Trang: ...] line the feedback button adds is the last
+    resort. A signal matching several homes (or the all-pages phrases) means several; signals pointing at different homes resolve no page."""
+    body = str(request.get("body") or "")
+    line = _PAGE_LINE.search(body)
+    text = "\n".join((str(request.get("subject") or ""), _PAGE_LINE.sub("", body)))
+    stems = [m.group(1) for m in _PAGE_STEM.finditer(text.casefold())]
+    by_stem = [home for home in homes if re.split(r"[^a-z0-9]+", home.rsplit("/", 1)[-1])[0] in stems]
+    named = [home for clause in _CLAUSE.split(text) for home in context._named_pages(clause, source, sha)]
+    by_line = ["public" + re.split(r"[?#]", line.group(1))[0]] if line and not line.group(1).startswith("//") else []
+    hits = [[home for home in homes if home in found] for found in (context._mentioned_files(_LINK_TARGET.sub(" ", text), source, sha), named, by_stem)]
+    if not any(hits):
+        hits = [[home for home in homes if home in by_line]]
+    several = functional.all_pages({"request_title": request.get("subject"), "request_detail": _PAGE_LINE.sub("", body)})
+    if several or any(len(set(pages)) > 1 for pages in hits):
+        return None, True
+    resolved = {pages[0] for pages in hits if pages}
+    return (resolved.pop() if len(resolved) == 1 else None), False
+
+
+def _loads(source, sha: str, page: str, script: str) -> bool:
+    """The page's own script links (code_index) include `script`."""
+    text = tools._show(source, sha, page)
+    links = code_index.parse(page, text)["links"]["js"] if text else []
+    return script in links
+
+
 def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
-    """Reason to send back a replace plan editing no file that holds an old text found verbatim at sha; '' = allowed."""
+    """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several pages
+    when the request names one element; '' = allowed. A page and a script it loads may both change; any other script is another home."""
     if not sha or feature(request):
         return ""
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
         homes = target_confidence._grep_files(source, sha, old)
-        if homes and not set(homes) & set(targets):
-            return f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}, plan phải sửa file chứa chữ đó"
+        if not homes:
+            continue
+        edited = set(homes) & set(targets)
+        page, several = requested_page(request, homes, source, sha) if len(homes) > 1 else (None, False)
+        pages = {home for home in edited if _PAGE.match(home)}
+        units = pages | {home for home in edited - pages if not any(_loads(source, sha, p, home) for p in pages)}
+        if edited and (len(homes) == 1 or several or len(units) <= 1 and (page is None or pages == {page})):
+            continue
+        where = f"yêu cầu đổi chữ '{old}': chữ cũ nằm ở {', '.join(homes[:5])}"
+        if len(homes) == 1:
+            return f"{where}, plan phải sửa file chứa chữ đó"
+        if page:
+            return f"{where}; yêu cầu chỉ tới {page}: chỉ sửa {page}, không đổi file khác"
+        return f"{where}; yêu cầu chỉ tới một phần tử: chọn đúng một file trong số đó, nêu lý do chọn, không đổi file khác"
     return ""

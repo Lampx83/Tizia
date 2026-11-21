@@ -72,6 +72,7 @@ def loop(env=None) -> dict:
     return {
         "model_calls": settings.loop_model_calls or (moving["loop_model_calls"] if moving["enabled"] else spec["model_calls"]),
         "tool_calls": settings.loop_tool_calls or (moving["loop_tool_calls"] if moving["enabled"] else spec["tool_calls"]),
+        "file_factor_max": spec["file_factor_max"],
         "repeats": spec["repeats"],
         "error_chars": spec["error_chars"],
         "compaction_tokens": spec["compaction_tokens"],

@@ -15,7 +15,6 @@ from runtime.budgets.budget import Budget
 @pytest.fixture
 def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
-    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "3")
 
 
 def task(**kw):

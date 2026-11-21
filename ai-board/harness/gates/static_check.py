@@ -18,6 +18,7 @@ import posixpath
 import re
 import subprocess
 import unicodedata
+from collections import Counter
 from pathlib import Path
 
 import path_policy
@@ -25,7 +26,7 @@ import path_policy
 from services import candidate
 from security import classifier, spotlight
 from gate5 import functional
-from gates import adversarial_review, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
+from gates import adversarial_review, best_match, change_class, guard, intake_guard, intent_review, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings
 from runtime import levels, limits, subtask_files
@@ -287,12 +288,6 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     check_header = get_settings().file_header_check
     outside_on, role = get_settings().out_of_plan_files, state.get("requester_role") or "student"
     out_of_plan: set[str] = set()
-    if outside_on:
-        touched = {_posix(p) for d in diffs for p in (d["file"], d.get("test_file"), *(d.get("extra_files") or [])) if p}
-        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
-            reason = f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [reason],
-                    "failure_class": "critical"}
     issues: list[str] = oversize_issues(state) if check_size else []
     needs_careful_review = bool(issues)
     for d in diffs:
@@ -312,7 +307,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             out_of_plan.update(path for path in stray if path_policy.outside_plan_ok(path, role))
             stray = [path for path in stray if path not in out_of_plan]
         if stray:
-            reason = f"file ngoài plan trong diff: {', '.join(stray)}"
+            reason = f"file ngoài plan trong diff: {_clip_list(stray)}"
             return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                     "issues": [*issues, reason], "failure_class": "critical"}
 
@@ -365,7 +360,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         uncovered = _uncovered_logic(sorted(out_of_plan), diffs, scratch_repo)
         if uncovered:
             state["outside_cover_tries"] = tries = state.get("outside_cover_tries", 0) + 1
-            reason = f"file logic ngoài plan thiếu test phủ: {', '.join(uncovered)}"
+            reason = f"file logic ngoài plan thiếu test phủ: {_clip_list(uncovered)}"
             return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                     "issues": [*issues, reason], "failure_class": "ordinary" if tries == 1 else "critical"}
     if outside_on:
@@ -383,6 +378,18 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     return {"gate": 4, "blocked": False, "reason": None,
             "needs_careful_review": needs_careful_review or bool(advisory),
             "issues": issues, "content_advisory": advisory, **report}
+
+
+def _clip_list(paths: list[str], limit: int = 600) -> str:
+    """Join paths up to limit chars; rest counted."""
+    shown, size = [], 0
+    for path in paths:
+        if shown and size + len(path) + 2 > limit:
+            break
+        shown.append(path)
+        size += len(path) + 2
+    rest = len(paths) - len(shown)
+    return ", ".join(shown) + (f" (+{rest} file nữa)" if rest else "")
 
 
 def _uncovered_logic(paths: list[str], diffs: list[dict], scratch_repo) -> list[str]:
@@ -439,11 +446,6 @@ def _existing(checkout, paths: list[str], text: str, added: int) -> bool:
     return count > added
 
 
-def _segment(line: str, text: str) -> str | None:
-    """Text between tags that holds `text`."""
-    return next((piece.strip() for piece in re.split(r"<[^>]*>", line) if text in piece), None)
-
-
 def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bool:
     """Added line `at` holds text right after the anchor: same line, or only tag lines between them; hunk start = unknown, passes."""
     if anchor in view[at][1] and view[at][1].index(anchor) < view[at][1].index(text):
@@ -456,6 +458,138 @@ def _follows(view: list[tuple[str, str]], at: int, text: str, anchor: str) -> bo
     return True
 
 
+def _pieces(line: str, text: str) -> list[str]:
+    """Text between tags holding `text`; else the string literals/attribute values holding it; else the whole line."""
+    found = [piece.strip() for piece in re.split(r"<[^>]*>", line) if text in piece]
+    if found:
+        return found
+    values = [value for value in _literals(line) if text in value]
+    return values or ([line] if text in line else [])
+
+
+_STRING = re.compile(r"""(["'`])((?:\.|(?!\1).)*)\1""")
+
+
+def _literals(line: str) -> list[str]:
+    """Quoted, backtick or attribute string values on a line."""
+    return [m.group(2).strip() for m in _STRING.finditer(line)]
+
+
+def _segments(line: str) -> set[str]:
+    """What one line can show: the whole line, each text between tags, each string literal / attribute value (and its inner text)."""
+    values = _literals(line)
+    parts = [line, *values, *(piece for text in [line, *values] for piece in re.split(r"<[^>]*>", text))]
+    return {seg.strip() for seg in parts if seg.strip()}
+
+
+def _kind(line: str) -> str:
+    """Head-only lines (meta, title, comment) are a different kind of element than page content."""
+    return "meta" if line.startswith("<meta") else "comment" if "<!--" in line else "title" if "<title" in line else ""
+
+
+def _shown(rows, kinds: set[str]) -> Counter:
+    """Segments of the added lines whose kind is one of `kinds`."""
+    return Counter(seg for sign, line in rows if sign == "+" and _kind(line) in kinds for seg in _segments(line))
+
+
+def _by_hunk(hunks) -> dict[str, list[list[tuple[str, str]]]]:
+    files: dict[str, list[list[tuple[str, str]]]] = {}
+    for path, hunk in hunks:
+        files.setdefault(path, []).append(hunk)
+    return files
+
+
+def _page_path(path: str) -> bool:
+    return bool(re.search(r"\.html?$", path))
+
+
+def _loads(checkout, page: str, script: str) -> bool:
+    """The page's own script links include `script`; unknown without a checkout counts as yes (no certain finding)."""
+    try:
+        text = (Path(checkout) / page).read_text(encoding="utf-8")
+    except (OSError, TypeError, UnicodeDecodeError):
+        return checkout is None
+    return script in code_index.parse(page, text)["links"]["js"]
+
+
+def _replacement_misses(pairs: list[tuple[str, str]], hunks, several, checkout=None) -> tuple[list[str], set[str]]:
+    """Per replace pair: each removed segment holding the old text needs its exact replacement as an added segment of the same hunk
+    (head-only lines only count when the removed element was one); failing that, the identical element with only the text
+    changed in another hunk of the file. A removed line that comes back unchanged (reindent) is not a target.
+    Several pages (or scripts no touched page loads) holding the old text = one miss unless the request names several places.
+    Returns (misses, new texts judged this way); a pair whose old text no hunk removes is left to the plain presence check."""
+    misses, judged = [], set()
+    files = _by_hunk(hunks)
+    for old, text in pairs:
+        old, text = _ws(old), _ws(text)
+        found: dict[str, list[str]] = {}
+        for path, group in files.items():
+            moved = [{line for sign, line in rows if sign == "+"} for rows in group]
+            for i, rows in enumerate(group):
+                unchanged = Counter(line for sign, line in rows if sign == "+")
+                before = []
+                for sign, line in rows:
+                    if sign != "-" or old not in line:
+                        continue
+                    if unchanged[line]:
+                        unchanged[line] -= 1
+                    else:
+                        before += [(seg, line) for seg in _pieces(line, old)]
+                if not before:
+                    continue
+                judged.add(text)
+                found.setdefault(path, [])
+                added = _shown(rows, {_kind(line) for _, line in before})
+                for seg, line in before:
+                    want = seg.replace(old, text)
+                    if added[want]:
+                        added[want] -= 1
+                    elif any(line.replace(old, text) in other for j, other in enumerate(moved) if j != i):
+                        continue
+                    else:
+                        near = next((a for a in sorted(added) if text.rstrip(".!?…") in a or want[:12] in a), None)
+                        found[path].append(f'{path}: đổi "{old}" thành "{text}": phần tử "{seg[:80]}" phải thành đúng "{want[:120]}", '
+                                           + (f'đang là "{near[:120]}"' if near else "không có phần tử thay thế trong dòng thêm"))
+        pages = [path for path in found if _page_path(path)]
+        units = pages + [path for path in found if not _page_path(path) and not any(_loads(checkout, page, path) for page in pages)]
+        if len(units) > 1 and not several(units):
+            keep = [path for path in units if not found[path]]
+            misses.append(f'đổi "{old}" thành "{text}" chỉ ở MỘT trang yêu cầu chỉ tới, diff đang sửa {len(units)} file ({", ".join(units)}): '
+                          + (f"giữ {keep[0]}, hoàn tác các file khác" if keep else
+                             f"giữ đúng một trang (sửa thành đúng chữ mới), hoàn tác các file khác; {next(m for p in units for m in found[p])}"))
+        else:
+            misses += [m for path in found for m in found[path]]
+    return misses, judged
+
+
+def _colon_misses(texts: list[str], hunks) -> list[str]:
+    """Unquoted 'thành: X': a hunk that removes something must add, in an element of the removed kind, a segment, string literal
+    or attribute value equal to X; X elsewhere does not count."""
+    misses = []
+    for text in map(_ws, texts):
+        if any(any(sign == "-" for sign, _ in rows) and _shown(rows, {_kind(line) for sign, line in rows if sign == "-"})[text]
+               for _, rows in hunks):
+            continue
+        path, closest = next(((path, line) for path, rows in hunks for sign, line in rows
+                              if sign == "+" and text.rstrip(".!?…") in line), (", ".join(dict.fromkeys(p for p, _ in hunks)), None))
+        misses.append(f'{path}: chữ yêu cầu "{text}" phải là đúng nguyên văn một phần tử trong dòng thêm thay cho chữ cũ (từng ký tự, cả dấu câu)'
+                      + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
+    return misses
+
+
+def _several(state: dict, homes: list[str], checkout) -> bool:
+    """Request names several places, by the plan gate's resolver on the candidate tree; undecidable without a tree counts as yes."""
+    if functional.all_pages(state) or not checkout:
+        return True
+    request = {"subject": functional.guest_input(state, "request_title"), "body": functional.guest_input(state, "request_detail")}
+    sha = state.get("base_sha") or "HEAD"
+    try:
+        code_index.git(checkout, "rev-parse", "--verify", f"{sha}^{{commit}}")
+    except OSError:
+        return True
+    return best_match.requested_page(request, homes, checkout, sha)[1]
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -463,31 +597,25 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     anchor = functional.anchor(state)
     raw = functional._request_raw(state)
     pairs = functional.replace_pairs(state) if want["absent"] else []
+    colon = [_ws(t) for t in functional.colon_replace(state)]
     hunks = _hunks(diff_text)
     paths = list(dict.fromkeys(path for path, _ in hunks))
+    misses, judged = _replacement_misses(pairs, hunks, lambda homes: _several(state, homes, checkout), checkout)
+    misses += _colon_misses(colon, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
+    new = [text for text in new if text not in judged and text not in colon]
     added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
     # Only the changed files count: text that sits on another page still has to be added where the request asks.
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]
     if functional.quoted(raw) and not want["absent"] and len(new) > 1:
         new = []  # a plain add quoting several texts: which one is new is not pinned down
-    misses = []
     for text in new:
         if not added[text]:
             path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
                                   if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
             misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
                           + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
-    for old, text in pairs:
-        old, text = _ws(old), _ws(text)
-        for path, hunk in hunks:
-            before = [seg for sign, line in hunk if sign == "-" and (seg := _segment(line, old)) is not None]
-            after = [seg for sign, line in hunk if sign == "+" and (seg := _segment(line, text)) is not None]
-            expected = {seg.replace(old, text) for seg in before}
-            if before and after and not expected & set(after):
-                misses.append(f'{path}: đổi "{old}" thành "{text}": phần tử phải thành "{sorted(expected)[0]}", '
-                              f'đang là "{after[0]}" (không giữ lại phần nào của chữ cũ)')
     if anchor:
         anchor = _ws(anchor)
         for text in new:
@@ -531,6 +659,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
         if outside:
             found = [*found, {"check": "catalog", "failure_class": "critical",
                               "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+    if intent_review.enabled():
+        found, review = intent_review.apply(state, deps, budget, found, out["checks"], db_path=db_path, proposal_id=proposal_id)
+        out = {**out, "checks": [*out["checks"], "intent_review"], "intent_review": review}
     if not found and budget is not None and getattr(deps, "models", None) is not None:
         # Chữ hiển thị mới trên diff thật (base..HEAD) qua LLM soát nội dung; lỗi/không chắc → người soát.
         review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)

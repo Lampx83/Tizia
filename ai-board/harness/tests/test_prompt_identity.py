@@ -35,7 +35,7 @@ def test_every_call_site_passes_prompt_name():
 
 
 def test_every_literal_prompt_name_resolves_to_a_hash():
-    import gates.adversarial_review, gates.react_plan, gates.reviewer_fix, gates.vision_advisory, security.classifier, services.skill_rewrite  # noqa: F401,E401
+    import gates.adversarial_review, gates.intent_review, gates.react_plan, gates.reviewer_fix, gates.vision_advisory, security.classifier, services.skill_rewrite  # noqa: F401,E401
     unresolved = set()
     for path in _sources():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

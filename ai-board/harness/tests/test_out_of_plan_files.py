@@ -8,7 +8,6 @@ import path_policy
 import tools
 from gates import static_check
 from runtime import tool_loop
-from runtime.loops import stop_report
 from runtime.budgets.budget import Budget
 
 FLAG, ZONE = "AI_BOARD_OUT_OF_PLAN_FILES", "AI_BOARD_ADMIN_BACKEND_ZONE"
@@ -86,23 +85,16 @@ def test_deny_zone_file_is_blocked(on):
     assert "server/index.js" in out["reason"]
 
 
-def test_nine_files_stop_with_scope_too_large(on):
-    files = [f"server/contexts/content/f{i}.js" for i in range(8)]
-    out = loop([edit("public/a.js"), *(edit(f) for f in files)])
-    assert out["status"] == "blocked" and "scope too large" in out["reason"]
-    assert stop_report.classify("blocked", out["reason"], 3, "critical") == "scope_too_large"
-
-
-def test_eight_files_including_test_are_within_the_cap(on):
-    files = [f"server/contexts/content/f{i}.js" for i in range(6)]
+def test_many_out_of_plan_files_stay_under_the_role_zone(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_LOOP_MODEL_CALLS", "40")
+    monkeypatch.setenv("AI_BOARD_LOOP_TOOL_CALLS", "40")
+    files = [f"server/contexts/content/f{i}.js" for i in range(12)]
     out = loop([edit("public/a.js"), *(edit(f) for f in files), TEST, FINISH])
-    assert out["status"] == "proposed"
-
-
-def test_test_file_counts_toward_the_cap(on):
-    files = [f"server/contexts/content/f{i}.js" for i in range(7)]
-    out = loop([edit("public/a.js"), *(edit(f) for f in files), TEST])
-    assert out["status"] == "blocked" and "scope too large" in out["reason"]
+    assert out["status"] == "proposed" and len(out["out"]["extra_files"]) == 12
+    out = loop([edit("public/a.js"), *(edit(f) for f in files), edit("server/index.js")])
+    assert out["status"] == "blocked" and "server/index.js" in out["reason"]
+    out = loop([edit("public/a.js"), *(edit(f) for f in files)], role="student")
+    assert out["status"] == "blocked" and "ngoài phạm vi" in out["reason"]
 
 
 def _state(tmp_path, extras, test_text=None, role="admin"):
@@ -134,10 +126,25 @@ def test_gate4_display_file_needs_no_cover(on, tmp_path):
     assert out["blocked"] is False and out["files"]["out_of_plan"] == ["public/b.css"]
 
 
-def test_gate4_nine_touched_files_stop(on, tmp_path):
-    extras = [f"server/contexts/content/f{i}.js" for i in range(8)]
-    out = static_check.run(_state(tmp_path, extras, "x\n"), check_size=False)
-    assert out["blocked"] and out["failure_class"] == "critical" and "scope too large" in out["reason"]
+def test_gate4_passes_twelve_files_all_in_plan(on, tmp_path):
+    names = [f"public/f{i}.js" for i in range(12)]
+    state = _state(tmp_path, names[1:], "// " + " ".join(names) + "\n")
+    state["plan"]["subtasks"] = [{"title": "t", "file": n, "verify": "v", "size": "small"} for n in names]
+    state["diffs"][0]["file"] = names[0]
+    out = static_check.run(state, check_size=False)
+    assert out["blocked"] is False and out["files"]["out_of_plan"] == []
+
+
+def test_gate4_many_out_of_plan_files_follow_the_role_zone(on, tmp_path):
+    extras = [f"server/contexts/content/f{i}.js" for i in range(9)]
+    out = static_check.run(_state(tmp_path, extras, "// " + " ".join(extras) + " public/a.js"), check_size=False)
+    assert out["blocked"] is False and len(out["files"]["out_of_plan"]) == 9
+
+
+def test_gate4_many_out_of_plan_files_blocked_for_student(on, tmp_path):
+    extras = [f"server/contexts/content/f{i}.js" for i in range(9)]
+    out = static_check.run(_state(tmp_path, extras, "// public/a.js", role="student"), check_size=False)
+    assert out["blocked"]
 
 
 def test_gate4_out_of_plan_in_deny_zone_blocks(on, tmp_path):
