@@ -43,4 +43,6 @@ test('Duyệt tab is registered, badged, and the Góp ý tab only points at it',
   assert.match(dash, /approvalsNotice\(approvalCounts\(approvalInput\(\)\)\.total\)/);
   assert.match(dash, /split\('\/'\)\[0\]/, 'deep link hash keeps the tab key');
   assert.match(dash, /dbDecisionPath\(item, approve \? 'approve' : 'reject'\)/);
+  assert.match(dash, /too_large_to_approve: 'Thay đổi quá lớn để duyệt an toàn; chỉ có thể từ chối\.'/);
+  assert.match(dash, /item\.clipped === true/);
 });

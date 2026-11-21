@@ -117,3 +117,12 @@ test('diff block clips at 20000 chars and handles empty', () => {
   assert.match(diffBlock('x'.repeat(20001)), /Đã cắt/);
   assert.match(diffBlock(''), /Không có diff/);
 });
+
+test('clipped item disables approve, shows the notice, keeps reject with a reason', () => {
+  const item = { id: 3, request_id: 4, kind: 'backend', diff: 'd', sandbox: { status: null }, clipped: true };
+  const html = renderDbApproval(item, { reason: 'quá lớn' });
+  assert.match(html, /data-clipped[\s\S]*Thay đổi quá lớn để duyệt an toàn; chỉ có thể từ chối/);
+  assert.match(html, /data-action="db-approve"[^>]* disabled/);
+  assert.doesNotMatch(html, /data-action="db-reject"[^>]* disabled/);
+  assert.doesNotMatch(renderDbApproval({ ...item, clipped: false }, {}), /data-clipped|data-action="db-approve"[^>]* disabled/);
+});

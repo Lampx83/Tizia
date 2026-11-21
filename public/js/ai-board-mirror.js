@@ -95,6 +95,7 @@ const diffLines = (d = {}) => [
   ...Object.entries(d.removed_columns || {}).map(([t, cols]) => `Xóa cột khỏi ${code(t)}: ${cols.map(code).join(' ')}`),
 ];
 
+export const TOO_LARGE = 'Thay đổi quá lớn để duyệt an toàn; chỉ có thể từ chối.';
 export const HOLD_KIND = { db: 'Thay đổi CSDL', backend: 'Thay đổi máy chủ', both: 'Thay đổi CSDL và máy chủ' };
 const DIFF_CAP = 20000;
 const showsSql = (kind) => kind !== 'backend';
@@ -117,6 +118,7 @@ export function renderDbApproval(item, ui = {}) {
   const files = item.files || [], diff = diffLines(sb.schema_diff), cand = item.candidate || {};
   const checks = sb.checks || [], tests = sb.tests || [], attention = item.attention || [];
   const noReason = !String(ui.reason ?? '').trim();
+  const clipped = item.clipped === true;
   const id = esc(item.id), hid = `db-approval-${id}`;
   const dbPart = showsSql(kind) ? `
     <div class="sub">SQL (chỉ đọc)</div>${sqlBlock(item.sql)}
@@ -130,6 +132,7 @@ export function renderDbApproval(item, ui = {}) {
   return `<article class="blk db-approval" id="${hid}" aria-labelledby="${hid}-h" data-id="${id}" data-request="${esc(item.request_id)}" data-kind="${esc(kind)}">
     <h3 id="${hid}-h">${item.title ? esc(item.title) : HOLD_KIND[kind]} ${tag('warn', HOLD_KIND[kind])} <span class="meta">yêu cầu #${esc(item.request_id)} · lượt ${id}</span></h3>
     <p class="meta"><a href="/admin-request.html?id=${esc(item.request_id)}" target="_top">Mở trang yêu cầu</a>${cand.branch ? ` · nhánh ${code(cand.branch)}` : ''}${cand.head_sha ? ` · ${code(String(cand.head_sha).slice(0, 7))}` : ''}</p>
+    ${clipped ? `<div class="attention" role="alert" data-clipped><b>${esc(TOO_LARGE)}</b></div>` : ''}
     ${attention.length ? `<div class="attention" role="alert"><b>Chạm bảng nhạy cảm:</b> ${attention.map(code).join(' ')}<div class="meta">Đọc kỹ SQL trước khi duyệt: bảng này chứa danh tính, quyền hoặc tiền.</div></div>` : ''}
     ${dbPart}${backendPart}
     <div class="sub">File bị giữ</div>
@@ -138,7 +141,7 @@ export function renderDbApproval(item, ui = {}) {
     <input id="${hid}-reason" data-db-reason="${id}" maxlength="500" autocomplete="off" aria-describedby="${hid}-hint" value="${esc(ui.reason)}" style="width:100%;max-width:72ch;display:block;margin:4px 0">
     <p class="meta" id="${hid}-hint">${noReason ? 'Nhập lý do để bật nút Từ chối.' : ''}</p>
     <div class="row">
-      <button class="btn ok" data-action="db-approve" data-id="${id}"${ui.busy ? ' disabled' : ''}>Duyệt</button>
+      <button class="btn ok" data-action="db-approve" data-id="${id}"${ui.busy || clipped ? ' disabled' : ''}${clipped ? ` title="${esc(TOO_LARGE)}"` : ''}>Duyệt</button>
       <button class="btn danger-outline" data-action="db-reject" data-id="${id}"${ui.busy || noReason ? ' disabled' : ''}>Từ chối</button>
     </div>
     <div class="meta" role="status" aria-live="polite">${esc(ui.msg || '')}</div>

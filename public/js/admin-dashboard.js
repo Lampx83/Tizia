@@ -775,7 +775,7 @@ async function netDecide(btn, decision) {
   await loadRequests();
 }
 
-const DB_ERROR = { not_awaiting_db_approval: 'Mục này đã được quyết định hoặc không còn chờ. Đã tải lại.', stale_db_approval: 'Có bản mới hơn của thay đổi này. Đã tải lại.',
+const DB_ERROR = { too_large_to_approve: 'Thay đổi quá lớn để duyệt an toàn; chỉ có thể từ chối.', not_awaiting_db_approval: 'Mục này đã được quyết định hoặc không còn chờ. Đã tải lại.', stale_db_approval: 'Có bản mới hơn của thay đổi này. Đã tải lại.',
   reason_required: 'Cần nhập lý do (tối đa 500 ký tự).', request_not_found: 'Không tìm thấy yêu cầu.' };
 
 async function dbAction(btn) {
@@ -784,6 +784,7 @@ async function dbAction(btn) {
   if (action === 'db-retry') return loadRequests();
   if (!item || approvalUi.busy) return;
   const approve = action === 'db-approve';
+  if (approve && item.clipped === true) { approvalUi.dbMsg = DB_ERROR.too_large_to_approve; return renderApprovals(); }
   const body = dbDecisionBody(approve ? 'approve' : 'reject', approvalReason('db', item.id), item);
   if (!body) { approvalUi.dbMsg = 'Nhập lý do trước khi từ chối.'; return renderApprovals(); }
   const lines = [`Yêu cầu #${item.request_id} · lượt ${item.id}`];
