@@ -13,10 +13,6 @@ def enabled() -> bool:
     return get_settings().multi_file_subtask
 
 
-def limit() -> int:
-    return get_settings().multi_file_max
-
-
 def _norm(path: str) -> str:
     return posixpath.normpath(unicodedata.normalize("NFC", path.strip()).replace("\\", "/"))
 
@@ -85,7 +81,7 @@ def _declared_extras(index: int, task: dict) -> list[str] | None:
 
 
 def validate(plan: dict) -> None:
-    """Flag off: drop `files` and `allowed_scope`. Flag on: shape, total <= limit, normalize in place, no file shared by two subtasks. Raise ValueError."""
+    """Flag off: drop `files` and `allowed_scope`. Flag on: shape, normalize in place, no file shared by two subtasks. Raise ValueError."""
     tasks = [task for task in plan.get("subtasks") or [] if isinstance(task, dict)]
     if not enabled():
         for task in tasks:
@@ -104,8 +100,6 @@ def validate(plan: dict) -> None:
             task["files"] = extras
         else:
             task.pop("files", None)
-        if 1 + len(extras) > limit():
-            raise ValueError(f"subtask[{index}] có {1 + len(extras)} file, tối đa {limit()}")
         if declared is not None:
             task["allowed_scope"] = files_of(task)
         for path in files_of(task):
