@@ -25,7 +25,7 @@ from gate5.session import STAGE_CLASS, Compose, failure_class, missing_tool
 from gate5 import functional, style
 from gate5.guest_inputs import ensure as ensure_guest_inputs, guest_input, missing as missing_guest_inputs
 from runtime import limits
-from runtime.meter import redact
+from runtime.budgets.meter import redact
 from settings import get_settings
 from gate5 import check_registry, checks as gate_checks
 from repositories import server_hsm

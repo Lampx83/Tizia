@@ -20,11 +20,12 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from runtime.budget import Budget, BudgetExhausted          # noqa: E402
+from runtime.budgets.budget import Budget, BudgetExhausted          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
-from runtime import limits, meter, prompt_roles, state_file  # noqa: E402
+from runtime import limits, prompt_roles, state_file
+from runtime.budgets import meter  # noqa: E402
 from services import context                     # noqa: E402
 from services import attachments                 # noqa: E402
 from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check

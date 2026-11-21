@@ -8,7 +8,7 @@ import pytest
 
 from gates import vision_advisory
 from gate5 import verify
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 from test_gate_5_verify import FakeRunner, checkout, state
 from gate5 import functional
 

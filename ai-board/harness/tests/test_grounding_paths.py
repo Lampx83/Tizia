@@ -90,7 +90,7 @@ def test_nearest_files_ignore_harness_and_single_token_matches():
 
 
 def test_error_message_has_no_placeholder_path_for_the_repeat_signature(repo):
-    from runtime import objection_repeat
+    from runtime.loops import objection_repeat
     source, sha = repo
     with pytest.raises(ValueError) as err:
         gp.check_references(so_tay_plan(False), source, sha, {})
@@ -99,7 +99,7 @@ def test_error_message_has_no_placeholder_path_for_the_repeat_signature(repo):
 
 
 def test_signature_ignores_extensionless_placeholders():
-    from runtime import objection_repeat
+    from runtime.loops import objection_repeat
     reason = "mỗi test/file nhắc tới; xem public/a.html và public/js/x"
     assert objection_repeat.describe({"gate": 1, "result": {"reason": reason}})["paths"] == ["public/a.html"]
 
@@ -149,7 +149,7 @@ ROOT43_REQUEST = {"subject": "Thêm trang Sổ tay Git cho Trường CNTT", "typ
 
 def test_gate1_run_accepts_root43_plan_without_a_test_subtask(repo):
     import json
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from conftest import FakeModels, deps_with
     from gates import brainstorm
 

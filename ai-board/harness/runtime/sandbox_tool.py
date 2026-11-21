@@ -14,8 +14,9 @@ from pathlib import Path, PurePosixPath
 from repositories import code_index
 import path_policy
 from repositories import server_hsm
-from runtime import limits, meter, tool_manifest
-from runtime.budget import BudgetExhausted
+from runtime import limits, tool_manifest
+from runtime.budgets import meter
+from runtime.budgets.budget import BudgetExhausted
 from settings import get_settings
 from verification.sandbox import SandboxError, SandboxSession, package
 

@@ -153,7 +153,7 @@ def run_model(cases: list[dict], deps, synth: bool, root: Path) -> list[dict]:
     """Gate 2.5 reviewer once per flag state, then the production post-filters. GPU lane only."""
     import settings
     from gates import plan_validate as pv
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     rows = []
     try:
         for case in cases:

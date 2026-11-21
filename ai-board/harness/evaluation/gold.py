@@ -19,8 +19,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from runtime import meter  # noqa: E402
-from runtime.budget import Budget  # noqa: E402
+from runtime.budgets import meter  # noqa: E402
+from runtime.budgets.budget import Budget  # noqa: E402
 from gates import implement  # noqa: E402
 from runtime.pipeline import ROOT, Deps  # noqa: E402
 from providers.routing import local_only  # noqa: E402

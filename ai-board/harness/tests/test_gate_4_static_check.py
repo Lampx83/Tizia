@@ -13,7 +13,7 @@ import pytest
 def test_content_review_stops_before_next_model(stop, after_json):
     from types import SimpleNamespace
     from repositories import server_hsm
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
 
     calls = []
     class Authority:
@@ -408,7 +408,7 @@ def test_forbidden_import_in_a_generated_test_still_blocks_even_with_an_oracle(t
 
 def test_content_review_root_allowance_exhaustion_is_budget_not_outage():
     from types import SimpleNamespace
-    from runtime.budget import Budget, BudgetExhausted
+    from runtime.budgets.budget import Budget, BudgetExhausted
 
     def call_model(*_args, **_kwargs):
         raise BudgetExhausted('root_allowance_exhausted')

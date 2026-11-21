@@ -1,6 +1,6 @@
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime.pipeline import Deps
 from evaluation.suite.trial import recording
 

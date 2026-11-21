@@ -8,8 +8,8 @@ import pytest
 import tools
 from conftest import FakeModels, deps_with
 from gates import best_match, brainstorm, plan_validate, react_plan, subtask_contract
-from runtime import meter
-from runtime.budget import Budget
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from settings import Settings
 from test_code_index import _SeqModels
 from test_repomap import COUNTER_REQUEST, _crowded_repo, _plan_for, _real_matching
@@ -117,7 +117,7 @@ def test_gate1_path_policy_and_missing_file_still_block_with_flag_on(monkeypatch
 
 def test_gate1_budget_stop_still_blocks_with_flag_on(monkeypatch, tmp_path):
     _flag(monkeypatch, True)
-    from runtime.budget import BudgetExhausted
+    from runtime.budgets.budget import BudgetExhausted
     with pytest.raises(BudgetExhausted):
         _gate1([_plan("server/nope.js")] * 2, REPLACE, _repo(tmp_path), Budget(max_wall_clock_s=0))
 

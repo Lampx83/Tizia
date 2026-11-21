@@ -4,7 +4,7 @@ import json
 import pytest
 
 from runtime import pipeline, state_file
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import get_settings
 
 PLAN = {"subtasks": [

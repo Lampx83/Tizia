@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, connect, deps_with, fake_repo_tree, plan_with
 from gates import plan_validate
 from runtime.pipeline import load_inbox, run_once
@@ -429,7 +429,7 @@ def test_named_request_file_is_loaded_even_when_the_plan_omits_it(monkeypatch):
 
 def test_http_worker_leaves_complexity_to_the_server_tier():
     from conftest import FakeModels, deps_with
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     plan = plan_with(["features", "quiz"])  # 2 capabilities: complex
     state = {"plan": plan}
     out = plan_validate.run({"id": "req-1", "complexity_by_server": True}, deps_with(FakeModels(plan)), Budget(), state)

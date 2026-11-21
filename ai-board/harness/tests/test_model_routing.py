@@ -4,9 +4,9 @@ import urllib.error
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime.pipeline import Deps
-from runtime.meter import Tracer
+from runtime.budgets.meter import Tracer
 from providers.routing import ModelRouter, validate_catalog
 from providers.client import OllamaClient
 

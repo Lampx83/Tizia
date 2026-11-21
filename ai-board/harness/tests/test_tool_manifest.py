@@ -6,7 +6,7 @@ import pytest
 
 import tools
 from runtime import tool_loop, tool_manifest
-from runtime.budget import Budget, ChildBudget
+from runtime.budgets.budget import Budget, ChildBudget
 
 RAW = json.loads(tool_manifest.PATH.read_text(encoding="utf-8"))
 KNOWN = tool_loop.IMPLEMENTED

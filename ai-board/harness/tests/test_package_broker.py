@@ -8,7 +8,7 @@ import path_policy
 import tools
 from gates import guard
 from runtime import network_request, package_broker
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_network_request import ASK, loop
 from test_tool_checkpoint import MemSteps
 from test_tool_loop import EDIT, FINISH, PAGE, TEST

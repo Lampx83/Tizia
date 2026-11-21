@@ -13,7 +13,7 @@ import urllib.request
 from urllib.parse import urlsplit
 from dataclasses import dataclass, replace
 from providers.routing import ModelRouter
-from runtime.meter import measure
+from runtime.budgets.meter import measure
 from runtime.root_allowance import current
 from settings import get_settings
 

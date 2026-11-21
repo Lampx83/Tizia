@@ -3,8 +3,9 @@ import html
 import json
 from types import SimpleNamespace
 
-from runtime import meter, prompt_roles
-from runtime.budget import Budget, BudgetExhausted
+from runtime import prompt_roles
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget, BudgetExhausted
 from services import default_skills, skill_format, skill_frontmatter
 from settings import get_settings
 

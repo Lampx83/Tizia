@@ -10,7 +10,8 @@ from typing import Annotated, Callable, TypedDict
 
 from langchain_core.runnables import RunnableConfig
 
-from runtime import limits, loop_guard
+from runtime import limits
+from runtime.loops import loop_guard
 from settings import get_settings
 
 PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "contract.json"
@@ -80,7 +81,7 @@ def compile_graph(handlers: dict[str, Callable[[], str]], entry: str, *, graph_s
 
     def make(nid: str):
         def node(state: GraphState, config: RunnableConfig) -> GraphState:
-            from runtime import budget
+            from runtime.budgets import budget
 
             if resume_nodes and nid in resume_nodes and nid not in resumed:
                 resumed.add(nid)  # one replay only: a repair re-enters the node for real

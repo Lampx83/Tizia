@@ -19,7 +19,7 @@ from evaluation import eval_fast
 from evaluation import gold as gold_eval
 from evaluation.suite import candidate_grade, taskpack
 from gates import brainstorm, gate3_guards, plan_validate, scope_check, static_check
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime import network_request, tool_loop
 from runtime.pipeline import Deps
 from settings import get_settings

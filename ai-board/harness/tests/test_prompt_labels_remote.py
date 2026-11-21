@@ -25,7 +25,7 @@ class Client:
 
 @pytest.fixture
 def disk(monkeypatch):
-    from runtime import meter
+    from runtime.budgets import meter
     monkeypatch.setattr(pl, "disk_versions", lambda *_: {"implement.md": {"hash": "a" * 64, "content": "x"}})
     monkeypatch.setattr(meter, "prompt_lock", lambda: LOCK)
 
@@ -72,13 +72,13 @@ def test_server_rejecting_stale_fingerprint_is_transient(monkeypatch, disk):
 
 
 def test_real_prompts_dir_matches_its_lock():
-    from runtime import meter
+    from runtime.budgets import meter
     assert pl.check_all(lock=meter.prompt_lock(), labels={}, disk={n: v["hash"] for n, v in pl.disk_versions().items()}) == []
 
 
 def test_edited_prompt_without_label_is_refused(monkeypatch, disk):
     monkeypatch.setenv("AI_BOARD_PROMPT_LABELS", "1")
-    from runtime import meter
+    from runtime.budgets import meter
     monkeypatch.setattr(meter, "prompt_lock", lambda: {"implement.md": "f" * 64})
     with pytest.raises(AuthorityError, match="prompt_label_mismatch"):
         gate(Client({})).authorize_action("model")

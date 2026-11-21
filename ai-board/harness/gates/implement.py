@@ -23,8 +23,9 @@ import path_policy
 from gates import change_class, gate3_guards, plan_rules, subtask_context, subtask_contract
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
-from runtime import limits, loop_guard, model_json, network_request, state_file, subtask_files, tool_loop
-from runtime.budget import BudgetExhausted
+from runtime import limits, model_json, network_request, state_file, subtask_files, tool_loop
+from runtime.loops import loop_guard
+from runtime.budgets.budget import BudgetExhausted
 from repositories import server_hsm
 from repositories import memory
 from services import conflict_markers

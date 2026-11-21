@@ -13,9 +13,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from runtime import expand_tool, limits, meter, model_json, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
-from runtime.budget import BudgetExhausted, ChildBudget
-from runtime.loop_budget import Stop, make_adaptive
+from runtime import expand_tool, limits, model_json, network_request, repair_session, sandbox_tool, subtask_files, tool_manifest
+from runtime.budgets import meter
+from runtime.budgets.budget import BudgetExhausted, ChildBudget
+from runtime.budgets.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -93,7 +93,7 @@ def test_gate_trace_record_noop_without_db_path_or_proposal_id(inbox_file, db_fi
     main.run_once, như phần lớn test hiện có) không truyền db_path/proposal_id
     -> không ghi trace, không lỗi."""
     from gates import brainstorm
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
 
     out = brainstorm.run({"id": "req-x", "subject": "s", "body": "b"}, fake_deps, Budget(max_wall_clock_s=999))
 

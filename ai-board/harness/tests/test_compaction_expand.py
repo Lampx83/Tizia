@@ -8,7 +8,7 @@ import pytest
 
 import tools
 from runtime import tool_loop, tool_manifest
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_context_compaction import CompactingDeps, trial
 from test_tool_loop import SUBTASK
 from test_tool_loop import PAGE

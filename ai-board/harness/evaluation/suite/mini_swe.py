@@ -14,7 +14,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from verification.loop_checks import CheckSession, archive
 
 VERSION = '2.4.6'

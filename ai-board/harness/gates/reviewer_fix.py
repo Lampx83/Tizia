@@ -8,7 +8,8 @@ from pathlib import Path
 from services import file_context
 from gates import change_class, gate3_guards, implement
 from repositories import server_hsm
-from runtime import meter, prompt_roles, subtask_files
+from runtime import prompt_roles, subtask_files
+from runtime.budgets import meter
 from services import candidate, default_skills
 
 MAX_CONTEXT_CHARS = 60_000  # listing của TẤT CẢ file đã chạm: mức 12000 làm reviewer fix skip

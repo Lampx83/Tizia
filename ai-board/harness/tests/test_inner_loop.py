@@ -2,7 +2,7 @@
 import subprocess
 
 from services import file_context
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import implement
 
@@ -204,7 +204,7 @@ def test_inner_retries_vary_the_sampling_so_a_deterministic_loop_can_break(tmp_p
 
 def _traced(tmp_path, models):
     import dataclasses
-    from runtime import meter
+    from runtime.budgets import meter
     tracer, batches = meter.Tracer(None), []
     tracer.begin(1, batches.append)
     state = {"plan": _one_file_plan(), "checkout_source": str(_source(tmp_path))}

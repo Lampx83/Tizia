@@ -4,8 +4,9 @@ import random
 
 import pytest
 
-from runtime import pipeline, meter, tool_loop
-from runtime.budget import Budget
+from runtime import pipeline, tool_loop
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from runtime.root_allowance import root_scope
 from services import context, default_skills, skill_selection as node, token_count
 from test_admin_skills import CatalogClient, approved

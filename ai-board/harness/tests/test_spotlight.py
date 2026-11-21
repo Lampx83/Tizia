@@ -6,7 +6,7 @@ import pytest
 
 from gates import brainstorm, intake_guard
 from runtime import pipeline
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from security import spotlight
 from services import context
 

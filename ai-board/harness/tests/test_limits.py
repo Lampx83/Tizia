@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from runtime import limits, meter, tool_loop
-from runtime.budget import Budget, ChildBudget
+from runtime import limits, tool_loop
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget, ChildBudget
 from verification import sandbox
 
 REPO = Path(__file__).resolve().parents[3]

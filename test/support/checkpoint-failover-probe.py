@@ -10,7 +10,7 @@ import tools
 from worker import WorkerClient
 from repositories.server_checkpoint import HttpCheckpoint
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_tool_loop import Deps, EDIT, FINISH, PAGE, SUBTASK, TEST
 
 base, worker_key, ticket_id, phase = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]

@@ -4,8 +4,9 @@ import json
 import subprocess
 from pathlib import Path
 
-from runtime import pipeline, meter, tool_loop
-from runtime.budget import Budget
+from runtime import pipeline, tool_loop
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from runtime.root_allowance import root_scope
 from test_prompt_roles import FakeModels, EDIT, TEST, FINISH, PAGE, SUBTASK
 

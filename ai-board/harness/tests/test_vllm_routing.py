@@ -9,9 +9,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime.pipeline import Deps
-from runtime.meter import Tracer, measure, units
+from runtime.budgets.meter import Tracer, measure, units
 from providers.client import OllamaClient
 
 
@@ -272,7 +272,7 @@ def test_ollama_protocol_ignores_images_and_says_so():
 @pytest.mark.parametrize('mode', ['legacy_ollama', 'legacy_vllm', 'routed_vllm'])
 @pytest.mark.parametrize('nested', [False, True])
 def test_retry_stops_at_shared_call_cap_without_hidden_http_attempts(mode, nested, monkeypatch):
-    from runtime.budget import BudgetExhausted, ChildBudget
+    from runtime.budgets.budget import BudgetExhausted, ChildBudget
     from providers import client
     monkeypatch.setattr(client, '_sleep', lambda _: None)
     with gateway(status=503) as (url, calls):
@@ -289,7 +289,7 @@ def test_retry_stops_at_shared_call_cap_without_hidden_http_attempts(mode, neste
 
 @pytest.mark.parametrize('routing', ['false', 'true'])
 def test_retry_backoff_cannot_start_another_request_after_wall_allowance_expires(routing):
-    from runtime.budget import BudgetExhausted
+    from runtime.budgets.budget import BudgetExhausted
     with gateway(status=503) as (url, calls):
         models = OllamaClient.from_env({'VLLM_URL': url, 'GATE3_MODEL_HEAVY': 'heavy', 'AI_BOARD_MODEL_ROUTING': routing})
         budget = Budget()

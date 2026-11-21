@@ -5,8 +5,8 @@ import pytest
 
 from conftest import FakeModels, deps_with
 from gates import best_match, brainstorm, plan_validate, react_plan, static_check
-from runtime import meter
-from runtime.budget import Budget
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from test_code_index import _SeqModels, _commit, _git
 
 pytestmark = pytest.mark.usefixtures('high_target_confidence')

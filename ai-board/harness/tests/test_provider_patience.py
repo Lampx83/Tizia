@@ -6,8 +6,8 @@ import pytest
 
 from providers.client import OllamaClient
 from providers.routing import ModelRouter
-from runtime.budget import Budget
-from runtime.meter import Tracer
+from runtime.budgets.budget import Budget
+from runtime.budgets.meter import Tracer
 from runtime.pipeline import Deps
 from test_model_routing import api_catalog, hosted_settings, mock_gateway
 

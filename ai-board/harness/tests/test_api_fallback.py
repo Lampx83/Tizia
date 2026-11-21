@@ -8,9 +8,9 @@ import pytest
 from providers.client import OllamaClient
 from providers.routing import GEMINI_DEFAULT_MODEL, ModelRouter, local_only
 from runtime import limits
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime.compaction import CompactionPause, History
-from runtime.meter import Tracer
+from runtime.budgets.meter import Tracer
 from runtime.pipeline import Deps
 
 GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai'

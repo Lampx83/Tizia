@@ -11,7 +11,7 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from services import candidate
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from worker import execute_pre_pr
 
 BRANCH = 'ai-board/2026-10-17-ticket-9-abc123'

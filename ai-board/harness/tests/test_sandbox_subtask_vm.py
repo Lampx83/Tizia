@@ -4,7 +4,7 @@ import json
 import pytest
 
 from runtime import sandbox_tool, tool_loop
-from runtime.budget import Budget, ChildBudget
+from runtime.budgets.budget import Budget, ChildBudget
 from runtime.tool_loop import Forbidden
 from verification.sandbox import SandboxError
 from tests.test_sandbox_tool import ALLOWED, OK, FakeClient, FakeTrace, stage_without_git  # noqa: F401

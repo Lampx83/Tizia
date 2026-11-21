@@ -3,7 +3,7 @@
 and a verify/acceptance test path no subtask creates is rejected."""
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import brainstorm
 

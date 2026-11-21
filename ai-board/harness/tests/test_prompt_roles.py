@@ -8,7 +8,7 @@ from providers import client as client_mod
 from providers.client import OllamaClient
 from providers.routing import ModelRouter
 from runtime import pipeline, prompt_roles, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "Thêm dòng", "file": "public/a.html", "verify": "thấy B"}

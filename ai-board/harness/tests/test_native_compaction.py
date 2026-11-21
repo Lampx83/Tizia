@@ -6,7 +6,7 @@ import pytest
 
 import tools
 from runtime import limits, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_native_tool_calling import EDIT, FINISH, PAGE, SUBTASK, TEST, native
 
 BIG = "界" * 2000

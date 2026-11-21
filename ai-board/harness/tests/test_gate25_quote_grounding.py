@@ -167,7 +167,7 @@ def test_new_file_is_not_grounded_by_an_anchor_elsewhere(monkeypatch):
 def _run_case(tmp_path, title, quote):
     import subprocess
     from conftest import FakeModels, deps_with
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     for path, text in {'public/admin.html': ADMIN, 'public/login.html': LOGIN}.items():
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / path).write_text(text, encoding='utf8')

@@ -1,4 +1,4 @@
-from runtime.objection_repeat import repeated, signature
+from runtime.loops.objection_repeat import repeated, signature
 
 
 def stopped(reason, gate=2.5):

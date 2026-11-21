@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from runtime import pipeline
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from security import prompt_guard
 
 

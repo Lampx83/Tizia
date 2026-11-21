@@ -172,7 +172,7 @@ def _judge(tasks: list[dict], pairs: dict, plans: dict, deps, left: float) -> di
     """Giám khảo shadow: model chọn plan gốc (A) hay biến thể (B) từng cặp; so với luật tất định. Chỉ dùng phần
     ngân sách eval còn lại; cặp mà lời gọi có thể vượt (ước = lời gọi đắt nhất đã thấy) → skipped. Model lỗi /
     trả sai khuôn → skipped. Không raise."""
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
 
     from security import spotlight
     prompt = spotlight.fence((HARNESS / "prompts" / JUDGE_PROMPT_NAME).read_text(encoding="utf-8"))

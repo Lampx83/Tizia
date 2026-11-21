@@ -76,7 +76,7 @@ def _real_trial(task: dict) -> dict:
     from dotenv import load_dotenv
     from evaluation import eval_run
     from evaluation.suite import trial
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from runtime.pipeline import Deps, ENV_FILE, ROOT
     from providers.routing import local_only
     from settings import get_settings

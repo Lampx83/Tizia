@@ -7,7 +7,7 @@ import tarfile
 import pytest
 
 from runtime import sandbox_tool, tool_loop
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 from runtime.tool_loop import Forbidden
 from verification.sandbox import SandboxError
 from tests.test_sandbox_tool import OK, FakeClient

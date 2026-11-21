@@ -7,7 +7,7 @@ import pytest
 import tools
 from repositories import server_hsm
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_tool_loop import Deps, EDIT, FINISH, PAGE, SUBTASK, TEST
 
 
@@ -114,7 +114,8 @@ def test_crash_during_compaction_retains_spend_and_rebuilds_only_untrusted_histo
 
 
 def test_real_deps_and_tracer_can_record_a_compactor_generation():
-    from runtime import meter, pipeline
+    from runtime import pipeline
+    from runtime.budgets import meter
     class Transport:
         protocol = 'vllm'
         routing = None

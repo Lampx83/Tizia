@@ -6,7 +6,7 @@ from pathlib import Path
 
 from runtime import pipeline as main
 from gates import reviewer_fix, static_check
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 F = 'server/contexts/payment/index.js'
 BASE = 'function pay(user, amount) {\n  return charge(user, amount);\n}\n'

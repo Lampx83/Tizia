@@ -89,7 +89,7 @@ PLAN = {"steps": [{"order": 1, "title": "t", "allowed_scope": ["public/a.html"],
 def _reverify(source, cand, monkeypatch, receipts_root):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from gates import static_check
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from services import reverify
     from worker import execute_pre_pr
 

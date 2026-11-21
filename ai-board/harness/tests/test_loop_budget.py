@@ -5,8 +5,8 @@ import pytest
 
 import tools
 from runtime import limits, tool_loop
-from runtime.budget import Budget
-from runtime.loop_budget import Continue, LoopBudget, Stop, make_adaptive
+from runtime.budgets.budget import Budget
+from runtime.budgets.loop_budget import Continue, LoopBudget, Stop, make_adaptive
 
 SPEC = {"soft_start": 2, "soft_step": 2, "same_call_repeats": 3, "no_progress_steps": 3}
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"

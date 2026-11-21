@@ -6,7 +6,7 @@ import urllib.error
 import pytest
 
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_gate_feedback_cap import _execution
 from test_sandbox_tool import OK
 from test_tool_call_id import ARGVS, OUTCOMES, PAGE, SUBTASK, Deps, RUNNERS, native, setup  # noqa: F401

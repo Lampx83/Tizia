@@ -6,7 +6,7 @@ import pytest
 
 from conftest import plan_with
 from gates import brainstorm, plan_rules, react_plan
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import Settings
 from test_react_plan import PAGE, QUOTE, Scripted, finish, repo  # noqa: F401
 

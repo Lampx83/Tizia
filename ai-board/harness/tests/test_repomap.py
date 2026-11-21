@@ -1,7 +1,7 @@
 """repomap.py (sơ đồ repo của AI Board) + wiring vào gates/brainstorm.py, gates/implement.py."""
 from services import repomap
 import tools
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import brainstorm, implement, plan_validate
 from test_code_index import _commit, _git

@@ -5,7 +5,7 @@ import urllib.error
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 
 _ROOT = ContextVar('ai_board_root_allowance', default=None)
 

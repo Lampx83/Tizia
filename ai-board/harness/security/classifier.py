@@ -9,7 +9,7 @@ import math
 import re
 from pathlib import Path
 
-from runtime import meter
+from runtime.budgets import meter
 
 CONFIG_PATH = Path(__file__).resolve().parents[3] / "server" / "ai-board" / "classifier-calibration.json"
 CLASSIFIER = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))

@@ -3,7 +3,7 @@ from services import context
 from services import file_context
 import pytest
 import tools
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import deps_with
 from gates import brainstorm
 from test_code_index import _SeqModels, _commit, repo  # noqa: F401 — repo là fixture

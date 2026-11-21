@@ -2,7 +2,7 @@
 lỗi cứng), elevation admin đã duyệt thì plan đi tiếp, vùng AI Board luôn bị chặn."""
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import brainstorm, plan_validate, scope_check
 from runtime import levels

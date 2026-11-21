@@ -92,7 +92,7 @@ def test_plan_problems_names_the_step_and_cap():
 
 def test_gate25_rejects_bad_check_only_with_flag_on(flag_on):
     from gates import plan_validate
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from conftest import FakeModels, deps_with
     from test_gate_2_5_plan_validate import _plan_with_steps
     plan = _plan_with_steps(2)
@@ -104,7 +104,7 @@ def test_gate25_rejects_bad_check_only_with_flag_on(flag_on):
 
 def test_gate25_ignores_checks_with_flag_off(monkeypatch):
     from gates import plan_validate
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from conftest import FakeModels, deps_with
     from test_gate_2_5_plan_validate import _plan_with_steps
     monkeypatch.delenv("AI_BOARD_PLAN_CHECKS", raising=False)

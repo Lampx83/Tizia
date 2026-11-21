@@ -1,7 +1,7 @@
 """Stop report v2: stable class + tried/blocked render, off by default."""
 import pytest
 
-from runtime import stop_report
+from runtime.loops import stop_report
 from settings import get_settings
 
 

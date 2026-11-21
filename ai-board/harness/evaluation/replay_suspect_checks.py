@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from gate5.session import missing_tool  # noqa: E402
-from runtime import loop_guard  # noqa: E402
+from runtime.loops import loop_guard  # noqa: E402
 from gate5 import checks  # noqa: E402
 from worker_execution import near_identical  # noqa: E402
 

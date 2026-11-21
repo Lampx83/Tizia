@@ -13,7 +13,8 @@ import tempfile
 from pathlib import Path
 
 import path_policy
-from runtime import levels, model_json, progress
+from runtime import levels, model_json
+from runtime.loops import progress
 from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "repair_agent.md").read_text(encoding="utf-8")

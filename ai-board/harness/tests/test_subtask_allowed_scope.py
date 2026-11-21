@@ -6,7 +6,7 @@ import pytest
 import tools
 from gates import brainstorm, plan_validate
 from runtime import subtask_files, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_multi_file_subtask_scope import multi_state, source  # noqa: F401
 
 

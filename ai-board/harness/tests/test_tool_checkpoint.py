@@ -8,7 +8,7 @@ from conftest import connect
 from providers.client import OllamaClient
 from repositories.tool_steps import PgSteps, identity
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
 
 

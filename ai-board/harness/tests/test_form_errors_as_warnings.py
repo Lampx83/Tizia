@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 import tools
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import brainstorm, plan_validate
 from test_code_index import _SeqModels
