@@ -108,6 +108,13 @@ def may_edit(path, role: str = "student") -> bool:
     return normalized is not None and not refused(normalized, role) and any(p.search(normalized) for p in _ZONE_ALLOWED)
 
 
+def mounted_context(path) -> bool:
+    """File in an existing app context (server/contexts/<name>/), not _ai-generated, _* or ai-board-*."""
+    normalized = normalize(path)
+    name = _context_name(normalized) if normalized else None
+    return bool(name) and not name.startswith(("_", "ai-board"))
+
+
 _CONTEXT_MIGRATION = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 
 

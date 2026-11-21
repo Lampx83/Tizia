@@ -337,8 +337,11 @@ function cleanBackendChange(value) {
   if (!value || typeof value !== 'object' || !Array.isArray(value.files)) return null;
   const diff = String(value.diff ?? '');
   const clipped = value.clipped === true || diff.length >= DB_SQL_CAP || diff.includes(CLIP_MARK);
+  const privileged = Array.isArray(value.privileged_imports)
+    ? value.privileged_imports.slice(0, 100).map((item) => String(item).slice(0, 400)) : [];
   return { files: value.files.slice(0, 200).map((file) => String(file).slice(0, 300)),
-    diff: diff.slice(0, DB_SQL_CAP), ...(clipped ? { clipped: true } : {}) };
+    diff: diff.slice(0, DB_SQL_CAP), ...(clipped ? { clipped: true } : {}),
+    ...(privileged.length ? { privileged_imports: privileged } : {}) };
 }
 
 /** revisedChecks: the accepted plan replaced a suspect check, so the run is for a human only. */

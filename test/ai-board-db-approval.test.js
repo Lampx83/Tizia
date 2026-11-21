@@ -316,3 +316,13 @@ test('a clipped item can only be rejected', async () => {
     db.close();
   }
 });
+
+test('privileged imports the worker recorded reach the approval item', async () => withFlag(async () => {
+  const imports = [`${BACKEND}: ../../db.js -> server/db.js`, `${BACKEND}: ../identity/auth.js -> server/contexts/identity/auth.js`];
+  const { db, store, ticket, lease } = await heldRoot(passing({ candidate: candidate([BACKEND]),
+    backend_change: { files: [BACKEND], diff: 'diff --git a/x b/x', privileged_imports: imports } }));
+  await release(store, ticket, lease);
+  const [item] = await store.listDbApprovals({ requestId: 1 });
+  assert.deepEqual(item.privileged_imports, imports);
+  db.close();
+}));

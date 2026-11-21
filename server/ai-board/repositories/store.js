@@ -2218,6 +2218,7 @@ function resumeSummary(journal) {
         sql: migrations.map((m) => `-- ${m.path}\n${m.sql}`).join('\n\n'),
         migrations, files: [...new Set([...(change.files || []), ...(backend.files || [])])].sort(),
         diff: backend.diff ?? '', attention: change.attention || [], clipped: !!(change.clipped || backend.clipped),
+        privileged_imports: backend.privileged_imports || [],
         sandbox: { ...(change.sandbox || {}), output: dbSummary(change) },
         candidate: verdict.candidate ? { branch: verdict.candidate.branch, base_sha: verdict.candidate.base_sha, head_sha: verdict.candidate.head_sha } : null,
         decision: decided ? { decision: decided.event_type === 'db_approved' ? 'approved' : 'rejected', reason: decided.detail.reason ?? null,
