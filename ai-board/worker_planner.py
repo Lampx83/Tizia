@@ -545,6 +545,8 @@ class HarnessPlanner:
             stamp_revision(plan, replaced)
         if state.get('grounding'):
             plan['grounding'] = state['grounding']
+        if state.get('ledger'):
+            plan['ledger'] = [{**item, 'gate': 1} for item in state['ledger']]
         if state.get('assumption'):
             note = f"Giả định chưa xác nhận với người gửi: {state['assumption']}"[:300]
             plan['non_goals'] = [*plan['non_goals'], note]

@@ -1607,7 +1607,9 @@ function resumeSummary(journal) {
     // Snapshot lúc xin không giữ grounding: chỉ mượn của plan đang lưu khi cùng plan_hash.
     const sameHash = !askPlan || (current?.plan_hash && current.plan_hash === asked?.detail?.plan_hash);
     const grounding = sameHash ? parseJson(current?.plan_json)?.grounding?.evidence : null;
+    const ledger = sameHash ? parseJson(current?.plan_json)?.ledger : null;
     return { ...buildElevationContext({ request, root, asked, scope: elevationView(root).scope, plan }),
+      ...(Array.isArray(ledger) && ledger.length ? { ledger } : {}),
       grounding: (Array.isArray(grounding) ? grounding : []).slice(0, 8).map((item) => ({
         file: String(item?.file ?? ''), target: String(item?.target ?? ''), quote: String(item?.quote ?? '').slice(0, 400) })) };
   }

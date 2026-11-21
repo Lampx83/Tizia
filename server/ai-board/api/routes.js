@@ -554,7 +554,7 @@ export function attachAiBoardRequestRoutes(router, {
             recommendation: 'review', questions: [], source: 'unknown', cached: false }, context.flags);
         }
       }
-      res.json({ ok: true, context: { ...context, risk, card: elevationCard(context, { grounding: context.grounding }) } });
+      res.json({ ok: true, context: { ...context, risk, card: elevationCard(context, { grounding: context.grounding, ledger: context.ledger }) } });
     } catch (error) { folderError(res, error); }
   });
   // Ngữ cảnh cho cả lô (không gọi model): danh sách nhỏ để tab yêu cầu biết trước cờ, chi tiết vẫn theo từng yêu cầu.
@@ -565,7 +565,7 @@ export function attachAiBoardRequestRoutes(router, {
       const contexts = {};
       for (const id of ids) {
         const context = store.elevationContext ? await store.elevationContext(id) : null;
-        if (context) contexts[id] = { ...context, card: elevationCard(context, { grounding: context.grounding }) };
+        if (context) contexts[id] = { ...context, card: elevationCard(context, { grounding: context.grounding, ledger: context.ledger }) };
       }
       res.json({ ok: true, contexts });
     } catch (error) { folderError(res, error); }

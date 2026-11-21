@@ -5,6 +5,7 @@ import { check as checkPath } from './path-policy.js';
 import { isSkillTaskType } from '../skill-task-types.js';
 import { ALLOWED_DOMAINS, ALLOWED_KEYS } from '../../contexts/campus/layout-schema.js';
 import { getSettings } from '../settings.js';
+import { cleanLedger } from '../ledger.js';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
@@ -234,6 +235,8 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       ...Object.fromEntries(['before', 'after', 'verify'].map((key) => [key, nonEmptyString(e[key], `grounding.${key}`).slice(0, 1200)])),
     })) };
   }
+  const ledger = cleanLedger(plan.ledger);
+  if (ledger.length) normalized.ledger = ledger;
   if (plan.read_only_admin_verification === true) normalized.read_only_admin_verification = true;
   if (!RISKS.has(normalized.risk)) fail('malformed_plan', `unknown risk '${normalized.risk}'`);
   if (!Array.isArray(normalized.steps) || normalized.steps.length === 0) fail('malformed_plan', 'steps must be non-empty');
