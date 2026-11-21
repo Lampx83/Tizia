@@ -79,11 +79,33 @@ RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly tha
 # {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
 SCOPE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_allowed_scope.md").read_text(encoding="utf-8")
+FEATURE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_feature.md").read_text(encoding="utf-8").split("\n---\n")
+_CONTEXT_INDEX = re.compile(r"^server/contexts/([^/]+)/index\.js$")
 # Request keys the planner reads (LF/125). plan_repair is planner-only: the validator never gets it.
 PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", "clarified_spec", "plan_repair", "task_type", "complexity_by_server")
 
 
-def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
+def editable_contexts(source, sha: str | None, role: str = "student") -> list[str]:
+    """Context names at sha whose index.js the role may edit (fullstack zone); [] outside it."""
+    if not (sha and path_policy.fullstack_on()):
+        return []
+    try:
+        files = repo_at_commit.at(source, sha).files()
+    except OSError:
+        return []
+    return sorted({m.group(1) for f in files if (m := _CONTEXT_INDEX.match(f))
+                   and path_policy.mounted_context(f) and path_policy.may_edit(f, role)})
+
+
+def feature_block(contexts: list[str]) -> str:
+    """model_first: planner guidance for new behaviour; the server path only when an editable context exists."""
+    if not get_settings().model_first:
+        return ""
+    common, server, browser = FEATURE_PROMPT
+    return common + "\n" + (server.replace("CONTEXTS_LIST", ", ".join(contexts)) if contexts else browser)
+
+
+def build_prompt(request: dict, surface: frozenset[str], context_text: str = "", contexts: list[str] = ()) -> str:
     """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     scrub = spotlight.scrub
@@ -99,7 +121,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
     ) + (two_level.DECOMPOSE_PROMPT if two_level.decomposing(request)
          else acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else "")
-         + data_kinds.prompt_block())
+         + data_kinds.prompt_block() + feature_block(list(contexts)))
 
 
 def infer_layer(file: str, role: str = "student") -> str:
@@ -406,7 +428,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             trace0.note("tool", "search_terms", f"the model asked the harness to search for: {', '.join(terms) or '(nothing usable)'}")
     ctx = context.build_context(1, request, None, source, sha or "HEAD")
     commit = ctx["sha"]
-    prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"])
+    role = request.get("requester_role") or "student"
+    prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"],
+                          contexts=editable_contexts(source, commit, role) if get_settings().model_first else ())
     reason = None
     trace = getattr(deps, "trace", None)
 
@@ -415,7 +439,6 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
 
     form_warnings: list[str] = []
-    role = request.get("requester_role") or "student"
     for attempt in range(2):
         if attempt and not budget.tick():
             break
@@ -488,6 +511,10 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
             feature = best_match.feature(request)
+            if not feature and best_match.unanchored_feature(request, added, source, commit):
+                feature = True
+                judge(stage, True, "model_first: request quotes nothing in the repo; plan adds a page and its files: "
+                                   + ", ".join(sorted(added)))
             # A request that names the new path literally is an explicit target: the renderer module is not the place
             # to edit, so best-match is advisory exactly as for a feature request.
             request_text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
