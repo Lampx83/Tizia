@@ -50,10 +50,23 @@ def literal_homes(request: dict, source, sha: str | None) -> dict[str, list[str]
             for literal in file_context.literals(request.get("subject"), request.get("body"))}
 
 
+def model_first() -> bool:
+    return bool(get_settings().model_first)
+
+
+def unanchored_feature(request: dict, added, source, sha: str | None) -> bool:
+    """model_first: plan adds a page plus another new file and no quoted request text exists in the repo at sha."""
+    added = set(added)
+    pages = {path for path in added if _PAGE.match(path)}
+    if not (model_first() and pages and added - pages):
+        return False
+    return not any(literal_homes(request, source, sha).values())
+
+
 def new_page_refusal(request: dict, added, source, sha: str | None) -> str:
     """Reason to send back a plan that adds public pages an edit request did not ask for, naming the files holding its quotes; '' = allowed."""
     pages = sorted(path for path in added if _PAGE.match(path))
-    if not pages or feature(request):
+    if not pages or feature(request) or unanchored_feature(request, added, source, sha):
         return ""
     homes = list(dict.fromkeys(path for paths in literal_homes(request, source, sha).values() for path in paths))[:5]
     return (f"yêu cầu sửa giao diện có sẵn: không tạo trang mới {', '.join(pages)}, sửa trang đang có"

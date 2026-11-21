@@ -86,6 +86,11 @@ def test_two_candidate_files_untouched():
     assert derived_checks.apply(copy.deepcopy(plan), _req("Thêm 'Liên hệ' vào"), with_checks=True) == plan
 
 
+def test_plan_with_server_layer_untouched():
+    plan = _plan({**_sub("server/contexts/teacher/migrations/001-notes.sql"), "layer": "db"}, {**_sub(PAGE), "layer": "frontend"})
+    assert derived_checks.apply(copy.deepcopy(plan), _req("Thêm trang ghi chú, bấm 'Lưu' thì hiện"), with_checks=True) == plan
+
+
 def test_non_page_file_gets_verify_only():
     st = _derived(_req("Thêm 'Liên hệ' vào"), file="public/js/menu.js")
     assert "checks" not in st and st["checks_source"] == "derived"

@@ -1137,7 +1137,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             contradicted = literal_contradicts(request, state.get('best_match'), files, source, sha)
             if anchored and not contradicted:
                 judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
-            elif added and best_match.feature(request):
+            elif added and (best_match.feature(request) or best_match.unanchored_feature(request, added, source, sha)):
                 # A feature adds files that do not exist yet: there is no "most quoted file" to edit, so the
                 # best-match is only recorded (the path/layer rules and grounding still apply). An edit request
                 # that points at a file which does not exist still has to name the best-matching file.

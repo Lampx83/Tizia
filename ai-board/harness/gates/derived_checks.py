@@ -105,6 +105,9 @@ def derive(found: dict, file: str, *, with_checks: bool) -> dict | None:
 
 def apply(plan: dict, request: dict, *, with_checks: bool = False) -> dict:
     """Set verify/checks on the one subtask able to hold the request kind and mark checks_source. No-op on any doubt."""
+    # A server layer means new behaviour: a quoted label there is not the whole request.
+    if any(isinstance(st, dict) and st.get("layer") in ("db", "backend") for st in plan.get("subtasks") or []):
+        return plan
     found = classify(request)
     if not found:
         return plan

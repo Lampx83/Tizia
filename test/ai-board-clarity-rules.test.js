@@ -13,6 +13,14 @@ test('excluded actions do not turn a single ETA copy change into multiple tasks'
   assert.equal(checkClarity('Thêm nút trên trang', 'Không sửa quyền, nhưng tạo trang và cập nhật ảnh.').mode, 'split');
 });
 
+test('negation with a filler word and an "or" list removes every negated verb', () => {
+  assert.equal(checkClarity('Trang ghi chú nhanh', 'Mình muốn có một trang ghi chú nhanh: gõ một ghi chú ngắn, bấm Lưu thì '
+    + 'ghi chú hiện trong danh sách bên dưới, và tải lại trang vẫn còn. Chỉ cần thêm và xem, chưa cần sửa hay xoá.').needed, false);
+  assert.equal(checkClarity('Thêm nút Lưu', 'Thêm nút Lưu, không cần sửa hay xoá hay đổi gì khác.').needed, false);
+  assert.equal(checkClarity('them nut luu', 'them nut luu cho trang, chua can sua hay xoa.').needed, false);
+  assert.equal(checkClarity('Thêm nút', 'Không chỉ thêm nút mà còn sửa tiêu đề và xoá ảnh cũ.').mode, 'split');
+});
+
 test('vague requests trigger clarification without a model', () => {
   for (const [title, detail] of [
     ['Sửa cái trang', 'làm cho đẹp hơn'],
