@@ -5,13 +5,20 @@ from pathlib import Path
 from providers import thinking
 from settings import get_settings
 
-SYSTEM = (Path(__file__).resolve().parent.parent / "prompts" / "system_roles.md").read_text(encoding="utf-8").strip()
+_PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
+SYSTEM = (_PROMPTS / "system_roles.md").read_text(encoding="utf-8").strip()
+SYSTEM_PRINCIPLES = (_PROMPTS / "system_roles_principles.md").read_text(encoding="utf-8").strip()
 RESTATE = "\n\nReminder: reply in exactly the format requested above, with no text outside that format."
 TOOL_ROLES = thinking.TOOL_ROLES
 REASONING_ROLES = thinking.SPLIT_ON_ROLES
 # Dự phòng khi catalog thiếu role; số liệu theo manual (tool loop: thinking off, sampling non-thinking).
 DEFAULT_SAMPLING = {"thinking": False, "temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}
 REASONING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_penalty": 0, "num_predict": 16384}
+
+
+def system() -> str:
+    """System prompt; principles variant when AI_BOARD_PROMPT_PRINCIPLES on."""
+    return SYSTEM_PRINCIPLES if get_settings().prompt_principles else SYSTEM
 
 
 def enabled() -> bool:
@@ -29,7 +36,7 @@ def tail(subtask: dict) -> str:
 
 def split(user: str) -> tuple[str, str]:
     """(system, user) với định dạng được nhắc lại ở cuối user (không nhắc lần nữa nếu đã có)."""
-    return SYSTEM, user if user.endswith(RESTATE) else user + RESTATE
+    return system(), user if user.endswith(RESTATE) else user + RESTATE
 
 
 def call_params(role: str, routing, *, structured: bool = False) -> tuple[dict, dict]:

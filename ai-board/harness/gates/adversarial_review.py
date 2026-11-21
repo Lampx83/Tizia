@@ -50,7 +50,7 @@ def run(state: dict, deps, budget, *, db_path=None, proposal_id=None) -> dict:
     if not budget.tick():
         return _blocked('adversarial review: budget exhausted', 'budget')
     selected = default_skills.review_selection()
-    system = prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(selected) + default_skills.review_axes_block(selected)
+    system = prompt_roles.system() + '\n\n' + default_skills.system_text(selected) + default_skills.review_axes_block(selected)
     routing = getattr(deps.models, 'routing', None)
     role_extra, role_options = prompt_roles.call_params('gate4_review', routing)
     try:

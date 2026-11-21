@@ -69,7 +69,7 @@ def run(state: dict, evidence: dict, deps, budget, *, temp_root=None, db_path=No
         server_hsm.authorize_action("model")
         body = deps.call_model(deps.models.gate1_model, prompt, gate=5, budget=budget, db_path=db_path, proposal_id=proposal_id,
                                prompt_name="vision_advisory", format=SCHEMA, options={**role_options, "num_predict": 600},
-                               extra={**role_extra, "system": prompt_roles.SYSTEM, "images": shots},
+                               extra={**role_extra, "system": prompt_roles.system(), "images": shots},
                                **({"role": "gate4_review"} if routing else {}))
     except server_hsm.AuthorityError as error:
         return _unavailable(str(error)[:200])

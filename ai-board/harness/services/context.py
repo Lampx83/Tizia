@@ -51,8 +51,15 @@ LOCATE_BUDGET = file_context.WEIGHTS["locate_budget"]
 _SECTION = re.compile(r"^## gate (\d)\s*$", re.M)
 
 
+_DB_LINE = "server/db.js and the database: touch only when the admin has approved elevation for that exact file in the plan."
+_DB_LINE_APPROVAL = "Database changes: write additive migrations only; the admin sees the SQL and the sandbox result and approves before anything reaches dev."
+
+
 def manual() -> str:
     """AIBOARD.md đã đọc lúc import (byte cố định), kèm 1 dòng trống — ghép thẳng vào đầu prompt."""
+    # cờ requester_fullstack_db chưa có trong Settings: getattr mặc định tắt
+    if getattr(get_settings(), "requester_fullstack_db", False):
+        return spotlight.fence(_MANUAL.replace(_DB_LINE, _DB_LINE_APPROVAL))
     return spotlight.fence(_MANUAL)
 
 

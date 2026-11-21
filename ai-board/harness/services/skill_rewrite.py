@@ -59,7 +59,7 @@ REWRITE_INSTRUCTION = meter.register_prompt('skill_rewrite',
 
 def system_prompt():
     selected = default_skills.select('gate3_light', {'purpose': 'skill-authoring'})
-    return prompt_roles.SYSTEM + '\n\n' + default_skills.system_text(selected)
+    return prompt_roles.system() + '\n\n' + default_skills.system_text(selected)
 
 
 def call(deps, budget, user, system, schema, num_predict, prompt_name=None):

@@ -47,7 +47,7 @@ class History:
     @staticmethod
     def _input_bound(prompt):
         # Early trigger only; actual context capacity comes from the serving backend.
-        system = prompt_roles.SYSTEM + prompt_roles.RESTATE if prompt_roles.enabled() else ''
+        system = prompt_roles.system() + prompt_roles.RESTATE if prompt_roles.enabled() else ''
         return len((prompt + system).encode()) + 1024
 
     def prepare(self, prefix, *, deps, model, role, budget, manifest, **call):
