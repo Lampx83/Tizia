@@ -1,6 +1,7 @@
 """AI_BOARD_REQUESTER_FULLSTACK: every role edits mounted contexts and public/, refused areas stay shut, a candidate with a DB
 change runs on the sandbox Postgres and waits for an admin before any push. Flag off = unchanged."""
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -73,6 +74,13 @@ def test_student_gets_the_admin_zone(flag):
         decision = levels.write_check(CONTEXT, (), None, role)
         assert decision == {"allow": True, "level": levels.SURFACE, "reason": ""}, role
     assert levels.requirements({"subtasks": [{"file": CONTEXT, "verify": "node --test", "title": "t"}]}, None, frozenset()) == []
+
+
+def test_existing_context_importing_db_needs_no_elevation(flag):
+    repo = Path(__file__).resolve().parents[3]
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    plan = {"subtasks": [{"file": "server/contexts/teacher/index.js", "verify": "node --test", "title": "t"}]}
+    assert levels.requirements(plan, levels.source_reader(str(repo), sha), role="student") == []
 
 
 def test_refused_list_blocks_every_role(flag):
@@ -238,6 +246,14 @@ def test_non_additive_candidate_is_blocked_and_its_branch_dropped(flag, tmp_path
     out, kept = _execute(tmp_path, FE_BE_DIFF + _new_file(MIGRATION, "DROP TABLE users;"))
     assert out["outcome"] == "blocked" and out["candidate"] is None and kept[-1] is False
     assert "thay đổi DB bị chặn" in out["reason"]
+
+
+def test_sandbox_crash_blocks_as_transient_and_still_cleans_up(flag, tmp_path, monkeypatch):
+    def boom(*_a, **_k):
+        raise RuntimeError("cleanup_unconfirmed")
+    monkeypatch.setattr(db_approval, "run_sandbox", boom)
+    out, kept = _execute(tmp_path, DB_DIFF)
+    assert out["outcome"] == "blocked" and out["failure_class"] == "transient" and kept == [False]
 
 
 def test_flag_off_db_candidate_is_unchanged(monkeypatch, tmp_path):

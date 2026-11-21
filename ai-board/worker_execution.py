@@ -592,7 +592,10 @@ class _Execution:
     def _db_gate(self, state: dict) -> None:
         """DB change in the passing attempt: non-additive or failed sandbox run blocks the last gate; passed is held for the admin."""
         from services import db_approval
-        outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
+        try:
+            outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
+        except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup
+            outcome = {"status": "transient", "reason": f"migration chưa chạy được trên Postgres sandbox: {str(error)[:300]}"}
         if outcome is None:
             return
         if outcome["status"] == "passed":
