@@ -5,12 +5,12 @@ import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr, renderSoftMisses } from './ai-board-trace.js';
-import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody } from './ai-board-mirror.js';
+import { renderGateReview, renderRiskAndChecks, renderDbStatus } from './ai-board-mirror.js';
+import { approvalsNotice } from './admin-approvals.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
-import { escalationCard } from './escalation-card.js?v=escalation1';
 import { createPoll } from './poll.js';
 
 const $ = (s) => document.querySelector(s);
@@ -27,9 +27,7 @@ const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // Trạng thái giao diện riêng của admin (không phải dữ liệu server): bảng xác nhận đang mở ở bước nào.
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
 const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null, toolFilter: { failure: '', tool: '' },
-  elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '',
-  net: { pending: [], approved: [], idx: 0, reason: '', msg: '' },
-  db: { pending: [], idx: 0, reason: '', msg: '', busy: false, loading: true, error: '' } };
+  net: { pending: [], approved: [] }, db: [] };
 let view = null;
 
 async function api(path, options = {}) {
@@ -519,94 +517,6 @@ async function rolloutDo(btn) {
   await refresh();
 }
 
-const NET_WARNING = 'Quyết định duyệt không thu hồi được: gói đã vào cache nội bộ và run tiếp tục với nó. Thay đổi code vẫn rollback được qua luồng release.';
-const NET_META = { version: 'Phiên bản', license: 'Giấy phép', age: 'Tuổi', weekly_downloads: 'Lượt tải/tuần', install_scripts: 'Script cài đặt',
-  transitive_count: 'Số gói phụ thuộc gián tiếp' };
-const netValue = (v) => (typeof v === 'boolean' ? (v ? 'Có' : 'Không') : Array.isArray(v) ? v.join(', ') : v && typeof v === 'object' ? JSON.stringify(v) : String(v));
-const netTitle = (item) => (item.kind === 'package' ? `${item.name || '?'}${item.version_range ? `@${item.version_range}` : ''}` : item.url || '?');
-const netMetaRows = (item) => Object.entries(NET_META).filter(([k]) => item.metadata?.[k] != null && item.metadata[k] !== '')
-  .map(([k, label]) => `<div><span class="meta">${esc(label)}</span> ${esc(netValue(item.metadata[k]))}</div>`).join('');
-
-function renderNetApproval() {
-  const { pending, idx, reason, msg } = ui.net;
-  if (!pending.length) return '';
-  const item = pending[Math.min(idx, pending.length - 1)];
-  const rows = netMetaRows(item);
-  const buttons = `<label class="meta" style="display:block;width:100%">Lý do từ chối (không bắt buộc)
-      <input data-net-reason maxlength="500" autocomplete="off" value="${esc(reason)}" style="width:100%;max-width:72ch;display:block;margin-top:4px"></label>
-      <button class="btn ok" data-action="net-approve" data-id="${esc(item.id)}">Duyệt</button>
-      <button class="btn danger-outline" data-action="net-reject" data-id="${esc(item.id)}">Từ chối</button>
-      <button class="btn" data-action="net-next">Tiếp</button>`;
-  return `<section class="blk" id="net-approval" aria-label="Cần admin đồng ý">
-    <h2>Cần admin đồng ý <span class="meta">${Math.min(idx, pending.length - 1) + 1}/${pending.length}</span></h2>
-    <div class="line1"><b>${code(netTitle(item))}</b> ${tag('warn', item.kind === 'package' ? 'Gói npm' : 'URL')}</div>
-    ${escalationCard(item.card, { tag, extra: { evidence: rows ? `<div class="meta">${rows}</div>` : '<div class="meta">Chưa có metadata cho mục này.</div>',
-      risk: `<div class="net-warn" role="note">${esc(NET_WARNING)}</div>` }, buttons })}
-    ${msg ? `<div class="meta" role="status">${esc(msg)}</div>` : ''}
-  </section>`;
-}
-
-async function netDecide(btn, decision) {
-  const item = ui.net.pending[Math.min(ui.net.idx, ui.net.pending.length - 1)];
-  if (!item) return refresh();
-  const approve = decision === 'approved';
-  const yes = await askConfirm(approve
-    ? { title: 'Duyệt yêu cầu mạng?', message: NET_WARNING, lines: [`Mục: ${netTitle(item)}`], ok: 'Duyệt' }
-    : { title: 'Từ chối yêu cầu mạng?', message: 'Quyết định từ chối sẽ được ghi lại. Lý do bạn ghi (nếu có) được lưu.', lines: [`Mục: ${netTitle(item)}`], ok: 'Từ chối', danger: true });
-  if (!yes) return;
-  btn.disabled = true;
-  try {
-    const body = decision === 'rejected' && ui.net.reason.trim() ? { reason: ui.net.reason.trim() } : {};
-    const r = await post(`/api/admin/ai-board/network-requests/${encodeURIComponent(item.id)}/${decision === 'approved' ? 'approve' : 'reject'}`, body);
-    ui.net.reason = '';
-    ui.net.msg = `${decision === 'approved' ? 'Đã duyệt' : 'Đã từ chối'}. Còn ${r.pending_left} mục chờ.${r.resumed ? ' Run đã về hàng đợi để chạy tiếp.' : ''}`;
-  } catch (e) {
-    const stale = /already decided|not found/.test(String(e.message));
-    ui.net.msg = stale ? 'Mục này đã được quyết định hoặc đã đổi. Đã tải lại.' : `Chưa thực hiện được: ${errText(e)}`;
-  }
-  await refresh();
-}
-
-const DB_BASE = `/api/admin/ai-board/requests/${REQUEST_ID}/db-approvals`;
-function renderDbSlot() {
-  const { pending, idx, loading, error } = ui.db;
-  const shell = renderDbApprovalState({ loading, error });
-  if (shell) return shell;
-  const at = Math.min(idx, pending.length - 1);
-  return renderDbApproval(pending[at], ui.db, { n: at + 1, total: pending.length });
-}
-
-async function loadDb() {
-  const r = await api(`${DB_BASE}?status=pending`);
-  ui.db.loading = false;
-  if (r.status === 404) { ui.db.pending = []; ui.db.error = ''; }
-  else if (r.ok) { ui.db.pending = r.data.items || []; ui.db.error = ''; }
-  else ui.db.error = errText(r.data?.error || r.status);
-  if (ui.db.idx >= ui.db.pending.length) ui.db.idx = 0;
-}
-
-async function dbDecide(btn, decision) {
-  const item = ui.db.pending[Math.min(ui.db.idx, ui.db.pending.length - 1)];
-  if (!item) return refresh();
-  const body = dbDecisionBody(decision, ui.db.reason);
-  if (!body) { ui.db.msg = 'Nhập lý do trước khi từ chối.'; return render(); }
-  const approve = decision === 'approve';
-  const yes = await askConfirm(approve
-    ? { title: 'Duyệt thay đổi cơ sở dữ liệu?', message: 'Sau khi duyệt, thay đổi được phép đẩy lên dev.', lines: [`Mục: ${item.id}`], ok: 'Duyệt' }
-    : { title: 'Từ chối thay đổi cơ sở dữ liệu?', message: 'Lý do bạn ghi được lưu và gửi lại cho luồng xử lý.', lines: [`Mục: ${item.id}`], ok: 'Từ chối', danger: true });
-  if (!yes) return;
-  ui.db.busy = true; btn.disabled = true;
-  try {
-    await post(`${DB_BASE}/${encodeURIComponent(item.id)}/${decision}`, body);
-    ui.db.reason = '';
-    ui.db.msg = approve ? 'Đã duyệt thay đổi cơ sở dữ liệu.' : 'Đã từ chối thay đổi cơ sở dữ liệu.';
-  } catch (e) {
-    ui.db.msg = /already|not found|409/.test(String(e.message)) ? 'Mục này đã được quyết định hoặc đã đổi. Đã tải lại.' : `Chưa thực hiện được: ${errText(e)}`;
-  }
-  ui.db.busy = false;
-  await refresh();
-}
-
 // Screenshots of the newest message that carries any (before/after pairs go through renderAtts).
 function shotsOf(messages) {
   const withShots = [...messages].reverse().find((m) => Array.isArray(m.attachments) && m.attachments.some((a) => a?.kind === 'screenshot'));
@@ -665,63 +575,6 @@ async function ackDataStep(btn) {
 
 // Quyền chạm phần bảo vệ/lõi: kế hoạch đang xin, admin quyết ngay trong trang yêu cầu.
 const ELEVATION_LEVEL_LABEL = { protected: 'bảo vệ', core: 'lõi', surface: 'bề mặt' };
-const ELEVATION_RISK = {
-  high: { tone: 'bad', label: 'Cao' }, medium: { tone: 'warn', label: 'Trung bình' },
-  low: { tone: 'ok', label: 'Thấp' }, unknown: { tone: 'idle', label: 'Chưa đánh giá được' },
-};
-const ELEVATION_REC_LABEL = { approve: 'có thể duyệt', review: 'cần xem thêm', reject: 'không nên duyệt' };
-const elevationPathTag = (row) => (row.named_in_request
-  ? '<span class="pill">có trong yêu cầu</span>'
-  : row.in_plan ? '<span class="pill">chỉ có trong kế hoạch</span>' : '<span class="pill warn">không có trong yêu cầu/plan</span>');
-
-// Ngữ cảnh duyệt: tải một lần khi trang thấy yêu cầu đang chờ; lỗi thì hiện đường thử lại.
-async function ensureElevationContext(trace) {
-  if (ui.elevationContextLoading) return false;
-  if (trace?.root?.elevation_detail?.state !== 'requested') return false;
-  if (ui.elevationContext) return false;
-  ui.elevationContextLoading = true;
-  try {
-    // Lần đầu có thể phải gọi model đánh giá rủi ro: chờ lâu hơn timeout mặc định của trang.
-    const r = await api(`/api/admin/ai-board/requests/${REQUEST_ID}/elevation-context`,
-      { signal: AbortSignal.timeout(45000) });
-    ui.elevationContext = r.ok && r.data?.context ? r.data.context : { error: r.data?.message || r.data?.error || `HTTP ${r.status}` };
-  } catch (error) {
-    ui.elevationContext = { error: errText(error) };
-  } finally {
-    ui.elevationContextLoading = false;
-  }
-  return true;
-}
-
-// Thẻ duyệt năm dòng: Hành động · Vì sao hỏi · Bằng chứng · Rủi ro · Lựa chọn. Duyệt cần lý do admin gõ + xác nhận lần hai.
-function elevationContextCard(ctx) {
-  if (ctx?.error) {
-    return `<div class="err">Không tải được ngữ cảnh duyệt: ${esc(ctx.error)}
-      <button class="btn" data-action="elevation-retry">Thử lại</button></div>`;
-  }
-  if (!ctx) return '<div class="meta" role="status">Đang tải ngữ cảnh duyệt…</div>';
-  const risk = ctx.risk || { level: 'unknown', reasons: [], recommendation: 'review', questions: [] };
-  const badge = ELEVATION_RISK[risk.level] || ELEVATION_RISK.unknown;
-  const scope = ctx.elevation?.scope || [];
-  const steps = ctx.plan?.steps || [];
-  const evidence = ctx.evidence || {};
-  const action = `<ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
-    ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
-    : '<div class="meta">Worker không gửi bước kế hoạch. Chỉ có phạm vi path.</div>'}
-    <div class="meta">Duyệt thì kế hoạch được lập lại với đúng quyền này.</div>`;
-  const why = `<div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}</div>`;
-  const modelRisk = `<div>Đánh giá model ${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
-    ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'Rủi ro cao. Đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
-    ${risk.reasons?.length ? `<ul>${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
-    ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
-  const trail = `<div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>`;
-  const narrow = (ctx.card?.options || []).some(option => option.key === 'edit' && option.available)
-    ? '<div class="meta">Sửa rồi duyệt: chọn bớt path / hạ mức ở thẻ quyền trong tab Góp ý của trang quản trị.</div>' : '';
-  return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
-    ${escalationCard(ctx.card, { tag, html: { action }, extra: { why, risk: modelRisk, evidence: trail, options: narrow } })}
-  </div>`;
-}
-
 function elevationBlock(t) {
   const e = t.root?.elevation_detail;
   if (!e || !e.state || e.state === 'none') return '';
@@ -729,66 +582,11 @@ function elevationBlock(t) {
     const label = e.state === 'approved' ? 'Quyền đã được duyệt' : 'Yêu cầu quyền đã bị từ chối';
     return `<div class="g-result" aria-label="Quyền chạm vùng bảo vệ"><div class="g-caption">Approval</div><div>${esc(label)}${e.max_level ? ` · mức ${esc(e.max_level)}` : ''}${e.reason ? ` · ${esc(e.reason)}` : ''}</div></div>`;
   }
-  const ctx = ui.elevationContext;
-  const blocked = !ctx || ctx.error || ctx.flags?.self_scope;
   const items = (e.scope || []).map((i) => `<li>${code(i.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[i.level] || i.level)}</span></li>`).join('');
-  // Có ngữ cảnh thì thẻ đã chứa phạm vi + lý do: không lặp lại danh sách cũ ở trên.
-  const summary = ctx && !ctx.error ? '' : `<div class="g-caption">Approval request</div>
+  return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt"><div class="g-caption">Chờ admin duyệt quyền</div>
     ${e.reason ? `<div class="meta">${esc(e.reason)}</div>` : ''}
-    <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>`;
-  return `<div class="g-result" id="elevation-ask" aria-label="Quyền chờ duyệt">
-    ${summary}
-    ${elevationContextCard(ctx)}
-    <div class="row">
-      <input id="elevation-reason" data-elevation-reason maxlength="1000" placeholder="Lý do duyệt (bắt buộc)" aria-label="Lý do duyệt"
-        value="${esc(ui.elevationReason || '')}" style="flex:1;min-width:220px">
-      <button class="btn ok" ${blocked ? 'disabled ' : ''}data-action="elevate" data-decision="approve">Duyệt quyền</button>
-      <button class="btn danger-outline" data-action="elevate" data-decision="reject">Từ chối</button></div>
-    <span class="meta" role="status" tabindex="-1" id="elevation-result">${esc(ui.elevationMsg || '')}</span></div>`;
-}
-
-async function decideElevation(btn) {
-  const approve = btn.dataset.decision === 'approve';
-  const ctx = ui.elevationContext;
-  const reason = (ui.elevationReason || '').trim();
-  if (approve && reason.length < 3) {
-    ui.elevationMsg = 'Ghi lý do duyệt trước khi duyệt.';
-    render();
-    $('#elevation-reason')?.focus();
-    return;
-  }
-  if (approve && (!ctx || ctx.error || ctx.flags?.self_scope)) {
-    ui.elevationMsg = ctx?.error ? 'Chưa tải được ngữ cảnh duyệt; tải lại trang trước khi duyệt.' : 'Phạm vi này không được cấp.';
-    render();
-    return;
-  }
-  const risk = ctx?.risk;
-  const lines = approve ? (ctx?.elevation?.scope || []).map((row) => `${row.path} · mức ${ELEVATION_LEVEL_LABEL[row.level] || row.level}`) : [];
-  const yes = await askConfirm({
-    title: approve ? 'Duyệt quyền cho kế hoạch này?' : 'Từ chối quyền cho kế hoạch này?',
-    message: approve
-      ? (risk?.level === 'high'
-        ? 'CẢNH BÁO rủi ro cao: đọc kỹ phạm vi và các bước ở trên. Duyệt thì kế hoạch được lập lại với quyền đó và lý do của bạn được lưu vào vết kiểm toán.'
-        : risk?.level === 'unknown'
-          ? 'Hệ thống chưa đánh giá được rủi ro; tự đọc phạm vi và các bước trước khi duyệt. Lý do của bạn được lưu vào vết kiểm toán.'
-          : 'Duyệt thì kế hoạch được lập lại với quyền đó. Lý do bạn ghi được lưu vào vết kiểm toán.')
-      : 'AI Board xin chạm vùng bảo vệ/lõi. Từ chối thì yêu cầu dừng.',
-    lines, ok: approve ? 'Duyệt quyền' : 'Từ chối', danger: !approve,
-  });
-  if (!yes) return;
-  btn.disabled = true;
-  try {
-    await post(`/api/admin/ai-board/requests/${REQUEST_ID}/elevate`, { decision: btn.dataset.decision,
-      reason: reason || (approve ? '' : 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.') });
-    ui.elevationMsg = approve ? 'Đã duyệt; kế hoạch sẽ được lập lại với quyền đó.' : 'Đã từ chối; yêu cầu dừng.';
-    ui.elevationContext = null;
-    ui.elevationReason = '';
-  } catch (e) {
-    ui.elevationMsg = `Không ghi nhận được: ${errText(e)}`;
-    btn.disabled = false;
-  }
-  await refresh();
-  $('#elevation-result')?.focus();
+    <ul>${items || '<li class="meta">chưa có phạm vi</li>'}</ul>
+    <div class="meta">Duyệt hoặc từ chối ở tab Duyệt. <a href="/admin.html#approvals/elevation-${esc(REQUEST_ID)}" target="_top">Mở tab Duyệt</a></div></div>`;
 }
 
 function renderAiBoard(t, messages = []) {
@@ -806,7 +604,7 @@ function renderAiBoard(t, messages = []) {
       ${renderSoftMisses(t)}
       ${renderGateReview(t)}
       ${renderRiskAndChecks(t)}
-      ${renderDbSlot()}
+      ${renderDbStatus(ui.db)}
       ${renderRepairAgent(t)}
       ${traceLine(t.trace_ref)}
       ${managedLine(root.managed)}
@@ -854,7 +652,7 @@ function render() {
       ${renderActions(r, trace)}
       ${renderRevertPr(trace)}
     </header>
-    ${renderNetApproval()}
+    ${approvalsNotice(waitingHere(trace), '/admin.html#approvals')}
     ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có phiếu xử lý AI Board.</section>'}
   `);
   syncOpen();
@@ -878,21 +676,21 @@ document.addEventListener('click', (e) => {
 async function refresh() {
   try {
   const headers = traceEtag ? { 'If-None-Match': traceEtag } : {};
-  const [thread, trace, netPending, netApproved] = await Promise.all([
+  const [thread, trace, netPending, netApproved, dbItems] = await Promise.all([
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/thread`),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/trace`, { headers }),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/network-requests?status=pending`),
     api(`/api/admin/ai-board/requests/${REQUEST_ID}/network-requests?status=approved`),
+    api(`/api/admin/ai-board/requests/${REQUEST_ID}/db-approvals?status=all`),
   ]);
   if (!thread.ok) {
     stopLiveTrace();
     $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
     return false;
   }
-  await loadDb().catch(() => { ui.db.loading = false; ui.db.error = 'mất kết nối'; });
+  ui.db = dbItems.ok ? (dbItems.data.items || []) : [];
   ui.net.pending = netPending.ok ? (netPending.data.items || []) : [];
   ui.net.approved = netApproved.ok ? (netApproved.data.items || []) : [];
-  if (ui.net.idx >= ui.net.pending.length) ui.net.idx = 0;
   // 304: tiến trình không đổi, giữ nguyên view.trace (kể cả writes/rollout) và không hỏi lại.
   if (trace.status === 304) {
     view = { ...view, thread: thread.data };
@@ -915,7 +713,6 @@ async function refresh() {
   if (view.trace?.root?.live && Number(view.trace.root.lease_expires_at) <= Date.now()) view.trace.root.live = false;
   render();
   // Ngữ cảnh duyệt elevation tải sau (có thể một lần gọi model): vẽ trước để trang không đứng chờ.
-  ensureElevationContext(view.trace).then(changed => { if (changed) render(); }).catch(() => {});
   return true;
   } catch (e) {
     stopLiveTrace();
@@ -940,7 +737,7 @@ const poll = createPoll(async () => {
     stopLiveTrace();
     render();
   }
-  if (!ui.confirm && !ui.reconcile && !document.activeElement?.matches?.('[data-net-reason],[data-db-reason]')) await refresh();
+  if (!ui.confirm && !ui.reconcile) await refresh();
 }, () => {
   const root = view?.trace?.root;
   if (root && !root.live && ENDED.includes(root.status)) return null;
@@ -954,15 +751,6 @@ document.addEventListener('keydown', e => {
   if (!node) return;
   e.preventDefault();
   node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-});
-// Lý do duyệt do admin gõ: giữ qua các lần vẽ lại (patchHtml) và gửi kèm quyết định.
-document.addEventListener('input', (e) => {
-  const input = e.target.closest('[data-elevation-reason]');
-  if (input) ui.elevationReason = input.value;
-  const net = e.target.closest?.('[data-net-reason]');
-  if (net) ui.net.reason = net.value;
-  const dbr = e.target.closest?.('[data-db-reason]');
-  if (dbr) { ui.db.reason = dbr.value; const b = document.querySelector('[data-action="db-reject"]'); if (b) b.disabled = ui.db.busy || !dbr.value.trim(); }
 });
 // Filter selects in the execution log: failure class and tool. Re-draws the log with the chosen value.
 document.addEventListener('change', (e) => {
@@ -985,11 +773,6 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; ui.focus = '[data-action="authorize-ask"]'; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'ack-data') return ackDataStep(btn);
-  else if (action === 'elevate') return decideElevation(btn);
-  else if (action === 'elevation-retry') {
-    ui.elevationContext = null;
-    ensureElevationContext(view?.trace).then(changed => { if (changed) render(); });
-  }
   else if (action === 'retry-transient') return retryTransient(btn);
   else if (action === 'continue-partial') {
     btn.disabled = true;
@@ -999,13 +782,6 @@ document.addEventListener('click', e => {
       .finally(async () => { await refresh(); poll.arm(); });
     return;
   } else if (action === 'rollout') return rolloutDo(btn);
-  else if (action === 'net-approve') return netDecide(btn, 'approved');
-  else if (action === 'net-reject') return netDecide(btn, 'rejected');
-  else if (action === 'db-approve') return dbDecide(btn, 'approve');
-  else if (action === 'db-reject') return dbDecide(btn, 'reject');
-  else if (action === 'db-next') { ui.db.idx = (ui.db.idx + 1) % ui.db.pending.length; ui.db.reason = ''; ui.db.msg = ''; }
-  else if (action === 'db-retry') { ui.db.loading = true; ui.db.error = ''; render(); return refresh(); }
-  else if (action === 'net-next') { ui.net.idx = (ui.net.idx + 1) % ui.net.pending.length; ui.net.reason = ''; ui.net.msg = ''; }
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
@@ -1049,3 +825,9 @@ installLightbox();
   try { if (await refresh()) poll.arm(); }
   catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<p class="err">Lỗi: ${esc(e.message)}</p>`; }
 })();
+
+// Items on this request that wait for a decision in the Duyệt tab.
+function waitingHere(trace) {
+  return ui.net.pending.length + ui.db.filter((i) => ['pending', 'publish_failed'].includes(i.status)).length
+    + (trace?.root?.elevation_detail?.state === 'requested' ? 1 : 0);
+}

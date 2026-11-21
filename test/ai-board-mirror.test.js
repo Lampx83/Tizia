@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody, sortFindings, sqlBlock } from '../public/js/ai-board-mirror.js';
+import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody, dbDecisionPath, renderDbStatus, sortFindings, sqlBlock } from '../public/js/ai-board-mirror.js';
 
 const run = (gates) => ({ id: 7, gates });
 const g = (gate, evidence) => ({ gate, evidence });
@@ -48,17 +48,42 @@ test('reject needs a reason, approve does not', () => {
   assert.deepEqual(dbDecisionBody('approve', ''), {});
 });
 
-test('db card: reject disabled until reason, busy disables both, files and sandbox shown', () => {
-  const item = { id: 'd1', sql: 'ALTER TABLE t ADD c int', sandbox: { status: 'passed', output: 'ok' }, files: ['server/db.js'] };
+test('db card: reject disabled until reason, busy disables both, contract fields shown', () => {
+  const item = { id: 56, request_id: 12, title: 'Ghi chú', status: 'pending', sql: 'CREATE TABLE t(a int)', files: ['server/db.js'],
+    sandbox: { status: 'passed', output: 'ok', schema_diff: { added_tables: ['t'], added_columns: { t: ['a'] } }, checks: [{ ok: true }], tests: [{ rc: 0 }], error: null },
+    candidate: { branch: 'ai-board/x', head_sha: 'a'.repeat(40) } };
   const idle = renderDbApproval(item, { reason: '' });
   assert.match(idle, /data-action="db-reject"[^>]* disabled/);
   assert.doesNotMatch(idle, /data-action="db-approve"[^>]* disabled/);
   assert.match(idle, /Chạy thử đạt/);
+  assert.match(idle, /Thêm bảng <code>t<\/code>/);
   assert.match(idle, /server\/db\.js/);
+  assert.match(idle, /admin-request\.html\?id=12/);
+  assert.match(idle, /<code>aaaaaaa<\/code>/);
   assert.doesNotMatch(renderDbApproval(item, { reason: 'x' }), /data-action="db-reject"[^>]* disabled/);
   assert.match(renderDbApproval(item, { reason: 'x', busy: true }), /data-action="db-approve"[^>]* disabled/);
-  assert.match(renderDbApproval({ id: 'd2', sql: 's' }, {}), /Chưa chạy thử/);
+  assert.match(renderDbApproval({ ...item, sandbox: { status: 'failed', error: 'boom <b>' } }, {}), /Chạy thử lỗi[\s\S]*boom &lt;b&gt;/);
   assert.equal(renderDbApproval(null), '');
+});
+
+test('approve pins head_sha; endpoint path is request scoped', () => {
+  const item = { id: 56, request_id: 12, candidate: { head_sha: 'b'.repeat(40) } };
+  assert.deepEqual(dbDecisionBody('approve', '', item), { head_sha: 'b'.repeat(40) });
+  assert.deepEqual(dbDecisionBody('approve', '', { id: 1 }), {});
+  assert.equal(dbDecisionPath(item, 'reject'), '/api/admin/ai-board/requests/12/db-approvals/56/reject');
+});
+
+test('read-only db status labels states, skips superseded, links only http PRs', () => {
+  const html = renderDbStatus([{ status: 'published', pull_request: { number: 9, url: 'https://x/pr/9' } }, { status: 'superseded' },
+    { status: 'rejected', decision: { reason: 'sai <i>' } }, { status: 'publish_failed', publish_error: 'push lỗi' }, { status: 'published', pull_request: { number: 1, url: 'javascript:x' } }]);
+  assert.match(html, /Đã mở PR/);
+  assert.match(html, /href="https:\/\/x\/pr\/9"/);
+  assert.doesNotMatch(html, /javascript:/);
+  assert.match(html, /Lý do: sai &lt;i&gt;/);
+  assert.match(html, /push lỗi[\s\S]*Mở tab Duyệt/);
+  assert.doesNotMatch(html, /bị bản mới thay/);
+  assert.equal(renderDbStatus([]), '');
+  assert.equal(renderDbStatus([{ status: 'superseded' }]), '');
 });
 
 test('db state shell: loading, error, empty', () => {

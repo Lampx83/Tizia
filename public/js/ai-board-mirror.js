@@ -72,46 +72,78 @@ export function sqlBlock(sql) {
     + (text.length > SQL_CAP ? `<p class="meta">Đã cắt, hiển thị ${SQL_CAP} trên ${text.length} ký tự.</p>` : '');
 }
 
-const SANDBOX_STATE = { passed: ['ok', 'Chạy thử đạt'], failed: ['bad', 'Chạy thử lỗi'], pending: ['idle', 'Chưa chạy thử'] };
-/** Decision body for the DB approval endpoints; null when a reject has no reason. */
-export function dbDecisionBody(decision, reason) {
-  const text = String(reason ?? '').trim();
-  if (decision === 'reject') return text ? { reason: text.slice(0, 500) } : null;
-  return {};
+const SANDBOX_STATE = { passed: ['ok', 'Chạy thử đạt'], failed: ['bad', 'Chạy thử lỗi'], blocked: ['bad', 'Chạy thử bị chặn'] };
+export const DB_STATUS = { pending: ['warn', 'Chờ duyệt'], approved: ['ok', 'Đã duyệt, chờ đẩy PR'], publishing: ['run', 'Đang đẩy PR'],
+  published: ['ok', 'Đã mở PR'], publish_failed: ['bad', 'Duyệt xong nhưng chưa mở được PR'], rejected: ['bad', 'Đã từ chối'], superseded: ['idle', 'Đã bị bản mới thay'] };
+const DB_BASE = '/api/admin/ai-board';
+/** Endpoint for one DB approval action; request-scoped like the other admin POSTs. */
+export const dbDecisionPath = (item, decision) => `${DB_BASE}/requests/${encodeURIComponent(item.request_id)}/db-approvals/${encodeURIComponent(item.id)}/${decision}`;
+
+/** Decision body: reject needs a reason (null otherwise); approve pins the candidate head_sha when known. */
+export function dbDecisionBody(decision, reason, item) {
+  if (decision === 'reject') {
+    const text = String(reason ?? '').trim();
+    return text ? { reason: text.slice(0, 500) } : null;
+  }
+  return item?.candidate?.head_sha ? { head_sha: item.candidate.head_sha } : {};
 }
 
-/** DB approval card. item: {id, sql, sandbox:{status,output}, files[]}; ui: {reason, msg, busy}. */
-export function renderDbApproval(item, ui = {}, pos = { n: 1, total: 1 }) {
+const diffLines = (d = {}) => [
+  ...(d.added_tables || []).map((t) => `Thêm bảng ${code(t)}`),
+  ...(d.removed_tables || []).map((t) => `Xóa bảng ${code(t)}`),
+  ...Object.entries(d.added_columns || {}).map(([t, cols]) => `Thêm cột vào ${code(t)}: ${cols.map(code).join(' ')}`),
+  ...Object.entries(d.removed_columns || {}).map(([t, cols]) => `Xóa cột khỏi ${code(t)}: ${cols.map(code).join(' ')}`),
+];
+
+/** Pending DB approval card. item per lf315 contract; ui: {reason, msg, busy}. */
+export function renderDbApproval(item, ui = {}) {
   if (!item) return '';
-  const sb = item.sandbox || {}, [state, label] = SANDBOX_STATE[sb.status] || SANDBOX_STATE.pending;
-  const files = item.files || [];
+  const sb = item.sandbox || {}, [state, label] = SANDBOX_STATE[sb.status] || ['idle', 'Chưa rõ kết quả chạy thử'];
+  const files = item.files || [], diff = diffLines(sb.schema_diff), cand = item.candidate || {};
+  const checks = sb.checks || [], tests = sb.tests || [];
   const noReason = !String(ui.reason ?? '').trim();
-  const id = esc(item.id);
-  return `<section class="blk db-approval" id="db-approval" aria-labelledby="db-approval-h" data-id="${id}">
-    <h2 id="db-approval-h">Thay đổi cơ sở dữ liệu chờ duyệt <span class="meta">${pos.n}/${pos.total}</span></h2>
-    <p class="meta">Duyệt xong mới được đẩy lên dev. Từ chối cần ghi lý do.</p>
-    <div class="sub">SQL</div>${sqlBlock(item.sql)}
+  const id = esc(item.id), hid = `db-approval-${id}`;
+  return `<article class="blk db-approval" id="${hid}" aria-labelledby="${hid}-h" data-id="${id}" data-request="${esc(item.request_id)}">
+    <h3 id="${hid}-h">${item.title ? esc(item.title) : 'Thay đổi cơ sở dữ liệu'} <span class="meta">yêu cầu #${esc(item.request_id)} · lượt ${id}</span></h3>
+    <p class="meta"><a href="/admin-request.html?id=${esc(item.request_id)}" target="_top">Mở trang yêu cầu</a>${cand.branch ? ` · nhánh ${code(cand.branch)}` : ''}${cand.head_sha ? ` · ${code(String(cand.head_sha).slice(0, 7))}` : ''}</p>
+    <div class="sub">SQL (chỉ đọc)</div>${sqlBlock(item.sql)}
     <div class="sub">Chạy thử trên sandbox</div>
     <p>${tag(state, label)}</p>
-    ${sb.output ? `<pre tabindex="0" role="region" aria-label="Kết quả chạy thử">${esc(sb.output)}</pre>` : ''}
+    ${diff.length ? list(diff) : ''}
+    ${sb.output ? `<pre tabindex="0" role="region" aria-label="Tóm tắt chạy thử">${esc(sb.output)}</pre>` : ''}
+    ${sb.error ? `<p class="err" role="alert">${esc(sb.error)}</p>` : ''}
+    ${checks.length || tests.length ? `<p class="meta">Kiểm tra SQL: ${checks.filter((c) => c.ok).length}/${checks.length} đạt · test: ${tests.filter((t) => t.rc === 0).length}/${tests.length} đạt</p>` : ''}
     <div class="sub">File liên quan</div>
     ${files.length ? `<p>${files.map(code).join(' ')}</p>` : '<p class="meta">Chưa có file liên quan.</p>'}
-    <label class="meta" for="db-reason" style="display:block">Lý do từ chối (bắt buộc khi từ chối)</label>
-    <input id="db-reason" data-db-reason maxlength="500" autocomplete="off" aria-describedby="db-reason-hint" value="${esc(ui.reason)}" style="width:100%;max-width:72ch;display:block;margin:4px 0">
-    <p class="meta" id="db-reason-hint">${noReason ? 'Nhập lý do để bật nút Từ chối.' : ''}</p>
+    <label class="meta" for="${hid}-reason" style="display:block">Lý do từ chối (bắt buộc khi từ chối)</label>
+    <input id="${hid}-reason" data-db-reason="${id}" maxlength="500" autocomplete="off" aria-describedby="${hid}-hint" value="${esc(ui.reason)}" style="width:100%;max-width:72ch;display:block;margin:4px 0">
+    <p class="meta" id="${hid}-hint">${noReason ? 'Nhập lý do để bật nút Từ chối.' : ''}</p>
     <div class="row">
       <button class="btn ok" data-action="db-approve" data-id="${id}"${ui.busy ? ' disabled' : ''}>Duyệt</button>
       <button class="btn danger-outline" data-action="db-reject" data-id="${id}"${ui.busy || noReason ? ' disabled' : ''}>Từ chối</button>
-      ${pos.total > 1 ? '<button class="btn" data-action="db-next">Tiếp</button>' : ''}
     </div>
     <div class="meta" role="status" aria-live="polite">${esc(ui.msg || '')}</div>
-  </section>`;
+  </article>`;
 }
 
-/** Load/error shell for the DB approval slot; '' when loaded and empty. */
+/** Read-only DB approval status for the request page, newest first; '' without items. */
+export function renderDbStatus(items = [], tabHref = '/admin.html#approvals') {
+  const rows = items.filter((i) => i.status !== 'superseded');
+  if (!rows.length) return '';
+  return `<div class="g-mirror meta" data-mirror="db"><p><b>Thay đổi cơ sở dữ liệu</b></p><ul>${rows.map((i) => {
+    const [state, label] = DB_STATUS[i.status] || ['idle', i.status];
+    const pr = i.pull_request?.url && /^https?:\/\//.test(i.pull_request.url) ? ` <a href="${esc(i.pull_request.url)}" target="_blank" rel="noopener">PR #${esc(i.pull_request.number)}</a>` : '';
+    const why = i.decision?.reason ? ` Lý do: ${esc(i.decision.reason)}` : '';
+    const err = i.publish_error ? ` <span class="err">${esc(i.publish_error)}</span>` : '';
+    const go = i.status === 'pending' || i.status === 'publish_failed' ? ` <a href="${esc(tabHref)}" target="_top">Mở tab Duyệt</a>` : '';
+    return `<li>${tag(state, label)}${pr}${why}${err}${go}</li>`;
+  }).join('')}</ul></div>`;
+}
+
+/** Load/error shell for a DB approval list. */
 export function renderDbApprovalState({ loading, error }) {
-  if (loading) return '<section class="blk" aria-busy="true"><p class="meta">Đang tải thay đổi cơ sở dữ liệu chờ duyệt…</p></section>';
-  if (error) return `<section class="blk"><p class="err" role="alert">Không tải được thay đổi cơ sở dữ liệu chờ duyệt: ${esc(error)}.</p>
-    <button class="btn" data-action="db-retry">Thử lại</button></section>`;
+  if (loading) return '<p class="meta" aria-busy="true">Đang tải thay đổi cơ sở dữ liệu chờ duyệt…</p>';
+  if (error) return `<div role="alert"><p class="err">Không tải được thay đổi cơ sở dữ liệu chờ duyệt: ${esc(error)}.</p>
+    <button class="btn" data-action="db-retry">Thử lại</button></div>`;
   return '';
 }

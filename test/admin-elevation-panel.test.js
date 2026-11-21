@@ -6,9 +6,10 @@ import { readFileSync } from 'node:fs';
 const dashboard = readFileSync(new URL('../public/js/admin-dashboard.js', import.meta.url), 'utf8');
 const detail = readFileSync(new URL('../public/js/admin-request.js', import.meta.url), 'utf8');
 
-test('the requests tab lists only pending elevations with path, level and the reason', () => {
+test('the Duyệt tab lists only pending elevations with path, level and the reason', () => {
   assert.match(dashboard, /const pending = rows\.filter\(r => r\.elevation === 'requested'\)/);
-  assert.match(dashboard, /\$\{elevationPanel\(filtered\)\}/, 'panel follows the visible rows');
+  assert.match(dashboard, /\$\{section\('elevation', 'Quyền chạm vùng bảo vệ', n\.elevation, elevationPanel\(reqCache\)\)\}/, 'panel lives in the Duyệt tab');
+  assert.doesNotMatch(dashboard.slice(dashboard.indexOf('function renderRequests'), dashboard.indexOf('function wireElevationInputs')), /elevationPanel\(/, 'the Góp ý tab no longer decides');
   assert.match(dashboard, /elevation_scope \|\| \[\]/, 'one scope entry per file');
   assert.match(dashboard, /mức \$\{esc\(ELEVATION_LEVEL_LABEL\[item\.level\] \|\| item\.level\)\}/);
   assert.match(dashboard, /\$\{r\.elevation_reason \?/, 'the reason the worker gave stays visible');
@@ -32,13 +33,11 @@ test('every decision goes through askConfirm, posts a reason and reloads the lis
   assert.match(dashboard, /if \(!r\.ok\) return toast\(/, 'failures surface through the existing toast');
 });
 
-test('the request page shows the pending scope and decides it in place', () => {
+test('the request page shows the pending scope read-only and links to the Duyệt tab', () => {
   assert.match(detail, /const e = t\.root\?\.elevation_detail;/);
   assert.match(detail, /if \(!e \|\| !e\.state \|\| e\.state === 'none'\) return '';/, 'only a real elevation state renders a block');
   assert.match(detail, /\(e\.scope \|\| \[\]\)\.map/);
-  assert.match(detail, /data-action="elevate" data-decision="approve">Duyệt quyền</);
+  assert.match(detail, /href="\/admin\.html#approvals\/elevation-/);
   assert.match(detail, /\$\{elevationBlock\(t\)\}/, 'rendered inside the AI board summary');
-  assert.match(detail, /action === 'elevate'\) return decideElevation\(btn\)/);
-  assert.match(detail, /post\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevate`/);
-  assert.match(detail, /await askConfirm\(\{[\s\S]{0,300}Duyệt quyền cho kế hoạch này\?/);
+  assert.doesNotMatch(detail, /data-action="elevate"|decideElevation|\/elevate`/, 'no decision controls on the request page');
 });

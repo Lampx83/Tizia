@@ -70,21 +70,11 @@ test('"Duyệt tất cả" only takes loaded, low/medium, inside-request items',
   assert.match(dashboard, /if \(approve && list\.length === 1 && elevationBlockReason\(contexts\[0\]\)\)/);
 });
 
-test('the request page repeats the card and keeps the same server endpoints', () => {
-  assert.match(detail, /api\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevation-context`/, 'single-context call');
-  assert.match(detail, /function elevationContextCard\(ctx\)/);
-  assert.match(detail, /escalationCard\(ctx\.card, \{ tag, html: \{ action \}, extra: \{ why, risk: modelRisk, evidence: trail, options: narrow \} \}\)/);
-  assert.match(detail, /id="elevation-reason" data-elevation-reason maxlength="1000" placeholder="Lý do duyệt \(bắt buộc\)"/);
-  assert.match(detail, /data-action="elevate" data-decision="approve">Duyệt quyền</);
-  assert.match(detail, /if \(approve && reason\.length < 3\)/);
-  assert.match(detail, /CẢNH BÁO rủi ro cao/);
-  assert.match(detail, /href="#ticket-trace">vết đầy đủ<\/a>/);
-  assert.match(detail, /post\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevate`/);
-  assert.match(detail, /await askConfirm\(\{[\s\S]{0,400}Duyệt quyền cho kế hoạch này\?/);
-  assert.match(detail, /if \(!yes\) return;/);
+test('the request page no longer carries the approval card or its endpoints', () => {
+  assert.doesNotMatch(detail, /elevationContextCard|elevation-context|\/elevate`|Duyệt quyền cho kế hoạch này\?/);
 });
 
-test('both pages escape every model/worker string before rendering', () => {
+test('the Duyệt tab escapes every model/worker string before rendering', () => {
   // Scope, reasons, questions, titles and excerpts are untrusted: each goes through esc()/code().
   assert.match(dashboard, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
   assert.match(dashboard, /risk\.questions\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
@@ -92,5 +82,4 @@ test('both pages escape every model/worker string before rendering', () => {
   for (const field of ['card.action', 'card.why', 'e.source', 'e.quote', 'card.risk?.note', 'o.note', 'card.kind']) {
     assert.ok(card.includes(field.startsWith('card.action') || field.startsWith('card.why') ? `text(${field})` : `escHtml(${field})`), `${field} is escaped`);
   }
-  assert.match(detail, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
 });

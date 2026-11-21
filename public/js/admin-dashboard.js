@@ -11,6 +11,8 @@ import { mountPromptLabels } from './admin-prompt-labels.js';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 import { createPoll } from './poll.js';
 import { escalationCard } from './escalation-card.js?v=escalation1';
+import { approvalCounts, renderNetItem, section, approvalsNotice, NET_WARNING, netTitle } from './admin-approvals.js';
+import { renderDbApproval, renderDbApprovalState, dbDecisionBody, dbDecisionPath } from './ai-board-mirror.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -410,16 +412,24 @@ let ownerFilter = 'all';
 let myAdminId = null;
 let userCache = [];
 let currentTab = 'dashboard';
+let approvalBadgeCount = 0;
 
 let netPendingByRequest = {};
 
-async function loadRequests() {
-  const [r, ai, net] = await Promise.all([
+let approvalDb = [];
+let approvalNet = [];
+const approvalUi = { dbError: '', netError: '', netMsg: '', dbMsg: '', reasons: new Map(), busy: false };
+
+async function fetchRequests() {
+  const [r, ai, net, db] = await Promise.all([
     // Every request from the board DB, so request ids match the board pages.
     api('/api/admin/ai-board/requests?limit=1000'),
     api('/api/admin/ai-board/queue'),
     api('/api/admin/ai-board/network-requests/pending-count'),
+    api('/api/admin/ai-board/db-approvals?status=pending'),
   ]);
+  approvalDb = db.ok ? (db.data.items || []) : [];
+  approvalUi.dbError = db.ok ? '' : String(db.data?.error || db.status);
   netPendingByRequest = net.ok ? (net.data.counts || {}) : {};
   reqCache = r.data.requests || [];
   reqTotal = Number(r.data.total) || reqCache.length;
@@ -428,7 +438,12 @@ async function loadRequests() {
   }
   aiTicketCache = ai.data.tickets || [];
   intakeRejections = ai.data.intake_rejections || [];
-  renderRequests();
+  updateApprovalBadge();
+}
+
+async function loadRequests() {
+  await fetchRequests();
+  if (currentTab === 'approvals') await renderApprovals(); else renderRequests();
 }
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
@@ -509,16 +524,17 @@ const elevationBatchEligible = (r) => {
 };
 
 // Ngữ cảnh một yêu cầu: tải theo yêu cầu, không tải cả loạt để tab mở nhanh.
+const renderCurrentRequests = () => (currentTab === 'approvals' ? renderApprovals() : renderRequests());
 async function loadElevationContext(rid) {
   const id = Number(rid);
   if (!Number.isInteger(id) || id <= 0) return;
   elevationContexts.set(id, { loading: true });
-  renderRequests();
+  renderCurrentRequests();
   const r = await api(`/api/admin/ai-board/requests/${id}/elevation-context`);
   elevationContexts.set(id, r.ok && r.data?.context
     ? { data: r.data.context }
     : { error: r.data?.message || r.data?.error || `HTTP ${r.status}` });
-  renderRequests();
+  renderCurrentRequests();
 }
 
 const elevationPathTag = (row) => (row.named_in_request
@@ -602,7 +618,7 @@ function elevationPanel(rows) {
       <button class="btn primary" data-act="elevate-all" data-ids="${eligible.map(r => r.id).join(',')}"${eligible.length ? '' : ' disabled'} title="${esc(batchHint)}">Duyệt tất cả (${eligible.length})</button>
     </div>
     <ul style="margin:10px 0 0;padding-left:18px">
-      ${pending.map(r => `<li data-elevation="${r.id}" style="margin:8px 0">
+      ${pending.map(r => `<li id="elevation-${r.id}" data-elevation="${r.id}" style="margin:8px 0">
         <b>#${r.id}</b> ${esc(r.title)} · <span style="opacity:.7">${esc(r.student || '')}</span>
         <div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
         ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}
@@ -685,6 +701,105 @@ async function decideElevation(ids, decision, narrowed = null) {
   await loadRequests();
 }
 
+
+async function loadNetItems() {
+  const ids = Object.keys(netPendingByRequest).filter(id => Number(netPendingByRequest[id]) > 0);
+  const results = await Promise.all(ids.map(id => api(`/api/admin/ai-board/requests/${id}/network-requests?status=pending`).then(r => ({ id, r }))));
+  approvalNet = results.flatMap(({ id, r }) => r.ok
+    ? (r.data.items || []).map(item => ({ item, request_id: Number(id), title: reqCache.find(q => q.id === Number(id))?.title || '' })) : []);
+  approvalUi.netError = results.some(({ r }) => !r.ok) ? 'một số yêu cầu mạng không tải được' : '';
+}
+
+const approvalReason = (kind, id) => approvalUi.reasons.get(`${kind}:${id}`) || '';
+
+// Tab Duyệt: mọi mục chờ admin quyết ở một chỗ.
+async function renderApprovals() {
+  const host = $('#tabbody');
+  await loadNetItems().catch(() => { approvalUi.netError = 'mất kết nối'; });
+  const n = approvalCounts(approvalInput());
+  const netBody = approvalNet.map(entry => renderNetItem(entry, { reason: approvalReason('net', entry.item.id), msg: approvalUi.netMsg },
+    { tag: dashTag, escalationCard })).join('');
+  const netState = approvalUi.netError ? `<div class="err" role="alert">Không tải đủ: ${esc(approvalUi.netError)}. <button class="btn" data-act="approvals-reload">Thử lại</button></div>` : '';
+  const dbBody = approvalDb.map(item => renderDbApproval(item, { reason: approvalReason('db', item.id), msg: approvalUi.dbMsg, busy: approvalUi.busy })).join('');
+  const dbState = renderDbApprovalState({ error: approvalUi.dbError });
+  host.innerHTML = `
+    <div class="toolbar"><h1 class="appr-title">Chờ admin duyệt</h1><div class="spacer"></div>
+      <button class="btn" data-act="approvals-reload">Tải lại</button></div>
+    <p class="meta" role="status">${n.total
+      ? `${n.total} mục: ${n.elevation} quyền, ${n.waiting} vé dừng, ${n.net} yêu cầu mạng, ${n.db} thay đổi CSDL.`
+      : 'Không có mục nào đang chờ duyệt.'}</p>
+    ${section('elevation', 'Quyền chạm vùng bảo vệ', n.elevation, elevationPanel(reqCache))}
+    ${section('db', 'Thay đổi cơ sở dữ liệu', n.db, dbBody + dbState, 'Duyệt xong mới được đẩy lên dev. Từ chối cần lý do.')}
+    ${section('net', 'Yêu cầu mạng', n.net, netBody + netState)}
+    ${section('waiting', 'Vé đang dừng chờ quản trị viên', n.waiting, waitingPanel(), 'Thao tác nằm ở trang yêu cầu (kế hoạch, hoàn tác…).')}`;
+  wireElevationInputs(host);
+  wireActs(host);
+  wireApprovalInputs(host);
+  host.querySelectorAll('[data-action]').forEach(b => b.addEventListener('click', () => dbAction(b)));
+  focusHashItem(host);
+}
+
+function wireApprovalInputs(host) {
+  host.querySelectorAll('[data-net-reason]').forEach(inp => inp.addEventListener('input', () => approvalUi.reasons.set(`net:${inp.dataset.netReason}`, inp.value)));
+  host.querySelectorAll('[data-db-reason]').forEach(inp => inp.addEventListener('input', () => {
+    approvalUi.reasons.set(`db:${inp.dataset.dbReason}`, inp.value);
+    const reject = host.querySelector(`[data-action="db-reject"][data-id="${CSS.escape(inp.dataset.dbReason)}"]`);
+    if (reject) reject.disabled = approvalUi.busy || !inp.value.trim();
+  }));
+}
+
+function focusHashItem(host) {
+  const target = (location.hash.split('/')[1] || '').replace(/[^\w-]/g, '');
+  const el = target && host.querySelector(`#${CSS.escape(target)}`);
+  if (el) { el.scrollIntoView({ block: 'start' }); el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
+}
+
+async function netDecide(btn, decision) {
+  const item = approvalNet.find(e => String(e.item.id) === btn.dataset.id)?.item;
+  if (!item) return loadRequests();
+  const approve = decision === 'approved';
+  const yes = await askConfirm(approve
+    ? { title: 'Duyệt yêu cầu mạng?', message: NET_WARNING, lines: [`Mục: ${netTitle(item)}`], ok: 'Duyệt' }
+    : { title: 'Từ chối yêu cầu mạng?', message: 'Quyết định từ chối sẽ được ghi lại. Lý do bạn ghi (nếu có) được lưu.', lines: [`Mục: ${netTitle(item)}`], ok: 'Từ chối', danger: true });
+  if (!yes) return;
+  btn.disabled = true;
+  const reason = approvalReason('net', item.id).trim();
+  const r = await api(`/api/admin/ai-board/network-requests/${encodeURIComponent(item.id)}/${approve ? 'approve' : 'reject'}`,
+    { method: 'POST', body: JSON.stringify(!approve && reason ? { reason } : {}) });
+  if (r.ok) {
+    approvalUi.reasons.delete(`net:${item.id}`);
+    approvalUi.netMsg = `${approve ? 'Đã duyệt' : 'Đã từ chối'}. Còn ${r.data.pending_left} mục chờ.${r.data.resumed ? ' Run đã về hàng đợi để chạy tiếp.' : ''}`;
+  } else {
+    approvalUi.netMsg = /already decided|not found/.test(String(r.data?.error || r.data?.message)) ? 'Mục này đã được quyết định hoặc đã đổi. Đã tải lại.' : `Chưa thực hiện được: ${r.data?.message || r.data?.error || r.status}`;
+  }
+  await loadRequests();
+}
+
+const DB_ERROR = { not_awaiting_db_approval: 'Mục này đã được quyết định hoặc không còn chờ. Đã tải lại.', stale_db_approval: 'Có bản mới hơn của thay đổi này. Đã tải lại.',
+  reason_required: 'Cần nhập lý do (tối đa 500 ký tự).', request_not_found: 'Không tìm thấy yêu cầu.' };
+
+async function dbAction(btn) {
+  const item = approvalDb.find(i => String(i.id) === btn.dataset.id);
+  const action = btn.dataset.action;
+  if (action === 'db-retry') return loadRequests();
+  if (!item || approvalUi.busy) return;
+  const approve = action === 'db-approve';
+  const body = dbDecisionBody(approve ? 'approve' : 'reject', approvalReason('db', item.id), item);
+  if (!body) { approvalUi.dbMsg = 'Nhập lý do trước khi từ chối.'; return renderApprovals(); }
+  const lines = [`Yêu cầu #${item.request_id} · lượt ${item.id}`];
+  const yes = await askConfirm(approve
+    ? { title: 'Duyệt thay đổi cơ sở dữ liệu?', message: 'Sau khi duyệt, worker được phép đẩy thay đổi lên dev và mở PR.', lines, ok: 'Duyệt' }
+    : { title: 'Từ chối thay đổi cơ sở dữ liệu?', message: 'Run dừng lại. Lý do bạn ghi được gửi cho người yêu cầu.', lines, ok: 'Từ chối', danger: true });
+  if (!yes) return;
+  approvalUi.busy = true; btn.disabled = true;
+  const r = await api(dbDecisionPath(item, approve ? 'approve' : 'reject'), { method: 'POST', body: JSON.stringify(body) });
+  approvalUi.busy = false;
+  const err = r.data?.error || r.status;
+  if (r.ok) { approvalUi.reasons.delete(`db:${item.id}`); approvalUi.dbMsg = approve ? 'Đã duyệt. Worker sẽ đẩy PR.' : 'Đã từ chối.'; }
+  else approvalUi.dbMsg = DB_ERROR[err] || `Chưa thực hiện được: ${err}`;
+  await loadRequests();
+}
+
 // Vé chờ quản trị viên / bị cờ intake: thẻ chỉ đọc, thao tác thật nằm ở trang yêu cầu (đã có sẵn).
 function waitingPanel() {
   const elevating = new Set(reqCache.filter(r => r.elevation === 'requested').map(r => r.id));
@@ -712,8 +827,7 @@ function renderRequests() {
   const counts = reqCache.reduce((m,r) => (m[r.status] = (m[r.status]||0)+1, m), {});
   const host = $('#tabbody');
   host.innerHTML = `
-    ${elevationPanel(filtered)}
-    ${waitingPanel()}
+    ${approvalsNotice(approvalCounts(approvalInput()).total)}
     <div class="toolbar">
       <span style="font-size:12px;opacity:.6">Lọc:</span>
       <select id="reqFilter">
@@ -783,6 +897,11 @@ function renderRequests() {
   $('#ownerFilter').addEventListener('change', e => { ownerFilter = e.target.value; renderRequests(); });
   $('#reqFilter').addEventListener('change', e => { reqFilter = e.target.value; renderRequests(); });
   $('#reqRefresh').addEventListener('click', loadRequests);
+  wireElevationInputs(host);
+  wireActs(host);
+}
+
+function wireElevationInputs(host) {
   host.querySelectorAll('[data-elevation-path], [data-elevation-level]').forEach(inp => inp.addEventListener('change', () => {
     const rid = Number(inp.dataset.elevationPath || inp.dataset.elevationLevel);
     const pick = narrowPick(rid, elevationCtx(rid)?.elevation?.scope || []);
@@ -798,9 +917,15 @@ function renderRequests() {
     inp.value = elevationReasons.get(key) || '';
     inp.addEventListener('input', () => elevationReasons.set(key, inp.value));
   });
+}
+
+function wireActs(host) {
   host.querySelectorAll('[data-act]').forEach(b => {
     b.addEventListener('click', () => {
       const id = Number(b.dataset.rid);
+      if (b.dataset.act === 'approvals-reload') return loadRequests();
+      if (b.dataset.act === 'net-approve') return netDecide(b, 'approved');
+      if (b.dataset.act === 'net-reject') return netDecide(b, 'rejected');
       if (b.dataset.act === 'elevation-context') return loadElevationContext(id);
       if (b.dataset.act === 'elevate') return decideElevation([id], b.dataset.decision);
       if (b.dataset.act === 'elevate-narrow') {
@@ -2060,6 +2185,7 @@ const TABS = {
   schools:    { label:'Trường', load: loadSchoolsCampus },
   curriculum: { label:'Curriculum', load: loadCurriculumTab },
   requests:   { label:'Góp ý', load: loadRequests, badge: () => requestBadgeCount },
+  approvals:  { label:'Duyệt', load: loadRequests, badge: () => approvalBadgeCount },
   features:   { label:'Chức năng', load: loadFeatureFolders },
   skills:     { label:'Skills & Tools', load: loadSkillsTools },
   users:     { label:'Người dùng', load: loadUsers },
@@ -2533,7 +2659,7 @@ function renderTabBar() {
 
 // Đọc tab từ location.hash (vd #schools). Trả null nếu hash không match tab nào.
 function tabFromHash() {
-  const h = (location.hash || '').replace(/^#/, '').trim();
+  const h = (location.hash || '').replace(/^#/, '').split('/')[0].trim();
   return TABS[h] ? h : null;
 }
 
@@ -2566,7 +2692,7 @@ async function showTab(key, { silent = false } = {}) {
 }
 
 // Tab tự làm mới: chỉ tab đọc số liệu; tab có form (trường, cấu hình, CSDL…) không bị vẽ lại khi đang sửa.
-const AUTO_REFRESH_TABS = new Set(['dashboard', 'requests']);
+const AUTO_REFRESH_TABS = new Set(['dashboard', 'requests', 'approvals']);
 function autoRefresh() {
   const busy = document.hidden || $('#modal-bg')?.classList.contains('show')
     || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
@@ -2576,6 +2702,15 @@ function updateRequestBadge(count) {
   requestBadgeCount = Number(count) || 0;
   const tb = document.querySelector('.tab[data-k="requests"] .count');
   if (tb) tb.textContent = requestBadgeCount;
+}
+
+function approvalInput() {
+  return { requests: reqCache, tickets: aiTicketCache, netCounts: netPendingByRequest, dbItems: approvalDb };
+}
+function updateApprovalBadge() {
+  approvalBadgeCount = approvalCounts(approvalInput()).total;
+  const tb = document.querySelector('.tab[data-k="approvals"] .count');
+  if (tb) tb.textContent = approvalBadgeCount;
 }
 
 async function refresh({ silent = false } = {}) {
@@ -2622,6 +2757,7 @@ async function init() {
     if (t && t !== currentTab) showTab(t);
   });
   await showTab(startTab);
+  fetchRequests().catch(() => {});
   // The tab count is the board DB number, fetched as soon as the admin page opens.
   api('/api/admin/ai-board/requests?limit=1').then(r => {
     if (!r.ok) return;
