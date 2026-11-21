@@ -8,7 +8,11 @@ Browser checks run on the after tree served from a temp dir; default DOM probe i
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
 import tempfile
 import unicodedata
@@ -18,11 +22,14 @@ from pathlib import Path
 from evaluation import behaviour_oracle as BO
 from evaluation import expectation_predicates as EP
 from gate5 import checks as gate_checks
+from settings import get_settings
 
 DATA_FILE = Path(__file__).with_name("feature_tuning.json")
 SETS = ("tuning", "validation")
 BROWSER = ("text_present", "text_absent", "http_status", "selector_exists", "computed_style")
 MAX_ANSWERS = 2
+TREE_ROOTS = ("server", "public/js", "package.json")
+ORACLE_TIMEOUT = 300
 Verdict = tuple[bool, str]
 _BLOCK = re.compile(r"^--- a/(\S+)\n\+\+\+ b/(\S+)$", re.M)
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@")
@@ -318,14 +325,80 @@ def trees(case: dict, seed, diff: str = "") -> tuple[dict, dict]:
     return before, apply_diff(before, diff)
 
 
-def grade_record(case: dict, record: dict, seed=EP.read_seed, dom_probe=None) -> dict:
-    """Record (diff + model criteria) -> hidden-expectation verdict; ok needs files, browser and criteria all green."""
+class OracleInfra(RuntimeError):
+    """Oracle cannot run here (no node, no node_modules, oracle file missing); not a candidate fault."""
+
+
+def _link(link: Path, source: Path) -> None:
+    if os.name == "nt":
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(source)], check=True, capture_output=True)
+    else:
+        link.symlink_to(source, target_is_directory=True)
+
+
+def _unlink(link: Path) -> None:
+    if link.is_symlink():
+        link.unlink()
+    elif link.exists():
+        os.rmdir(link)
+
+
+def oracle_verdict(case: dict, after: dict, repo=None, timeout: int = ORACLE_TIMEOUT) -> Verdict:
+    """Candidate = repo TREE_ROOTS + after files + oracle_files in a temp dir, node_modules linked (AI_BOARD_EVAL_NODE_MODULES or repo's). Exit 0 = pass. Raise OracleInfra when it cannot run."""
+    repo = Path(repo or EP.REPO)
+    if not shutil.which("node"):
+        raise OracleInfra("node not found on PATH")
+    modules = get_settings().eval_node_modules or repo / "node_modules"
+    if not modules.is_dir() or not any(modules.iterdir()):
+        raise OracleInfra(f"node_modules missing or empty: {modules}")
+    if "_dir" not in case:
+        raise OracleInfra("oracle dir unknown: case has no _dir")
+    sources = [(Path(case["_dir"]) / "oracle" / o["src"], o["dest"]) for o in case["oracle_files"]]
+    if gone := next((s for s, _ in sources if not s.is_file()), None):
+        raise OracleInfra(f"oracle file missing: {gone}")
+    with tempfile.TemporaryDirectory(prefix="feature-oracle-") as tmp:
+        ws = Path(tmp)
+        for root in TREE_ROOTS:
+            src = repo / root
+            if src.is_dir():
+                shutil.copytree(src, ws / root)
+            elif src.is_file():
+                shutil.copy2(src, ws / root)
+        for path, text in after.items():
+            (ws / path).parent.mkdir(parents=True, exist_ok=True)
+            (ws / path).write_bytes(text.encode("utf-8"))
+        for src, dest in sources:
+            (ws / dest).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, ws / dest)
+        link = ws / "node_modules"
+        _link(link, modules)
+        try:
+            p = subprocess.run(shlex.split(case["oracle_cmd"]), cwd=ws, capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL)
+            rc, out = p.returncode, (p.stdout + p.stderr).decode("utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            rc, out = 124, "oracle timeout"
+        except FileNotFoundError as err:
+            raise OracleInfra(f"oracle command not runnable: {err}") from err
+        finally:
+            _unlink(link)
+    if rc == 0:
+        return True, ""
+    head = " | ".join([ln.strip() for ln in out.splitlines() if ln.strip()][:8])
+    return False, f"oracle red (rc {rc}): {head}"[:600]
+
+
+def grade_record(case: dict, record: dict, seed=EP.read_seed, dom_probe=None, repo=None) -> dict:
+    """Record (diff + model criteria) -> hidden-expectation verdict; ok needs files, browser, criteria and (when oracle_cmd) oracle all green. Raise OracleInfra."""
     before, after = trees(case, seed, record.get("diff") or "")
     files_ok, files_why = grade_files(before, after, case)
     browser_ok, browser_why = browser_verdict(case["browser"], after, dom_probe) if files_ok else (False, "files red")
     criteria = compare_criteria(case, record.get("criteria") or {}, after if files_ok else None, dom_probe)
-    return {"ok": files_ok and browser_ok and criteria["ok"], "files_ok": files_ok, "files_reason": files_why,
-            "browser_ok": browser_ok, "browser_reason": browser_why, "criteria": criteria}
+    out = {"ok": files_ok and browser_ok and criteria["ok"], "files_ok": files_ok, "files_reason": files_why,
+           "browser_ok": browser_ok, "browser_reason": browser_why, "criteria": criteria}
+    if case.get("oracle_cmd"):
+        out["oracle_ok"], out["oracle_reason"] = oracle_verdict(case, after, repo)
+        out["ok"] = out["ok"] and out["oracle_ok"]
+    return out
 
 
 def _case_problems(case: dict, seed, dom_probe) -> list[str]:

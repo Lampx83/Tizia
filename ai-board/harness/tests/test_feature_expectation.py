@@ -1,5 +1,6 @@
 import difflib
 import json
+import shutil
 
 import pytest
 
@@ -170,3 +171,61 @@ def test_tuning_data_is_marked_and_passes_two_way_check():
     assert fx.self_check(data) == []
     assert all(c["browser"] and c["request"] and c["must_state"] is not None for c in data["cases"])
     json.dumps(data)
+
+
+
+needs_node = pytest.mark.skipif(not shutil.which("node"), reason="node missing")
+
+
+def oracle_case(tmp_path):
+    (tmp_path / "oracle").mkdir()
+    (tmp_path / "oracle" / "check.js").write_text("const t = require('fs').readFileSync('server/x.js', 'utf8'); process.exit(t.includes('GOOD') ? 0 : 1);\n", encoding="utf-8")
+    return {**CASE, "_dir": tmp_path, "oracle_files": [{"src": "check.js", "dest": "test/check.js"}], "oracle_cmd": "node test/check.js"}
+
+
+@pytest.fixture
+def tiny(tmp_path, monkeypatch):
+    repo, modules = tmp_path / "repo", tmp_path / "mods"
+    (repo / "server").mkdir(parents=True)
+    (repo / "server" / "x.js").write_text("// BAD\n", encoding="utf-8")
+    (modules / "dep").mkdir(parents=True)
+    (modules / "dep" / "index.js").write_text("", encoding="utf-8")
+    monkeypatch.setenv("AI_BOARD_EVAL_NODE_MODULES", str(modules))
+    return repo, oracle_case(tmp_path)
+
+
+@needs_node
+def test_oracle_cmd_gates_ok_and_default_cases_unchanged(tiny):
+    repo, case = tiny
+    seed = lambda p: SEED[p]
+    rec = {"diff": diff_between(SEED, fixed()), "criteria": {"acceptance": ["/new.html"], "checks": CASE["browser"]}}
+    assert "oracle_ok" not in fx.grade_record(CASE, rec, seed=seed)
+    bad = fx.grade_record(case, rec, seed=seed, repo=repo)
+    assert not bad["ok"] and bad["files_ok"] and bad["browser_ok"] and not bad["oracle_ok"] and "rc 1" in bad["oracle_reason"]
+    assert fx.oracle_verdict(case, {"server/x.js": "// GOOD\n"}, repo) == (True, "")
+
+
+@needs_node
+def test_oracle_pass_does_not_rescue_red_static(tiny):
+    repo, case = tiny
+    out = fx.grade_record(case, {"diff": "", "criteria": {}}, seed=lambda p: SEED[p], repo=repo)
+    assert not out["ok"] and not out["files_ok"]
+
+
+@needs_node
+def test_oracle_infra_errors_raise_not_fail(tiny, monkeypatch, tmp_path):
+    repo, case = tiny
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setenv("AI_BOARD_EVAL_NODE_MODULES", str(tmp_path / "empty"))
+    with pytest.raises(fx.OracleInfra, match="node_modules"):
+        fx.oracle_verdict(case, {}, repo)
+    monkeypatch.setenv("AI_BOARD_EVAL_NODE_MODULES", str(tmp_path / "mods"))
+    monkeypatch.setattr(fx.shutil, "which", lambda _n: None)
+    with pytest.raises(fx.OracleInfra, match="node not found"):
+        fx.oracle_verdict(case, {}, repo)
+    monkeypatch.undo()
+    monkeypatch.setenv("AI_BOARD_EVAL_NODE_MODULES", str(tmp_path / "mods"))
+    with pytest.raises(fx.OracleInfra, match="oracle dir"):
+        fx.oracle_verdict({k: v for k, v in case.items() if k != "_dir"}, {}, repo)
+    with pytest.raises(fx.OracleInfra, match="oracle file missing"):
+        fx.oracle_verdict({**case, "oracle_files": [{"src": "nope.js", "dest": "t.js"}]}, {}, repo)
