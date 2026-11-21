@@ -1081,6 +1081,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
         judge("clarify limit", True, state["assumption"])
         validation = {**validation, "clear": True}
+    if validation["clear"] and (asked := decision_ledger.ambiguity_question(state.get("ledger"), request, clarify_limit())):
+        judge("ledger ambiguity", False, asked)
+        validation = {**validation, "clear": False, "question": asked}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:

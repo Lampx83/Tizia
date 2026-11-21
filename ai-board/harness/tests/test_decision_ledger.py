@@ -191,3 +191,14 @@ def test_coverage_needs_wired_new_file_and_a_rejected_existing_file(repo):
     assert "rejected" in " ".join(decision_ledger.coverage(plan, norej, log, exists))
     wrong = [ok[0], {**ok[1], "decision": "placement"}]
     assert "new_file" in " ".join(decision_ledger.coverage(plan, wrong, log, exists))
+
+
+def test_ambiguity_entry_needs_exactly_two_readings(repo):
+    log = log_with_read(repo)
+    ok = {"decision": "ambiguity", "target": "lưu", "readings": ["máy", "tài khoản"], "evidence": []}
+    assert decision_ledger.pop({"decisions": [ok]}, log)
+    for bad in ({**ok, "readings": ["một"]}, {**ok, "readings": ["a", ""]}, {**ok, "readings": ["a", "b", "c"]},
+                {**ok, "evidence": [{"step_id": 9, "file": "x", "lines": "1"}]}):
+        with pytest.raises(ValueError):
+            decision_ledger.pop({"decisions": [bad]}, log)
+    assert decision_ledger.ambiguity_question([ok], {}, 2).endswith("Bạn muốn cách nào?")

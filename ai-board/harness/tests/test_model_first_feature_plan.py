@@ -201,3 +201,43 @@ def test_gate25_keeps_an_evidenced_choice_and_refuses_the_same_plan_without_it(f
     kept = run({"ledger": ledger, "best_match": homes[0]})
     assert not kept["blocked"], kept["reason"]
     assert run({})["blocked"]
+
+
+AMBIGUOUS = {"decision": "ambiguity", "target": "việc còn ghi chú khi tải lại trang",
+             "readings": ["lưu theo từng máy", "lưu theo tài khoản"], "evidence": []}
+
+
+def _gate25(request, extra):
+    grounding = [{"target": t["file"], "file": t["file"], "quote": "export const plugin = {" if t["file"] == f"{CTX}/index.js" else "",
+                  "before": "a", "after": "b", "verify": "c"} for t in PLAN["subtasks"]]
+    validation = {"clear": True, "question": None, "grounded": True, "reason": "", "grounding": grounding, "objection": None}
+    state = {"plan": PLAN, "checkout_source": str(REPO), "base_sha": _sha(), "ledger": _ledger() + [AMBIGUOUS], **extra}
+    return plan_validate.run({**request, "grounding_required": True}, deps_with(FakeModels(PLAN, validation=validation)),
+                             Budget(max_wall_clock_s=999), state)
+
+
+def test_ambiguity_in_the_ledger_becomes_one_clarify_question(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    out = _gate25(REQUEST, {})
+    assert out["blocked"] and out["outcome"] == "needs_clarification"
+    assert "lưu theo từng máy" in out["public_message"] and "lưu theo tài khoản" in out["public_message"]
+
+
+def test_answered_ambiguity_lets_the_plan_run_on(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    question = _gate25(REQUEST, {})["public_message"]
+    thread = [{"role": "admin", "body": question}, {"role": "requester", "body": "theo tài khoản"}]
+    assert not _gate25({**REQUEST, "thread": thread}, {})["blocked"]
+    assert not _gate25({**REQUEST, "clarified_spec": "theo tài khoản"}, {})["blocked"]
+
+
+def test_ambiguity_respects_the_clarify_question_limit(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    full = [{"role": "admin", "body": f"câu hỏi {i}"} for i in range(plan_validate.clarify_limit())]
+    assert not _gate25({**REQUEST, "thread": full}, {})["blocked"]
+
+
+def test_ledger_without_ambiguity_or_without_flag_asks_nothing(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    assert not _gate25(REQUEST, {"ledger": _ledger()})["blocked"]
+    assert not _gate25(REQUEST, {"ledger": None})["blocked"]

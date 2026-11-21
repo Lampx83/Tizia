@@ -9,7 +9,8 @@ from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_ledger.md").read_text(encoding="utf-8")
 KINDS = ("choose_file", "new_file", "placement", "wiring", "skip_alternative")
-MAX_EVIDENCE, MAX_REJECTED = 3, 2
+AMBIGUITY = "ambiguity"
+MAX_EVIDENCE, MAX_REJECTED, MAX_READING = 3, 2, 200
 _NUMBERED = re.compile(r"^L(\d+)\| ?", re.M)
 _RANGE = re.compile(r"^\s*(\d+)\s*(?:-\s*(\d+))?\s*$")
 
@@ -81,13 +82,17 @@ def _problems(decision, i: int, log: StepLog) -> list[str]:
     if not isinstance(decision, dict):
         return [f"decisions[{i}] không phải object"]
     out = []
-    if decision.get("decision") not in KINDS:
-        out.append(f"decisions[{i}].decision phải thuộc {', '.join(KINDS)}")
+    ambiguous = decision.get("decision") == AMBIGUITY
+    if decision.get("decision") not in KINDS and not ambiguous:
+        out.append(f"decisions[{i}].decision phải thuộc {', '.join((*KINDS, AMBIGUITY))}")
+    readings = decision.get("readings")
+    if ambiguous and not (isinstance(readings, list) and len(readings) == 2 and all(isinstance(r, str) and r.strip() for r in readings)):
+        out.append(f"decisions[{i}].readings cần đúng 2 cách hiểu (chuỗi)")
     if not isinstance(decision.get("target"), str) or not decision["target"].strip():
         out.append(f"decisions[{i}].target rỗng")
     evidence, rejected = decision.get("evidence"), decision.get("rejected", [])
-    if not isinstance(evidence, list) or not 1 <= len(evidence) <= MAX_EVIDENCE:
-        out.append(f"decisions[{i}].evidence cần 1-{MAX_EVIDENCE} mục")
+    if not isinstance(evidence, list) or not (0 if ambiguous else 1) <= len(evidence) <= MAX_EVIDENCE:
+        out.append(f"decisions[{i}].evidence cần {0 if ambiguous else 1}-{MAX_EVIDENCE} mục")
     else:
         out += [f"decisions[{i}].evidence[{j}]: {why}" for j, item in enumerate(evidence) if (why := check_evidence(item, log))]
     if not isinstance(rejected, list) or len(rejected) > MAX_REJECTED or not all(
@@ -126,7 +131,7 @@ def coverage(plan: dict, decisions: list[dict], log: StepLog, exists) -> list[st
         path = task.get("file") if isinstance(task, dict) else None
         if not isinstance(path, str):
             continue
-        mine = [d for d in decisions if d["target"] == path]
+        mine = [d for d in decisions if d["target"] == path and d["decision"] != AMBIGUITY]
         if not mine:
             problems.append(f"file {path} chưa có quyết định nào trong sổ")
         elif not exists(path):
@@ -158,3 +163,17 @@ def review_block(state: dict) -> str:
         return ""
     return ("Planner đi ngược gợi ý của harness và sổ quyết định có bằng chứng; kiểm lại bằng chứng có đỡ lựa chọn không, "
             "lựa chọn sai là wrong_target hoặc outside_request:\n" + "\n".join(f"- {n}" for n in notes))
+
+
+def ambiguity_question(decisions: list[dict] | None, request: dict, limit: int) -> str | None:
+    """Câu hỏi làm rõ từ mục mơ hồ đầu tiên của sổ; None khi không có, đã hỏi rồi, spec đã làm rõ, hoặc hết trần câu hỏi."""
+    asked = [str(m.get("body") or "") for m in request.get("thread") or [] if isinstance(m, dict) and m.get("role") == "admin"]
+    if request.get("clarified_spec") or len(asked) >= limit:
+        return None
+    for d in decisions or []:
+        if d["decision"] == AMBIGUITY:
+            first, second = (r.strip()[:MAX_READING] for r in d["readings"])
+            question = f"Về {d['target'].strip()[:MAX_READING]}, yêu cầu có thể hiểu theo hai cách: (1) {first}; (2) {second}. Bạn muốn cách nào?"
+            if question not in asked:
+                return question
+    return None
