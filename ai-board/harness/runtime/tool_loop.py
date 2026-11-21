@@ -232,11 +232,6 @@ class ScopeMiss(Forbidden):
     error_kind = "scope"
 
 
-class ScopeTooLarge(Forbidden):
-    """Agent chạm quá trần file: dừng, không cắt diff."""
-    error_kind = "scope_too_large"
-
-
 class NetworkPause(Exception):
     """Network request chưa có quyết định: dừng loop, chờ admin."""
 
@@ -448,22 +443,14 @@ class Workspace:
             raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
             raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}")
-        if test and self.outside_role:
-            self._cap({path})
         if not test and path != self.file and path not in self.extra_content and self.outside_role \
                 and path_policy.outside_plan_ok(path, self.outside_role):
-            self._cap({path})
             base = tools._show(self.source, self.sha, path)
             self.extra_base[path], self.extra_content[path] = base, base or ""
             self.out_of_plan.append(path)
         if not test and path != self.file and path not in self.extra_content:
             raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
         return path
-
-    def _cap(self, adding: set[str]) -> None:
-        touched = {self.file, *self.extra_content, *([self.test_file] if self.test_file else []), *adding}
-        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
-            raise ScopeTooLarge(f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}")
 
     def _expand(self, edits: list) -> list:
         """Replace {{LIT_n}} in insert/replace with the constant; unknown name -> ToolError."""
@@ -589,13 +576,19 @@ class Workspace:
     def _follow_vm(self, drafts: dict[str, str]) -> list[str]:
         """Adopt the VM diff after an exec; returns the out-of-scope paths put back to base."""
         try:
-            snapshot = self.sandbox.changes(drafts)
+            snapshot = self.sandbox.changes(drafts, in_scope=self._vm_scope)
             if snapshot is None:
                 return []
             self._adopt(*snapshot)
             return self._restore_vm()
         except SandboxError:
             return []  # a broken VM surfaces at finish, where the diff is read again
+
+    def _vm_scope(self, path: str) -> bool:
+        """False only for a VM path _check_scope would put back to base; denied paths stay so they still fault."""
+        return (path in (self.file, self.test_file) or path in self.extra_content or path.startswith(("test/", "tests/"))
+                or bool(MANIFEST.policy.write_reason(path)) or path_policy.denied(path, "write")
+                or bool(self.outside_role and path_policy.outside_plan_ok(path, self.outside_role)))
 
     def _restore_vm(self) -> list[str]:
         paths, self.vm_restore = self.vm_restore, []
@@ -637,7 +630,7 @@ class Workspace:
     def _vm_settle(self) -> None:
         """Finish: push pending drafts, read the final diff from git in the VM, restore out-of-scope paths, refuse path-policy faults."""
         try:
-            self._adopt(*self.sandbox.settle(self._drafts()))
+            self._adopt(*self.sandbox.settle(self._drafts(), in_scope=self._vm_scope))
             self._restore_vm()
         except SandboxError as error:
             raise sandbox_tool.VMUnavailable(error.code, error.status) from None

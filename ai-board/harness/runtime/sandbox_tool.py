@@ -382,14 +382,15 @@ class Runner:
         session.client.upload(session.run_id, _overlay(todo), deadline=session.deadline)
         self._vm_state.update(todo)
 
-    def changes(self, drafts: dict[str, str], ensure: bool = False):
-        """(changed {path: text}, rejected [(path, kind)]) of the VM worktree against its base tree, read from git there; None when no VM and not ensure."""
+    def changes(self, drafts: dict[str, str], ensure: bool = False, in_scope=None):
+        """(changed {path: text}, rejected [(path, kind)]) of the VM worktree against its base tree, read from git there; None when no VM and not ensure. Paths that are not drafts and fail `in_scope` are rejected as "extra" unread."""
         if self._session is None and not ensure:
             return None
         self._open(drafts)
         self._git("add", "-A")
-        for rel in drafts:
-            self._exec(*_GIT, "add", "-f", "--", rel)  # ignored targets must be submitted; a missing one is not an error
+        if drafts and self._exec(*_GIT, "add", "-f", "--", *drafts)["rc"] != 0:
+            for rel in drafts:  # ignored targets must be submitted; a missing one is not an error
+                self._exec(*_GIT, "add", "-f", "--", rel)
         raw = self._git("diff", "--cached", "--raw", "--no-abbrev", "--no-renames", self._tree)
         entries = sorted((line.partition("\t")[::2] for line in raw.split("\n") if line), key=lambda e: e[1] not in drafts)
         changed, rejected = {}, []
@@ -399,7 +400,7 @@ class Runner:
                 rejected.append((_unquote(path) or path, "quoted" if _unquote(path) else "path"))
             elif path_policy.normalize(path) != path:
                 rejected.append((path, "path"))
-            elif number >= path_policy.OUT_OF_PLAN_CAP:
+            elif in_scope is not None and path not in drafts and not in_scope(path):
                 rejected.append((path, "extra"))
             elif status == "D":
                 rejected.append((path, "deleted"))
@@ -428,19 +429,26 @@ class Runner:
 
     def restore(self, paths, drafts=None) -> None:
         """Put each path back to the base tree (removed when the base has none), then re-push the model's draft for the declared ones."""
-        for path in paths:
-            if self._exec(*_GIT, "cat-file", "-e", f"{self._tree}:{path}")["rc"] == 0:
-                self._git("checkout", self._tree, "--", path)
-            else:
-                self._git("rm", "-f", "-q", "--ignore-unmatch", "--", path)
-            self._vm_state.pop(path, None)
+        paths = list(dict.fromkeys(paths))
+        if paths:
+            listed = self._exec(*_GIT, "ls-tree", "--name-only", self._tree, "--", *paths)
+            if listed["rc"] != 0 or listed["truncated"]:
+                raise SandboxError("worktree_git", "exec")
+            held = set(listed["stdout"].split("\n"))
+            back, gone = [p for p in paths if p in held], [p for p in paths if p not in held]
+            if back:
+                self._git("checkout", self._tree, "--", *back)
+            if gone:
+                self._git("rm", "-f", "-q", "--ignore-unmatch", "--", *gone)
+            for path in paths:
+                self._vm_state.pop(path, None)
         self._push({path: drafts[path] for path in paths if drafts and path in drafts})
 
-    def settle(self, drafts: dict[str, str]):
+    def settle(self, drafts: dict[str, str], in_scope=None):
         """Final diff for finish; transient VM errors retry like a tool call. Busy raises RunnerBusy, out of time BudgetExhausted, else VMUnavailable."""
         for attempt in range(self.cfg["max_retries"] + 1):
             try:
-                return self.changes(drafts, ensure=True)
+                return self.changes(drafts, ensure=True, in_scope=in_scope)
             except SandboxError as caught:
                 error = caught
                 if error.code == "lease_lost" and time.monotonic() >= self._deadline:

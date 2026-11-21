@@ -566,7 +566,7 @@ def checked_grounding(validation: dict, plan: dict, sha: str | None, files: dict
 
 
 def scope_problems(plan: dict, read) -> list[str]:
-    """Declared allowed_scope sets: within limit, writable by path policy, existing at base or an allowed new path. [] when flag off."""
+    """Declared allowed_scope sets: writable by path policy, existing at base or an allowed new path. [] when flag off."""
     if not subtask_files.enabled():
         return []
     from gates.brainstorm import _NEW_OK
@@ -575,8 +575,6 @@ def scope_problems(plan: dict, read) -> list[str]:
         if not isinstance(task, dict) or "allowed_scope" not in task:
             continue
         scope = subtask_files.files_of(task)
-        if len(scope) > subtask_files.limit():
-            problems.append(f"subtask[{index}].allowed_scope có {len(scope)} file, tối đa {subtask_files.limit()}")
         for path in scope:
             if not path_policy.check(path, "write")["allow"]:
                 problems.append(f"subtask[{index}]: '{path}' ngoài vùng được phép sửa")

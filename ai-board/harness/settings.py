@@ -63,7 +63,6 @@ class Settings(BaseSettings):
     thinking_budget: bool = False
     multi_file_subtask: bool = False
     backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
-    multi_file_max: int = Field(default=3, ge=2, le=6)
     budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False
     plan_repair: bool = True
@@ -124,7 +123,7 @@ class Settings(BaseSettings):
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     deterministic_ready_oracle: bool = False  # ready_for_pr cần check tất định (literal nguyên văn + chỉ file được nêu); thiếu thì needs_review; loop dừng chưa qua = needs_review
     intent_review: bool = False  # cổng 4: reviewer AI (cùng model, context mới) chấm diff theo yêu cầu, gộp lỗi + miss tất định thành một bản sửa gửi worker; lỗi/sai schema thì đóng an toàn
-    out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, trần 8 file, tối đa needs_review; file logic cần test phủ
+    out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, tối đa needs_review; file logic cần test phủ
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
     derived_checks: bool = False  # gate 1: verify/checks của css_color/replace/insert/remove suy từ request bằng code, thay lệnh model viết
