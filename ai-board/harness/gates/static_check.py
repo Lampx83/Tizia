@@ -608,6 +608,14 @@ def _several(state: dict, homes: list[str], checkout) -> bool:
     return best_match.requested_page(request, homes, checkout, sha)[1]
 
 
+def _missing_tail(text: str, closest: str | None) -> str:
+    """Repair hint naming the dropped trailing punctuation and the exact literal to paste; "" when flag off or nothing dropped."""
+    stem = text.rstrip(".!?…")
+    if not get_settings().literal_exact_feedback or not closest or stem == text or stem not in closest or text in closest:
+        return ""
+    return f'; thiếu ký tự "{text[len(stem):]}" ngay sau "{stem}"; dán đúng nguyên văn "{text}"'
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -633,6 +641,7 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
             path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
                                   if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
             misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'
+                          + _missing_tail(text, closest)
                           + (f'; dòng đang thêm: "{closest[:120]}"' if closest else ""))
     if anchor:
         anchor = _ws(anchor)

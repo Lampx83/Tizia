@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = True
+    literal_exact_feedback: bool = False  # gate 4 request_literal repair names the dropped trailing characters and the exact literal
     inline_handler_repairable: bool = True  # inline on*=/javascript:/<script> in added markup = repairable, not critical
     soft_quality_checks: bool = True  # contract quality_checks: soft miss ships with a warning, hard miss blocks
     keep_blocked_candidate: bool = False  # eval: keep the branch of a gate 4+ block and report it as blocked_candidate

@@ -113,3 +113,12 @@ def test_two_quotes_on_a_plain_add_are_ambiguous_and_never_block():
     shown = diff('public/search.html', ' <ul id="hits"></ul>', '+<p>Không có kết quả</p>')
     assert misses("Hiển thị 'Không có kết quả' khi tìm 'xyz123'", shown) == []
     assert misses("Thêm 'Mục A' và 'Mục B'", diff('public/menu.html', '+<li>Mục A</li>')) == []
+
+
+def test_literal_feedback_names_dropped_period_only_when_flag_on(monkeypatch):
+    text = diff('public/grades.html', ' <h2>Bảng điểm</h2>', '+<p class="note">Ôn kỹ phần đạo hàm</p>')
+    monkeypatch.delenv('AI_BOARD_LITERAL_EXACT_FEEDBACK', raising=False)
+    assert 'thiếu ký tự' not in misses(COLON, text)[0]
+    monkeypatch.setenv('AI_BOARD_LITERAL_EXACT_FEEDBACK', '1')
+    msg = misses(COLON, text)[0]
+    assert 'thiếu ký tự "."' in msg and 'dán đúng nguyên văn "Ôn kỹ phần đạo hàm."' in msg
