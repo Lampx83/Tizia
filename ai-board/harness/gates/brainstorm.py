@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from verification import functional
 import path_policy
-from gates import acceptance_structure, best_match, grounding_paths, plan_rules, react_plan, subtask_contract
+from gates import acceptance_structure, best_match, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -84,7 +84,8 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         thread=scrub(thread),
         surface=", ".join(sorted(surface)),
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
-    ) + acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else "")
+    ) + (two_level.DECOMPOSE_PROMPT if two_level.decomposing(request)
+         else acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else ""))
 
 
 def infer_layer(file: str, role: str = "student") -> str:
@@ -195,6 +196,8 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
         raise ValueError("plan phải là object")
     if not isinstance(plan.get("summary_vi"), str) or not plan["summary_vi"].strip():
         raise ValueError("thiếu summary_vi")
+    if two_level.decomposing(request):
+        two_level.normalize(plan)
     subtasks = plan.get("subtasks")
     if not isinstance(subtasks, list) or not subtasks:
         raise ValueError("subtasks rỗng")

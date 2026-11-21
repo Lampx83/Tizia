@@ -352,7 +352,8 @@ class HarnessPlanner:
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         settings = get_settings()
-        planned = _checks_by_file(old) if settings.plan_checks and settings.red_check_classify else {}
+        from gates import two_level
+        planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level.enabled() else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps

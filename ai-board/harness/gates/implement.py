@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import services.context as repo_context
 from services import file_context
 import path_policy
-from gates import change_class, gate3_guards, plan_rules, subtask_context, subtask_contract
+from gates import change_class, gate3_guards, plan_rules, subtask_context, subtask_contract, two_level
 from repositories import repo_at_commit
 from repositories.tool_steps import PgSteps
 from runtime import limits, loop_guard, model_json, network_request, state_file, subtask_files, tool_loop
@@ -877,6 +877,12 @@ def _fan_out(tasks: list[tuple], *, state: dict, deps, budget, texts: dict, repo
 
     Mỗi task chạy trong context đã copy để ContextVar (authority, root allowance) không rơi mất."""
     def one(child: int, subtask: dict) -> tuple:
+        if two_level.enabled():
+            return two_level.run_subtask(subtask, state=state, deps=deps, budget=budget, current=texts.get(subtask["file"]),
+                                         db_path=db_path, proposal_id=proposal_id,
+                                         generate=lambda work, current: _generate_one(
+                                             child, subtask, state=work, deps=deps, budget=budget, current=current, repo=repo,
+                                             known=known, db_path=db_path, proposal_id=proposal_id))
         return _generate_one(child, subtask, state=state, deps=deps, budget=budget, current=texts.get(subtask["file"]),
                              repo=repo, known=known, db_path=db_path, proposal_id=proposal_id)
 

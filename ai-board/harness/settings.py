@@ -119,6 +119,7 @@ class Settings(BaseSettings):
     form_errors_as_warnings: bool = False  # plan sửa lần cuối: lỗi hình thức (verify, file nhắc tên, size) thành cảnh báo
     plan_objections_advisory: bool = False  # cổng 1/2.5: phản đối grounding (best_match, file chứa chữ cũ, trang mới, trích dẫn) thành góp ý cho bước code; path/scope/budget/intake vẫn chặn
     session_plan_execute: bool = False  # cổng 1: một phiên đọc repo, viết plan, nhận luật plan tất định như observation, rồi chuyển lịch sử đọc sang bước sửa
+    two_level_plan: bool = False  # cổng 1 chỉ chia subtask + tiêu chí chốt; mỗi subtask context mới tự lập plan, thực thi, check + reviewer, sửa; cần plan_checks
     subtask_fresh_context: bool = False  # cổng 3: mỗi subtask là phiên con context mới, nhận plan + file đã tạo + tóm tắt subtask trước; chạy tuần tự
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     deterministic_ready_oracle: bool = False  # ready_for_pr cần check tất định (literal nguyên văn + chỉ file được nêu); thiếu thì needs_review; loop dừng chưa qua = needs_review
