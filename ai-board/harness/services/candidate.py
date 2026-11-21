@@ -389,6 +389,10 @@ class Candidates:
         return [path_policy.check(path, "write")["reason"] for path in changed
                 if path_policy.denied(path, "write") and not (broker_ok and path in package_broker.FILES)]
 
+    def diff(self, candidate: dict) -> str:
+        """Unified diff base..head of the kept candidate branch."""
+        return _git_out(["diff", "--no-ext-diff", "--no-renames", f"{candidate['base_sha']}..{candidate['head_sha']}"], self.repo)
+
     def publish(self, candidate: dict, *, title: str, body: str, labels=()) -> dict:
         """Push candidate, open (or find) its one PR into dev. Return server pull_request record.
         PathDenied before any push on a denied path; ValueError on stale head or another base."""

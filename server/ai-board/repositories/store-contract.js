@@ -67,6 +67,11 @@ const PHASES = {
   rolled_back: { label: 'đã hoàn tác', rollback: true, terminal: true },
   revert_ready: { label: 'có nhánh hoàn tác, chờ người merge', rollback: true },
   rollback_failed: { label: 'hoàn tác chưa được' },
+  // DB approval gate: a candidate with a DB change is held; nothing is pushed until the admin approves this head.
+  awaiting_db_approval: { label: 'chờ quản trị viên duyệt thay đổi CSDL' },
+  db_approved: { label: 'đã duyệt CSDL, chờ worker đẩy PR', queue: 'plan', active: true, lease: 'publishing' },
+  publishing: { label: 'đang đẩy PR sau khi duyệt CSDL', active: true, lease: 'publishing', trigger: 'publish' },
+  db_publish_failed: { label: 'đã duyệt CSDL nhưng chưa mở được PR' },
 };
 // Danh sách SQL IN(...) sinh từ bảng; khóa là hằng trong code nên nhúng thẳng an toàn.
 const phaseList = (pick) => Object.keys(PHASES).filter((k) => pick(PHASES[k])).map((k) => `'${k}'`).join(', ');
@@ -177,6 +182,7 @@ const CLARIFYING_NOTE = 'Ban điều hành cần trao đổi thêm để làm r�
 export const CLARIFY_AUTHOR = 'Ban điều hành AI · làm rõ';
 export const SPEC_AUTHOR = 'Ban điều hành AI · tóm tắt';
 export const QUALITY_AUTHOR = 'Ban điều hành AI · chất lượng';
+export const DB_AUTHOR = 'Ban điều hành AI · cơ sở dữ liệu';
 const PR_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/(\d+)$/;
 
 function validateCandidate(value) {
@@ -293,6 +299,33 @@ export function softMissNote(gates) {
   if (!misses.length) return '';
   const line = (m) => `${m.check} ${m.value} (ngưỡng ${m.threshold})${m.page ? ` ${m.page} ${m.width}px` : ''}`;
   return `Lưu ý: ${misses.length} kiểm chất lượng chưa đạt ngưỡng, thay đổi vẫn được gửi kèm cảnh báo: ${misses.map(line).join('; ')}.`.slice(0, 1000);
+}
+
+const DB_SQL_CAP = 20_000;
+/** DB change the worker reports with a passing verdict: migrations verbatim (capped), files, sandbox report. */
+function cleanDbChange(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const sandbox = value.sandbox && typeof value.sandbox === 'object' ? value.sandbox : {};
+  const diff = sandbox.schema_diff && typeof sandbox.schema_diff === 'object' ? sandbox.schema_diff : null;
+  const names = (items) => (Array.isArray(items) ? items.slice(0, 50).map((item) => String(item).slice(0, 120)) : []);
+  const columns = (map) => Object.fromEntries(Object.entries(map && typeof map === 'object' ? map : {}).slice(0, 50)
+    .map(([table, cols]) => [String(table).slice(0, 120), names(cols)]));
+  return {
+    migrations: (Array.isArray(value.migrations) ? value.migrations : []).slice(0, 10)
+      .filter((m) => m && typeof m.path === 'string' && typeof m.sql === 'string')
+      .map((m) => ({ path: m.path.slice(0, 300), sql: m.sql.slice(0, DB_SQL_CAP) })),
+    files: names(value.files).map((file) => file.slice(0, 300)),
+    sandbox: {
+      status: String(sandbox.status ?? '').slice(0, 40) || null,
+      schema_diff: diff && { added_tables: names(diff.added_tables), removed_tables: names(diff.removed_tables),
+        added_columns: columns(diff.added_columns), removed_columns: columns(diff.removed_columns) },
+      checks: (Array.isArray(sandbox.checks) ? sandbox.checks : []).slice(0, 20)
+        .map((c) => ({ sql: String(c?.sql ?? '').slice(0, 500), ok: c?.ok === true })),
+      tests: (Array.isArray(sandbox.tests) ? sandbox.tests : []).slice(0, 20)
+        .map((t) => ({ argv: names(t?.argv), rc: Number.isInteger(t?.rc) ? t.rc : null })),
+      error: sandbox.error == null ? null : String(sandbox.error).slice(0, 500),
+    },
+  };
 }
 
 /** revisedChecks: the accepted plan replaced a suspect check, so the run is for a human only. */
@@ -423,6 +456,7 @@ function validatePrePrVerdict(value, selfRequest = false, revisedChecks = false)
     repairs: repairs.map((r) => ({ gate: Number(r.gate), reason: String(r.reason || '').slice(0, 1000) })),
     candidate, gates,
     ...(blockedCandidate ? { blocked_candidate: blockedCandidate } : {}),
+    ...(passing && cleanDbChange(value.db_change) ? { db_change: cleanDbChange(value.db_change) } : {}),
     ...(cleanNetworkReport(value.network_requests) ? { network_requests: cleanNetworkReport(value.network_requests) } : {}),
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),

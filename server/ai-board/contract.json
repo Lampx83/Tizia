@@ -34,7 +34,7 @@
   },
   "verdict_outcomes": ["ready_for_pr", "needs_review", "blocked"],
   "failure_classes": ["ordinary", "transient", "critical", "budget", "plan", "eval", "partial", "network_request"],
-  "run_triggers": ["shadow_precheck", "plan", "execute", "rollback", "reverify"],
+  "run_triggers": ["shadow_precheck", "plan", "execute", "rollback", "reverify", "publish"],
   "rollback_outcomes": ["discarded", "revert_ready", "failed"],
   "max_repairs": 1,
   "repair_replan": {

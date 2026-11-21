@@ -18,6 +18,7 @@ import ast
 import base64
 import html
 import json
+import posixpath
 import re
 import unicodedata
 from pathlib import Path
@@ -163,7 +164,7 @@ _GENERATED_JS = re.compile(r".+\.m?js$")
 def visible_file(path: str) -> bool:
     """File giao diện/nội dung người dùng thấy: public/ hoặc JS trong vùng backend sinh."""
     return bool(_PUBLIC_VISIBLE.match(path)
-                or path_policy.may_edit(path) and _GENERATED_JS.match(path[len(path_policy.GENERATED_ROOT):]))
+                or path_policy.may_edit(path) and _GENERATED_JS.match(posixpath.basename(path)))
 _BLOCK = re.compile(r"<(script|style)\b.*?</\1\s*>", re.I | re.S)
 _TAG = re.compile(r"<[^>]*>")
 _ATTR_TEXT = re.compile(r"""\b(?:alt|title|placeholder|aria-label|content|value)\s*=\s*["']([^"']*)["']""", re.I)

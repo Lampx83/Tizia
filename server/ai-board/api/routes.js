@@ -19,6 +19,7 @@ import { activeChats } from '../services/chat-activity.js';
 import { guardModelText, MAX_QUESTIONS } from '../../contexts/ai-board-intake/clarify.js';
 import { attachAppealRoutes } from './appeals.js';
 import { attachRolloutRoutes } from './rollout.js';
+import { attachAiBoardDbApproval, attachDbApprovalWorkerRoutes } from '../../contexts/ai-board-db-approval/index.js';
 import { createSpanService } from '../services/spans.js';
 import { EDITABLE_PHASES, editRequestAndReplan } from '../services/requester-edit.js';
 import { createRequesterEditRepository } from '../repositories/requester-edit.js';
@@ -72,6 +73,7 @@ export function attachAiBoardRequestRoutes(router, {
   if(store.db) attachSkillRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf,classifySkillText});
   if(store.db) attachAppealRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   if(store.db) attachRolloutRoutes(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
+  if(store.db) attachAiBoardDbApproval(router,{store,requireAuth,requireAdmin,requireStrictCsrf});
   route.get('/api/ai-board/capabilities', requireAuth, (req, res) => {
     res.json({ multimodal: getSettings().multimodal });
   });
@@ -652,6 +654,7 @@ export function attachAiBoardWorkerRoutes(router, {
     leaseToken: String(body.lease_token || ''),
   });
   attachWorkerLessonRoutes(route, { store, authenticate, handle, lessonOptions });
+  attachDbApprovalWorkerRoutes(route, { store, authenticate, handle });
   const hsm = createHsmStore(store);
   route.post('/api/ai-board/worker/tickets/:id/hsm', authenticate, handle(async (req,res) => {
     res.json(await hsm.transition(req.params.id,req.body || {}));

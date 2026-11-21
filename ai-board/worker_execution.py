@@ -240,6 +240,7 @@ class _Execution:
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
         self.blocked_candidate: dict | None = None
+        self.db_change: dict | None = None
         self.attempt_checkpoint = None
         self.open = self.lease_lost = False
         self.result: dict | None = None
@@ -571,6 +572,9 @@ class _Execution:
                     self.preview_capture(state, private_candidate)
                 except Exception:
                     pass  # optional artifact must never change verdict or prevent cleanup
+        self.db_change = None
+        if _passed(self.gates, self.kind) and not lease_lost and path_policy.fullstack_on():
+            self._db_gate(state)
         self.candidate = candidates.record(state) if _passed(self.gates, self.kind) and not lease_lost else None
         if self.candidate is None and not lease_lost and _keep_blocked(self.gates, self.kind):
             self.blocked_candidate = candidates.record(state)
@@ -584,6 +588,18 @@ class _Execution:
         self.produced = dict(state.get("produced") or {})
         self.base_sha = state.get("base_sha")
         self.lease_lost = lease_lost
+
+    def _db_gate(self, state: dict) -> None:
+        """DB change in the passing attempt: non-additive or failed sandbox run blocks the last gate; passed is held for the admin."""
+        from services import db_approval
+        outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
+        if outcome is None:
+            return
+        if outcome["status"] == "passed":
+            self.db_change = outcome["db_change"]
+            return
+        self.gates[-1] = {**self.gates[-1], "blocked": True, "reason": outcome["reason"]}
+        self.kind = "transient" if outcome["status"] == "transient" else "ordinary"
 
     def attempt_close(self) -> str:
         self.close_attempt()
@@ -999,6 +1015,7 @@ class _Execution:
             **progress.verdict_fields(window=self.progress_window),
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
             **({"check_revision": revised} if revised else {}),
+            **({"db_change": self.db_change} if passed and self.db_change else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

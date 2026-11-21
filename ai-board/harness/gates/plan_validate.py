@@ -569,7 +569,7 @@ def scope_problems(plan: dict, read) -> list[str]:
     """Declared allowed_scope sets: within limit, writable by path policy, existing at base or an allowed new path. [] when flag off."""
     if not subtask_files.enabled():
         return []
-    from gates.brainstorm import _NEW_OK
+    from gates.brainstorm import new_path_ok
     problems = []
     for index, task in enumerate(plan.get("subtasks") or []):
         if not isinstance(task, dict) or "allowed_scope" not in task:
@@ -580,7 +580,7 @@ def scope_problems(plan: dict, read) -> list[str]:
         for path in scope:
             if not path_policy.check(path, "write")["allow"]:
                 problems.append(f"subtask[{index}]: '{path}' ngoài vùng được phép sửa")
-            elif read is not None and read(path) is None and not _NEW_OK.match(path):
+            elif read is not None and read(path) is None and not new_path_ok(path):
                 problems.append(f"subtask[{index}]: '{path}' không có trong repo và không phải đường file mới hợp lệ")
     return problems
 
