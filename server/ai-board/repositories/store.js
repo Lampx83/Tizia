@@ -1880,8 +1880,10 @@ function resumeSummary(journal) {
       [root.source_request_id]))?.role;
     // Non-admin change that runs on the server: outside public/ and top-level tests, plus what the worker found by import
     // graph (public modules the server loads, tests issuing SQL). Admins and FE-only go straight on.
-    const backendFiles = [...new Set([...changed.filter((f) => !/^(public|tests?)\//.test(f)),
-      ...(verdict.backend_change?.files || [])])];
+    // No worker list (older worker, harness flag off): every public JS module may be server-loaded, so it counts.
+    const reported = Array.isArray(verdict.backend_change?.files) ? verdict.backend_change.files
+      : changed.filter((f) => /^public\/.+\.[cm]?js$/.test(f));
+    const backendFiles = [...new Set([...changed.filter((f) => !/^(public|tests?)\//.test(f)), ...reported])];
     const holdKinds = verdict.outcome === 'blocked' ? [] : [
       ...(verdict.db_change || (fullstack && sqlFiles.length) ? ['db'] : []),
       ...(fullstack && ownerRole !== 'admin' && backendFiles.length ? ['backend'] : []),

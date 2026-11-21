@@ -595,7 +595,8 @@ class _Execution:
         from services import db_approval
         source, base = state.get("checkout_repo") or str(self.checkout_source), state.get("base_sha")
         server_public = db_approval.server_imported_public(str(source), base) if base else None
-        self.backend_change = db_approval.backend_change(state.get("full_diff") or [], server_public)
+        # Always sent under the flag: an absent list makes the server hold every public JS module.
+        self.backend_change = db_approval.backend_change(state.get("full_diff") or [], server_public) or {"files": [], "diff": ""}
         try:
             outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
         except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup
@@ -1023,7 +1024,7 @@ class _Execution:
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
             **({"check_revision": revised} if revised else {}),
             **({"db_change": self.db_change} if passed and self.db_change else {}),
-            **({"backend_change": self.backend_change} if passed and self.backend_change else {}),
+            **({"backend_change": self.backend_change} if passed and self.backend_change is not None else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

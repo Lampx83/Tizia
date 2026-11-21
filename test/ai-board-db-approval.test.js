@@ -271,6 +271,13 @@ test('flag on: public-only goes straight on, admin is unchanged, test-pattern pa
     backend_change: { files: ['public/js/pharmacy/score.js'], diff: 'diff --git a/public/js/pharmacy/score.js b/public/js/pharmacy/score.js' } }));
   assert.deepEqual(loaded.stored.hold_kinds, ['backend'], 'public module the server loads, as the worker reported it');
   loaded.db.close();
+  const noList = await heldRoot(passing({ candidate: candidate(['public/js/pharmacy/score.js', 'public/gioi-thieu.html']) }));
+  assert.deepEqual(noList.stored.hold_kinds, ['backend'], 'no worker list: public JS is held');
+  assert.deepEqual(noList.stored.backend_change.files, ['public/js/pharmacy/score.js']);
+  noList.db.close();
+  const listed = await heldRoot(passing({ candidate: candidate(['public/js/free.js']), backend_change: { files: [], diff: '' } }));
+  assert.equal((await root(listed.db, listed.ticket.id)).phase, 'pre_pr_ready', 'worker list without it: public JS goes on');
+  listed.db.close();
   const tests = await heldRoot(passing({ candidate: candidate(['server/contexts/teacher/tests/a.test.js']) }));
   assert.deepEqual(tests.stored.hold_kinds, ['backend']);
   tests.db.close();

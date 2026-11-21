@@ -284,6 +284,8 @@ def test_db_candidate_is_kept_with_its_sandbox_report(flag, tmp_path, monkeypatc
                                                                              "checks": [], "tests": [], "error": None})
     out, kept = _execute(tmp_path, DB_DIFF)
     assert out["outcome"] == "ready_for_pr" and kept == [True]
+    fe, _ = _execute(tmp_path, _new_file("public/a.html", "<p>x</p>"))
+    assert fe["backend_change"] == {"files": [], "diff": ""}, "empty list is sent, never omitted"
     assert out["db_change"]["migrations"][0]["path"] == MIGRATION and out["db_change"]["sandbox"]["status"] == "passed"
 
 
