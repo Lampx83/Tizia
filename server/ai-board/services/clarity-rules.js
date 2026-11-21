@@ -1,6 +1,7 @@
 // Luật cứng độ rõ: quyết định có cần làm rõ yêu cầu mà không cần model.
 // Danh sách từ ở clarity-rules.json; bộ phân loại logprobs chỉ bổ sung khi ở mode 'active'.
 import fs from 'node:fs';
+import { getSettings } from '../settings.js';
 
 const RULES = JSON.parse(fs.readFileSync(new URL('../clarity-rules.json', import.meta.url), 'utf8'));
 const fold = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd');
@@ -55,10 +56,15 @@ export function checkClarity(title, detail) {
 
 /** Final clarify decision from hard rules + model signal: {needed, mode, source, rules}.
     Feature requests always ask the 3 'feature' questions; a shadow-mode model verdict is ignored by the caller;
-    `enabled` = client understands clarifying. Split (from rules or model) wins over ask. */
-export function resolveClarify({ title, detail, classified = null, isFeature = false, enabled = true }) {
+    `enabled` = client understands clarifying. Split (from rules or model) wins over ask.
+    modelFirst: an active model verdict decides alone; the rules stay in `rules` as an observation and decide only without one. */
+export function resolveClarify({ title, detail, classified = null, isFeature = false, enabled = true, modelFirst = getSettings().modelFirst }) {
   const rules = isFeature ? { needed: true, mode: 'feature', reasons: ['chức năng mới'] } : checkClarity(title, detail);
   const model = classified?.clarity?.shadow || isFeature ? null : classified?.clarity;
+  if (modelFirst && model && !isFeature) {
+    return enabled && model.needed ? { needed: true, mode: model.mode === 'split' ? 'split' : 'ask', source: ['model'], rules }
+      : { needed: false, mode: null, source: ['model'], rules };
+  }
   const source = [rules.needed && 'rules', model?.needed && 'model'].filter(Boolean);
   if (!enabled || !source.length) return { needed: false, mode: null, source, rules };
   const mode = isFeature ? 'feature' : [rules.mode, model?.mode].includes('split') ? 'split' : 'ask';

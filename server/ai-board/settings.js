@@ -22,6 +22,8 @@ export function getSettings(env = environment()) {
     requesterFullstackDb: truthy(env.AI_BOARD_REQUESTER_FULLSTACK_DB),
     // A plan data step may target any kind of contract.json data_kinds, not only campus_layout.
     dataRegistry: truthy(env.AI_BOARD_DATA_REGISTRY),
+    // Heuristics that guess intent from phrasing become observations; the model decides (harness AI_BOARD_MODEL_FIRST).
+    modelFirst: truthy(env.AI_BOARD_MODEL_FIRST),
     tokenizerFile: text(env, 'AI_BOARD_QWEN_TOKENIZER'),
     workerKey: text(env, 'AI_BOARD_WORKER_KEY'),
     shots: {

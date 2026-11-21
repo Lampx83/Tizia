@@ -99,3 +99,19 @@ test('clarifyFromPhase reports the stored phase of an idempotent replay', () => 
   assert.deepEqual(clarifyFromPhase('clarifying'), { needed: true, mode: 'ask' });
   assert.deepEqual(clarifyFromPhase('queued'), { needed: false, mode: null });
 });
+
+test('model_first: an active model verdict decides alone and the rule hits stay an observation; rules decide without one', () => {
+  const vague = { title: 'Sửa cái này', detail: 'làm đẹp hơn' };
+  const broad = { title: 'Làm lại', detail: 'thêm nút, sửa chữ, xoá ảnh, tạo bảng, đổi màu' };
+  const decide = (over) => resolveClarify({ ...vague, modelFirst: true, ...over });
+  const clear = decide({ classified: { clarity: { needed: false, mode: null } } });
+  assert.deepEqual([clear.needed, clear.source], [false, ['model']]);
+  assert.ok(clear.rules.needed, 'rules still computed for the trace');
+  assert.deepEqual(decide({ ...broad, classified: { clarity: { needed: true, mode: 'ask' } } }).mode, 'ask', 'model mode wins over rule split');
+  assert.deepEqual(decide({ classified: { clarity: { needed: true, mode: 'split' } } }).mode, 'split');
+  for (const classified of [null, { clarity: null }, { clarity: { needed: false, mode: null, shadow: true } }]) {
+    assert.deepEqual([decide({ classified }).needed, decide({ classified }).source], [true, ['rules']], 'no active model: rules decide');
+  }
+  assert.equal(decide({ classified: { clarity: { needed: false } }, enabled: false }).needed, false);
+  assert.equal(resolveClarify({ ...vague, classified: { clarity: { needed: false, mode: null } } }).needed, true, 'flag off: rules still win');
+});
