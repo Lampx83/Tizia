@@ -227,7 +227,7 @@ function renderPlan(p, root, children, trace) {
       <div class="sub">Các bước</div>
       <ol class="plan-steps">${steps.map(st => {
         const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root, execution, st.order);
-        return `<li class="st-${state}"><div class="line1"><b>${esc(st.title)}</b>${tag(state, label)}</div>
+        return `<li id="plan-step-${esc(st.order)}" class="st-${state}"><div class="line1"><b>${esc(st.title)}</b>${tag(state, label)}</div>
           <div class="meta">Sửa ${(st.allowed_scope || []).map(code).join(', ')} · quyền ${capText(st.capability)} · rủi ro ${esc(RISK_TEXT[st.risk] || st.risk)}</div>
           ${st.acceptance?.length ? `<div class="meta">Đạt khi: ${st.acceptance.map(esc).join('; ')}</div>` : ''}</li>`;
       }).join('')}${extra.map(c => {
@@ -644,6 +644,7 @@ document.addEventListener('click', async (e) => {
   try { await navigator.clipboard.writeText(btn.dataset.copy); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1200); } catch { /* clipboard bị chặn: vẫn đọc được */ }
 });
 
+let hashSeen = false;
 function render() {
   if (!view) return;
   const { thread, trace } = view;
@@ -662,6 +663,8 @@ function render() {
     ${trace ? renderAiBoard(trace, thread.messages || []) : '<section class="blk meta">Yêu cầu này chưa có phiếu xử lý AI Board.</section>'}
   `);
   syncOpen();
+  const anchor = !hashSeen && /^#plan-step-\d+$/.test(location.hash) && document.getElementById(location.hash.slice(1));
+  if (anchor) { hashSeen = true; anchor.scrollIntoView(); }
   const go = $('#confirm-go');
   if (go) go.disabled = !confirmed();
 }

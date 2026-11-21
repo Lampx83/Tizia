@@ -10,7 +10,7 @@ import { mountSkillsTab } from './admin-skills.js?v=skills-labels2';
 import { toastMs } from './admin-skills-state.js?v=skills-ux1';
 import { createPoll } from './poll.js';
 import { escalationCard } from './escalation-card.js?v=escalation1';
-import { approvalCounts, renderNetItem, section, approvalsNotice, NET_WARNING, netTitle } from './admin-approvals.js';
+import { approvalCounts, planStepHref, renderNetItem, section, approvalsNotice, NET_WARNING, netTitle } from './admin-approvals.js';
 import { renderDbApproval, renderDbApprovalState, dbDecisionBody, dbDecisionPath } from './ai-board-mirror.js';
 
 const $ = (s) => document.querySelector(s);
@@ -578,7 +578,7 @@ function elevationCard(r) {
   const pick = narrowPick(r.id, scope);
   const action = `<ul style="margin:0 0 8px;padding-left:18px">${scope.map(row => `<li><code>${esc(row.path)}</code> · mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)} ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}${narrowable ? ` ${narrowControls(r, row, pick)}` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
       ${ctx.plan?.goal ? `<div class="meta">Kế hoạch: ${esc(ctx.plan.goal)}</div>` : ''}
-      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol style="margin:4px 0 8px;padding-left:18px">${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · <code>${esc(step.paths.join(', '))}</code>` : ''}${step.tier ? ` · mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}` : ''}</li>`).join('')}</ol>`
+      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol style="margin:4px 0 8px;padding-left:18px">${steps.map(step => `<li>${planStepHref(r.id, step.order) ? `<a href="${planStepHref(r.id, step.order)}" target="_top" title="Mở bước ${esc(step.order)} trên trang yêu cầu">${esc(step.title)}</a>` : esc(step.title)}${step.paths?.length ? ` · <code>${esc(step.paths.join(', '))}</code>` : ''}${step.tier ? ` · mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}` : ''}</li>`).join('')}</ol>`
     : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
       <div class="meta">Duyệt thì kế hoạch được lập lại với đúng quyền này.</div>`;
   const why = `<div style="font-size:12px;margin-top:4px">${ctx.flags?.outside_request ? '<span class="pill ai-bad">có path ngoài yêu cầu</span>' : '<span class="pill ai-ok">path khớp yêu cầu/plan</span>'}${ctx.flags?.scope_changed_since_request ? ' <span class="pill ai-bad">phạm vi đổi sau khi xin</span>' : ''}</div>`;
