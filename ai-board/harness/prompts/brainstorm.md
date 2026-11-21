@@ -40,25 +40,25 @@ SCHEMA (exactly these keys):
    "layer": "db" | "backend" | "frontend" | "wiring", "depends_on": [<1-based subtask numbers, optional>]}}]}}
 Small request (one file, no layer/depends_on/acceptance): the old 4-key subtask object is still valid.
 
-EXAMPLE 1 (text edit). Request: Sửa chữ "Bắt dầu" thành "Bắt đầu" ở trang vi-du.html. REPO DATA: public/vi-du.html (trích) L40| <button id="start">Bắt dầu</button>
-{{"summary_vi": "Sửa lỗi chính tả trên nút bắt đầu của trang vi-du.", "capabilities": [], "subtasks": [{{"title": "Đổi chữ nút #start từ \"Bắt dầu\" thành \"Bắt đầu\"", "file": "public/vi-du.html", "verify": "public/vi-du.html chứa 'Bắt đầu</button>' và không còn 'Bắt dầu'", "size": "small"}}]}}
+EXAMPLE 1 (text edit). Request: Sửa chữ "Bắt dầu" thành "Bắt đầu" ở trang <trang>.html. REPO DATA: public/<trang>.html (trích) L40| <button id="start">Bắt dầu</button>
+{{"summary_vi": "Sửa lỗi chính tả trên nút bắt đầu của trang <trang>.", "capabilities": [], "subtasks": [{{"title": "Đổi chữ nút #start từ \"Bắt dầu\" thành \"Bắt đầu\"", "file": "public/<trang>.html", "verify": "public/<trang>.html chứa 'Bắt đầu</button>' và không còn 'Bắt dầu'", "size": "small"}}]}}
 
-EXAMPLE 2 (colour, page links a stylesheet). Request: Đổi màu chữ tiêu đề trang lab.html thành đỏ. REPO DATA: public/lab.html css liên kết: public/css/lab.css … public/css/lab.css selector: .title, .card
-{{"summary_vi": "Đổi màu chữ tiêu đề trang lab sang đỏ.", "capabilities": [], "subtasks": [{{"title": "Đổi color của .title thành #dc2626", "file": "public/css/lab.css", "verify": "rule .title trong public/css/lab.css có color: #dc2626", "size": "small"}}]}}
-(Had it said "css liên kết: (không có file .css …)", the file would be public/lab.html.)
+EXAMPLE 2 (colour, page links a stylesheet). Request: Đổi màu chữ tiêu đề trang <trang-b>.html thành đỏ. REPO DATA: public/<trang-b>.html css liên kết: public/css/<trang-b>.css … public/css/<trang-b>.css selector: .title, .card
+{{"summary_vi": "Đổi màu chữ tiêu đề trang <trang-b> sang đỏ.", "capabilities": [], "subtasks": [{{"title": "Đổi color của .title thành #dc2626", "file": "public/css/<trang-b>.css", "verify": "rule .title trong public/css/<trang-b>.css có color: #dc2626", "size": "small"}}]}}
+(Had it said "css liên kết: (không có file .css …)", the file would be public/<trang-b>.html.)
 
 EXAMPLE 3 (feature: API + database + two independent pages). Request: Thêm API thuật ngữ trong context mới và hai trang mới dùng API đó (hai trang độc lập). REPO DATA: public/index.html (trang mẫu), server/contexts/_ai-generated/ (chưa có context nào)
-{{"summary_vi": "Thêm API thuật ngữ CNTT và hai trang mới dùng chung API.", "capabilities": ["features"], "acceptance": ["curl -s localhost:8041/api/glossary | grep -q items", "curl -s localhost:8041/so-tay-thuat-ngu.html | grep -q '<h1>'"], "subtasks": [
- {{"title": "Migration mới lưu thuật ngữ", "file": "server/contexts/_ai-generated/cntt/migrations/001-thuat-ngu.sql", "verify": "psql \"$DATABASE_URL\" -c 'select 1 from glossary'", "size": "large", "layer": "db", "depends_on": []}},
- {{"title": "API thuật ngữ trong context cntt", "file": "server/contexts/_ai-generated/cntt/glossary/index.js", "verify": "curl -s localhost:8041/api/glossary | grep -q items", "size": "large", "layer": "backend", "depends_on": [1]}},
- {{"title": "Module gọi API cho hai trang", "file": "public/js/features/thuat-ngu/glossary-client.js", "verify": "curl -s localhost:8041/so-tay-thuat-ngu.html | grep -q glossary-client.js", "size": "small", "layer": "frontend", "depends_on": [2]}},
- {{"title": "Trang sổ tay thuật ngữ", "file": "public/so-tay-thuat-ngu.html", "verify": "curl -s localhost:8041/so-tay-thuat-ngu.html | grep -q '<h1>'", "size": "small", "layer": "frontend", "depends_on": [3]}},
- {{"title": "Trang lịch ôn tập", "file": "public/lich-on-tap.html", "verify": "curl -s localhost:8041/lich-on-tap.html | grep -q '<h1>'", "size": "small", "layer": "frontend", "depends_on": [3]}}]}}
+{{"summary_vi": "Thêm API thuật ngữ CNTT và hai trang mới dùng chung API.", "capabilities": ["features"], "acceptance": ["curl -s localhost:8041/api/glossary | grep -q items", "curl -s localhost:8041/<trang-1>.html | grep -q '<h1>'"], "subtasks": [
+ {{"title": "Migration mới lưu thuật ngữ", "file": "server/contexts/_ai-generated/<tinh-nang>/migrations/001-thuat-ngu.sql", "verify": "psql \"$DATABASE_URL\" -c 'select 1 from glossary'", "size": "large", "layer": "db", "depends_on": []}},
+ {{"title": "API thuật ngữ trong context <tinh-nang>", "file": "server/contexts/_ai-generated/<tinh-nang>/glossary/index.js", "verify": "curl -s localhost:8041/api/glossary | grep -q items", "size": "large", "layer": "backend", "depends_on": [1]}},
+ {{"title": "Module gọi API cho hai trang", "file": "public/js/features/<tinh-nang>/glossary-client.js", "verify": "curl -s localhost:8041/<trang-1>.html | grep -q glossary-client.js", "size": "small", "layer": "frontend", "depends_on": [2]}},
+ {{"title": "Trang sổ tay thuật ngữ", "file": "public/<trang-1>.html", "verify": "curl -s localhost:8041/<trang-1>.html | grep -q '<h1>'", "size": "small", "layer": "frontend", "depends_on": [3]}},
+ {{"title": "Trang lịch ôn tập", "file": "public/<trang-2>.html", "verify": "curl -s localhost:8041/<trang-2>.html | grep -q '<h1>'", "size": "small", "layer": "frontend", "depends_on": [3]}}]}}
 Two frontend pages depend only on the client module, so they are independent of each other (same layer, depends_on equal). A page that calls the API loads exactly one module, from public/js/features/<slug>/<name>.js (never js/engine/, js/domains/ or an inline script), and that module is its own subtask. db is always ONE new migration at server/contexts/_ai-generated/<feature>/migrations/<name>.sql; backend files live in the same context server/contexts/_ai-generated/<feature>/<file>.js. A feature plan's "verify" and "acceptance" are RUNNABLE commands, never sentences, and never an invented test path.
 
-EXAMPLE 4 (database + API, no UI). Request: Thêm bảng FAQ lưu trong database, có migration, cần API đọc danh sách, không cần giao diện. REPO DATA: server/contexts/content/index.js (trích) import db, attachContent(router) có router.get('/api/content/:collection').
+EXAMPLE 4 (database + API, no UI). Request: Thêm bảng FAQ lưu trong database, có migration, cần API đọc danh sách, không cần giao diện. REPO DATA: server/contexts/<ten>/index.js (trích) import db, attachContent(router) có router.get('/api/content/:collection').
 {{"summary_vi": "Thêm bảng FAQ và API đọc danh sách, không thêm giao diện.", "capabilities": ["content.write"], "acceptance": ["curl -s localhost:8041/api/faq | grep -q items"], "subtasks": [
- {{"title": "Thêm bảng faq_entries và route GET /api/faq trong content context", "file": "server/contexts/content/index.js", "verify": "curl -s localhost:8041/api/faq | grep -q items", "size": "large", "layer": "wiring", "depends_on": []}}]}}
+ {{"title": "Thêm bảng faq_entries và route GET /api/faq trong context <ten>", "file": "server/contexts/<ten>/index.js", "verify": "curl -s localhost:8041/api/faq | grep -q items", "size": "large", "layer": "wiring", "depends_on": []}}]}}
 One existing protected/core file, one subtask, core capability content.write. The harness asks the admin for elevation (core here: the file already imports db.js); no _ai-generated file, no invented test path, no new import — reuse the db handle the module already imports.
 
 {context}

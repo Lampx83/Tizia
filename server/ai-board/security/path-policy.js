@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
+export const REFUSED_CONTEXTS = [...LEXICON.refused_contexts.forbidden, ...LEXICON.refused_contexts.requester_extra]
+  .map((name) => `server/contexts/${name}/`);
 const DENY = LEXICON.deny_paths.patterns.map((pattern) => new RegExp(pattern, 'i'));
 
 /** Chuẩn hoá đường dẫn repo; null nếu tuyệt đối, thoát bằng .., hay có ký tự điều khiển. */

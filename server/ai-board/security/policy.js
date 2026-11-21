@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
-import { check as checkPath } from './path-policy.js';
+import { check as checkPath, REFUSED_CONTEXTS } from './path-policy.js';
 import { isSkillTaskType } from '../skill-task-types.js';
 import { ALLOWED_DOMAINS, ALLOWED_KEYS } from '../../contexts/campus/layout-schema.js';
 import { getSettings } from '../settings.js';
@@ -31,9 +31,6 @@ const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
 // Read once at load: the catalog hash pins accepted plans, so the flag changes only with a restart.
 export const REQUESTER_FULLSTACK = getSettings().requesterFullstackDb;
 export const FULLSTACK_CAPABILITY = 'context.write';
-const REFUSED_CONTEXTS = ['billing', 'payment', 'economy', 'security', 'identity', 'auth', 'session', 'admin',
-  'integration', 'engagement', 'feature-gate', 'safety']
-  .map((name) => `server/contexts/${name}/`);
 const FULLSTACK_POLICY = REQUESTER_FULLSTACK ? {
   [FULLSTACK_CAPABILITY]: capability('surface', ['server/contexts/'],
     'Requester edits an existing mounted context; every DB change waits for an admin before any push.', {

@@ -14,7 +14,7 @@ metadata:
 ## gate 1
 1. Find the page in REPO DATA and read its "css liên kết" line.
 2. If it lists a local .css file, "file" = that .css file. If it says "(không có file .css ...)", "file" = the page itself (the rule is in its <style>).
-3. Name the ONE selector to change from the "selector" list (e.g. `.section-title h1`). Whole-page text → `body`; never `*`. No fitting selector → say "thêm rule mới <selector>".
+3. Name the ONE selector to change from the "selector" list (e.g. `.khoi-mau h1`). Whole-page text → `body`; never `*`. No fitting selector → say "thêm rule mới <selector>".
 4. Colour names used in requests map to these values: xanh dương #2563eb, xanh lá #16a34a, đỏ #dc2626, vàng #facc15, tím #7c3aed, cam #ea580c, hồng #db2777, đen #111827, trắng #ffffff.
 5. One subtask, size "small". verify = "rule <selector> trong <file> có <property>: <value>".
 ## gate 3
@@ -22,4 +22,4 @@ metadata:
 2. Never touch HTML markup or scripts.
 3. Test: read the file with fs and match the rule with a regex.
 Example output:
-{"edits": [{"search": "  .section-title h1, .section-title h2 { margin: 0; font-size: 22px; font-weight: 700; }", "replace": "  .section-title h1, .section-title h2 { margin: 0; font-size: 22px; font-weight: 700; color: #2563eb; }"}], "test_file": "test/school-title-color.test.js", "test": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n\ntest('tiêu đề trường màu xanh dương', () => {\n  const html = readFileSync('public/school.html', 'utf8');\n  assert.match(html, /\\.section-title h1[^{]*\\{[^}]*color:\\s*#2563eb/);\n});\n"}
+{"edits": [{"search": "  .khoi-mau h1, .khoi-mau h2 { margin: 0; font-size: 22px; font-weight: 700; }", "replace": "  .khoi-mau h1, .khoi-mau h2 { margin: 0; font-size: 22px; font-weight: 700; color: #2563eb; }"}], "test_file": "test/<trang>-title-color.test.js", "test": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n\ntest('tiêu đề trường màu xanh dương', () => {\n  const html = readFileSync('public/<trang>.html', 'utf8');\n  assert.match(html, /\\.khoi-mau h1[^{]*\\{[^}]*color:\\s*#2563eb/);\n});\n"}

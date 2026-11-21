@@ -19,6 +19,11 @@
       "^ai-board/harness/retrieval_weights\\.json$"
     ]
   },
+  "refused_contexts": {
+    "_why": "Context server/contexts/<tên>/ AI Board không mở. forbidden: tiền, bảo mật, danh tính, quản trị, đóng với mọi vai; requester_extra: đóng thêm với người gửi thường. policy.js và path_policy.py đọc cùng file.",
+    "forbidden": ["billing", "payment", "economy", "security", "identity", "auth", "session", "admin"],
+    "requester_extra": ["integration", "engagement", "feature-gate", "safety"]
+  },
   "deny_paths": {
     "_why": "Đường dẫn AI Board không được đọc/ghi/PR: một danh sách dùng chung, policy/path-policy.js và ai-board/harness/path_policy.py đọc cùng file. Khớp sau khi chuẩn hoá (\\ → /, bỏ ./, không cho .. hay đường dẫn tuyệt đối) và KHÔNG phân biệt hoa thường (NTFS). Regex toàn chuỗi, cú pháp chung JS/Python.",
     "patterns": [

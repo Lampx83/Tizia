@@ -59,9 +59,8 @@ _REFUSED = tuple(re.compile(p, re.I) for p in (
     r"^Dockerfile", r"^docker-compose[^/]*$", r"^\.dockerignore$", r"^\.env", r"^\.github/",
 ))
 # Tiền, bảo mật, danh tính, quản trị: không bao giờ mở, kể cả khi owner liệt kê nhầm.
-FORBIDDEN_CONTEXTS = frozenset({"billing", "payment", "economy", "security", "identity", "auth", "session", "admin"})
-# Người gửi thường: thêm điểm/thưởng, tích hợp ngoài, cổng tính năng, lọc nội dung.
-REQUESTER_REFUSED_CONTEXTS = FORBIDDEN_CONTEXTS | {"integration", "engagement", "feature-gate", "safety"}
+FORBIDDEN_CONTEXTS = frozenset(_LEXICON["refused_contexts"]["forbidden"])
+REQUESTER_REFUSED_CONTEXTS = FORBIDDEN_CONTEXTS | frozenset(_LEXICON["refused_contexts"]["requester_extra"])
 _ZONE_ALLOWED = tuple(re.compile(p) for p in (r"^server/contexts/[^/]+/.+", r"^public/.+", r"^package(-lock)?\.json$"))
 
 
