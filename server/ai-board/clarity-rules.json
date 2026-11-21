@@ -6,5 +6,9 @@
   "concrete_objects": ["nút", "màu", "chữ", "cỡ chữ", "phông", "font", "bài", "bài tập", "câu hỏi", "đáp án", "ảnh", "hình", "video", "âm thanh", "tiêu đề", "menu", "bảng", "biểu đồ", "khung", "icon", "biểu tượng", "liên kết", "link", "thẻ", "trò chơi", "game", "điểm", "lớp", "môn", "px", "#"],
   "broad_keywords": ["toàn bộ", "cả hệ thống", "làm lại", "tất cả các trang", "tất cả mọi", "mọi trang"],
   "task_verbs": ["thêm", "sửa", "đổi", "xóa", "xoá", "bỏ", "tạo", "viết", "chuyển", "cập nhật"],
-  "max_tasks": 3
+  "max_tasks": 3,
+  "negations": ["không", "khong", "chưa", "chua", "đừng", "do not", "don't", "no need to"],
+  "negation_fillers": ["cần", "can", "phải", "phai", "muốn", "muon", "nên", "nen"],
+  "negated_verbs": ["sửa", "sua", "tạo", "tao", "thêm", "them", "xóa", "xoá", "xoa", "đổi", "doi", "cập nhật", "cap nhat", "merge", "edit", "create", "delete"],
+  "negation_ends": ["nhưng", "nhung", "but", "hãy", "mà", "ma"]
 }
