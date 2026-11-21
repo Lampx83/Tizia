@@ -267,7 +267,7 @@ def _mentioned_files(text: str, source, sha: str) -> list[str]:
     return list(dict.fromkeys(found))[:file_context.WEIGHTS["max_mentioned_files"]]
 
 
-NAMED_PAGES_MAX, NAMED_MIN_TOKENS = 3, 2
+NAMED_PAGES_MAX, NAMED_MIN_TOKENS, NAMED_OBS_MAX = 3, 2, 6
 # Trước khi fold: fold("trắng") = "trang", nên chữ "trắng" (màu) không được coi là "trang".
 _PAGE_WORD = re.compile(r"\b(?:trang|page)\b")
 _NAME_END = re.compile(r"[.,;:!?\n'\"‘’“”()\[\]]")
@@ -347,7 +347,16 @@ def _named_pages(text: str, source, commit: str) -> list[str]:
     # Đầu tên chung ("mô phỏng ...") khớp 2 token ở trang khác; nhãn khớp dài hơn cụ thể hơn, hoà thì giữ tiêu đề.
     if by_label > top and by_label >= NAMED_MIN_TOKENS and len(labelled) == 1:
         return labelled
-    return found if top >= NAMED_MIN_TOKENS and len(found) <= NAMED_PAGES_MAX else []
+    cap = NAMED_OBS_MAX if get_settings().model_first else NAMED_PAGES_MAX
+    return found if top >= NAMED_MIN_TOKENS and len(found) <= cap else []
+
+def _locate_note(path: str, grams: list[str]) -> str:
+    """Evidence line for the file holding most quoted phrases; model_first drops the instruction to edit it."""
+    base = f"LƯU Ý: {path} chứa nhiều cụm bạn viết nhất ({'; '.join(grams)}). "
+    if get_settings().model_first:
+        return base + "Đây là bằng chứng, không phải chỉ định: chọn file theo phần code bạn đã đọc và ghi lý do vào sổ quyết định."
+    return base + "Nếu thay đổi nằm ở đó, sửa file đó, không thêm phần tử mới vào trang."
+
 
 def _linked_css(source, sha: str, files: list[str]) -> list[str]:
     out = []
@@ -399,6 +408,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     skill = node["skill"] if node else pick_skill(f"{request_text} {sub_text}", request.get("type"), file, exists)
 
     parts, used, targets, best = [], [], [], []
+    render_only: list[str] = []
     mode = ""  # gate-1 retrieval mode actually resolved for this request ('' = off, 'literal', 'model')
     log = []  # every tool the harness ran for the model: what, with which inputs, how much came back
     if commit:
@@ -415,6 +425,8 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
         if named:
             targets = list(dict.fromkeys([*targets, *named]))
             log.append({"tool": "named_page", "params": {}, "chars": 0, "result": ", ".join(named)})
+            if get_settings().model_first:
+                parts.append(f"TRANG CÓ TÊN KHỚP chữ sau 'trang' (so với <title>/<h1>; bằng chứng, không phải chỉ định): {', '.join(named)}.")
         # Chữ người dùng nhắc có thể không nằm ở trang trong dòng [Trang: …] mà ở module JS trang đó import:
         # gate 1 thì đưa module đó lên đầu target (model 8B/14B bỏ qua gợi ý nếu chỉ là 1 dòng dữ liệu).
         pages = [t for t in targets if t.endswith(".html")]
@@ -427,6 +439,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
             log.append({"tool": "renderers", "params": {"pages": pages}, "chars": 0,
                         "result": ", ".join(render) or "no dedicated render module"})
         if render:  # trang không chứa chữ đó: bỏ trang khỏi target, budget dành cho module render
+            render_only = render
             targets = render
             parts.append(f"LƯU Ý: chữ người dùng nhắc KHÔNG nằm trong {', '.join(pages)}; trang hiển thị nó qua "
                          f"{', '.join(render)}. Sửa ở file đó, không thêm phần tử mới vào trang.")
@@ -450,8 +463,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
                         "result": f"{best[0][0]} matches: {'; '.join(best[0][1])[:200]}" if best else "no file matches several phrases"})
             if best:
                 targets = [best[0][0], *targets]
-                parts.append(f"LƯU Ý: {best[0][0]} chứa nhiều cụm bạn viết nhất ({'; '.join(best[0][1])}). "
-                             "Nếu thay đổi nằm ở đó, sửa file đó, không thêm phần tử mới vào trang.")
+                parts.append(_locate_note(best[0][0], best[0][1]))
                 used.append("locate")
         if literal.get("files"):
             only = literal["files"][0]["file"] if len(literal["files"]) == 1 else None
@@ -506,7 +518,7 @@ def build_context(gate: int, request: dict, subtask: dict | None, source, sha: s
     return {"skill": skill.name, "text": text, "used_tools": list(dict.fromkeys(used)), "chars": len(text),
             "sha": commit, "tiers": {"brief": len(brief), "recent": len(recent), "repo": len(data)},
             "targets": targets,  # file cổng này nhắm tới (bộ đo chấm "đúng file")
-            "retrieval": mode,
+            "retrieval": mode, "render_only": list(render_only),
             "best_match": best[0][0] if best else None, "tool_log": log, "selection": selection}
 
 

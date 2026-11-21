@@ -20,6 +20,8 @@ def violations(text: str, request: dict, source, sha: str | None) -> list[str]:
     role = request.get("requester_role") or "student"
     try:
         plan = brainstorm.parse_plan(text, request=request)
+        if shared := brainstorm.duplicate_file_problem(plan["subtasks"]):
+            raise ValueError(shared)
         plan = {**plan, "subtasks": brainstorm.merge_same_file(plan["subtasks"])}
         brainstorm.check_files(plan, source, sha, levels.approved_scope(request, None, plan), role=role)
         grounding_paths.check_references(plan, source, sha, request)

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from gates import acceptance_structure, gate3_guards, static_check
 from runtime import subtask_files
+from settings import get_settings
 from gate5 import functional
 from gate5.guest_inputs import GuestInputMissing
 
@@ -15,6 +16,13 @@ _HANDLER = re.compile(r"""\bon[a-z]+\s*=\s*["']\s*([A-Za-z_$][\w$]*)\s*\(""")
 _LINK_ASK = re.compile(r"liên kết|đường dẫn|lối vào|\bmenu\b|\blinks?\b|trỏ tới|từ trang", re.I)
 _NEW_FILE = re.compile(r"^diff --git a/\S+ b/(\S+)\n(?:new file mode[^\n]*\n)?(?:index[^\n]*\n)?--- /dev/null", re.M)
 _LOCAL_SCRIPT = re.compile(r"""<script[^>]*\ssrc\s*=\s*["']([^"'#?\s]+)["']""")
+
+
+def link_required(request_text: str, ledger: list | None, page: str) -> bool:
+    """A new page must be linked from another page. model_first: the planner's new_file entry says so; else link words in the request."""
+    if get_settings().model_first and ledger is not None:
+        return any(d.get("decision") == "new_file" and d.get("target") == page for d in ledger)
+    return bool(_LINK_ASK.search(request_text))
 
 
 def _fail(reason: str) -> dict:
@@ -91,8 +99,9 @@ def crossref_issues(state: dict, text: str) -> list[str]:
                 ok = re.search(rf"""\bid\s*[=:]\s*["']{re.escape(name)}["']""", corpus) if kind == "id" else _defined(name, corpus)
                 if not ok:
                     issues.append(f"{file}: {kind} {name} is used but not defined")
-    if _LINK_ASK.search(functional._request_raw(state)):
-        for page in sorted(p for p in _NEW_FILE.findall(text) if p.endswith((".html", ".htm"))):
+    raw = functional._request_raw(state)
+    for page in sorted(p for p in _NEW_FILE.findall(text) if p.endswith((".html", ".htm"))):
+        if link_required(raw, state.get("ledger"), page):
             link = re.compile(rf"""href\s*=\s*["'][^"'#?]*{re.escape(posixpath.basename(page))}["'?#]""")
             if not any(link.search(_read(p)) for p in _pages(root) if p != root / page):
                 issues.append(f"new page {page} has no link from any other page")

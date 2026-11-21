@@ -16,6 +16,7 @@ from pathlib import Path
 
 from repositories import repo_at_commit
 from services import repomap
+from settings import get_settings
 
 MAX_CANDIDATES = 5
 MAX_QUOTES = 3
@@ -147,6 +148,8 @@ def _reason(rule: str, target: str, quote: dict, near: str | None, candidates: l
         return f"trích dẫn chỉ có trong {quote['home']}, không phải {target}"
     if rule == "unique_quote_agrees":
         return f"trích dẫn duy nhất khớp target {target}"
+    if rule == "new_file_decided":
+        return f"{target} là file mới, planner ghi quyết định new_file kèm bằng chứng nối"
     if rule == "new_file_named":
         return f"{target} là file mới, request và verify cùng đặt tên"
     if rule == "new_file_unnamed":
@@ -156,10 +159,12 @@ def _reason(rule: str, target: str, quote: dict, near: str | None, candidates: l
     return f"plan không nêu trích dẫn và không tín hiệu nào đồng ý {target}"
 
 
-def assess(plan, state, source, sha, *, repomap_limit: int = 5) -> dict:
+def assess(plan, state, source, sha, *, repomap_limit: int = 5, decided_new=frozenset()) -> dict:
     """Chấm plan ở `sha` (thuần, không model) → {'level', 'signals', 'candidates', 'reason'}.
     `state` cấp câu hỏi cho repomap (`question`/`request`), `best_match` và `grounding` của cổng trước.
-    signals['path']['files'] chỉ xét 5 file đầu của plan (giữ chi phí git ls-files ở mức cố định)."""
+    signals['path']['files'] chỉ xét 5 file đầu của plan (giữ chi phí git ls-files ở mức cố định).
+    decided_new (model_first): file mới mà planner ghi new_file kèm bằng chứng; không bị coi là gõ sai file gần tên."""
+    decided = frozenset(decided_new) if get_settings().model_first else frozenset()
     plan = plan if isinstance(plan, dict) else {}
     state = state if isinstance(state, dict) else {}
     tasks = [task for task in plan.get("subtasks") or [] if isinstance(task, dict)]
@@ -176,7 +181,7 @@ def assess(plan, state, source, sha, *, repomap_limit: int = 5) -> dict:
     repo_agree = (target in candidates) if (candidates and target) else None
     best = str(state.get("best_match") or "")
     best_agree = _same_path(best, target) if (best and target) else None
-    kinds = {path: _path_kind(path, source) for path in files[:MAX_CANDIDATES]}
+    kinds = {path: ("new", None) if path in decided else _path_kind(path, source) for path in files[:MAX_CANDIDATES]}
     kind, near = kinds.get(target, ("existing", None))
     quoted = _quote_hits(plan, state, source, sha)
     counts = [len(hits) for hits in quoted]
@@ -185,12 +190,14 @@ def assess(plan, state, source, sha, *, repomap_limit: int = 5) -> dict:
              "checked": len(quoted), "counts": counts,
              "home": quoted[0][0] if len(quoted) == 1 and counts[0] == 1 else None}
     verify = " ".join(str(task.get("verify") or "") for task in tasks if str(task.get("file") or "") == target)
-    named = _named(target, verify) and _named(target, _request_text(state))
+    named = target in decided or (_named(target, verify) and _named(target, _request_text(state)))
     if not target:
         return {"level": "low", "signals": {"plan": "không có subtask/file"}, "candidates": candidates,
                 "reason": "plan không nêu file nào để sửa"[:REASON_MAX]}
     level, rule = _decide(quote["state"], bool(quote["home"] and _same_path(quote["home"], target)),
                           repo_agree, best_agree, kind, named)
+    if target in decided and rule == "new_file_named":
+        rule = "new_file_decided"
     signals = {
         "quote": quote,
         "repomap": {"agree": repo_agree, "top": candidates[0] if candidates else None},

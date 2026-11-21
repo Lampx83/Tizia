@@ -161,8 +161,9 @@ def _task_text(task: dict) -> str:
                       ensure_ascii=False).casefold()
 
 
-def requested_missing(plan, text):
-    """Đường dẫn và chữ trong dấu ngoặc mà người dùng nhắc nhưng plan không có subtask/không nhắc tới. File test nêu tên đủ khi có trong acceptance/verify."""
+def requested_missing(plan, text, waived=()):
+    """Đường dẫn và chữ trong dấu ngoặc mà người dùng nhắc nhưng plan không có subtask/không nhắc tới. File test nêu tên đủ khi có trong acceptance/verify.
+    waived: target planner chủ động bỏ qua kèm bằng chứng (model_first, skip_alternative); mục khớp thì không tính là thiếu."""
     files = _plan_files(plan)
     checks = _checks(plan)
     missing = [path for path in requested_paths(text)
@@ -185,7 +186,7 @@ def requested_missing(plan, text):
         if literal.casefold() in haystack:
             continue
         missing.append(f'chữ "{literal}"')
-    return list(dict.fromkeys(missing))
+    return [m for m in dict.fromkeys(missing) if not any(w in m or _same_file(w, m) for w in waived)]
 
 
 def plan_block(plan, missing_conditions, missing_requested=None):
