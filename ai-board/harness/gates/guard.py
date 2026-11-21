@@ -324,6 +324,10 @@ _INJECTION = [re.compile(p, re.I) for p in (
     r"<\s*script\b", r"javascript\s*:", r"\son[a-z]+\s*=", r"\beval\s*\(", r"new\s+Function\s*\(",
     r"child_process", r"document\.write\s*\(",
 )]
+# <script>, javascript:, on*= : markup mistakes, repairable; the rest of _INJECTION stays critical.
+_MARKUP_INJECTION = frozenset(_INJECTION[:3])
+_INLINE_HANDLER_HINT = ("attach handlers with addEventListener in the page's own JS file; "
+                        "no inline on*=, javascript: URLs or <script> in markup strings")
 # Handler/javascript: URL kept verbatim from a removed line of the same file: a text edit re-adds the line, not the attribute.
 _HANDLER = re.compile(
     r"""\s(?:on[a-z]+|(?:href|src|action|formaction|xlink:href)(?=\s*=\s*["']?\s*javascript\s*:))"""
@@ -484,6 +488,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
     colors, theme_colors = [], []
     sections = _sections(diff_text)
     from runtime import package_broker
+    from settings import get_settings
     broker_exempt = bool(broker_diffs) and package_broker.digest([diff_text]) == package_broker.digest(broker_diffs)
     new_paths = frozenset(path for path, _, _, _, existing, _ in sections if not existing)
     for path, deleted, added, removed, existing, binary in sections:
@@ -512,11 +517,14 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
                 add("pii", "medium", f"{path}: dòng thêm có email/SĐT/CCCD")
             if path.startswith("public/") and not _SAFE_SCRIPT.match(line) and not _FEATURE_MODULE.match(line):
                 probe = _without_kept_handlers(line, kept_handlers)
-                pattern = next((p for p in _INJECTION if p.search(probe)), None)
+                hits = [p for p in _INJECTION if p.search(probe)]
+                pattern = hits[0] if hits else None
                 if pattern and pattern is _INJECTION[0] and _INLINE_SCRIPT.match(probe) \
                         and not any(p.search(probe) for p in _INJECTION[1:]):
                     add("inline_script", "medium", f"{path}:{number}: không dùng <script> inline; đưa code vào public/js/features/<slug>/index.js, HTML chỉ có 1 dòng nạp module",
                         line=number, pattern=pattern.pattern)
+                elif pattern and get_settings().inline_handler_repairable and all(p in _MARKUP_INJECTION for p in hits):
+                    add("inline_handler", "medium", f"{path}:{number}: {_INLINE_HANDLER_HINT}", line=number, pattern=pattern.pattern)
                 elif pattern:
                     add("injection", "critical", f"{path}:{number}: dòng thêm có script/handler/prompt injection",
                         line=number, pattern=pattern.pattern)

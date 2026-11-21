@@ -1,9 +1,16 @@
 """Injection check: a handler kept verbatim from the removed line is not new; new or changed handlers stay critical."""
 from gates import guard
+import pytest
 
 PATH = "public/lesson.html"
 OLD = """  <button onclick="document.getElementById('cmt-input').focus()">💬 Viết phản hồi</button>"""
 NEW_TEXT = """  <button onclick="document.getElementById('cmt-input').focus()">Bài biến tựu cân xu.</button>"""
+
+
+@pytest.fixture(autouse=True)
+def _handler_critical(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_INLINE_HANDLER_REPAIRABLE", "0")
+
 
 
 def diff(added, removed):
@@ -60,3 +67,10 @@ def test_javascript_href_added_to_another_element_is_critical():
 def test_script_and_javascript_url_stay_critical_with_an_existing_handler():
     for extra in ('<a href="javascript:alert(1)">x</a>', "<script>alert(1)</script>"):
         assert injection([NEW_TEXT + extra], [OLD]), extra
+
+
+def test_new_handler_is_repairable_by_default(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_INLINE_HANDLER_REPAIRABLE")
+    line = """  <button onclick="save()">Bài biến</button>"""
+    out = [f for f in guard.scan(diff([line], [OLD]))["findings"]]
+    assert [(f["check"], f["failure_class"]) for f in out] == [("inline_handler", "ordinary")]

@@ -4,6 +4,13 @@ from dataclasses import replace
 
 from runtime import pipeline as main
 from gates import guard
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _handler_critical(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_INLINE_HANDLER_REPAIRABLE", "0")
+
 
 
 def diff(path, added=(), removed=(), new=False):
