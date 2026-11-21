@@ -139,6 +139,10 @@ def image_parts(items) -> list[dict]:
     return parts
 
 
+# Raw tabs/newlines never occur inside a valid JSON string, so a long run is a guided-decoding whitespace runaway.
+WHITESPACE_STOPS = ('\t' * 8, '\n' * 8)
+
+
 @dataclass
 class OllamaClient:
     # KHÔNG hardcode default endpoint/model ở đây — trước có default cho 1 Ollama
@@ -231,6 +235,9 @@ class OllamaClient:
                 payload['response_format'] = ({'type': 'json_schema', 'json_schema':
                     {'name': 'ai_board', 'schema': format}} if isinstance(format, dict)
                     else {'type': 'json_object'})
+            if isinstance(format, dict) and not hosted:
+                given = payload.get('stop') or []
+                payload['stop'] = [*([given] if isinstance(given, str) else given), *(s for s in WHITESPACE_STOPS if s not in given)]
             if extra and 'thinking' in extra and (not hosted or _takes_thinking_switch(model)):  # absent = server default
                 payload['chat_template_kwargs'] = {'enable_thinking': bool(extra['thinking'])}
             if extra and extra.get('tools'):
