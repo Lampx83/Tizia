@@ -34,7 +34,7 @@ from repositories import repo_at_commit
 from services import context
 from gate5 import functional
 import path_policy
-from gates import acceptance_structure, best_match, data_kinds, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
+from gates import acceptance_structure, best_match, data_kinds, decision_ledger, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime.plan_merge import merge_same_file
@@ -62,6 +62,13 @@ _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      rf"|{_GEN}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
 # Cờ requester_fullstack_db: file mới chỉ trong context đã có ở base; context mới không bao giờ được mount.
 _CONTEXT_NEW = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/(?:[a-z0-9][\w-]*\.(?:js|mjs|json)|migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
+# model_first: kebab-named pages, styles and modules anywhere in public/, and nested files of an editable context.
+_NEW_PUBLIC = re.compile(r"^public/(?:[a-z0-9][a-z0-9-]*/)*[a-z0-9][a-z0-9-]*\.(?:html|css|js|mjs)$")
+_CONTEXT_NESTED = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/(?!migrations/)(?:[a-z0-9][\w-]*/)+[a-z0-9][\w-]*\.(?:js|mjs|json)$")
+
+
+def _context_new(file: str):
+    return _CONTEXT_NEW.match(file) or (get_settings().model_first and _CONTEXT_NESTED.match(file))
 
 
 def db_migration(file: str, role: str = "student") -> bool:
@@ -71,19 +78,41 @@ def db_migration(file: str, role: str = "student") -> bool:
 
 def new_path_ok(file: str, role: str = "student") -> bool:
     """Đường file chưa có ở base được phép tạo."""
-    return bool(_NEW_OK.match(file)) or bool(path_policy.fullstack_on() and _CONTEXT_NEW.match(file)
-                                             and path_policy.may_edit(file, role))
+    return (bool(_NEW_OK.match(file)) or bool(get_settings().model_first and _NEW_PUBLIC.match(file))
+            or bool(path_policy.fullstack_on() and _context_new(file) and path_policy.may_edit(file, role)))
 RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly that. Output ONLY the JSON object."
 
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
 # {context} cố định byte-để-byte mọi lần gọi (kỷ luật cache, khoá bằng prompts.lock.json).
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "brainstorm.md").read_text(encoding="utf-8")
 SCOPE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_allowed_scope.md").read_text(encoding="utf-8")
+FEATURE_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_feature.md").read_text(encoding="utf-8").split("\n---\n")
+_CONTEXT_INDEX = re.compile(r"^server/contexts/([^/]+)/index\.js$")
 # Request keys the planner reads (LF/125). plan_repair is planner-only: the validator never gets it.
 PLANNER_INPUTS = ("id", "domain", "type", "votes", "subject", "body", "thread", "clarified_spec", "plan_repair", "task_type", "complexity_by_server")
 
 
-def build_prompt(request: dict, surface: frozenset[str], context_text: str = "") -> str:
+def editable_contexts(source, sha: str | None, role: str = "student") -> list[str]:
+    """Context names at sha whose index.js the role may edit (fullstack zone); [] outside it."""
+    if not (sha and path_policy.fullstack_on()):
+        return []
+    try:
+        files = repo_at_commit.at(source, sha).files()
+    except OSError:
+        return []
+    return sorted({m.group(1) for f in files if (m := _CONTEXT_INDEX.match(f))
+                   and path_policy.mounted_context(f) and path_policy.may_edit(f, role)})
+
+
+def feature_block(contexts: list[str]) -> str:
+    """model_first: planner guidance for new behaviour; the server path only when an editable context exists."""
+    if not get_settings().model_first:
+        return ""
+    common, server, browser = FEATURE_PROMPT
+    return common + "\n" + (server.replace("CONTEXTS_LIST", ", ".join(contexts)) if contexts else browser)
+
+
+def build_prompt(request: dict, surface: frozenset[str], context_text: str = "", contexts: list[str] = ()) -> str:
     """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     scrub = spotlight.scrub
@@ -99,7 +128,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
     ) + (two_level.DECOMPOSE_PROMPT if two_level.decomposing(request)
          else acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else "")
-         + data_kinds.prompt_block())
+         + data_kinds.prompt_block() + feature_block(list(contexts)))
 
 
 def infer_layer(file: str, role: str = "student") -> str:
@@ -329,7 +358,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None, role: str = 
     must_exist = [f for f in seen if not new_path_ok(f, role) and f not in granted]
     if path_policy.fullstack_on():
         must_exist += sorted({f"server/contexts/{m.group(1)}" for f in seen
-                              if not _NEW_OK.match(f) and (m := _CONTEXT_NEW.match(f))} - set(must_exist))
+                              if not _NEW_OK.match(f) and (m := _context_new(f))} - set(must_exist))
     if sha is None:
         if pending and (needs := levels.requirements(plan, read, role=role)):
             raise levels.ElevationRequired(needs, plan)
@@ -408,7 +437,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             trace0.note("tool", "search_terms", f"the model asked the harness to search for: {', '.join(terms) or '(nothing usable)'}")
     ctx = context.build_context(1, request, None, source, sha or "HEAD")
     commit = ctx["sha"]
-    prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"])
+    role = request.get("requester_role") or "student"
+    prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"],
+                          contexts=editable_contexts(source, commit, role) if get_settings().model_first else ())
     reason = None
     trace = getattr(deps, "trace", None)
 
@@ -417,7 +448,6 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             trace.attach_last("evaluation", {"check": check, "ok": ok, "detail": detail})
 
     form_warnings: list[str] = []
-    role = request.get("requester_role") or "student"
     for attempt in range(2):
         if attempt and not budget.tick():
             break
@@ -435,10 +465,19 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         skill_context = {'task_type': request.get('task_type'), 'file': (ctx.get('targets') or [''])[0]}
         react, evidence = None, ""
         session = get_settings().session_plan_execute
-        if not attempt and (react_plan.enabled() or session):
-            react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
-                                   db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
-                                   **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}))
+        if not attempt and (react_plan.enabled() or session or decision_ledger.enabled()):
+            try:
+                react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
+                                       db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
+                                       **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}),
+                                       **({"ledger": True, "ledger_check": lambda plan, decisions, log: decision_ledger.coverage(
+                                           plan, decisions, log, repo_at_commit.at(source, commit).exists)}
+                                          if decision_ledger.enabled() else {}))
+            except decision_ledger.LedgerInvalid as error:
+                judge("decision ledger", False, str(error))
+                return {"gate": 1, "blocked": True, "reason": f"sổ quyết định không hợp lệ: {error}", "plan": None,
+                        "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],
+                        "source_targets": ctx.get("targets") or [], "best_match": ctx.get("best_match")}
         elif not attempt and react_plan.exploration_enabled() and react_plan.warranted(request, ctx):
             # Hard request (see react_plan.warranted): one bounded read-only pass puts real source lines in front of
             # the planner; a pass that fails or reads nothing leaves `ask` byte-identical to the one-shot prompt.
@@ -490,6 +529,10 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 judge(stage, True, 'oracle advisory: plan does not edit ' + ', '.join(sorted(required)))
             added = new_files(plan, source, commit)
             feature = best_match.feature(request)
+            if not feature and best_match.unanchored_feature(request, added, source, commit):
+                feature = True
+                judge(stage, True, "model_first: request quotes nothing in the repo; plan adds a page and its files: "
+                                   + ", ".join(sorted(added)))
             # A request that names the new path literally is an explicit target: the renderer module is not the place
             # to edit, so best-match is advisory exactly as for a feature request.
             request_text = " ".join(str(request.get(k) or "") for k in ("subject", "body", "clarified_spec"))
@@ -503,9 +546,15 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 form_warnings.append(f"{subtask_contract.OBJECTION_TAG}: {message}")
                 judge(stage, True, f"{subtask_contract.OBJECTION_TAG}: {message}")
 
+            decisions = (react or {}).get("ledger", {}).get("decisions")
+            overrides = []
+            if decisions and (chosen := added & decision_ledger.decided(decisions, "new_file") - named):
+                overrides.append(f"plan thêm file mới {', '.join(sorted(chosen))} dù yêu cầu sửa giao diện có sẵn; model nêu bằng chứng trong sổ")
+                named = named | chosen
             if refusal := best_match.new_page_refusal(request, added - named, source, commit):
                 objection(refusal)
-            if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit):
+            skipped = decision_ledger.decided(decisions, "skip_alternative")
+            if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit, skipped):
                 objection(refusal)
             if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
@@ -515,8 +564,12 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                    f"best-match {ctx.get('best_match') or '(none)'}")
             else:
                 try:
-                    best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                                       f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                    if ctx.get('best_match') in decision_ledger.decided(decisions, "skip_alternative"):
+                        overrides.append(f"plan không sửa {ctx.get('best_match')}, file khớp nhiều cụm người dùng viết nhất; model nêu bằng chứng trong sổ")
+                        judge(stage, True, overrides[-1])
+                    else:
+                        best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                           f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
                 except ValueError as miss:
                     if advisory:
                         objection(str(miss))
@@ -543,6 +596,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 'form_warnings': list(form_warnings),
                 **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
                 **({'react_quotes': react['quotes']} if react else {}),
+                **({'ledger': react['ledger']} if react and 'ledger' in react else {}),
+                **({'ledger_overrides': overrides} if overrides else {}),
                 **({'plan_session': react['session'], 'plan_tier': plan_rules.tier(plan)} if react and 'session' in react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],

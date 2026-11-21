@@ -21,9 +21,13 @@ function matcher(text) {
 const userText = (title, detail) => `${title ?? ''}\n${String(detail ?? '').split('\n')
   .filter((line) => !/^\s*\[Trang:/.test(line)).join('\n')}`;
 
+const alt = (words) => words.map(escape).join('|');
+// "chưa cần sửa hay xoá": the negated clause runs to punctuation or a contrast word; "hay" (or) stays inside it.
+const NEGATED = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alt(RULES.negations)})(?:\\s+(?:${alt(RULES.negation_fillers)}))?\\s+`
+  + `(?:${alt(RULES.negated_verbs)})(?![\\p{L}])[^.!?;,\\n]*?(?=[.!?;,\\n]| +(?:${alt(RULES.negation_ends)})(?![\\p{L}])|$)`, 'giu');
+
 function broadReasons(text, has) {
-  // Negated exclusions end at a contrast/new instruction; positive tasks still count.
-  const tasks = text.replace(/(?:không|khong|do not|don't)\s+(?:sửa|sua|tạo|tao|thêm|them|xóa|xoá|xoa|đổi|doi|cập nhật|cap nhat|merge|edit|create|delete)[^.!?;,\n]*?(?=[.!?;,\n]| +(?:nhưng|nhung|but|hãy|hay)\b|$)/giu, ' ');
+  const tasks = text.replace(NEGATED, ' ');
   const taskHas = matcher(tasks);
   const reasons = RULES.broad_keywords.filter(taskHas).map((k) => `rộng: "${k}"`);
   const bullets = (tasks.match(/^\s*(?:[-*•+]|\d+[.)])\s+/gm) || []).length;

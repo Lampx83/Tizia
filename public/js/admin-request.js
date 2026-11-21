@@ -6,6 +6,7 @@ import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr, renderSoftMisses } from './ai-board-trace.js';
 import { renderGateReview, renderRiskAndChecks, renderDbStatus } from './ai-board-mirror.js';
+import { renderLedger } from './ai-board-ledger.js';
 import { approvalsNotice } from './admin-approvals.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
@@ -613,6 +614,7 @@ function renderAiBoard(t, messages = []) {
       ${managedLine(root.managed)}
       ${renderWrites(t)}
       ${dataSteps(t)}
+      ${renderLedger(t.plan?.plan?.ledger)}
       ${elevationBlock(t)}
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
     </div>`;

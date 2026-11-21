@@ -5,7 +5,7 @@
   "content_guard.md": "cacee58cab0c38d45a19154a120a954136bdfbc36aaa7ac0bc438be22df98d75",
   "context_compaction.md": "39aa9086a31cf4ad65eef385d2d35bfa43aed4ea8e07ffb06fb7dc28c3661eb7",
   "grill.md": "d3590654c04307d3ba35d56fd9e4b5e2aeb20bb9d4c99ae521a1fefb09fd00b3",
-  "grill_output.schema.json": "929b2adf1f8159bc19f3ebfb984667b215fe6ecdfd99fe09cde1acd667a31b8a",
+  "grill_output.schema.json": "51b07004990523162716f2981c7872ef1ea21323ca6780238aee86cae0ccb507",
   "implement.md": "3654256e45c7f70853001c4b5f668bd3cac8c56661fa8c804e243a10cae76e36",
   "intake_guard.md": "230384edad87c179e1d2661898db82c0e346a4240a1bb13a15a9a147ae9ab9e2",
   "intake_selfcheck.md": "2d97541d001fe2afaefe3741833eea09e54bdfa45f85030a47d83a4c7b5d6cb2",
@@ -23,5 +23,8 @@
   "tool_loop.md": "137d05fa424f8c9f82cc50e9e33c89373beb011e82f3b22748d3f230de29a3bf",
   "plan_decompose.md": "ea26d34b1f0e0a6ecde021a07b892901579c293e8e582b02d4c4061d0e33440a",
   "subtask_plan.md": "854f8e12798251841c35492667ac0819049989b637988daa882aecdd820b6c6a",
-  "plan_data_kinds.md": "21cfd7719a750023cb3e76072cbe905f35b0d295952dc0bc215089a4be35b773"
+  "plan_data_kinds.md": "21cfd7719a750023cb3e76072cbe905f35b0d295952dc0bc215089a4be35b773",
+  "plan_ledger.md": "de5e35965c1398d4038cbfd172f7cc30ef06a689c538a229ccabf2abb339a04d",
+  "plan_feature.md": "3d675e47f0594fc829f98e627409c1ab20888d0eb3320ad29923a17fe5867b83",
+  "gate3_ledger.md": "70b0dfc0c0783af0ef74e93134c42ca2967961dd5b2cf299498292b8113316fb"
 }

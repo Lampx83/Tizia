@@ -24,7 +24,7 @@ from services import edit_shape, file_context  # noqa: E402
 import tools  # noqa: E402
 from repositories import code_index
 import path_policy
-from gates import change_class
+from gates import change_class, decision_ledger
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 from services import token_count
@@ -35,6 +35,7 @@ ERROR_CHARS = _LOOP["error_chars"]
 PAGE_HINT_TOKENS = 60  # room kept in a read_file page for the continue hint
 IMPLEMENTED = {"tree", "outline", "grep", "read_file", "read_skill_resource", "edit_file", "write_test", "run_check", "request_package", "fetch_url", "finish"}
 MANIFEST = tool_manifest.load(known=IMPLEMENTED)
+LEDGER_READS = ("tree", "outline", "grep", "read_file")
 REPO_TOOLS = tuple(name for name in ("tree", "outline", "grep") if name in MANIFEST.tools)
 WRITE_TOOLS = MANIFEST.names("draft_write")
 # Tool ghi chỉ chạm bản nháp trong bộ nhớ; file thật chỉ được ghi ở cổng 3 sau khi loop đề xuất xong.
@@ -319,13 +320,18 @@ def validate(name: str, args: dict) -> None:
     """Kiểm tham số theo JSON Schema thu gọn (kiểu string/array + required). Raise ToolError."""
     spec = _specs()[name]
     schema = spec.parameters
-    if len(json.dumps(args, ensure_ascii=False).encode("utf-8")) > spec.max_arg_bytes:
-        raise ToolError(f"{name}: tham số vượt trần {spec.max_arg_bytes} byte")
+    cap = decision_ledger.MAX_ARG_BYTES if name == "finish" and "decisions" in args and decision_ledger.enabled() else spec.max_arg_bytes
+    if len(json.dumps(args, ensure_ascii=False).encode("utf-8")) > cap:
+        raise ToolError(f"{name}: tham số vượt trần {cap} byte")
     for key in schema["required"]:
         if key not in args:
             raise ToolError(f"{name}: thiếu `{key}`")
     for key, value in args.items():
         spec = schema["properties"].get(key)
+        if spec is None and name == "finish" and key == "decisions" and decision_ledger.enabled():
+            if not isinstance(value, list) or not all(isinstance(v, dict) for v in value):
+                raise ToolError("finish.decisions phải là mảng object")
+            continue
         if spec is None:
             raise ToolError(f"{name}: tham số lạ `{key}`")
         if spec["type"] == "string" and not isinstance(value, str):
@@ -962,6 +968,8 @@ def _resume(store, ws: Workspace, budget, pins: dict, prompt: str, check, histor
                 return prompt, steps, False, _result("blocked", f"replay finish lệch: {error}", "critical", steps=steps)
         elif kind == "finish_ok":
             observation = "đề xuất đã gửi sang cổng kiểm tra"
+        if getattr(ws, "step_log", None) is not None and name in LEDGER_READS and kind == "ok":
+            ws.step_log.add(n, name, args, observation)
         steps.append(name)
         rejected = kind == "finish_rejected"
         cid = row.get("call_id") or (mint(n) if mint else None)
@@ -1110,6 +1118,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     except server_hsm.AuthorityError as error:
         return _result('blocked', str(error), error.failure_class)
     paths = subtask_files.files_of(subtask)
+    ledger_log = decision_ledger.StepLog() if decision_ledger.enabled() else None
     for path in paths:
         if reason := MANIFEST.policy.write_reason(path):
             return _result("blocked", reason, "critical")
@@ -1127,6 +1136,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                    outside_role=requester_role if get_settings().out_of_plan_files and not subtask_files.declared(subtask) else None,
                    constants=constants_of(*(request_text if isinstance(request_text, tuple) else (request_text,)))
                    if get_settings().literal_by_reference else None)
+    ws.step_log = ledger_log
     if drafts:  # earlier round's files are the starting drafts; freshness still checks against base
         ws.content = drafts["files"].get(subtask["file"], ws.content)
         ws.extra_content.update({path: text for path, text in drafts["files"].items() if path in ws.extra_content})
@@ -1149,6 +1159,9 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         pins = {**(pins or {}), "constants": sha_of(json.dumps(ws.constants, ensure_ascii=False, sort_keys=True))}
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
+    if ledger_log is not None:
+        prompt += "\n" + decision_ledger.GATE3_PROMPT
+        pins = {**(pins or {}), "ledger": "on"}
     feedback, prior = None, None
     if repair_reason and store and session_from and repair_session.enabled():
         prior = _prior_rows(session_from, _pins(subtask, sha, ws, pins))
@@ -1307,6 +1320,9 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
             failure = _observed_error(name, observation)
             if failure:
                 kind = KIND_INFRA
+            elif ledger_log is not None and name in LEDGER_READS:
+                observation = f"[step {n}]\n{observation}"
+                ledger_log.add(n, name, args, observation)
         except NetworkPause:
             text = f"waiting for admin: {name}"
             if store:
@@ -1371,12 +1387,16 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         if name == "finish":
             try:
                 out = ws.proposal()
+                decisions = (decision_ledger.finish_ledger(args, ledger_log, [p for p, base in {subtask["file"]: current, **extras}.items() if base is None],
+                                                           lambda path: tools._show(source, sha, path) is not None)
+                             if ledger_log is not None else [])
                 check(out)
                 if store:
                     store.done(n, name, args, json.dumps(out.get('verification') or {}, sort_keys=True), "finish_ok", cid)
                     store.save_ledger(budget.snapshot())
                 _tool_span(deps, name, n, child, "finish_ok", "", started_ms, cid, model_call, thought=thought)
-                return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}))
+                return _result("proposed", out=out, steps=steps + [name], **({"stale_reset": ws.stale_reset} if ws.stale_reset else {}),
+                               **({"ledger": decisions} if decisions else {}))
             except BudgetExhausted as error:
                 return _result("paused", str(error), "budget", steps=steps)
             except sandbox_tool.VMUnavailable as error:

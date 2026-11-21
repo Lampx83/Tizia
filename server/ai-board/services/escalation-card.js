@@ -1,6 +1,7 @@
 // Thẻ quyết định thống nhất cho admin: Hành động · Vì sao hỏi · Bằng chứng · Rủi ro · Lựa chọn.
 // Thuần, tất định: chỉ dựng từ dữ liệu server đã lưu, không gọi model, không quyết định gì.
 import { isSelfScope, levelRank } from '../elevation-context.js';
+import { ledgerRows } from '../ledger.js';
 
 export const OPTION_LABEL = { approve: 'duyệt', reject: 'từ chối', edit: 'sửa rồi duyệt' };
 const LEVEL_LABEL = { surface: 'bề mặt', protected: 'bảo vệ', core: 'lõi' };
@@ -13,7 +14,7 @@ const clip = (value, cap = QUOTE) => {
   return text.length > cap ? `${text.slice(0, cap - 1)}…` : text;
 };
 const option = (key, available, note = '', act = null) => ({ key, label: OPTION_LABEL[key], available: !!available, note, ...(act ? { act } : {}) });
-const evidence = (items) => items.filter((item) => item && item.quote).slice(0, MAX_EVIDENCE)
+const evidence = (items, max = MAX_EVIDENCE) => items.filter((item) => item && item.quote).slice(0, max)
   .map((item) => ({ source: clip(item.source, 160), quote: clip(item.quote) }));
 const maxRisk = (...levels) => levels.reduce((top, level) => (RISK_RANK[level] > RISK_RANK[top] ? level : top), 'low');
 
@@ -41,7 +42,7 @@ export function scopeRisk(scope) {
 }
 
 /** Context duyệt elevation (buildElevationContext) → thẻ. `grounding` = plan.grounding.evidence nếu có. */
-export function elevationCard(context, { grounding = [] } = {}) {
+export function elevationCard(context, { grounding = [], ledger = [] } = {}) {
   const scope = context?.elevation?.scope ?? [];
   const flags = context?.flags ?? {};
   const plan = context?.plan ?? {};
@@ -63,10 +64,12 @@ export function elevationCard(context, { grounding = [] } = {}) {
     context?.elevation?.reason ? `Lý do worker: ${clip(context.elevation.reason, 300)}` : '',
   ].filter(Boolean).join('\n');
   const ev = context?.evidence ?? {};
+  const decided = ledgerRows(ledger).slice(0, 6);
   const items = evidence([
     { source: `Yêu cầu #${context?.request?.id ?? '?'}`, quote: [context?.request?.title, context?.request?.excerpt].filter(Boolean).join(' — ') },
     ...(Array.isArray(grounding) ? grounding : []).map((g) => ({
       source: `${g.file}${g.line ? `:${g.line}` : ''}`, quote: g.quote || g.before || '' })),
+    ...decided,
     ...scope.map((row) => ({ source: `scope ${row.path}`, quote: [
       row.named_in_request ? 'có trong yêu cầu' : row.in_plan ? 'chỉ có trong kế hoạch' : 'không có trong yêu cầu/kế hoạch',
       row.plan_step ? `bước ${row.plan_step.order} ${row.plan_step.title}` : '',
@@ -75,7 +78,7 @@ export function elevationCard(context, { grounding = [] } = {}) {
       ev.revision_request != null ? `revision ${ev.revision_request}` : '',
       ev.plan_hash_current && ev.plan_hash_current !== ev.plan_hash_request ? `hiện tại ${String(ev.plan_hash_current).slice(0, 12)}` : '']
       .filter(Boolean).join(' · ') },
-  ]);
+  ], MAX_EVIDENCE + decided.length);
   const risk = scopeRisk(scope);
   if (flags.outside_request || flags.scope_changed_since_request) risk.level = maxRisk(risk.level, 'medium');
   const narrowable = scope.length > 1 || scope.some((row) => levelRank(row.level) > levelRank('protected'));

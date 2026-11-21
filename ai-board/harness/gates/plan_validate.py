@@ -54,7 +54,7 @@ from services import context
 from services import file_context
 import path_policy
 from repositories.dbconn import harness_db
-from gates import acceptance_structure, best_match, evidence, grounding_paths, subtask_contract
+from gates import acceptance_structure, best_match, decision_ledger, evidence, grounding_paths, subtask_contract
 from repositories import repo_at_commit
 from runtime import coverage, levels, limits, model_json, subtask_files
 from services import target_confidence
@@ -1081,6 +1081,9 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         state["assumption"] = validation["question"] or validation.get("reason") or "yêu cầu chưa nêu rõ"
         judge("clarify limit", True, state["assumption"])
         validation = {**validation, "clear": True}
+    if validation["clear"] and (asked := decision_ledger.ambiguity_question(state.get("ledger"), request, clarify_limit())):
+        judge("ledger ambiguity", False, asked)
+        validation = {**validation, "clear": False, "question": asked}
     if not validation["clear"]:
         question = validation["question"] or "Plan chưa đủ rõ — bạn mô tả thêm chi tiết được không?"
         if db_path is not None:
@@ -1125,9 +1128,14 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                     raise ValueError(refusal)
                 observe(state, judge, 'plan_ungrounded', refusal)
 
-            if refusal := best_match.new_page_refusal(request, added - set(_named_new_files(plan, files, request)), source, sha):
+            decided_new = added & decision_ledger.decided(state.get('ledger'), 'new_file')
+            if decided_new:
+                note = f"plan thêm file mới {', '.join(sorted(decided_new))} dù yêu cầu sửa giao diện có sẵn; model nêu bằng chứng trong sổ"
+                state['ledger_overrides'] = list(dict.fromkeys([*(state.get('ledger_overrides') or []), note]))
+                judge('ledger', True, note)
+            if refusal := best_match.new_page_refusal(request, added - set(_named_new_files(plan, files, request)) - decided_new, source, sha):
                 refuse(refusal)
-            if refusal := best_match.old_literal_refusal(request, targets, source, sha):
+            if refusal := best_match.old_literal_refusal(request, targets, source, sha, decision_ledger.decided(state.get('ledger'), 'skip_alternative')):
                 refuse(refusal)
             planned = [files.get(task['file'], '') for task in plan['subtasks']]
             # trace only: an insert request quotes new text, which may already sit in another file
@@ -1137,7 +1145,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             contradicted = literal_contradicts(request, state.get('best_match'), files, source, sha)
             if anchored and not contradicted:
                 judge('best_match', True, 'targetpresent: anchors verified in plan files; advisory skipped')
-            elif added and best_match.feature(request):
+            elif state.get('best_match') in decision_ledger.decided(state.get('ledger'), 'skip_alternative'):
+                note = f"plan không sửa {state.get('best_match')}, file khớp nhiều cụm người dùng viết nhất; model nêu bằng chứng trong sổ"
+                state['ledger_overrides'] = list(dict.fromkeys([*(state.get('ledger_overrides') or []), note]))
+                judge('ledger', True, note)
+            elif added and (best_match.feature(request) or best_match.unanchored_feature(request, added, source, sha)):
                 # A feature adds files that do not exist yet: there is no "most quoted file" to edit, so the
                 # best-match is only recorded (the path/layer rules and grounding still apply). An edit request
                 # that points at a file which does not exist still has to name the best-matching file.

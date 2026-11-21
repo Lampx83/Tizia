@@ -749,6 +749,8 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
         if looped.get("stale_reset") and trace:
             trace.note("tool", "stale checkpoint", f"an upstream artifact changed ({', '.join(looped['stale_reset'])}); this subtask was checked again from scratch")
         receipts.extend(looped.get("sandbox_receipts", []))
+        if looped.get("ledger"):
+            state.setdefault("ledger_gate3", {})[subtask["file"]] = looped["ledger"]
         if looped["status"] != "proposed":
             return None, {"gate": 3, "blocked": True, "failure_class": looped["failure_class"],
                           "reason": f"subtask '{subtask.get('title')}': {looped['reason']}",
