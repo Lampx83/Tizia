@@ -126,3 +126,12 @@ test('clipped item disables approve, shows the notice, keeps reject with a reaso
   assert.doesNotMatch(html, /data-action="db-reject"[^>]* disabled/);
   assert.doesNotMatch(renderDbApproval({ ...item, clipped: false }, {}), /data-clipped|data-action="db-approve"[^>]* disabled/);
 });
+
+test('privileged imports are listed escaped under a highlighted title, omitted when empty', () => {
+  const item = { id: 5, request_id: 6, kind: 'backend', diff: 'd', sandbox: {}, privileged_imports: ['server/contexts/t/q.js: ../../db.js -> server/db.js', '<b>x</b>'] };
+  const html = renderDbApproval(item, {});
+  assert.match(html, /data-imports[\s\S]*Import đặc quyền \(db\.js, context khác\)[\s\S]*<code>server\/contexts\/t\/q\.js: \.\.\/\.\.\/db\.js -&gt; server\/db\.js<\/code>/);
+  assert.match(html, /&lt;b&gt;x&lt;\/b&gt;/);
+  assert.doesNotMatch(renderDbApproval({ ...item, privileged_imports: [] }, {}), /data-imports/);
+  assert.doesNotMatch(renderDbApproval({ ...item, privileged_imports: undefined }, {}), /data-imports/);
+});
