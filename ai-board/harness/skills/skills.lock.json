@@ -1,5 +1,5 @@
 {
-  "add-html-section": "dd0196108ae1fbe061c46ace906ce059dea70b622e33076db4ab095cfdda7796",
+  "add-html-section": "9e20680d95a9fe29e96bdc2e6b4dc27bb602f831463745ec72057836e4babb0e",
   "default": "9788aca2b512186b38c23af8e6f76343e6ed943d613727959ca31c4b9d33db89",
   "default-all": "75d5c52f79a7eaa87f579cbb7bc0b06312a019c8c4e7b436d81b99b506d86dc3",
   "default-backend": "a1d3f651669bcd0edb4fc369419da75bfe3ac0a05742dec7c561036427e6eb9c",
@@ -10,8 +10,8 @@
   "default-security-audit": "d9eee7b910796f7e5e1e2fea0d88c683714aa5024c6e112f40446fd3c284c88e",
   "default-skill-authoring": "3b22b89cdb5db20b7198af7b9dfa8518319163b07604942afbed5a90db908962",
   "default-test": "dbfcdf782d0b5bf7a95f15c375b844c419a4c0efa5ba8c5880536c04033620e8",
-  "edit-css-style": "0850b227ed55fabc2da435216d640724cfe93f41f889380467c294647e689021",
-  "edit-html-text": "cb1c9e2070112ee0dbcd3ce6d290ad6f813c3b9ba8f7310f0fa8963c0fc3134f",
+  "edit-css-style": "634ef7521755dcc6fb02d1352906a714ba684382b4326f2edf643672ebfe73d5",
+  "edit-html-text": "6e886146c8d49ca44579e545d961da4a07345f2030b55ee813a7192aebbadb69",
   "fix-js-behavior": "26296249323ec68be676ca9034e81cf8a27209dee3ff32a6fb3a163bf2f6784c",
   "frontend-design-core": "fd45b6273f6a15bc2a9ade342f670e8f9e9a9dad0bf964fffdb1cfcae3ee7f95",
   "implement-one-slice": "e7d3dd647ab264d79f6ffbf36eeae1cec5b6ecb6cc1629ad76bb541e51c90590",
