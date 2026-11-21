@@ -754,3 +754,38 @@ def test_a_three_subtask_plan_behaves_exactly_as_today():
 
     assert out["blocked"] is False
     assert models.calls
+
+
+class _BadThenGood(FakeModels):
+    def generate(self, model, prompt, **kw):
+        out = super().generate(model, prompt, **kw)
+        if "PLAN TO CHECK" in prompt and not any("PLAN TO CHECK" in c["prompt"] for c in self.calls[:-1]):
+            out["response"] = '{"clear": true "question": null}'
+        return out
+
+
+def _run_validator(models):
+    return plan_validate.run({"id": "x", "domain": "pharmacy"}, deps_with(models), Budget(max_wall_clock_s=999),
+                             {"plan": plan_with(["features"])})
+
+
+def test_validator_reask_off_blocks_on_first_bad_reply(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_VALIDATOR_REASK", raising=False)
+    models = _BadThenGood(plan_with(["features"]))
+    assert "sai schema" in _run_validator(models)["reason"]
+    assert sum("PLAN TO CHECK" in c["prompt"] for c in models.calls) == 1
+
+
+def test_validator_reask_names_parse_error_and_recovers(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VALIDATOR_REASK", "1")
+    models = _BadThenGood(plan_with(["features"]))
+    out = _run_validator(models)
+    asks = [c["prompt"] for c in models.calls if "PLAN TO CHECK" in c["prompt"]]
+    assert len(asks) == 2 and "Expecting ',' delimiter" in asks[1] and "sai schema" not in str(out.get("reason"))
+
+
+def test_validator_reask_is_single(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_VALIDATOR_REASK", "1")
+    models = FakeModels(plan_with(["features"]), validation="khong phai JSON hop le")
+    assert "sai schema" in _run_validator(models)["reason"]
+    assert sum("PLAN TO CHECK" in c["prompt"] for c in models.calls) == 2

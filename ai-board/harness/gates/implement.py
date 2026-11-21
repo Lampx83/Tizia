@@ -406,7 +406,8 @@ def _check_rest(out: dict, current: str | None, file: str | None) -> None:
             from gates import static_check
             if static_check.syntax_error(current) is None and (broken := static_check.syntax_error(out["code"])):
                 raise ValueError(f"cú pháp JS lỗi sau khi áp edit: {broken[-600:]}\n"
-                                 f"Các dòng edit của bạn tạo ra (số dòng thật):\n{_produced_lines(current, out['code'])}")
+                                 f"Các dòng edit của bạn tạo ra (số dòng thật):\n{_produced_lines(current, out['code'])}"
+                                 + _block_note(current, out["code"]))
         if "</body>" in current and out["code"].rsplit("</body>", 1)[-1] != current.rsplit("</body>", 1)[-1]:
             line = current[:current.rindex("</body>")].count("\n") + 1
             raise ValueError(f"nội dung bị chèn sau </body> (dòng L{line}); chèn trước nó: after_line {line - 1}")
@@ -526,6 +527,33 @@ def restore(state: dict, repo_dir: str | Path | None = None) -> None:
         raise ValueError(f"gate 3 chua xong: {len(diffs)}/{len(subtasks)} child co diff")
     state["diffs"] = diffs
     state["scratch_repo"] = str(repo)
+
+
+_TOP_LEVEL = re.compile(r"\s*(export|import)\b")
+_STRING_OR_COMMENT = re.compile(r"""//.*|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`""")
+
+
+def _block_note(old: str, new: str) -> str:
+    """Flag on: name block enclosing first produced line (naive bracket count), say top-level declarations go outside it; "" otherwise."""
+    if not get_settings().syntax_block_context:
+        return ""
+    ops = difflib.SequenceMatcher(None, old.splitlines(), new.splitlines(), autojunk=False).get_opcodes()
+    first = next((j1 for tag, _i1, _i2, j1, _j2 in ops if tag in ("replace", "insert")), None)
+    if first is None:
+        return ""
+    lines, stack = new.splitlines(), []
+    for number, line in enumerate(lines[:first], 1):
+        for char in _STRING_OR_COMMENT.sub("", line):
+            if char in "{[(":
+                stack.append(number)
+            elif char in ")]}" and stack:
+                stack.pop()
+    if not stack:
+        return ""
+    note = f"\nDòng L{first + 1} nằm trong khối bắt đầu ở L{stack[-1]}| {lines[stack[-1] - 1].strip()[:120]}"
+    if _TOP_LEVEL.match(lines[first]):
+        note += "\nKhai báo top-level (export/import) phải nằm NGOÀI mọi khối/mảng/object hiện có: chèn sau dòng đóng khối, không chèn vào giữa."
+    return note
 
 
 def _produced_lines(old: str, new: str, limit: int = 12) -> str:
