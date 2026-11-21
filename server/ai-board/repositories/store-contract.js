@@ -315,6 +315,7 @@ function cleanDbChange(value) {
       .filter((m) => m && typeof m.path === 'string' && typeof m.sql === 'string')
       .map((m) => ({ path: m.path.slice(0, 300), sql: m.sql.slice(0, DB_SQL_CAP) })),
     files: names(value.files).map((file) => file.slice(0, 300)),
+    attention: names(value.attention),
     sandbox: {
       status: String(sandbox.status ?? '').slice(0, 40) || null,
       schema_diff: diff && { added_tables: names(diff.added_tables), removed_tables: names(diff.removed_tables),
@@ -326,6 +327,13 @@ function cleanDbChange(value) {
       error: sandbox.error == null ? null : String(sandbox.error).slice(0, 500),
     },
   };
+}
+
+/** Non-public files of a passing candidate and their diff text, for the admin approval card. */
+function cleanBackendChange(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.files)) return null;
+  return { files: value.files.slice(0, 200).map((file) => String(file).slice(0, 300)),
+    diff: String(value.diff ?? '').slice(0, DB_SQL_CAP) };
 }
 
 /** revisedChecks: the accepted plan replaced a suspect check, so the run is for a human only. */
@@ -457,6 +465,7 @@ function validatePrePrVerdict(value, selfRequest = false, revisedChecks = false)
     candidate, gates,
     ...(blockedCandidate ? { blocked_candidate: blockedCandidate } : {}),
     ...(passing && cleanDbChange(value.db_change) ? { db_change: cleanDbChange(value.db_change) } : {}),
+    ...(passing && cleanBackendChange(value.backend_change) ? { backend_change: cleanBackendChange(value.backend_change) } : {}),
     ...(cleanNetworkReport(value.network_requests) ? { network_requests: cleanNetworkReport(value.network_requests) } : {}),
     config_sha256: /^[0-9a-f]{64}$/.test(value.config_sha256) ? value.config_sha256 : null,
     ...(typeof value.loop_guard?.reason === 'string' ? { loop_guard: { reason: value.loop_guard.reason.slice(0, 40), node: String(value.loop_guard.node ?? '').slice(0, 40),

@@ -24,6 +24,8 @@ REFUSED_ALL = ["server/index.js", "server/db.js", "server/db/pool.js", "server/c
                "server/ai-board/guard-lexicon.json", "ai-board/harness/gates/x.py", "Dockerfile", "docker-compose.yml",
                ".env", ".env.production", ".github/workflows/ci.yml"]
 REFUSED_REQUESTER = ["server/contexts/admin/db-admin.js", "server/contexts/ai-board-intake/index.js",
+                     "server/contexts/integration/x.js", "server/contexts/engagement/league.js",
+                     "server/contexts/feature-gate/index.js", "server/contexts/safety/profanity-vi.js",
                      "server/contexts/_shared/x.js", "server/contexts/registry.js", "public/js/ai-board-chat.js",
                      "public/admin-request.html", "package.json", "package-lock.json"]
 
@@ -31,6 +33,7 @@ REFUSED_REQUESTER = ["server/contexts/admin/db-admin.js", "server/contexts/ai-bo
 @pytest.fixture
 def flag(monkeypatch):
     monkeypatch.setenv(FLAG, "1")
+    monkeypatch.setenv("AI_BOARD_DB_CHECK", "1")
 
 
 def _new_file(path: str, body: str) -> str:
@@ -184,10 +187,52 @@ def test_sandbox_result_decides_hold_block_or_transient(flag, monkeypatch):
         assert (out["status"], out["db_change"]) == (kind, None), status
 
 
-def test_sandbox_disabled_by_default_blocks_as_transient(flag, monkeypatch):
+def test_flag_is_inert_without_db_check(flag, monkeypatch):
     monkeypatch.delenv("AI_BOARD_DB_CHECK", raising=False)
-    out = db_approval.evaluate([{"diff": DB_DIFF}])
-    assert out["status"] == "transient" and "disabled" in out["reason"]
+    assert path_policy.fullstack_on() is False
+    assert path_policy.may_edit(CONTEXT, "student") is False
+    assert path_policy.context_migration(MIGRATION) is False
+
+
+def test_dollar_inside_an_identifier_does_not_hide_a_statement(flag):
+    sql = "CREATE TABLE IF NOT EXISTS t$x$ (a int); DROP TABLE IF EXISTS users; CREATE TABLE IF NOT EXISTS u$x$ (b int);"
+    assert any("DROP TABLE" in p for p in db_approval.review([{"diff": _new_file(MIGRATION, sql)}])["problems"])
+    body = "CREATE TABLE IF NOT EXISTS t (a text DEFAULT $$x;y$$);"
+    assert db_approval.review([{"diff": _new_file(MIGRATION, body)}])["problems"] == []
+
+
+def test_insert_takes_literal_rows_only(flag):
+    ok = "INSERT INTO ghi_chu_nhanh (id, noi_dung) VALUES (1, 'a;b'), (2, NULL) ON CONFLICT (id) DO NOTHING;"
+    assert db_approval.review([{"diff": _new_file(MIGRATION, ok)}])["problems"] == []
+    for sql in ("INSERT INTO t SELECT pg_terminate_backend(pid) FROM pg_stat_activity ON CONFLICT DO NOTHING;",
+                "INSERT INTO t (a) VALUES (now()) ON CONFLICT DO NOTHING;",
+                "INSERT INTO t (a) VALUES ((SELECT 1)) ON CONFLICT DO NOTHING;"):
+        assert any("VALUES hằng" in p for p in db_approval.review([{"diff": _new_file(MIGRATION, sql)}])["problems"]), sql
+
+
+def test_identity_and_money_tables_need_explicit_attention(flag):
+    sql = ("INSERT INTO users (email, role) VALUES ('x', 'admin') ON CONFLICT DO NOTHING;\n"
+           "CREATE TABLE IF NOT EXISTS user_roles (id int);\nCREATE TABLE IF NOT EXISTS ghi_chu_nhanh (id int);")
+    assert db_approval.review([{"diff": _new_file(MIGRATION, sql)}])["attention"] == ["user_roles", "users"]
+
+
+def test_test_pattern_paths_under_server_are_not_exempt(flag):
+    for path in ("server/contexts/teacher/tests/a.test.js", "server/contexts/teacher/__tests__/a.js",
+                 "server/contexts/teacher/a.spec.js"):
+        inline = _new_file(path, "await db.exec('DROP TABLE users');")
+        assert any("DDL viết trong code" in p for p in db_approval.review([{"diff": inline}])["problems"]), path
+        assert db_approval.backend_change([{"diff": inline}])["files"] == [path]
+
+
+def test_push_hold_kinds(flag):
+    fe = _new_file("public/a.html", "<p>x</p>") + _new_file("test/a.test.js", "import 'node:test';")
+    assert db_approval.push_hold([{"diff": fe}], "student") is None
+    assert db_approval.push_hold([{"diff": FE_BE_DIFF}], "student") == "backend"
+    assert db_approval.push_hold([{"diff": FE_BE_DIFF}], "admin") is None
+    assert db_approval.push_hold([{"diff": DB_DIFF}], "student") == "both"
+    assert db_approval.push_hold([{"diff": DB_DIFF}], "admin") == "db"
+    change = db_approval.backend_change([{"diff": FE_BE_DIFF}])
+    assert change["files"] == ["server/contexts/teacher/index.js", CONTEXT] and "attachQuickNotes" in change["diff"]
 
 
 # ── execution: gates 3→5.5 with fake models ──
@@ -231,6 +276,7 @@ def test_requester_fe_be_candidate_reaches_ready_for_pr(flag, tmp_path):
     out, kept = _execute(tmp_path, FE_BE_DIFF)
     assert out["outcome"] == "ready_for_pr" and out["candidate"]["head_sha"] == "b" * 40
     assert "db_change" not in out and kept == [True]
+    assert out["backend_change"]["files"] == ["server/contexts/teacher/index.js", CONTEXT]
 
 
 def test_db_candidate_is_kept_with_its_sandbox_report(flag, tmp_path, monkeypatch):
@@ -282,10 +328,39 @@ def _calls(transport):
     return [call[1].rsplit("/", 1)[-1] for call in transport.calls]
 
 
-def test_worker_opens_the_pr_for_a_fe_be_candidate(flag):
-    transport, candidates = FakeTransport(), DiffCandidates(FE_BE_DIFF)
+FE_DIFF = _new_file("public/ghi-chu-nhanh.html", "<ul></ul>") + _new_file("test/ghi-chu.test.js", "import 'node:test';")
+
+
+class Admin(FakeTransport):
+    def __call__(self, method, path, payload, headers):
+        out = super().__call__(method, path, payload, headers)
+        return {**out, "requester_role": "admin"} if path.endswith("/snapshot") else out
+
+
+def test_worker_opens_the_pr_for_a_frontend_only_candidate(flag):
+    transport, candidates = FakeTransport(), DiffCandidates(FE_DIFF)
     _publishing_worker(transport, candidates).run_once()
     assert len(candidates.published) == 1 and "pull-request" in _calls(transport)
+
+
+def test_admin_backend_candidate_is_pushed_as_before(flag):
+    transport, candidates = Admin(), DiffCandidates(FE_BE_DIFF)
+    _publishing_worker(transport, candidates).run_once()
+    assert len(candidates.published) == 1
+
+
+def test_requester_backend_diff_is_never_pushed_without_approval(flag):
+    transport, candidates = FakeTransport(), DiffCandidates(FE_BE_DIFF)
+    _publishing_worker(transport, candidates).run_once()
+    assert candidates.published == []
+    assert "(backend)" in transport.calls[-1][2]["internal_detail"]
+
+
+def test_flag_off_requester_backend_diff_is_pushed_as_before(monkeypatch):
+    monkeypatch.delenv(FLAG, raising=False)
+    transport, candidates = FakeTransport(), DiffCandidates(FE_BE_DIFF)
+    _publishing_worker(transport, candidates).run_once()
+    assert len(candidates.published) == 1
 
 
 def test_worker_never_pushes_a_held_db_candidate(flag):
@@ -296,7 +371,7 @@ def test_worker_never_pushes_a_held_db_candidate(flag):
 
 
 def test_server_hold_marker_alone_stops_the_push(flag):
-    transport, candidates = FakeTransport(), DiffCandidates(FE_BE_DIFF)
+    transport, candidates = Admin(), DiffCandidates(FE_DIFF)
     _publishing_worker(transport, candidates, {**PASSING, "db_hold": True}).run_once()
     assert candidates.published == [] and "pull-request" not in _calls(transport)
 

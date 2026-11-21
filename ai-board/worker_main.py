@@ -232,7 +232,8 @@ class HttpWorker:
         return None
 
     def _db_refusal(self, snapshot: dict, cand: dict) -> str | None:
-        """Flag on: the pushed diff has a DB change and the snapshot holds no admin approval for this exact head → reason."""
+        """Flag on: the real diff needs admin approval (DB change, or a non-admin change outside public/) and the snapshot
+        holds none for this exact head → reason."""
         import path_policy
         if not path_policy.fullstack_on():
             return None
@@ -244,11 +245,10 @@ class HttpWorker:
             text = diff(cand)
         except OSError as error:
             return f"db_approval_required: candidate diff failed: {str(error)[:200]}"
-        if db_approval.review([{"diff": text}]) is None:
+        kind = db_approval.push_hold([{"diff": text}], snapshot.get("requester_role") or "student")
+        if kind is None or (snapshot.get("db_publish") or {}).get("head_sha") == cand.get("head_sha"):
             return None
-        if (snapshot.get("db_publish") or {}).get("head_sha") == cand.get("head_sha"):
-            return None
-        return f"db_approval_required: {cand.get('head_sha')} has a DB change without admin approval"
+        return f"db_approval_required: {cand.get('head_sha')} needs admin approval ({kind}) before any push"
 
     def _publish(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
         """Admin approved the DB change: push the held candidate and open its PR, then report it. Failure waits for the admin."""
@@ -611,6 +611,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--execute requires --mode active")
     if args.mode == "active" and not args.execute:
         parser.error("--mode active requires --execute")
+    if get_settings().requester_fullstack_db and not get_settings().db_check:
+        print("[worker] AI_BOARD_REQUESTER_FULLSTACK_DB bật nhưng AI_BOARD_DB_CHECK tắt: cờ không có hiệu lực")
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")

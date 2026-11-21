@@ -28,7 +28,8 @@ const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
 // Read once at load: the catalog hash pins accepted plans, so the flag changes only with a restart.
 export const REQUESTER_FULLSTACK = getSettings().requesterFullstackDb;
 export const FULLSTACK_CAPABILITY = 'context.write';
-const REFUSED_CONTEXTS = ['billing', 'payment', 'economy', 'security', 'identity', 'auth', 'session', 'admin']
+const REFUSED_CONTEXTS = ['billing', 'payment', 'economy', 'security', 'identity', 'auth', 'session', 'admin',
+  'integration', 'engagement', 'feature-gate', 'safety']
   .map((name) => `server/contexts/${name}/`);
 const FULLSTACK_POLICY = REQUESTER_FULLSTACK ? {
   [FULLSTACK_CAPABILITY]: capability('surface', ['server/contexts/'],

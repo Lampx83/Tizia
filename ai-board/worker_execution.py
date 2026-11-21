@@ -241,6 +241,7 @@ class _Execution:
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
         self.blocked_candidate: dict | None = None
         self.db_change: dict | None = None
+        self.backend_change: dict | None = None
         self.attempt_checkpoint = None
         self.open = self.lease_lost = False
         self.result: dict | None = None
@@ -572,7 +573,7 @@ class _Execution:
                     self.preview_capture(state, private_candidate)
                 except Exception:
                     pass  # optional artifact must never change verdict or prevent cleanup
-        self.db_change = None
+        self.db_change = self.backend_change = None
         if _passed(self.gates, self.kind) and not lease_lost and path_policy.fullstack_on():
             self._db_gate(state)
         self.candidate = candidates.record(state) if _passed(self.gates, self.kind) and not lease_lost else None
@@ -592,6 +593,7 @@ class _Execution:
     def _db_gate(self, state: dict) -> None:
         """DB change in the passing attempt: non-additive or failed sandbox run blocks the last gate; passed is held for the admin."""
         from services import db_approval
+        self.backend_change = db_approval.backend_change(state.get("full_diff") or [])
         try:
             outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
         except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup
@@ -1019,6 +1021,7 @@ class _Execution:
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
             **({"check_revision": revised} if revised else {}),
             **({"db_change": self.db_change} if passed and self.db_change else {}),
+            **({"backend_change": self.backend_change} if passed and self.backend_change else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

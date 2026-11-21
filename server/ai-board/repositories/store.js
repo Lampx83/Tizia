@@ -1285,6 +1285,7 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: await latestCandidate(ticket.id) } : {}),
       ...(ticket.phase === 'reverifying' ? { reverify_candidate: await latestCandidate(ticket.id) } : {}),
       ...(ticket.phase === 'publishing' ? { db_publish: await dbPublishHandoff(ticket) } : {}),
+      requester_role: (await db.get('SELECT role FROM users WHERE id=?', [request.owner_user_id]))?.role ?? null,
       // Folder: worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3.
       folder: await withBrief(await db.get(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
         FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`, [ticket.source_request_id])),
@@ -1872,11 +1873,23 @@ function resumeSummary(journal) {
     }
     if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
     // Fail closed: a worker DB marker always holds; inferring one from .sql files is the flag's extra layer.
-    const sqlFiles = [...new Set((verdict.candidate?.commits || []).flatMap((c) => c.files || []).filter((f) => /\.sql$/i.test(f)))];
-    if (verdict.outcome !== 'blocked' && (verdict.db_change || (getSettings().requesterFullstackDb && sqlFiles.length))) {
+    const changed = [...new Set((verdict.candidate?.commits || []).flatMap((c) => c.files || []))];
+    const sqlFiles = changed.filter((f) => /\.sql$/i.test(f));
+    const fullstack = getSettings().requesterFullstackDb;
+    const ownerRole = (await db.get('SELECT u.role FROM requests r LEFT JOIN users u ON u.id=r.owner_user_id WHERE r.id=?',
+      [root.source_request_id]))?.role;
+    // Non-admin change outside public/ (and top-level tests): held like a DB change; admins and FE-only go straight on.
+    const backendFiles = changed.filter((f) => !/^(public|tests?)\//.test(f));
+    const holdKinds = verdict.outcome === 'blocked' ? [] : [
+      ...(verdict.db_change || (fullstack && sqlFiles.length) ? ['db'] : []),
+      ...(fullstack && ownerRole !== 'admin' && backendFiles.length ? ['backend'] : []),
+    ];
+    if (holdKinds.length) {
       verdict.db_hold = true;
-      verdict.db_change ??= { migrations: [], files: sqlFiles,
+      verdict.hold_kinds = holdKinds;
+      if (holdKinds.includes('db')) verdict.db_change ??= { migrations: [], files: sqlFiles, attention: [],
         sandbox: { status: null, schema_diff: null, checks: [], tests: [], error: 'worker sent no DB report' } };
+      if (holdKinds.includes('backend')) verdict.backend_change ??= { files: backendFiles, diff: '' };
     }
     const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
     const runEvidence = parseJson(run.evidence_json) ?? {};
@@ -1982,7 +1995,9 @@ function resumeSummary(journal) {
     if (verdict.db_hold) {
       status = 'waiting_admin';
       phase = 'awaiting_db_approval';
-      note = 'Thay đổi có sửa cơ sở dữ liệu; chờ quản trị viên duyệt trước khi đưa lên dev.';
+      note = verdict.hold_kinds?.includes('db')
+        ? 'Thay đổi có sửa cơ sở dữ liệu; chờ quản trị viên duyệt trước khi đưa lên dev.'
+        : 'Thay đổi có sửa phần máy chủ; chờ quản trị viên duyệt trước khi đưa lên dev.';
     }
     const repairSequence = (await db.get(`
       SELECT COALESCE(MAX(sequence), 0) + 1 AS nxt FROM ai_tickets WHERE parent_id=? AND plan_revision=?
@@ -2184,6 +2199,8 @@ function resumeSummary(journal) {
       const evidence = parseJson(run.evidence_json) ?? {};
       const verdict = evidence.verdict ?? {};
       const change = verdict.db_change ?? {};
+      const backend = verdict.backend_change ?? {};
+      const kinds = verdict.hold_kinds ?? ['db'];
       const decided = decisions.filter((d) => Number(d.detail.run_id) === run.id).at(-1);
       const current = index === 0;
       const status = decided?.event_type === 'db_rejected' ? 'rejected'
@@ -2192,8 +2209,10 @@ function resumeSummary(journal) {
       const migrations = change.migrations || [];
       return {
         id: run.id, request_id: request.id, ticket_id: root.id, title: request.title, status, created_at: run.created_at,
+        kind: kinds.length === 2 ? 'both' : kinds[0],
         sql: migrations.map((m) => `-- ${m.path}\n${m.sql}`).join('\n\n'),
-        migrations, files: change.files || [],
+        migrations, files: [...new Set([...(change.files || []), ...(backend.files || [])])].sort(),
+        diff: backend.diff ?? '', attention: change.attention || [],
         sandbox: { ...(change.sandbox || {}), output: dbSummary(change) },
         candidate: verdict.candidate ? { branch: verdict.candidate.branch, base_sha: verdict.candidate.base_sha, head_sha: verdict.candidate.head_sha } : null,
         decision: decided ? { decision: decided.event_type === 'db_approved' ? 'approved' : 'rejected', reason: decided.detail.reason ?? null,

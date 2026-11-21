@@ -60,19 +60,22 @@ _REFUSED = tuple(re.compile(p, re.I) for p in (
 ))
 # Tiền, bảo mật, danh tính, quản trị: không bao giờ mở, kể cả khi owner liệt kê nhầm.
 FORBIDDEN_CONTEXTS = frozenset({"billing", "payment", "economy", "security", "identity", "auth", "session", "admin"})
+# Người gửi thường: thêm điểm/thưởng, tích hợp ngoài, cổng tính năng, lọc nội dung.
+REQUESTER_REFUSED_CONTEXTS = FORBIDDEN_CONTEXTS | {"integration", "engagement", "feature-gate", "safety"}
 _ZONE_ALLOWED = tuple(re.compile(p) for p in (r"^server/contexts/[^/]+/.+", r"^public/.+", r"^package(-lock)?\.json$"))
 
 
 def zone_on(role: str = ADMIN_ROLE) -> bool:
     """Vùng sửa backend mở cho role: admin theo admin_backend_zone, mọi vai theo requester_fullstack_db."""
     from settings import get_settings
-    settings = get_settings()
-    return bool(settings.requester_fullstack_db or settings.admin_backend_zone and role == ADMIN_ROLE)
+    return bool(fullstack_on() or get_settings().admin_backend_zone and role == ADMIN_ROLE)
 
 
 def fullstack_on() -> bool:
+    """requester_fullstack_db chỉ có hiệu lực khi db_check bật: thiếu sandbox thì mọi candidate DB chỉ requeue."""
     from settings import get_settings
-    return bool(get_settings().requester_fullstack_db)
+    settings = get_settings()
+    return bool(settings.requester_fullstack_db and settings.db_check)
 
 
 def _context_name(normalized: str) -> str | None:
@@ -91,7 +94,7 @@ def refused(path, role: str = "student") -> bool:
     if role == ADMIN_ROLE or not fullstack_on() or normalized.startswith(GENERATED_ROOT):
         return False
     name = _context_name(normalized)
-    return denied(normalized, "write") or bool(name) and (name in FORBIDDEN_CONTEXTS or name.startswith(("_", "ai-board")))
+    return denied(normalized, "write") or bool(name) and (name in REQUESTER_REFUSED_CONTEXTS or name.startswith(("_", "ai-board")))
 
 
 def may_edit(path, role: str = "student") -> bool:
