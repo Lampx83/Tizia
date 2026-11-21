@@ -35,10 +35,10 @@ const passing = (extra = {}) => ({ outcome: 'ready_for_pr', gate_reached: 5.5, r
 const PR = (n = 7) => ({ number: n, url: `https://github.com/acme/tizia/pull/${n}`, branch: candidate().branch, base: 'dev',
   head_sha: SHA_B, base_sha: SHA_A });
 
-async function heldRoot(verdict = passing({ db_change: DB_CHANGE })) {
-  const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'pharmacy'], [9, 'admin', 'Admin', 'admin', null]] });
+async function heldRoot(verdict = passing({ db_change: DB_CHANGE }), owner = 1) {
+  const db = await openBoard({ users: [[1, 'lan', 'Lan', 'student', 'pharmacy'], [9, 'admin', 'Admin', 'admin', 'pharmacy']] });
   const store = createAsyncAiBoardStore(db.d);
-  await store.createRequestWithRoot({ ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+  await store.createRequestWithRoot({ ownerUserId: owner, ownerDomain: 'pharmacy', ownerDisplayName: owner === 9 ? 'Admin' : 'Lan',
     idempotencyKey: 'db-approval-request-1', title: 'Ghi chú nhanh', detail: 'fixture' });
   const ticket = await store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
   const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
@@ -72,6 +72,7 @@ test('a passing verdict with a DB change is held, persisted, and cannot record a
   assert.equal(item.sandbox.status, 'passed');
   assert.match(item.sandbox.output, /ghi_chu_nhanh/);
   assert.equal(item.candidate.head_sha, SHA_B);
+  assert.equal(item.kind, 'db');
   assert.equal((await restarted.listDbApprovals()).length, 1, 'board-wide pending queue');
   db.close();
 });
@@ -211,5 +212,80 @@ test('db approval routes: admin only, strict CSRF on POST, worker publish route 
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();
+  }
+});
+
+const withFlag = async (fn) => {
+  const before = process.env.AI_BOARD_REQUESTER_FULLSTACK_DB;
+  process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = '1';
+  try { await fn(); } finally {
+    if (before === undefined) delete process.env.AI_BOARD_REQUESTER_FULLSTACK_DB; else process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = before;
+  }
+};
+const BACKEND = 'server/contexts/teacher/quick-notes.js';
+const backendVerdict = (files) => passing({ candidate: candidate(files),
+  backend_change: { files: files.filter((f) => f.startsWith('server/')), diff: `diff --git a/${BACKEND} b/${BACKEND}\n+export {};` } });
+
+test('flag on: a requester change outside public/ is held as backend; approve publishes it, reject stops it', async () => withFlag(async () => {
+  const { db, store, ticket, lease, run, stored } = await heldRoot(backendVerdict(['public/gioi-thieu.html', BACKEND]));
+  assert.equal(stored.db_hold, true);
+  assert.deepEqual(stored.hold_kinds, ['backend']);
+  await assert.rejects(store.recordPullRequest(ticket.id, { ...lease, runId: run.id, pullRequest: PR(), idempotencyKey: 'backend-approval-pr-0' }),
+    (e) => e.code === 'db_approval_required');
+  await release(store, ticket, lease);
+  const [item] = await store.listDbApprovals({ requestId: 1 });
+  assert.equal(item.kind, 'backend');
+  assert.equal(item.sql, '');
+  assert.match(item.diff, /quick-notes\.js/);
+  assert.deepEqual(item.files, [BACKEND]);
+  assert.match((await root(db, ticket.id)).public_note, /máy chủ/);
+  await store.decideDbApproval(1, run.id, { decision: 'approved', adminUserId: 9 });
+  const claim = await store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' });
+  assert.equal(claim.trigger, 'publish');
+  const publishLease = { workerId: 'w1', leaseToken: claim.lease_token };
+  assert.equal((await store.getLeasedSnapshot(ticket.id, 'w1', claim.lease_token)).requester_role, 'student');
+  await store.recordPullRequest(ticket.id, { ...publishLease, runId: run.id, pullRequest: PR(), idempotencyKey: 'backend-approval-pr-1' });
+  db.close();
+
+  const second = await heldRoot(backendVerdict([BACKEND]));
+  await release(second.store, second.ticket, second.lease);
+  await second.store.decideDbApproval(1, second.run.id, { decision: 'rejected', reason: 'Không sửa máy chủ lúc này', adminUserId: 9 });
+  const rejected = await root(second.db, second.ticket.id);
+  assert.equal(rejected.phase, 'admin_rejected');
+  assert.match(rejected.public_note, /thay đổi máy chủ: Không sửa máy chủ lúc này/);
+  assert.equal(await second.store.claimNext({ workerId: 'w1', mode: 'active', intent: 'plan' }), null);
+  second.db.close();
+}));
+
+test('flag on: public-only goes straight on, admin is unchanged, test-pattern paths under server/ are held', async () => withFlag(async () => {
+  const fe = await heldRoot(passing({ candidate: candidate(['public/gioi-thieu.html', 'test/p.test.js']) }));
+  assert.equal((await root(fe.db, fe.ticket.id)).phase, 'pre_pr_ready');
+  fe.db.close();
+  const admin = await heldRoot(backendVerdict(['public/gioi-thieu.html', BACKEND]), 9);
+  assert.equal((await root(admin.db, admin.ticket.id)).phase, 'pre_pr_ready', 'admin backend change is not held');
+  admin.db.close();
+  const adminDb = await heldRoot(passing({ db_change: DB_CHANGE }), 9);
+  assert.deepEqual(adminDb.stored.hold_kinds, ['db'], 'admin DB change is still held');
+  adminDb.db.close();
+  const tests = await heldRoot(passing({ candidate: candidate(['server/contexts/teacher/tests/a.test.js']) }));
+  assert.deepEqual(tests.stored.hold_kinds, ['backend']);
+  tests.db.close();
+  const both = await heldRoot(passing({ db_change: DB_CHANGE }));
+  assert.deepEqual(both.stored.hold_kinds, ['db', 'backend']);
+  await release(both.store, both.ticket, both.lease);
+  assert.equal((await both.store.listDbApprovals({ requestId: 1 }))[0].kind, 'both');
+  both.db.close();
+}));
+
+test('flag off: a requester backend change is not held', async () => {
+  const before = process.env.AI_BOARD_REQUESTER_FULLSTACK_DB;
+  delete process.env.AI_BOARD_REQUESTER_FULLSTACK_DB;
+  try {
+    const off = await heldRoot(backendVerdict(['public/gioi-thieu.html', BACKEND]));
+    assert.equal(off.stored.db_hold, undefined);
+    assert.equal((await root(off.db, off.ticket.id)).phase, 'pre_pr_ready');
+    off.db.close();
+  } finally {
+    if (before !== undefined) process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = before;
   }
 });

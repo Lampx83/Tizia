@@ -2257,7 +2257,8 @@ function resumeSummary(journal) {
       await touchAdmin(root.id, input.adminUserId, 'db_approve', input.now);
       return { ok: true, status: 'queued', phase: 'db_approved', item_id: held.id };
     }
-    const note = `Quản trị viên từ chối thay đổi CSDL: ${input.reason}`;
+    const kinds = parseJson(held.evidence_json)?.verdict?.hold_kinds ?? ['db'];
+    const note = `Quản trị viên từ chối thay đổi ${kinds.includes('db') ? 'CSDL' : 'máy chủ'}: ${input.reason}`;
     await closeRoot(root, { status: 'cancelled', phase: 'admin_rejected', note, reason: 'db_rejected', now: input.now,
       event: { type: 'db_rejected', actorType: 'admin', actorId: input.adminUserId, idem, detail } });
     await db.run(`UPDATE ai_tickets SET status='cancelled', internal_reason='db_rejected', updated_at=?

@@ -31,7 +31,8 @@ test('flag on: a requester plan over a mounted context, its migration and a page
 test('flag on: refused contexts and files stay shut for context.write', () => {
   for (const file of ['server/contexts/admin/db-admin.js', 'server/contexts/billing/index.js', 'server/contexts/payment/x.js',
     'server/contexts/identity/auth.js', 'server/contexts/security/x.js', 'server/contexts/economy/x.js',
-    'server/contexts/ai-board-intake/index.js', 'server/contexts/_ai-generated/x/index.js', 'server/contexts/registry.js',
+    'server/contexts/ai-board-intake/index.js', 'server/contexts/integration/x.js', 'server/contexts/engagement/league.js',
+    'server/contexts/feature-gate/index.js', 'server/contexts/safety/profanity-vi.js', 'server/contexts/_ai-generated/x/index.js', 'server/contexts/registry.js',
     'server/index.js', 'server/db.js', 'server/ai-board/policy.js']) {
     assert.throws(() => validatePlan(plan([step(1, file, 'backend')]), 'pharmacy'), /scope|money|not granted/, file);
   }
