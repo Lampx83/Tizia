@@ -107,6 +107,7 @@ ARBITER_ON = {"AI_BOARD_GATE1_ARBITER": "1"}
 FEEDBACK_FLAGS = ("AI_BOARD_PLAN_REPAIR", "AI_BOARD_REPAIR_SAME_SESSION", "AI_BOARD_GATE_FEEDBACK_CAP",
                   "AI_BOARD_STOP_REPORT_V2", "AI_BOARD_GATE1_ARBITER", "AI_BOARD_VERIFY_PRELOADED_BASES",
                   "AI_BOARD_NO_ORACLE_REVIEW_ANY")
+M2_FIX_FLAGS = ("AI_BOARD_LITERAL_EXACT_FEEDBACK", "AI_BOARD_VALIDATOR_REASK", "AI_BOARD_SYNTAX_BLOCK_CONTEXT")
 B1_FEEDBACK_OFF = tuple(k for k in FEEDBACK_FLAGS if k not in ("AI_BOARD_STOP_REPORT_V2", "AI_BOARD_GATE1_ARBITER"))
 
 
@@ -123,6 +124,8 @@ def arm_env(arm: str) -> dict[str, str]:
         return {**arm_env("B0"), "AI_BOARD_COMPILE_PROSE_VERIFY": "1"}
     if arm == "B0-mf":  # multi-file demo: B0 plus the multi-file subtask and its budget, product defaults untouched
         return {**arm_env("B0"), "AI_BOARD_MULTI_FILE_SUBTASK": "1", "AI_BOARD_BUDGET_BY_FILE_COUNT": "1"}
+    if arm in ("B0-m2fix", "B0-mf-m2fix"):
+        return {**arm_env(arm.removesuffix("-m2fix")), **{k: "1" for k in M2_FIX_FLAGS}}
     if arm == "B1":
         return on
     if arm in context_budget.ARM_FLAGS:
@@ -139,7 +142,7 @@ def arm_env(arm: str) -> dict[str, str]:
 
 def arm_table() -> dict[str, dict[str, str]]:
     """Every named arm and its env; written to the freeze manifest."""
-    names = ["A", "B", "B0", "B0-mf", "B1", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
+    names = ["A", "B", "B0", "B0-mf", "B0-m2fix", "B0-mf-m2fix", "B1", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
     return {name: arm_env(name) for name in names}
 
 # student owners beyond localtest/localadmin; created once, then reused
