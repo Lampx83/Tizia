@@ -109,14 +109,14 @@ def _loads(source, sha: str, page: str, script: str) -> bool:
     return script in links
 
 
-def old_literal_refusal(request: dict, targets, source, sha: str | None) -> str:
+def old_literal_refusal(request: dict, targets, source, sha: str | None, skipped=()) -> str:
     """Reason to send back a replace plan that edits no home of an old text found verbatim at sha, or edits several pages
-    when the request names one element; '' = allowed. A page and a script it loads may both change; any other script is another home."""
+    when the request names one element; '' = allowed. Homes the model skipped with evidence (`skipped`) are not refused. A page and a script it loads may both change; any other script is another home."""
     if not sha or feature(request):
         return ""
     for old, _ in functional.replace_pairs({"request_title": request.get("subject"), "request_detail": request.get("body")}):
         homes = target_confidence._grep_files(source, sha, old)
-        if not homes:
+        if not homes or set(homes) <= set(skipped):
             continue
         edited = set(homes) & set(targets)
         page, several = requested_page(request, homes, source, sha) if len(homes) > 1 else (None, False)

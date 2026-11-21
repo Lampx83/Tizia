@@ -48,16 +48,29 @@ def fullstack(monkeypatch):
     monkeypatch.setattr(react_plan, "exploration_enabled", lambda: False)
 
 
-def _ledger_replies():
+LINE = "// Teacher Team Quest + Class Leaderboard (Classcraft-style)"
+WIRED = {"step_id": 1, "file": f"{CTX}/index.js", "lines": "1-3"}
+
+
+def _ledger(drop=(), wiring=True, rejected=True):
+    """One decision per planned file: the mount edits an existing file, the other four are new and wired through the context index."""
+    out = [{"decision": "choose_file", "target": f"{CTX}/index.js", "evidence": [WIRED], "rejected": []}]
+    for task in PLAN["subtasks"]:
+        if task["file"] != f"{CTX}/index.js" and task["file"] not in drop:
+            out.append({"decision": "new_file", "target": task["file"], "evidence": [WIRED if wiring else {"step_id": 2, "tool_output_excerpt": "file khớp từ khoá"}],
+                        "rejected": [{"target": "public/school.html", "reason": "school page is the origin, not a notes page"}] if rejected else []})
+    return out
+
+
+def _ledger_replies(**kw):
     """With model_first the plan comes from the react loop and carries a decision ledger."""
-    line = "// Teacher Team Quest + Class Leaderboard (Classcraft-style)"
-    ledger = [{"decision": "choose_file", "target": f"{CTX}/index.js", "evidence": [{"step_id": 1, "tool_output_excerpt": line}], "rejected": []}]
-    plan = {**PLAN, "subtasks": [{**t, "quotes": [line]} for t in PLAN["subtasks"]], "decisions": ledger}
-    return [{"tool": "read_file", "arguments": {"file": f"{CTX}/index.js"}}, {"tool": "finish", "arguments": {"plan": plan}}]
+    plan = {**PLAN, "subtasks": [{**t, "quotes": [LINE]} for t in PLAN["subtasks"]], "decisions": _ledger(**kw)}
+    reads = [{"tool": "read_file", "arguments": {"file": f"{CTX}/index.js"}}, {"tool": "grep", "arguments": {"words": ["Teacher"], "path": CTX}}]
+    return reads + [{"tool": "finish", "arguments": {"plan": plan}}] * 6
 
 
-def _gate1(request=REQUEST):
-    deps = deps_with(_SeqModels(_ledger_replies() if os.environ.get("AI_BOARD_MODEL_FIRST") else [PLAN, PLAN]))
+def _gate1(request=REQUEST, replies=None):
+    deps = deps_with(_SeqModels(replies or (_ledger_replies() if os.environ.get("AI_BOARD_MODEL_FIRST") else [PLAN, PLAN])))
     out = brainstorm.run(request, deps, Budget(max_wall_clock_s=999), source=str(REPO), sha=_sha())
     return out, deps.models.calls[0]["prompt"]
 
@@ -133,3 +146,58 @@ def test_new_paths_widen_only_with_the_flag(fullstack, monkeypatch):
     plan = {"subtasks": [{"title": "t", "file": "server/contexts/ghi-chu/notes/routes.js", "verify": "node --test", "size": "small"}]}
     with pytest.raises(ValueError, match="không có trong repo"):
         brainstorm.check_files(plan, str(REPO), _sha(), role="teacher")
+
+
+def test_realistic_request_every_file_choice_carries_valid_evidence(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    assert not react_plan.warranted(REQUEST, {}), "the old trigger (quoted text, two paths) would not have explored"
+    out, _ = _gate1()
+    assert not out["blocked"], out["reason"]
+    assert {d["target"] for d in out["ledger"]["decisions"]} == {t["file"] for t in out["plan"]["subtasks"]}
+    assert out["ledger"]["signals"]["repair_rounds"] == 0 and "decisions" not in out["plan"]
+
+
+@pytest.mark.parametrize("kw,why", [({"drop": (PAGE,)}, "chưa có quyết định"), ({"wiring": False}, "bằng chứng nối"),
+                                    ({"rejected": False}, "file có sẵn trong rejected")])
+def test_gate1_refuses_a_plan_whose_choices_lack_evidence(fullstack, monkeypatch, kw, why):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    out, _ = _gate1(replies=_ledger_replies(**kw))
+    assert out["blocked"] and why in out["reason"] and "failure_class" not in out
+
+
+def test_evidenced_new_file_overrides_the_new_page_refusal(fullstack, monkeypatch):
+    quoted = {**REQUEST, "body": 'Đổi chữ "Trường" trên trang thành "Khoa".'}
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    ctx = best_match.literal_homes(quoted, str(REPO), _sha())["Trường"]
+    assert best_match.new_page_refusal(quoted, {PAGE, f"{CTX}/quick-notes.js"}, str(REPO), _sha())
+    ledger = _ledger()
+    ledger += [{"decision": "skip_alternative", "target": home, "evidence": [WIRED], "rejected": []} for home in ctx]
+    plan = {**PLAN, "subtasks": [{**t, "quotes": [LINE]} for t in PLAN["subtasks"]], "decisions": ledger}
+    replies = _ledger_replies()[:2] + [{"tool": "finish", "arguments": {"plan": plan}}]
+    out, _ = _gate1(request=quoted, replies=replies)
+    assert not out["blocked"], out["reason"]
+    assert any(PAGE in note for note in out["ledger_overrides"])
+
+
+def test_flag_off_has_no_ledger_keys(fullstack, monkeypatch):
+    monkeypatch.delenv("AI_BOARD_MODEL_FIRST", raising=False)
+    out, _ = _gate1(request={**REQUEST, "type": "feature"})
+    assert "ledger" not in out and "ledger_overrides" not in out
+
+
+def test_gate25_keeps_an_evidenced_choice_and_refuses_the_same_plan_without_it(fullstack, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MODEL_FIRST", "1")
+    quoted = {**REQUEST, "body": 'Đổi chữ "Trường" trên trang thành "Khoa".', "grounding_required": True}
+    homes = best_match.literal_homes(quoted, str(REPO), _sha())["Trường"]
+    ledger = _ledger() + [{"decision": "skip_alternative", "target": home, "evidence": [WIRED], "rejected": []} for home in homes]
+    grounding = [{"target": t["file"], "file": t["file"], "quote": "export const plugin = {" if t["file"] == f"{CTX}/index.js" else "",
+                  "before": "a", "after": "b", "verify": "c"} for t in PLAN["subtasks"]]
+    validation = {"clear": True, "question": None, "grounded": True, "reason": "", "grounding": grounding, "objection": None}
+
+    def run(state):
+        return plan_validate.run(quoted, deps_with(FakeModels(PLAN, validation=validation)), Budget(max_wall_clock_s=999),
+                                 {"plan": PLAN, "checkout_source": str(REPO), "base_sha": _sha(), **state})
+
+    kept = run({"ledger": ledger, "best_match": homes[0]})
+    assert not kept["blocked"], kept["reason"]
+    assert run({})["blocked"]

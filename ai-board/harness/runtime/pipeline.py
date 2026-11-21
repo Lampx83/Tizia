@@ -519,6 +519,10 @@ def _intake_and_plan(request, deps, budget, state, **trace) -> dict:
     state['form_warnings'] = list(out.get('form_warnings') or [])
     state.pop('plan_session', None)
     state.pop('plan_tier', None)
+    for key, value in (('ledger', (out.get('ledger') or {}).get('decisions')), ('ledger_overrides', out.get('ledger_overrides'))):
+        state.pop(key, None)
+        if value:
+            state[key] = value
     if out.get('plan_session'):
         state['plan_session'], state['plan_tier'] = out['plan_session'], out.get('plan_tier')
     return out

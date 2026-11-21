@@ -117,3 +117,44 @@ def confidence(*, evidence_valid: bool, repair_rounds: int, checks_passed: bool 
     else:
         level = "high" if repair_rounds == 0 and checks_passed and reviewer_agrees else "medium"
     return {**signals, "level": level}
+
+
+def coverage(plan: dict, decisions: list[dict], log: StepLog, exists) -> list[str]:
+    """Lỗi bao phủ của sổ so với plan: mỗi file của subtask có quyết định; file mới cần bằng chứng nối và một file có sẵn bị bỏ."""
+    problems = []
+    for task in plan.get("subtasks") or []:
+        path = task.get("file") if isinstance(task, dict) else None
+        if not isinstance(path, str):
+            continue
+        mine = [d for d in decisions if d["target"] == path]
+        if not mine:
+            problems.append(f"file {path} chưa có quyết định nào trong sổ")
+        elif not exists(path):
+            problems += _new_file_problems(path, mine, log, exists)
+    return problems
+
+
+def _new_file_problems(path: str, mine: list[dict], log: StepLog, exists) -> list[str]:
+    made = [d for d in mine if d["decision"] == "new_file"]
+    if not made:
+        return [f"file mới {path} cần quyết định new_file"]
+    wired = any((step := log.steps.get(e.get("step_id"))) and step["file"] and step["file"] != path and exists(step["file"])
+                for d in made for e in d["evidence"])
+    out = [] if wired else [f"new_file {path} cần bằng chứng nối: một bước đã đọc file có sẵn khác (router, index, link trang)"]
+    if not any(exists(r["target"]) for d in made for r in d["rejected"]):
+        out.append(f"new_file {path} cần ít nhất một file có sẵn trong rejected, kèm lý do")
+    return out
+
+
+def decided(decisions: list[dict] | None, kind: str) -> set[str]:
+    """Target của mọi quyết định loại `kind` (đã qua kiểm bằng chứng)."""
+    return {d["target"] for d in decisions or [] if d["decision"] == kind}
+
+
+def review_block(state: dict) -> str:
+    """Khối cho reviewer gate 4: lựa chọn của model đi ngược gợi ý harness, kèm bằng chứng; '' khi không có."""
+    notes = state.get("ledger_overrides") or []
+    if not notes:
+        return ""
+    return ("Planner đi ngược gợi ý của harness và sổ quyết định có bằng chứng; kiểm lại bằng chứng có đỡ lựa chọn không, "
+            "lựa chọn sai là wrong_target hoặc outside_request:\n" + "\n".join(f"- {n}" for n in notes))

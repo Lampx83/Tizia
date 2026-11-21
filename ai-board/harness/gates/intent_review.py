@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from gates import guard
+from gates import decision_ledger, guard
 from repositories import server_hsm
 from runtime import model_json, prompt_roles
 from runtime.budgets import meter
@@ -170,7 +170,7 @@ def review_diff(state: dict) -> tuple[str, bool]:
 
 
 def render(request: str, hint: str | None, pages: dict[str, str], diff: str, checks: list[str], misses: list[str],
-           cut: bool = False, from_hint: bool = True) -> str:
+           cut: bool = False, from_hint: bool = True, choices: str = "") -> str:
     """Full reviewer prompt: instructions + fenced request, page hint, pages (after the change), diff, deterministic evidence."""
     with spotlight.scope():
         def block(tag: str, content: str) -> str:
@@ -184,7 +184,7 @@ def render(request: str, hint: str | None, pages: dict[str, str], diff: str, che
         if not pages:
             text += block(label, "(không đọc được)")
         text += block("DIFF" + (" (đã cắt)" if cut else ""), diff) + block("KẾT QUẢ CHECK TẤT ĐỊNH", evidence)
-        return text
+        return text + (block("LỰA CHỌN CỦA PLANNER CẦN KIỂM LẠI", choices) if choices else "")
 
 
 def _blocked(reason: str, failure_class: str) -> dict:
@@ -201,7 +201,8 @@ def run(state: dict, deps, budget, checks: list[str], misses: list[str], *, db_p
     if not budget.tick():
         return _blocked("intent review: budget exhausted", "budget")
     pages, from_hint = target_pages(state)
-    prompt = render(_request_text(state), _page_hint(state), pages, diff, checks, misses, from_hint=from_hint)
+    prompt = render(_request_text(state), _page_hint(state), pages, diff, checks, misses, from_hint=from_hint,
+                    choices=decision_ledger.review_block(state))
     routing = getattr(deps.models, "routing", None)
     role_extra, role_options = prompt_roles.call_params("gate4_review", routing, structured=True)
     for attempt in (1, 2):

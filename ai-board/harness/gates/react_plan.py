@@ -185,13 +185,15 @@ def _rewoo(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
 
 
 def run(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=None, proposal_id=None,
-        skill_context=None, rules=None, ledger=False) -> dict | None:
+        skill_context=None, rules=None, ledger=False, ledger_check=None) -> dict | None:
     """{"response": plan_json, "quotes": [[...]]} khi finish đạt; None khi hết trần, stuck, hoặc hết lượt không finish.
     Cờ rewoo_gate2_reads: thử kế hoạch một lượt trước, hỏng thì chạy vòng ReAct.
-    ledger (cờ model_first): finish phải kèm sổ quyết định hợp lệ, kết quả thêm "ledger"; hết vòng không có sổ → LedgerInvalid."""
+    ledger (cờ model_first): finish phải kèm sổ quyết định hợp lệ, kết quả thêm "ledger"; hết vòng không có sổ → LedgerInvalid.
+    ledger_check(plan, decisions, step_log) -> list[str]: lỗi bao phủ trả về model như lỗi bằng chứng."""
     kwargs = dict(model=model, source=source, sha=sha, db_path=db_path, proposal_id=proposal_id, skill_context=skill_context)
     if ledger:
         fail: dict = {}
+        fail["check"] = ledger_check
         out = _react(prompt, deps, budget, rules=rules, ledger=fail, **kwargs)
         if out is None:
             raise decision_ledger.LedgerInvalid(fail.get("reason") or "vòng đọc kết thúc mà chưa finish kèm sổ quyết định")
@@ -233,6 +235,8 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
                 try:
                     quotes = pop_quotes(args.get("plan"), observed)
                     decisions = decision_ledger.pop(args["plan"], step_log) if ledger is not None else None
+                    if ledger is not None and ledger.get("check") and (broken := ledger["check"](args["plan"], decisions, step_log)):
+                        raise ValueError("; ".join(broken))
                 except ValueError as error:
                     observation, ok = f"BỊ LOẠI: {error}. Sửa rồi finish lại.", False
                     if ledger is not None:

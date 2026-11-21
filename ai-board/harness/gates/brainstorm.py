@@ -468,7 +468,9 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 react = react_plan.run(prompt, deps, budget, model=deps.models.gate1_model, source=source, sha=commit,
                                        db_path=db_path, proposal_id=proposal_id, skill_context=skill_context,
                                        **({"rules": lambda text: plan_rules.violations(text, request, source, commit)} if session else {}),
-                                       **({"ledger": True} if decision_ledger.enabled() else {}))
+                                       **({"ledger": True, "ledger_check": lambda plan, decisions, log: decision_ledger.coverage(
+                                           plan, decisions, log, repo_at_commit.at(source, commit).exists)}
+                                          if decision_ledger.enabled() else {}))
             except decision_ledger.LedgerInvalid as error:
                 judge("decision ledger", False, str(error))
                 return {"gate": 1, "blocked": True, "reason": f"sổ quyết định không hợp lệ: {error}", "plan": None,
@@ -542,9 +544,15 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 form_warnings.append(f"{subtask_contract.OBJECTION_TAG}: {message}")
                 judge(stage, True, f"{subtask_contract.OBJECTION_TAG}: {message}")
 
+            decisions = (react or {}).get("ledger", {}).get("decisions")
+            overrides = []
+            if decisions and (chosen := added & decision_ledger.decided(decisions, "new_file") - named):
+                overrides.append(f"plan thêm file mới {', '.join(sorted(chosen))} dù yêu cầu sửa giao diện có sẵn; model nêu bằng chứng trong sổ")
+                named = named | chosen
             if refusal := best_match.new_page_refusal(request, added - named, source, commit):
                 objection(refusal)
-            if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit):
+            skipped = decision_ledger.decided(decisions, "skip_alternative")
+            if refusal := best_match.old_literal_refusal(request, {task['file'] for task in plan['subtasks']}, source, commit, skipped):
                 objection(refusal)
             if added and (feature or named):
                 # A feature adds files that do not exist yet: no "most quoted file" to edit, so record the
@@ -554,8 +562,12 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                                    f"best-match {ctx.get('best_match') or '(none)'}")
             else:
                 try:
-                    best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
-                                       f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
+                    if ctx.get('best_match') in decision_ledger.decided(decisions, "skip_alternative"):
+                        overrides.append(f"plan không sửa {ctx.get('best_match')}, file khớp nhiều cụm người dùng viết nhất; model nêu bằng chứng trong sổ")
+                        judge(stage, True, overrides[-1])
+                    else:
+                        best_match.enforce(ctx.get('best_match'), {task['file'] for task in plan['subtasks']},
+                                           f"Sửa file khớp nhiều cụm người dùng viết nhất: {ctx.get('best_match')}", judge)
                 except ValueError as miss:
                     if advisory:
                         objection(str(miss))
@@ -583,6 +595,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
                 **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
                 **({'react_quotes': react['quotes']} if react else {}),
                 **({'ledger': react['ledger']} if react and 'ledger' in react else {}),
+                **({'ledger_overrides': overrides} if overrides else {}),
                 **({'plan_session': react['session'], 'plan_tier': plan_rules.tier(plan)} if react and 'session' in react else {})}
     return {"gate": 1, "blocked": True, "reason": f"plan không hợp lệ: {reason}", "plan": None,
             "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx["text"],

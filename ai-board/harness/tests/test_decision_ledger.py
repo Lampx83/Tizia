@@ -164,3 +164,30 @@ def test_flag_off_react_loop_is_byte_identical(repo):
     dump = json.dumps({"prompts": deps.prompts, "out": out}, ensure_ascii=False, sort_keys=True)
     assert "ledger" not in out and "DECISION LEDGER" not in dump and "STEP 1" not in dump
     assert hashlib.sha256(dump.encode()).hexdigest() == OFF_DUMP_SHA
+
+
+def test_gate4_reviewer_sees_overridden_choices_only_when_there_are_some():
+    from gates import intent_review
+    base = intent_review.render("yêu cầu", None, {}, "diff", [], [])
+    assert intent_review.render("yêu cầu", None, {}, "diff", [], [], choices="") == base
+    note = decision_ledger.review_block({"ledger_overrides": ["plan thêm file mới x"]})
+    assert "plan thêm file mới x" in intent_review.render("yêu cầu", None, {}, "diff", [], [], choices=note)
+    assert decision_ledger.review_block({}) == ""
+
+
+def test_coverage_needs_wired_new_file_and_a_rejected_existing_file(repo):
+    log = log_with_read(repo)
+    exists = lambda path: path == "public/a.html"
+    plan = {"subtasks": [{"file": "public/a.html"}, {"file": "public/new.html"}]}
+    wired = {"step_id": 1, "file": "public/a.html", "lines": "1-2"}
+    ok = [decision([wired]), {**decision([wired], kind="new_file"), "target": "public/new.html",
+                              "rejected": [{"target": "public/a.html", "reason": "other page"}]}]
+    assert decision_ledger.coverage(plan, ok, log, exists) == []
+    assert decision_ledger.coverage(plan, ok[:1], log, exists) == ["file public/new.html chưa có quyết định nào trong sổ"]
+    log.add(2, "grep", {"words": ["x"]}, "file khớp từ khoá: public/a.html (2)")
+    unwired = [ok[0], {**ok[1], "evidence": [{"step_id": 2, "tool_output_excerpt": "file khớp từ khoá"}]}]
+    assert "bằng chứng nối" in " ".join(decision_ledger.coverage(plan, unwired, log, exists))
+    norej = [ok[0], {**ok[1], "rejected": [{"target": "public/none.html", "reason": "r"}]}]
+    assert "rejected" in " ".join(decision_ledger.coverage(plan, norej, log, exists))
+    wrong = [ok[0], {**ok[1], "decision": "placement"}]
+    assert "new_file" in " ".join(decision_ledger.coverage(plan, wrong, log, exists))
