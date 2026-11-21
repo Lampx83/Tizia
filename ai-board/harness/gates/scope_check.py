@@ -17,7 +17,10 @@ import posixpath
 from functools import lru_cache
 from pathlib import Path
 
+import path_policy
 from runtime import levels, subtask_files
+
+FULLSTACK_CAPABILITY = "context.write"
 
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES_JS = ROOT / "server" / "contexts" / "capabilities.js"
@@ -120,12 +123,41 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None, catalog: d
     return {"blocked": False, "reason": None}
 
 
+def _zone_capability(file: str) -> str | None:
+    """Capability of a file the fullstack zone opens, from its path alone; None outside the zone."""
+    if file.startswith(path_policy.GENERATED_ROOT):
+        return "generated.context"
+    if file.startswith("public/") and path_policy.may_edit(file):
+        return "public.ui"
+    if path_policy.mounted_context(file) and path_policy.may_edit(file):
+        return FULLSTACK_CAPABILITY
+    return None
+
+
+def derive_capabilities(plan: dict) -> tuple[list[str], list[str]]:
+    """Flag on: (capabilities from the plan's files, model names dropped). A file outside the zone keeps the model's names
+    so this gate still judges it."""
+    files = [posixpath.normpath(path.replace('\\', '/'))
+             for task in plan.get('subtasks') or [] for path in subtask_files.files_of(task)]
+    model = [cap for cap in plan.get("capabilities") or [] if isinstance(cap, str)]
+    derived = [cap for file in files if (cap := _zone_capability(file))]
+    if any(_zone_capability(file) is None for file in files):
+        derived += model
+    caps = list(dict.fromkeys(derived))
+    return caps, [cap for cap in dict.fromkeys(model) if cap not in caps]
+
+
 def run(state: dict, request: dict | None = None) -> dict:
     """Điểm vào cho main.run_gate. Đọc state['plan'] do cổng 1 để lại, catalog snapshot
-    và elevation đã duyệt (request/state) để mở đúng capability protected/core."""
+    và elevation đã duyệt (request/state) để mở đúng capability protected/core.
+    Cờ requester_fullstack_db: capability của plan suy từ file (ghi đè plan), tên model khai thừa bị bỏ, ghi vào kết quả."""
     plan = state.get("plan")
     if not plan:
         return {"gate": 2, "blocked": True, "reason": "không có plan từ cổng 1"}
+    dropped = []
+    if path_policy.fullstack_on():
+        plan["capabilities"], dropped = derive_capabilities(plan)
     scope = levels.approved_scope(request, state, plan)
     return {"gate": 2, **check(plan, catalog=state.get('catalog'), scope=scope,
-                               plan_hash=levels.fingerprint(plan))}
+                               plan_hash=levels.fingerprint(plan)),
+            **({"capabilities_dropped": dropped} if dropped else {})}

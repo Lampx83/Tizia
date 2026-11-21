@@ -632,3 +632,64 @@ def test_privileged_imports_reach_the_admin_payload(flag, tmp_path):
     plain, _ = _execute(tmp_path, FE_BE_DIFF)
     assert "privileged_imports" not in plain["backend_change"]
     assert static_check.privileged_imports(QUICK_NOTES, CONTEXT, QUICK_NOTES) == [], "imports already at base are not new"
+
+
+# ── gate 2: capabilities derived from the files (request #407 shape) ──
+
+PLAN_407_FILES = [MIGRATION, CONTEXT, "server/contexts/teacher/index.js", "public/ghi-chu-nhanh.html",
+                  "public/js/ghi-chu-nhanh.js"]
+CATALOG = {"public.ui": {"tier": "surface", "allow": ["public/"], "deny": []},
+           "generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"], "deny": []},
+           "content.write": {"tier": "protected", "allow": ["server/contexts/content/", "public/"], "deny": []},
+           "context.write": {"tier": "surface", "allow": ["server/contexts/"],
+                             "deny": ["server/contexts/admin/", "server/contexts/ai-board-", "server/contexts/_"]}}
+
+
+def _plan_407():
+    return {"summary_vi": "Ghi chú nhanh", "capabilities": ["content.write"],
+            "subtasks": [{"title": f"t{i}", "file": file, "verify": "node --test test/ghi-chu.test.js", "size": "small"}
+                         for i, file in enumerate(PLAN_407_FILES)]}
+
+
+def test_gate_2_derives_capabilities_from_the_files_and_drops_the_model_name(flag):
+    from gates import scope_check
+    state = {"plan": _plan_407(), "catalog": CATALOG}
+    out = scope_check.run(state)
+    assert out["blocked"] is False, out["reason"]
+    assert state["plan"]["capabilities"] == ["context.write", "public.ui"]
+    assert out["capabilities_dropped"] == ["content.write"]
+
+
+def test_gate_2_flag_off_judges_the_model_capabilities_as_before(monkeypatch):
+    from gates import scope_check
+    monkeypatch.delenv(FLAG, raising=False)
+    state = {"plan": _plan_407(), "catalog": CATALOG}
+    out = scope_check.run(state)
+    assert out["blocked"] is True and "content.write" in out["reason"]
+    assert state["plan"]["capabilities"] == ["content.write"] and "capabilities_dropped" not in out
+
+
+def test_gate_2_keeps_judging_files_outside_the_zone(flag):
+    from gates import scope_check
+    plan = {"capabilities": ["core.server"], "subtasks": [{"title": "t", "file": "server/index.js", "verify": "v", "size": "small"}]}
+    out = scope_check.run({"plan": plan, "catalog": {**CATALOG, "core.server": {"tier": "core", "allow": ["server/"], "deny": []}}})
+    assert out["blocked"] is True
+
+
+def test_407_canonical_plan_passes_the_server_plan_guardrail(flag, tmp_path):
+    import json
+    from gates import scope_check
+    from worker import HarnessPlanner
+    plan = _plan_407()
+    for st, layer in zip(plan["subtasks"], ["db", "backend", "backend", "frontend", "frontend"]):
+        st["layer"] = layer
+    scope_check.run({"plan": plan, "catalog": CATALOG})
+    canonical = HarnessPlanner._canonical({"domain": "pharmacy", "type": "feature"}, plan, None, CATALOG)
+    assert [step["capability"] for step in canonical["steps"]] == ["context.write"] * 3 + ["public.ui"] * 2
+    repo = Path(__file__).resolve().parents[3]
+    script = ("const { validatePlan } = await import('./server/ai-board/security/policy.js');"
+              f"const out = validatePlan({json.dumps(canonical)}, 'pharmacy'); console.log(JSON.stringify({{tier: out.tier}}));")
+    run = subprocess.run(["node", "--input-type=module", "-e", script], cwd=repo, capture_output=True, text=True,
+                         env={**__import__("os").environ, "AI_BOARD_REQUESTER_FULLSTACK_DB": "1"})
+    assert run.returncode == 0, run.stderr[-800:]
+    assert json.loads(run.stdout.strip().splitlines()[-1]) == {"tier": "surface"}
