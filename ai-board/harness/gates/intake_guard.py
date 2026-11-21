@@ -184,7 +184,7 @@ def selfcheck(text: str, deps, budget, *, db_path=None, proposal_id=None) -> tup
     try:
         body = deps.call_model(deps.models.gate1_model, selfcheck_prompt(text), gate=1, budget=budget, db_path=db_path,
                                proposal_id=proposal_id, prompt_name="intake_selfcheck.md", format=None,
-                               options=dict(SELFCHECK_OPTIONS), extra={"thinking": False})
+                               options=dict(SELFCHECK_OPTIONS), extra={"thinking": False, "_no_split": True})
         answer = body.get("response", "")
     except Exception as e:  # model sập/timeout/hết budget — fail closed
         return None, f"tự kiểm lỗi: {str(e)[:200]}"

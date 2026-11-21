@@ -53,7 +53,7 @@ def test_no_answer_passes(flag):
     out = run(deps)
     assert out["verdict"] == "allow" and out["selfcheck"]["calibration_id"] == intake_guard.SELFCHECK_CALIBRATION_ID
     call, = deps.calls
-    assert call["options"] == {"num_predict": 5, "temperature": 0.001} and call["extra"] == {"thinking": False}
+    assert call["options"] == {"num_predict": 5, "temperature": 0.001} and call["extra"] == {"thinking": False, "_no_split": True}
     assert call["prompt_name"] == "intake_selfcheck.md" and call["format"] is None and "classifier" not in out
     assert BENIGN[1] in call["prompt"]
 
@@ -126,3 +126,14 @@ def test_equivalent_to_measured_arm_b():
         assert blocked is (row["nemo"] == "block"), row["id"]
         assert (row["verdict"] == "human_review") is (blocked or row["verdict"] == row["lex_verdict"] == "human_review"), row["id"]
     print(f"rows={len(rows)} prompts_identical={len(called)} decisions_identical={len(called)}")
+
+
+def test_role_split_mode_leaves_the_prompt_bytes_alone(flag, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_PROMPT_ROLE_SPLIT", "1")
+    from runtime.pipeline import _split_call
+    prompt = intake_guard.selfcheck_prompt("Đổi màu nút")
+    extra = {"thinking": False, "_no_split": True}
+    out_prompt, out_extra, out_opts = _split_call(prompt, "gate1", None, extra, dict(intake_guard.SELFCHECK_OPTIONS))
+    assert out_prompt == prompt and out_extra == {"thinking": False} and out_opts == intake_guard.SELFCHECK_OPTIONS
+    split_prompt, split_extra, _ = _split_call(prompt, "gate1", None, {"thinking": False}, {})
+    assert split_prompt != prompt and split_extra.get("system")
