@@ -105,3 +105,44 @@ def test_old_tier_baseline_still_valid_and_loaded():
     base = json.loads((Path(__file__).resolve().parent.parent / "evaluation" / "strata-baseline.json").read_text(encoding="utf-8"))
     assert "_config" in base and not any(k.startswith("feature") for k in base)
     assert eval_run.group_stats([{"oracle": True}, {"oracle": False}])["rate"] == 50.0
+
+
+def tuning_file(tmp_path, cases):
+    path = tmp_path / "tuning.json"
+    path.write_text(json.dumps({"set": "tuning", "cases": cases}), encoding="utf-8")
+    return path
+
+
+def test_cli_case_selects_one_default_case(tmp_path):
+    rec = tmp_path / "rec.jsonl"
+    rec.write_text("".join(json.dumps({"case": c["id"], "record": perfect(c)}) + "\n" for c in CASES), encoding="utf-8")
+    assert eval_run.main(["feature", "--records", str(rec), "--root", str(tmp_path), "--label", "one", "--case", CASES[0]["id"]]) == 0
+    assert json.loads((tmp_path / "feature" / "one" / "report.json").read_text(encoding="utf-8"))["trials"] == 1
+    assert eval_run.main(["feature", "--records", str(rec), "--root", str(tmp_path), "--case", "nope"]) == 2
+
+
+def test_cli_cases_file_selects_case_and_grades_by_expectation(tmp_path):
+    a = {"id": "x-a", "request": "r", "files": [{"path": "public/new.html", "new": {"must": ["hi"], "forbid": []}}],
+         "browser": [{"primitive": "text_present", "path": "/new.html", "text": "hi"}], "fix": [], "must_state": []}
+    path = tuning_file(tmp_path, [a, {**a, "id": "x-b"}])
+    diff = "--- a/public/new.html\n+++ b/public/new.html\n@@ -0,0 +1,1 @@\n+<p>hi</p>\n"
+    rec = tmp_path / "rec.jsonl"
+    rec.write_text(json.dumps({"case": "x-b", "record": {"diff": diff, "criteria": {"acceptance": ["/new.html hi"], "checks": a["browser"]}}}) + "\n", encoding="utf-8")
+    args = ["feature", "--records", str(rec), "--root", str(tmp_path), "--cases-file", str(path)]
+    assert eval_run.main([*args, "--label", "b", "--case", "x-b"]) == 0
+    rep = json.loads((tmp_path / "feature" / "b" / "report.json").read_text(encoding="utf-8"))
+    assert rep["trials"] == 1 and rep["overall"]["accepted"] == 1
+    assert eval_run.main([*args, "--label", "all"]) == 0
+    assert json.loads((tmp_path / "feature" / "all" / "report.json").read_text(encoding="utf-8"))["overall"]["accepted"] == 1
+    assert eval_run.main([*args, "--case", "zzz"]) == 2
+
+
+def test_cli_oracle_infra_error_exit_3(tmp_path, monkeypatch):
+    case = {"id": "x-o", "request": "r", "files": [], "browser": [], "fix": [], "must_state": [], "oracle_files": [], "oracle_cmd": "node t.js"}
+    path = tuning_file(tmp_path, [case])
+    rec = tmp_path / "rec.jsonl"
+    rec.write_text("", encoding="utf-8")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("AI_BOARD_EVAL_NODE_MODULES", str(empty))
+    assert eval_run.main(["feature", "--records", str(rec), "--root", str(tmp_path), "--cases-file", str(path)]) == 3
