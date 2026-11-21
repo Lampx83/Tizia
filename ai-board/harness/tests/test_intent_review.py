@@ -118,7 +118,7 @@ def test_model_error_fails_closed_as_transient(on, fake_deps, checkout):
     assert out["blocked"] and out["failure_class"] == "transient" and "intent review failed" in out["reason"]
 
 
-@pytest.mark.parametrize("reply", ["not json", {"verdict": "maybe", "findings": [], "brief": ""}, {"verdict": "pass"},
+@pytest.mark.parametrize("reply", [{"verdict": "maybe", "findings": [], "brief": ""}, {"verdict": "pass"},
                                    {"verdict": "fail", "findings": [], "brief": ""}])
 def test_bad_schema_fails_closed_as_critical(on, fake_deps, checkout, reply):
     out, _ = gate(fake_deps, Models(reply), RIGHT, checkout)
@@ -287,3 +287,32 @@ def test_brief_words_that_stop_the_repair_loop_are_scrubbed(on, fake_deps, check
 def test_empty_brief_on_fail_falls_back_to_the_findings_fixes(on, fake_deps, checkout):
     out, _ = gate(fake_deps, Models({**FAIL, "brief": ""}), RIGHT, checkout)
     assert out["failure_class"] == "ordinary" and "sửa liên kết thứ hai ở public/pet.html" in out["reason"]
+
+
+RUNAWAY = '{"verdict": "fail", "findings": [{"kind": "missing", "severity": "high", "file": "f", "evidence": "<p class="' + " " * 500
+CUT = '{"verdict": "fail", "findings": [{"kind": "missing", "sev'
+
+
+@pytest.mark.parametrize("bad", [RUNAWAY, CUT])
+def test_cut_off_output_without_a_miss_is_transient_never_critical(on, fake_deps, checkout, bad):
+    models = Models(bad, bad)
+    out, _ = gate(fake_deps, models, RIGHT, checkout)
+    assert out["blocked"] and out["failure_class"] == "transient" and len(models.calls) == 2
+
+
+@pytest.mark.parametrize("bad", [RUNAWAY, CUT])
+def test_cut_off_output_with_a_miss_is_an_ordinary_finding(on, fake_deps, checkout, bad):
+    out, _ = gate(fake_deps, Models(bad, bad), WRONG, checkout)
+    assert out["failure_class"] == "ordinary" and out["reason"].startswith("intent_review: request_literal")
+    assert "cut off" not in out["reason"] and "cut off" in out["intent_review"]["error"]
+
+
+def test_cut_off_output_is_retried_once(on, fake_deps, checkout):
+    models = Models(RUNAWAY, PASS)
+    out, _ = gate(fake_deps, models, RIGHT, checkout)
+    assert out["blocked"] is False and len(models.calls) == 2
+
+
+def test_prompt_forbids_double_quotes_in_evidence_and_pins_the_insert_anchor():
+    assert "KHÔNG dùng dấu nháy kép" in intent_review.PROMPT and "ngay sau / ngay trước" in intent_review.PROMPT
+    assert intent_review.NUM_PREDICT <= 512

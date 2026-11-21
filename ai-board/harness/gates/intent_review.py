@@ -20,7 +20,7 @@ MAX_TOUCHED_CHARS = 3000
 EXCERPT_RADIUS = 6
 MAX_BRIEF_CHARS = 500
 MAX_DETAIL_CHARS = 900
-NUM_PREDICT = 2048
+NUM_PREDICT = 512
 CHECK = "intent_review"
 KINDS = ("wrong_target", "not_verbatim", "outside_request", "missing", "other")
 SEVERITIES = ("high", "medium", "low")
@@ -44,9 +44,9 @@ PROMPT = meter.register_prompt('intent_review', (
     "Từng ký tự phải khớp, kể cả hoa thường; không thêm bớt.\n"
     "3. Chữ mới THAY TOÀN BỘ chữ hiển thị của phần tử đó: emoji, mũi tên, tiền tố cũ phải mất đi trừ khi yêu cầu nói giữ lại.\n"
     "4. Không đổi gì ngoài yêu cầu: file, dòng, phần tử khác phải giữ nguyên. File test dưới test/ do pipeline sinh là hợp lệ.\n"
-    "5. Không thiếu: mọi phần của yêu cầu đã có trong diff.\n"
+    "5. Không thiếu: mọi phần của yêu cầu đã có trong diff. Vị trí chèn phải khớp mốc của yêu cầu (ngay sau / ngay trước phần tử nào).\n"
     "Mỗi lỗi một mục trong findings (tối đa 6): kind (wrong_target | not_verbatim | outside_request | missing | other), severity, file, "
-    "evidence (trích ngắn một dòng từ diff hoặc trang), fix (việc cần làm, ngắn). Chỉ báo lỗi có bằng chứng; không viết lập luận trong các trường.\n"
+    "evidence (trích ngắn một dòng từ diff hoặc trang, KHÔNG dùng dấu nháy kép: dùng nháy đơn hoặc mô tả phần tử), fix (việc cần làm, ngắn). Chỉ báo lỗi có bằng chứng; không viết lập luận trong các trường.\n"
     "KẾT QUẢ CHECK TẤT ĐỊNH là bằng chứng đã đo: không bỏ qua chúng.\n"
     "brief: MỘT bản sửa duy nhất gửi người viết code, tiếng Việt, tối đa 450 ký tự, gộp mọi lỗi của bạn VÀ mọi MISS tất định, "
     "nói rõ việc phải làm (đúng phần tử nào, chữ nguyên văn nào), không khen, không dùng từ 'scope'. brief rỗng khi verdict pass.\n"
@@ -204,19 +204,25 @@ def run(state: dict, deps, budget, checks: list[str], misses: list[str], *, db_p
     prompt = render(_request_text(state), _page_hint(state), pages, diff, checks, misses, from_hint=from_hint)
     routing = getattr(deps.models, "routing", None)
     role_extra, role_options = prompt_roles.call_params("gate4_review", routing, structured=True)
+    for attempt in (1, 2):
+        try:
+            server_hsm.authorize_action("model")
+            body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget, db_path=db_path, proposal_id=proposal_id,
+                                   prompt_name="intent_review", format=SCHEMA, options={**role_options, "num_predict": NUM_PREDICT},
+                                   extra={**role_extra, "system": SYSTEM}, **({"role": "gate4_review"} if routing else {}))
+        except server_hsm.AuthorityError as error:
+            return _blocked(str(error), error.failure_class)
+        except BudgetExhausted:
+            return _blocked("intent review: budget exhausted", "budget")
+        except Exception as error:  # noqa: BLE001 - outage: nothing was judged, so retryable
+            return _blocked(f"intent review failed: {str(error)[:200]}", "transient")
+        try:
+            parsed = json.loads(body.get("response", ""))
+            break
+        except json.JSONDecodeError:  # output cut off or padded to the token cap: nothing was judged, one retry
+            if attempt == 2 or not budget.tick():
+                return _blocked("intent review output was cut off", "transient")
     try:
-        server_hsm.authorize_action("model")
-        body = deps.call_model(deps.models.gate1_model, prompt, gate=4, budget=budget, db_path=db_path, proposal_id=proposal_id,
-                               prompt_name="intent_review", format=SCHEMA, options={**role_options, "num_predict": NUM_PREDICT},
-                               extra={**role_extra, "system": SYSTEM}, **({"role": "gate4_review"} if routing else {}))
-    except server_hsm.AuthorityError as error:
-        return _blocked(str(error), error.failure_class)
-    except BudgetExhausted:
-        return _blocked("intent review: budget exhausted", "budget")
-    except Exception as error:  # noqa: BLE001 - outage: nothing was judged, so retryable
-        return _blocked(f"intent review failed: {str(error)[:200]}", "transient")
-    try:
-        parsed = json.loads(body.get("response", ""))
         brief, findings = parsed["brief"], parsed["findings"]
         if parsed["verdict"] not in ("pass", "fail") or not isinstance(brief, str) or not isinstance(findings, list):
             raise ValueError("shape")
