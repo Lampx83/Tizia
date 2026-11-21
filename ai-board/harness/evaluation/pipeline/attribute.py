@@ -47,7 +47,7 @@ GATE_MODULES = {
     "5": ["gate5/*", "gates/vision_advisory.py", "verification/*"],
     "loop": ["runtime/*"],
 }
-GUARD_CHECKS = {"content", "external_link", "external_script", "image", "injection", "inline_script", "network_call",
+GUARD_CHECKS = {"content", "external_link", "external_script", "image", "injection", "inline_handler", "inline_script", "network_call",
                 "palette", "personal_form", "pii", "protected_path", "python_syntax", "secret", "sensitive_topic",
                 "sovereignty_map", "test_removal"}
 SEALED = ("held-out", "heldout", "sealed")
