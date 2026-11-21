@@ -116,7 +116,7 @@ export function renderDbApproval(item, ui = {}) {
   const kind = HOLD_KIND[item.kind] ? item.kind : 'db';
   const sb = item.sandbox || {}, [state, label] = SANDBOX_STATE[sb.status] || ['idle', 'Chưa rõ kết quả chạy thử'];
   const files = item.files || [], diff = diffLines(sb.schema_diff), cand = item.candidate || {};
-  const checks = sb.checks || [], tests = sb.tests || [], attention = item.attention || [];
+  const checks = sb.checks || [], tests = sb.tests || [], attention = item.attention || [], imports = item.privileged_imports || [];
   const noReason = !String(ui.reason ?? '').trim();
   const clipped = item.clipped === true;
   const id = esc(item.id), hid = `db-approval-${id}`;
@@ -134,6 +134,7 @@ export function renderDbApproval(item, ui = {}) {
     <p class="meta"><a href="/admin-request.html?id=${esc(item.request_id)}" target="_top">Mở trang yêu cầu</a>${cand.branch ? ` · nhánh ${code(cand.branch)}` : ''}${cand.head_sha ? ` · ${code(String(cand.head_sha).slice(0, 7))}` : ''}</p>
     ${clipped ? `<div class="attention" role="alert" data-clipped><b>${esc(TOO_LARGE)}</b></div>` : ''}
     ${attention.length ? `<div class="attention" role="alert"><b>Chạm bảng nhạy cảm:</b> ${attention.map(code).join(' ')}<div class="meta">Đọc kỹ SQL trước khi duyệt: bảng này chứa danh tính, quyền hoặc tiền.</div></div>` : ''}
+    ${imports.length ? `<div class="attention" role="alert" data-imports><b>Import đặc quyền (db.js, context khác)</b><ul>${imports.map((i) => `<li><code>${esc(i)}</code></li>`).join('')}</ul></div>` : ''}
     ${dbPart}${backendPart}
     <div class="sub">File bị giữ</div>
     ${files.length ? `<p>${files.map(code).join(' ')}</p>` : '<p class="meta">Chưa có file liên quan.</p>'}
