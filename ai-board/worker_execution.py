@@ -90,6 +90,8 @@ def _public_gate_result(result: dict) -> dict:
             out["change_class"] = result["change_class"]
         if result.get("adversarial_review"):
             out["adversarial_review"] = result["adversarial_review"]
+        if result.get("intent_review"):
+            out["intent_review"] = result["intent_review"]
     elif result["gate"] == 5:
         out["smoke_passed"] = bool((result.get("evidence") or {}).get("smoke_passed"))
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))

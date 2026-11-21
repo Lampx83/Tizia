@@ -26,7 +26,7 @@ import path_policy
 from services import candidate
 from security import classifier, spotlight
 from verification import functional
-from gates import adversarial_review, best_match, change_class, guard, intake_guard, reviewer_fix, risk_triage, subtask_contract
+from gates import adversarial_review, best_match, change_class, guard, intake_guard, intent_review, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings
 from runtime import levels, limits, subtask_files
@@ -653,6 +653,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
         if outside:
             found = [*found, {"check": "catalog", "failure_class": "critical",
                               "detail": f"path ngoài catalog capability: {', '.join(outside)}"[:300]}]
+    if intent_review.enabled():
+        found, review = intent_review.apply(state, deps, budget, found, out["checks"], db_path=db_path, proposal_id=proposal_id)
+        out = {**out, "checks": [*out["checks"], "intent_review"], "intent_review": review}
     if not found and budget is not None and getattr(deps, "models", None) is not None:
         # Chữ hiển thị mới trên diff thật (base..HEAD) qua LLM soát nội dung; lỗi/không chắc → người soát.
         review = content_review(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
