@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     subtask_fresh_context: bool = False  # cổng 3: mỗi subtask là phiên con context mới, nhận plan + file đã tạo + tóm tắt subtask trước; chạy tuần tự
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
     deterministic_ready_oracle: bool = False  # ready_for_pr cần check tất định (literal nguyên văn + chỉ file được nêu); thiếu thì needs_review; loop dừng chưa qua = needs_review
-    out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, trần 8 file, tối đa needs_review; file logic cần test phủ
+    out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, tối đa needs_review; file logic cần test phủ
     change_class_ddl: bool = False  # change_class: DDL (CREATE/ALTER/DROP TABLE|INDEX) trong dòng thêm của file không phải migration = one-way
     plan_checks: bool = False  # plan khai checks (text_present/text_absent); gate 2.5 soát, gate 5 đo đỏ→xanh base/candidate
     derived_checks: bool = False  # gate 1: verify/checks của css_color/replace/insert/remove suy từ request bằng code, thay lệnh model viết
