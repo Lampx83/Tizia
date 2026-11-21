@@ -38,6 +38,7 @@ def _real_deps(Deps, tracer, progress):
 def _execution_plan(plan: dict) -> dict:
     """Server plan → subtask Gate 3. Giữ nguyên mọi field của step đã duyệt (allowed_scope, tests,
     acceptance, risk, …); thêm file = scope[0], verify = mọi test + acceptance, size theo risk."""
+    from gates import two_level
     subtasks = []
     for step in sorted(plan.get("steps") or [], key=lambda step: step.get("order", 0)):
         scope = step.get("allowed_scope") or []
@@ -46,7 +47,7 @@ def _execution_plan(plan: dict) -> dict:
             raise ValueError("plan step requires allowed_scope and tests")
         verify = dict.fromkeys([*tests, *(step.get("acceptance") or [])])
         subtasks.append({
-            **step, "file": scope[0], "verify": "; ".join(verify),
+            **step, "file": scope[0], "verify": "; ".join(verify), **({"files": scope[1:]} if len(scope) > 1 and two_level.enabled() else {}),
             "size": "small" if step.get("risk") == "low" else "large",
         })
     if not subtasks:

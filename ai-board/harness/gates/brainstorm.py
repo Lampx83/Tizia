@@ -230,7 +230,7 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
                 not isinstance(item, str) or not item.strip() for item in acceptance):
             raise ValueError("acceptance phải là mảng chuỗi không rỗng")
     settings = get_settings()
-    if request is not None and getattr(settings, "derived_checks", False):
+    if request is not None and getattr(settings, "derived_checks", False) and not two_level.decomposing(request):
         from gates import derived_checks
         derived_checks.apply(plan, request, with_checks=bool(getattr(settings, "plan_checks", False)))
     if get_settings().compile_prose_verify:

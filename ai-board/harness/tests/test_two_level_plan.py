@@ -80,7 +80,7 @@ def fixed(file, prompt):
 
 
 def wrong(file, prompt):
-    return {"edits": [{"search": OLD, "replace": WRONG}], "test_file": f"test/{file[7]}.test.js",
+    return {"edits": [{"search": WRONG if WRONG in prompt else OLD, "replace": WRONG}], "test_file": f"test/{file[7]}.test.js",
             "test": f"import test from 'node:test';\n// {file}\n"}
 
 
@@ -311,3 +311,78 @@ def test_reviewer_outage_stops_the_subtask_without_a_fix_round(repo, tmp_path, o
     out, state = gate3(repo, tmp_path, plan, models, repairs_left=5)
     assert out["blocked"] is True and out["failure_class"] in ("critical", "transient") and state["repairs_left"] == 5
     assert "review stopped" in out["reason"] and len(models.edits()) == 1
+
+
+# ── wiring: server plan, derived checks, gate 2.5, worker verdict ──
+
+def test_multi_file_scope_reaches_the_executor(on, monkeypatch):
+    import worker_execution
+    import worker_planner
+    from runtime import subtask_files
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    raw = decomposition(files=["public/a.html", "public/js/a.js"])
+    plan = brainstorm.parse_plan(json.dumps(raw), request=REQUEST)
+    canonical = worker_planner.HarnessPlanner._canonical({**REQUEST, "domain": None}, plan)
+    assert canonical["steps"][0]["allowed_scope"] == ["public/a.html", "public/js/a.js"]
+    assert canonical["allowed_scope"] == ["public/a.html", "public/js/a.js", "public/b.html"]
+    executed = worker_execution._execution_plan(canonical)
+    assert subtask_files.files_of(executed["subtasks"][0]) == ["public/a.html", "public/js/a.js"]
+    assert subtask_files.files_of(executed["subtasks"][1]) == ["public/b.html"]
+
+
+def test_flag_off_server_plan_keeps_one_file_per_step(monkeypatch):
+    import worker_planner
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    plan = {"summary_vi": "s", "capabilities": [], "subtasks": [
+        {"title": "t", "file": "public/a.html", "verify": "grep -q x public/a.html", "size": "small", "files": ["public/js/a.js"]}]}
+    canonical = worker_planner.HarnessPlanner._canonical({**REQUEST, "domain": None}, plan)
+    assert canonical["steps"][0]["allowed_scope"] == ["public/a.html"] and canonical["allowed_scope"] == ["public/a.html"]
+
+
+def test_derived_checks_never_replace_the_fixed_criteria(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_DERIVED_CHECKS", "1")
+    plan = brainstorm.parse_plan(json.dumps(decomposition()), request=REQUEST)
+    assert [st["checks_source"] for st in plan["subtasks"]] == ["two_level", "two_level"]
+    assert [c for st in plan["subtasks"] for c in st["checks"]] == [two_level.acceptance_structure.check_of(i) for i in plan["criteria"]]
+
+
+def test_gate_2_5_rules_still_run_on_the_decomposition(repo, on):
+    from gates import plan_validate
+    from runtime import coverage
+    plan = normalized()
+    assert coverage.plan_block(plan, lambda: [], lambda: []) is None
+    state = {"plan": plan, "checkout_source": str(repo)}
+    out = plan_validate.run(REQUEST, deps_with(Models({})), Budget(max_wall_clock_s=999, max_model_calls=20), state)
+    assert out["blocked"] is False, out["reason"]
+    broken = normalized()
+    broken["subtasks"][1]["checks"] = [{"primitive": "text_present", "path": "b.html", "text": "x"}]
+    out = plan_validate.run(REQUEST, deps_with(Models({})), Budget(max_wall_clock_s=999, max_model_calls=20), {"plan": broken})
+    assert out["blocked"] is True and out["outcome"] == plan_validate.PLAN_UNFIT
+
+
+def test_worker_run_folds_fix_rounds_into_repairs_and_ends_partial_with_a_stop_report(repo, on, no_detail, monkeypatch):
+    import worker_execution
+    import worker_planner
+    monkeypatch.setenv("AI_BOARD_STOP_REPORT_V2", "1")
+    fail = {"verdict": "fail", "findings": [], "brief": "Sai chữ trang b."}
+    models = Models({}, lambda f, p: fixed(f, p) if f == "public/a.html" else wrong(f, p), reviews=(PASS, fail))
+    deps = deps_with(models)
+    canonical = worker_planner.HarnessPlanner._canonical({**REQUEST, "domain": None}, normalized())
+    seen = {}
+
+    def run_gate(gate, _request, deps, budget, state):
+        assert gate == 3, gate  # gate 3 stops partial: no later gate runs
+        seen["repairs_left"] = state["repairs_left"]
+        return implement.run(state, deps, budget)
+
+    verdict = worker_execution.execute_pre_pr(
+        canonical, ticket_id=7, checkout_source=repo, deps=deps, budget=Budget(max_wall_clock_s=999, max_model_calls=60),
+        run_gate=run_gate, cleanup=lambda *a, **k: None, request_detail=REQUEST["body"])
+    cap = worker_execution.repair_cap()
+    assert seen["repairs_left"] == cap and cap >= 1
+    assert verdict["outcome"] == "blocked" and verdict["failure_class"] == "partial"
+    # same wrong output and brief twice: state_repeat ends the loop long before the shared cap
+    assert [r["reason"] for r in verdict["repairs"]] == ["two-level fix 'Nút #go trang b hiển thị Bắt đầu': Sai chữ trang b."]
+    assert "state_repeat" in verdict["reason"]
+    assert verdict["stop_report"]["blocked_gate"] == 3 and "hoàn thành một phần 1/2" in verdict["reason"]
+    assert "Sai chữ trang b." in verdict["reason"] and verdict["reason"].startswith("stop[")

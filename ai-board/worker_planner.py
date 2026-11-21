@@ -353,7 +353,9 @@ class HarnessPlanner:
         steps = []
         settings = get_settings()
         from gates import two_level
-        planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level.enabled() else {}
+        from runtime import subtask_files
+        two_level_on = two_level.enabled()
+        planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level_on else {}
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
@@ -372,7 +374,7 @@ class HarnessPlanner:
                 "order": index,
                 "title": subtask["title"],
                 "description": subtask["title"],
-                "allowed_scope": [file],
+                "allowed_scope": [file, *subtask_files.files_of(subtask)[1:]] if two_level_on else [file],
                 "acceptance": [subtask["verify"]],
                 "tests": [subtask["verify"]],
                 "capability": capability,
@@ -388,7 +390,7 @@ class HarnessPlanner:
         return {
             "domain": request["domain"],
             "goal": old["summary_vi"],
-            "allowed_scope": [step["allowed_scope"][0] for step in steps],
+            "allowed_scope": [path for step in steps for path in (step["allowed_scope"] if two_level_on else step["allowed_scope"][:1])],
             "acceptance": list(dict.fromkeys(old.get("acceptance") or [item for step in steps for item in step["acceptance"]])),
             "tests": list(dict.fromkeys(item for step in steps for item in step["tests"])),
             "capabilities": capabilities,
