@@ -317,3 +317,9 @@ def test_cut_off_output_is_retried_once(on, fake_deps, checkout):
 def test_prompt_forbids_double_quotes_in_evidence_and_pins_the_insert_anchor():
     assert "KHÔNG dùng dấu nháy kép" in intent_review.PROMPT and "ngay sau / ngay trước" in intent_review.PROMPT
     assert intent_review.NUM_PREDICT <= 512
+
+
+def test_complete_object_padded_with_whitespace_is_read_without_retry(on, fake_deps, checkout):
+    models = Models(json.dumps(PASS) + "\t" * 500)
+    out, _ = gate(fake_deps, models, RIGHT, checkout)
+    assert out["blocked"] is False and len(models.calls) == 1

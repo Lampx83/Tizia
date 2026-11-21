@@ -1,13 +1,12 @@
 """AI reviewer of a candidate against the request (AI_BOARD_INTENT_REVIEW): fresh context, merges every problem into one repair brief. Fails closed."""
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
 from gates import guard
 from repositories import server_hsm
-from runtime import prompt_roles
+from runtime import model_json, prompt_roles
 from runtime.budgets import meter
 from runtime.budgets.budget import BudgetExhausted
 from security import spotlight
@@ -218,9 +217,9 @@ def run(state: dict, deps, budget, checks: list[str], misses: list[str], *, db_p
         except Exception as error:  # noqa: BLE001 - outage: nothing was judged, so retryable
             return _blocked(f"intent review failed: {str(error)[:200]}", "transient")
         try:
-            parsed = json.loads(body.get("response", ""))
+            parsed = model_json.loads((body.get("response") or "").rstrip())
             break
-        except json.JSONDecodeError:  # output cut off or padded to the token cap: nothing was judged, one retry
+        except ValueError:  # output cut off or padded to the token cap: nothing was judged, one retry
             if attempt == 2 or not budget.tick():
                 return _blocked("intent review output was cut off", "transient")
     try:

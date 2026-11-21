@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     call_executor: bool = False  # runtime/call_executor.py: one retry/failover owner; off = legacy loops
     explore_low_confidence: bool = False
     state_file: bool = False
+    intake_selfcheck: bool = False  # gate 1 intake: lexicon rồi 1 lời gọi tự kiểm Yes/No thay JSON guard + logprob classifier
     gate1_arbiter: bool = True
     gate1_arbiter_min: float = Field(default=0.97, ge=0.5, le=1.0)
     no_oracle_review_any: bool = True  # gate 5: không oracle + smoke xanh + không có generated test → needs_review thay vì block

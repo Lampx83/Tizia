@@ -146,7 +146,10 @@ def _split_call(prompt: str, role: str, routing, extra: dict | None, options: di
     context = (extra or {}).get('_skill_context')
     if extra and '_skill_context' in extra:
         extra = {k: v for k, v in extra.items() if k != '_skill_context'}
-    if not prompt_roles.enabled() or (extra or {}).get('system') or (extra or {}).get('logprobs'):
+    no_split = bool((extra or {}).get('_no_split'))  # calibrated prompts must reach the model byte-identical
+    if no_split:
+        extra = {k: v for k, v in extra.items() if k != '_no_split'}
+    if no_split or not prompt_roles.enabled() or (extra or {}).get('system') or (extra or {}).get('logprobs'):
         return prompt, extra, options
     system, user = prompt_roles.split(prompt)
     if role in ('gate1', 'gate3_light', 'gate3_heavy', 'gate4_review'):

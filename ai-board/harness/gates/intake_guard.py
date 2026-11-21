@@ -31,6 +31,10 @@ from gates import guard
 from runtime import limits, model_json
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_guard.md").read_text(encoding="utf-8")
+SELFCHECK_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "intake_selfcheck.md").read_text(encoding="utf-8")
+SELFCHECK_CALIBRATION_ID = "intake-selfcheck-v1"
+SELFCHECK_OPTIONS = {"num_predict": 5, "temperature": 0.001}
+SELFCHECK_MAX_TEXT = 2000
 
 LABELS = (
     "ok", "prompt_injection", "privileged_area", "money", "personal_data", "politics_sovereignty", "religion",
@@ -98,6 +102,11 @@ def _trusts_requester(requester_role: str | None) -> bool:
     return bool(get_settings().admin_requester_trust and requester_role == "admin")
 
 
+def _selfcheck_on() -> bool:
+    from settings import get_settings
+    return bool(get_settings().intake_selfcheck)
+
+
 def _warns_by_role() -> bool:
     from settings import get_settings
     return bool(get_settings().intake_labels_by_role)
@@ -154,6 +163,34 @@ def classify(title: str, detail: str, deps, budget, *, db_path=None, proposal_id
     return labels, reason
 
 
+def selfcheck_prompt(text: str) -> str:
+    """Render self-check template; trailing newline dropped, text inserted raw."""
+    return SELFCHECK_PROMPT.removesuffix("\n").replace("{{ user_input }}", text[:SELFCHECK_MAX_TEXT], 1)
+
+
+def selfcheck_blocks(response: str) -> bool:
+    """Yes/No answer -> True when message must be blocked. Unclear or empty answer blocks."""
+    words = re.sub(r"\W+", " ", response.lower().strip()).split(" ")[:2]
+    for word, safe in (("safe", True), ("unsafe", False), ("yes", False), ("no", True)):
+        if word in words:
+            return not safe
+    return True
+
+
+def selfcheck(text: str, deps, budget, *, db_path=None, proposal_id=None) -> tuple[bool | None, str]:
+    """(blocked, answer). Error or budget exhausted -> (None, reason)."""
+    if not budget.tick():
+        return None, "hết budget, không gọi được tự kiểm"
+    try:
+        body = deps.call_model(deps.models.gate1_model, selfcheck_prompt(text), gate=1, budget=budget, db_path=db_path,
+                               proposal_id=proposal_id, prompt_name="intake_selfcheck.md", format=None,
+                               options=dict(SELFCHECK_OPTIONS), extra={"thinking": False, "_no_split": True})
+        answer = body.get("response", "")
+    except Exception as e:  # model sập/timeout/hết budget — fail closed
+        return None, f"tự kiểm lỗi: {str(e)[:200]}"
+    return selfcheck_blocks(answer), _THINK.sub("", answer).strip()[:40]
+
+
 _CACHE: dict[str, dict] = {}
 _CACHE_MAX = 64
 
@@ -165,7 +202,8 @@ def run(request_title: str, request_detail: str | None, deps, budget, *, db_path
     models = getattr(deps, "models", None)
     key = hashlib.sha256(json.dumps([request_title or "", request_detail or "", requester_role or "",
                                      str(getattr(models, "gate1_model", "")),
-                                     str(getattr(models, "classifier_model", "")), limits.config_sha256()]).encode()).hexdigest()
+                                     str(getattr(models, "classifier_model", "")), limits.config_sha256(),
+                                     *([SELFCHECK_CALIBRATION_ID] if _selfcheck_on() else [])]).encode()).hexdigest()
     if key in _CACHE:
         return {**_CACHE[key], "cached": True}
     out = _run(request_title, request_detail, deps, budget, db_path=db_path, proposal_id=proposal_id,
@@ -189,7 +227,21 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
     verdict = _worst(hits.values())
     reasons = [f"tất định: {', '.join(hits)}"] if hits else []
     scored = None
-    if verdict in ("allow", "needs_info"):
+    selfchecked = None
+    if verdict in ("allow", "needs_info") and _selfcheck_on():
+        blocked, answer = selfcheck(readonly_verification_text(f"{title}\n{detail}".strip()), deps, budget,
+                                    db_path=db_path, proposal_id=proposal_id)
+        selfchecked = {"calibration_id": SELFCHECK_CALIBRATION_ID, "answer": answer, "blocked": blocked}
+        if blocked is None:
+            hits["classifier_error"] = "human_review"
+            reasons.append(f"tự kiểm: {answer}")
+        elif blocked:
+            hits["selfcheck_unsafe"] = "human_review"
+            reasons.append(f"tự kiểm: model chặn ({answer})")
+        else:
+            reasons.append(f"tự kiểm: cho qua ({answer})")
+        verdict = _worst([verdict, *hits.values()])
+    elif verdict in ("allow", "needs_info"):
         llm, why = classify(readonly_verification_text(title), readonly_verification_text(detail), deps, budget,
                             db_path=db_path, proposal_id=proposal_id)
         if trusted and "privileged_area" in llm:
@@ -235,6 +287,8 @@ def _run(request_title: str, request_detail: str | None, deps, budget, *, db_pat
         out["arbitrated"] = arbitrated
     if warned:
         out["warned_labels"] = warned
+    if selfchecked:
+        out["selfcheck"] = selfchecked
     if scored:
         out["classifier"] = scored  # model, probs, escalate, logged: compared with the JSON guard
     if readonly_verification_text(f"{title}\n{detail}") != f"{title}\n{detail}":
