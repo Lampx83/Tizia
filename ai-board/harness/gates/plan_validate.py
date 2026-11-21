@@ -193,9 +193,15 @@ def explore_enabled() -> bool:
     return get_settings().explore_low_confidence
 
 
+def _source_root(path: str) -> bool:
+    """Path grounding may read: SOURCE_ROOTS, plus the editable mounted contexts when requester_fullstack_db is on."""
+    return path.startswith(SOURCE_ROOTS) or (path_policy.fullstack_on() and path_policy.mounted_context(path)
+                                              and path_policy.may_edit(path))
+
+
 def _in_scope(path: str, source, sha: str) -> bool:
     """Tương đối, trong SOURCE_ROOTS, đuôi file đọc được, không bị path_policy chặn, là file ở sha."""
-    if not path.startswith(SOURCE_ROOTS) or '..' in Path(path).parts or not _FILE_SUFFIX.match(Path(path).suffix):
+    if not _source_root(path) or '..' in Path(path).parts or not _FILE_SUFFIX.match(Path(path).suffix):
         return False
     if path_policy.denied(path):
         return False
@@ -269,7 +275,7 @@ def source_evidence(request: dict, plan: dict, state: dict) -> tuple[str | None,
     tasks += [{'file': path} for path in named if path not in {str(task.get('file') or '') for task in tasks}]
 
     def readable(path: str) -> bool:
-        return path.startswith(SOURCE_ROOTS) and '..' not in Path(path).parts
+        return _source_root(path) and '..' not in Path(path).parts
 
     blobs = repo_at_commit.at(source, sha).read_many(
         [path for path in (str(task.get('file') or '') for task in tasks) if readable(path)])
