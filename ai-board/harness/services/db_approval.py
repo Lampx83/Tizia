@@ -12,6 +12,7 @@ from verification import db_check
 _GENERATED_MIGRATION = re.compile(rf"^{re.escape(path_policy.GENERATED_ROOT)}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql$")
 _INLINE = re.compile(rf"{change_class._DDL.pattern}|(?<!\w)truncate\s+(?:table\s+)?[\w.\"]+", re.I)
 SQL_CAP = 20_000
+TOO_LARGE = "quá lớn để admin duyệt; tách yêu cầu nhỏ hơn"
 _TOP_TEST = re.compile(r"^tests?/")
 # INSERT carries literal rows only: no SELECT, no function call can run inside a migration.
 _LITERAL = r"(?:''|-?\d+(?:\.\d+)?|NULL|TRUE|FALSE|DEFAULT)"
@@ -90,7 +91,9 @@ def review(diffs: list[dict], role: str = "student") -> dict | None:
                 problems.append(f"{path}: migration phải là file mới, không sửa file đã có")
             problems += [f"{path}: {item}" for item in db_check.violations(sql)]
             problems += [f"{path}: {item}" for item in idempotency_problems(sql)]
-            migrations.append({"path": path, "sql": sql[:SQL_CAP]})
+            if len(sql) > SQL_CAP:
+                problems.append(f"{path}: migration {len(sql)} ký tự, {TOO_LARGE}")
+            migrations.append({"path": path, "sql": sql})
         elif not _TOP_TEST.match(path) and any(_INLINE.search(line) for line in added):
             problems.append(f"{path}: DDL viết trong code; thay đổi DB phải nằm trong file migrations/*.sql")
     if not migrations and not problems:
@@ -208,9 +211,10 @@ def backend_change(diffs: list[dict], server_public: frozenset[str] | None = fro
     pulled = _pulled(roots, diffed, read)
     parts += [PULLED_NOTE.format(path=path) + text for path, text in sorted(pulled.items())]
     text = "".join(parts)
-    if len(text) > DIFF_CAP:
+    clipped = len(text) > DIFF_CAP
+    if clipped:
         text = text[:DIFF_CAP] + CLIP_NOTE.format(cap=DIFF_CAP)
-    return {"files": sorted(set(files) | set(pulled)), "diff": text}
+    return {"files": sorted(set(files) | set(pulled)), "diff": text, **({"clipped": True} if clipped else {})}
 
 
 def push_hold(diffs: list[dict], role: str, server_public: frozenset[str] | None = frozenset()) -> str | None:

@@ -2157,6 +2157,7 @@ function resumeSummary(journal) {
   }
 
   // ── DB approval gate: a held candidate is pushed only after an admin approves its exact run/head. ──
+  const CLIP_CAP = 20_000;
   const HELD_RUNS = `SELECT r.id, r.evidence_json, r.created_at FROM ai_runs r WHERE r.ticket_id=?
     AND r.outcome IN ('ready_for_pr', 'needs_review') AND r.evidence_json LIKE '%"db_hold":true%' ORDER BY r.id DESC`;
   const DB_DECISIONS = `SELECT event_type, actor_id, internal_detail, created_at FROM ai_events
@@ -2216,7 +2217,7 @@ function resumeSummary(journal) {
         kind: kinds.length === 2 ? 'both' : kinds[0],
         sql: migrations.map((m) => `-- ${m.path}\n${m.sql}`).join('\n\n'),
         migrations, files: [...new Set([...(change.files || []), ...(backend.files || [])])].sort(),
-        diff: backend.diff ?? '', attention: change.attention || [],
+        diff: backend.diff ?? '', attention: change.attention || [], clipped: !!(change.clipped || backend.clipped),
         sandbox: { ...(change.sandbox || {}), output: dbSummary(change) },
         candidate: verdict.candidate ? { branch: verdict.candidate.branch, base_sha: verdict.candidate.base_sha, head_sha: verdict.candidate.head_sha } : null,
         decision: decided ? { decision: decided.event_type === 'db_approved' ? 'approved' : 'rejected', reason: decided.detail.reason ?? null,
@@ -2250,6 +2251,14 @@ function resumeSummary(journal) {
     const candidate = parseJson(held?.evidence_json)?.verdict?.candidate;
     if (!held || held.id !== itemId || !candidate || (input.headSha && input.headSha !== candidate.head_sha)) {
       throw new WorkerContractError('this DB change is not the one waiting for approval', 409, 'stale_db_approval');
+    }
+    const heldVerdict = parseJson(held.evidence_json)?.verdict ?? {};
+    // Fail closed: an item the admin cannot see in full is never approvable.
+    const clipped = heldVerdict.db_change?.clipped || heldVerdict.backend_change?.clipped
+      || (heldVerdict.backend_change?.diff || '').length >= CLIP_CAP || (heldVerdict.backend_change?.diff || '').includes('# --- clipped at')
+      || (heldVerdict.db_change?.migrations || []).some((m) => (m.sql || '').length >= CLIP_CAP);
+    if (input.decision === 'approved' && clipped) {
+      throw new WorkerContractError('the change is clipped and too large to review; reject it', 409, 'too_large_to_approve');
     }
     const detail = JSON.stringify({ run_id: held.id, head_sha: candidate.head_sha, reason: input.reason });
     const decided = (await db.get(`SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND event_type IN ('db_approved', 'db_rejected')`, [root.id])).n;

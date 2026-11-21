@@ -300,3 +300,19 @@ test('flag off: a requester backend change is not held', async () => {
     if (before !== undefined) process.env.AI_BOARD_REQUESTER_FULLSTACK_DB = before;
   }
 });
+
+test('a clipped item can only be rejected', async () => {
+  for (const extra of [
+    { db_change: { ...DB_CHANGE, migrations: [{ path: MIGRATION, sql: `${SQL};\n${'-- pad\n'.repeat(4000)}` }] } },
+    { db_change: DB_CHANGE, backend_change: { files: [MIGRATION], diff: 'x'.repeat(100), clipped: true } },
+    { db_change: DB_CHANGE, backend_change: { files: [MIGRATION], diff: `x\n# --- clipped at 20000 characters ---\n` } },
+  ]) {
+    const { db, store, ticket, lease, run } = await heldRoot(passing(extra));
+    await release(store, ticket, lease);
+    const [item] = await store.listDbApprovals({ requestId: 1 });
+    assert.equal(item.clipped, true);
+    await assert.rejects(store.decideDbApproval(1, run.id, { decision: 'approved', adminUserId: 9 }), (e) => e.code === 'too_large_to_approve');
+    assert.equal((await store.decideDbApproval(1, run.id, { decision: 'rejected', reason: 'Quá lớn, tách nhỏ', adminUserId: 9 })).phase, 'admin_rejected');
+    db.close();
+  }
+});

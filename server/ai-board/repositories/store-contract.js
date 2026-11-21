@@ -302,6 +302,7 @@ export function softMissNote(gates) {
 }
 
 const DB_SQL_CAP = 20_000;
+const CLIP_MARK = '# --- clipped at';
 /** DB change the worker reports with a passing verdict: migrations verbatim (capped), files, sandbox report. */
 function cleanDbChange(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -310,10 +311,12 @@ function cleanDbChange(value) {
   const names = (items) => (Array.isArray(items) ? items.slice(0, 50).map((item) => String(item).slice(0, 120)) : []);
   const columns = (map) => Object.fromEntries(Object.entries(map && typeof map === 'object' ? map : {}).slice(0, 50)
     .map(([table, cols]) => [String(table).slice(0, 120), names(cols)]));
+  const raw = (Array.isArray(value.migrations) ? value.migrations : [])
+    .filter((m) => m && typeof m.path === 'string' && typeof m.sql === 'string');
+  const clipped = value.clipped === true || raw.length > 10 || raw.some((m) => m.sql.length >= DB_SQL_CAP);
   return {
-    migrations: (Array.isArray(value.migrations) ? value.migrations : []).slice(0, 10)
-      .filter((m) => m && typeof m.path === 'string' && typeof m.sql === 'string')
-      .map((m) => ({ path: m.path.slice(0, 300), sql: m.sql.slice(0, DB_SQL_CAP) })),
+    ...(clipped ? { clipped: true } : {}),
+    migrations: raw.slice(0, 10).map((m) => ({ path: m.path.slice(0, 300), sql: m.sql.slice(0, DB_SQL_CAP) })),
     files: names(value.files).map((file) => file.slice(0, 300)),
     attention: names(value.attention),
     sandbox: {
@@ -332,8 +335,10 @@ function cleanDbChange(value) {
 /** Non-public files of a passing candidate and their diff text, for the admin approval card. */
 function cleanBackendChange(value) {
   if (!value || typeof value !== 'object' || !Array.isArray(value.files)) return null;
+  const diff = String(value.diff ?? '');
+  const clipped = value.clipped === true || diff.length >= DB_SQL_CAP || diff.includes(CLIP_MARK);
   return { files: value.files.slice(0, 200).map((file) => String(file).slice(0, 300)),
-    diff: String(value.diff ?? '').slice(0, DB_SQL_CAP) };
+    diff: diff.slice(0, DB_SQL_CAP), ...(clipped ? { clipped: true } : {}) };
 }
 
 /** revisedChecks: the accepted plan replaced a suspect check, so the run is for a human only. */

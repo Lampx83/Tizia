@@ -251,7 +251,7 @@ class _Budget:
         return True
 
 
-def _execute(tmp_path, diff):
+def _execute(tmp_path, diff, role=None):
     def run_gate(gate, _request, _deps, _budget, state):
         if gate == 3:
             state.update(diffs=[{"file": CONTEXT, "test_file": None, "diff": "x"}], branch="ai-board/2026-11-21-ticket-1",
@@ -268,7 +268,8 @@ def _execute(tmp_path, diff):
 
     kept = []
     out = execute_pre_pr(PLAN, ticket_id=1, checkout_source=tmp_path, deps=object(), budget=_Budget(), run_gate=run_gate,
-                         cleanup=lambda _state, keep_branch: kept.append(keep_branch))
+                         cleanup=lambda _state, keep_branch: kept.append(keep_branch),
+                         candidate_opts={"requester_role": role} if role else None)
     return out, kept
 
 
@@ -520,3 +521,57 @@ def test_held_file_pulling_in_a_public_module_shows_its_full_content(flag, tmp_p
     assert clipped["diff"].endswith("# --- clipped at 20000 characters ---\n")
     assert db_approval.backend_change([{"diff": _edit("public/js/free.js", ["import './helper.js';"])}], server_public,
                                       current.get) is None, "frontend-only file pulling a module stays frontend"
+
+
+# ── nothing reaches the admin clipped ──
+
+def test_oversized_migration_is_judged_on_its_full_text_and_blocked(flag, monkeypatch):
+    padding = "\n".join(f"CREATE TABLE IF NOT EXISTS pad_{i} (id int);" for i in range(800))
+    sql = padding + "\nINSERT INTO users (email, role) VALUES ('x', 'admin') ON CONFLICT DO NOTHING;"
+    change = db_approval.review([{"diff": _new_file(MIGRATION, sql)}])
+    assert "users" in change["attention"], "attention reads the full text"
+    assert any(db_approval.TOO_LARGE in p for p in change["problems"])
+    assert change["migrations"][0]["sql"] == sql
+    monkeypatch.setattr(db_approval, "run_sandbox", lambda *a, **k: pytest.fail("oversized SQL must not reach the sandbox"))
+    assert db_approval.evaluate([{"diff": _new_file(MIGRATION, sql)}])["status"] == "blocked"
+
+
+PADDED = (_edit("public/js/engine/case-db.js", ["// " + "x" * 30_000])
+          + _edit("public/js/pharmacy/score.js", ["import('../../../server/db.js').then(m => m.default.run('UPDATE users SET role=1'));"]))
+
+
+def test_oversized_backend_diff_is_marked_clipped(flag):
+    change = db_approval.backend_change([{"diff": PADDED}], None)
+    assert change["clipped"] is True and change["diff"].endswith("# --- clipped at 20000 characters ---\n")
+    assert "clipped" not in db_approval.backend_change([{"diff": FE_BE_DIFF}], None)
+
+
+def test_oversized_backend_candidate_is_blocked_for_requesters_not_admins(flag, tmp_path):
+    out, kept = _execute(tmp_path, PADDED)
+    assert out["outcome"] == "blocked" and out["failure_class"] == "ordinary" and kept[-1] is False
+    assert db_approval.TOO_LARGE in out["reason"]
+    admin, _ = _execute(tmp_path, PADDED, role="admin")
+    assert admin["outcome"] == "ready_for_pr" and admin["backend_change"]["clipped"] is True
+
+
+def test_worker_passes_the_server_role_to_the_gates_only_under_the_flag(flag, monkeypatch):
+    seen = []
+
+    class Role(FakeTransport):
+        def __call__(self, method, path, payload, headers):
+            out = super().__call__(method, path, payload, headers)
+            return {**out, "requester_role": "admin"} if path.endswith("/snapshot") else out
+
+    def runner(*_a, **kwargs):
+        seen.append(kwargs.get("candidate_opts"))
+        return dict(PASSING)
+    HttpWorker(WorkerClient("http://fixture", "secret", transport=Role()), worker_id="w1", mode="active",
+               planner=lambda _s: ({"goal": "g", "tests": [], "steps": []}, 0), change_runner=runner,
+               candidates=DiffCandidates(FE_DIFF)).run_once()
+    assert seen == [{"requester_role": "admin"}]
+    monkeypatch.delenv(FLAG)
+    seen.clear()
+    HttpWorker(WorkerClient("http://fixture", "secret", transport=Role()), worker_id="w1", mode="active",
+               planner=lambda _s: ({"goal": "g", "tests": [], "steps": []}, 0), change_runner=runner,
+               candidates=DiffCandidates(FE_DIFF)).run_once()
+    assert seen == [None]

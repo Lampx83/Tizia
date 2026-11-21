@@ -387,6 +387,10 @@ class HttpWorker:
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
             "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
             "folder_brief": brief.get("text")}} if folder_src else {}
+        import path_policy
+        if path_policy.fullstack_on() and snapshot.get("requester_role"):
+            # Server-authenticated role: only the admin approval gate reads it, and only under the flag.
+            run_kwargs["candidate_opts"] = {**run_kwargs.get("candidate_opts", {}), "requester_role": snapshot["requester_role"]}
         if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
         if trigger == "reverify":

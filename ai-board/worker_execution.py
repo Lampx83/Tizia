@@ -595,15 +595,21 @@ class _Execution:
         from services import db_approval
         source, base = state.get("checkout_repo") or str(self.checkout_source), state.get("base_sha")
         server_public = db_approval.server_imported_public(str(source), base) if base else None
-        # Always sent under the flag: an absent list makes the server hold every public JS module.
         checkout = state.get("full_checkout")
 
         def read(rel):
             target = Path(checkout) / rel if checkout else None
             return target.read_text(encoding="utf-8", errors="replace") if target and target.is_file() else None
 
+        # Always sent under the flag: an absent list makes the server hold every public JS module.
         self.backend_change = (db_approval.backend_change(state.get("full_diff") or [], server_public, read)
                                or {"files": [], "diff": ""})
+        role = state.get("requester_role") or "student"
+        if self.backend_change.get("clipped") and role != path_policy.ADMIN_ROLE:
+            self.gates[-1] = {**self.gates[-1], "blocked": True,
+                              "reason": f"thay đổi phía máy chủ {db_approval.TOO_LARGE}"}
+            self.kind = "ordinary"
+            return
         try:
             outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
         except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup
