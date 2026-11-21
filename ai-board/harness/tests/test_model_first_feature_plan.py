@@ -48,8 +48,16 @@ def fullstack(monkeypatch):
     monkeypatch.setattr(react_plan, "exploration_enabled", lambda: False)
 
 
+def _ledger_replies():
+    """With model_first the plan comes from the react loop and carries a decision ledger."""
+    line = "// Teacher Team Quest + Class Leaderboard (Classcraft-style)"
+    ledger = [{"decision": "choose_file", "target": f"{CTX}/index.js", "evidence": [{"step_id": 1, "tool_output_excerpt": line}], "rejected": []}]
+    plan = {**PLAN, "subtasks": [{**t, "quotes": [line]} for t in PLAN["subtasks"]], "decisions": ledger}
+    return [{"tool": "read_file", "arguments": {"file": f"{CTX}/index.js"}}, {"tool": "finish", "arguments": {"plan": plan}}]
+
+
 def _gate1(request=REQUEST):
-    deps = deps_with(_SeqModels([PLAN, PLAN]))
+    deps = deps_with(_SeqModels(_ledger_replies() if os.environ.get("AI_BOARD_MODEL_FIRST") else [PLAN, PLAN]))
     out = brainstorm.run(request, deps, Budget(max_wall_clock_s=999), source=str(REPO), sha=_sha())
     return out, deps.models.calls[0]["prompt"]
 
