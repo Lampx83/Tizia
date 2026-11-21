@@ -2,13 +2,14 @@
 Giới hạn số (budget, loop, thời gian) ở server/ai-board/contract.json qua runtime/limits.py, không ở đây."""
 from __future__ import annotations
 
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Mapping
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_GATE25_FIXES = frozenset({"quotes", "ellipsis"})
@@ -187,6 +188,12 @@ class Settings(BaseSettings):
 
     # secret; worker.take_secret vẫn đọc-rồi-xoá key của chính nó khỏi môi trường
     internal_key: SecretStr = SecretStr("")
+
+    @model_validator(mode="after")
+    def _two_level_needs_checks(self):
+        if self.two_level_plan and not self.plan_checks:
+            logging.getLogger(__name__).warning("AI_BOARD_TWO_LEVEL_PLAN is set without AI_BOARD_PLAN_CHECKS: two-level plan stays off")
+        return self
 
     @field_validator("gate1_probe_timeout_s")
     @classmethod

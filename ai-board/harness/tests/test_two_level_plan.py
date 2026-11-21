@@ -64,7 +64,7 @@ class Models(FakeModels):
             return {"response": json.dumps(reply, ensure_ascii=False), "prompt_eval_count": 1, "eval_count": 1}
         if model in (self.gate3_model, self.gate3_model_light):
             self.calls.append({"model": model, "prompt": prompt, "role": "edit"})
-            file = next(line[8:].strip() for line in prompt.splitlines() if line.startswith("- file: "))
+            file = next((line[8:].strip() for line in prompt.splitlines() if line.startswith("- file: ")), None)
             return {"response": json.dumps(self.code(file, prompt), ensure_ascii=False), "prompt_eval_count": 1, "eval_count": 1}
         return super().generate(model, prompt, **kw)
 
@@ -386,3 +386,80 @@ def test_worker_run_folds_fix_rounds_into_repairs_and_ends_partial_with_a_stop_r
     assert "state_repeat" in verdict["reason"]
     assert verdict["stop_report"]["blocked_gate"] == 3 and "hoàn thành một phần 1/2" in verdict["reason"]
     assert "Sai chữ trang b." in verdict["reason"] and verdict["reason"].startswith("stop[")
+
+
+# ── review follow-ups: real tool loop fix round, server capability, path shape, startup warning ──
+
+def test_fix_round_in_the_real_tool_loop_starts_from_last_rounds_files(repo, tmp_path, on, no_detail, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_TOOL_LOOP", "1")
+    first = [{"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": OLD, "replace": WRONG}]}},
+             {"tool": "write_test", "arguments": {"test_file": "test/a.test.js", "test": "import test from 'node:test';\n// public/a.html\n"}},
+             {"tool": "finish", "arguments": {}}]
+    second = [{"tool": "edit_file", "arguments": {"file": "public/a.html", "edits": [{"search": WRONG, "replace": NEW}]}},
+              {"tool": "finish", "arguments": {}}]  # no write_test: the test is carried from round 1
+    rounds = {"first": 0, "second": 0}
+
+    def code(file, prompt):
+        key = "second" if "Lần làm trước bị loại" in prompt else "first"
+        script = first if key == "first" else second
+        rounds[key] += 1
+        return script[min(rounds[key], len(script)) - 1]
+
+    fail = {"verdict": "fail", "findings": [], "brief": "Chữ nút phải đúng 'Bắt đầu'."}
+    models = Models({}, code, reviews=(fail, PASS))
+    plan = {"summary_vi": "s", "capabilities": [], "subtasks": [normalized()["subtasks"][0]]}
+    out, state = gate3(repo, tmp_path, plan, models, repairs_left=2)
+    assert out["blocked"] is False, out["reason"]
+    assert rounds == {"first": 3, "second": 2}
+    assert (tmp_path / "scratch/public/a.html").read_text(encoding="utf-8") == PAGE.replace(OLD, NEW)
+    assert (tmp_path / "scratch/test/a.test.js").exists() and state["repairs_left"] == 1
+
+
+def _node(script: str, *args: str) -> str:
+    root = Path(__file__).resolve().parents[3]
+    run = subprocess.run(["node", "--input-type=module", "-e", script, *args], cwd=root, capture_output=True, text=True,
+                         encoding="utf-8", check=True)
+    return run.stdout.strip()
+
+
+@pytest.mark.skipif(__import__("shutil").which("node") is None, reason="node not installed")
+def test_multi_file_step_gets_a_capability_the_server_policy_accepts(on, monkeypatch, tmp_path):
+    import worker_planner
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    policy = "./server/ai-board/security/policy.js"
+    catalog = json.loads(_node(f"import {{ CAPABILITY_POLICY as p }} from '{policy}'; console.log(JSON.stringify("
+                               "Object.fromEntries(Object.entries(p).map(([k, v]) => [k, {allow: v.allow, deny: v.deny}]))))"))
+    raw = decomposition(files=["public/a.html", "server/contexts/_ai-generated/demo/api.js"])
+    plan = brainstorm.parse_plan(json.dumps(raw), request=REQUEST)
+    canonical = worker_planner.HarnessPlanner._canonical({**REQUEST, "domain": "it"}, plan, None, catalog)
+    assert canonical["steps"][0]["capability"] == "features" and canonical["steps"][1]["capability"] == "public.ui"
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(canonical, ensure_ascii=False), encoding="utf-8")
+    verdict = _node(f"import {{ validatePlan }} from '{policy}'; import fs from 'node:fs';"
+                    "try { const out = validatePlan(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')), 'it');"
+                    " console.log('ok ' + out.plan.steps.map((s) => s.allowed_scope.join('+')).join('|')); }"
+                    " catch (e) { console.log('reject ' + (e.code || '') + ' ' + e.message); }", str(path))
+    assert verdict == "ok public/a.html+server/contexts/_ai-generated/demo/api.js|public/b.html", verdict
+
+
+@pytest.mark.parametrize("files", [["../server/x.js"], ["/etc/passwd"], ["public/../../x.html"]])
+def test_normalize_refuses_paths_outside_the_repo(files, on):
+    with pytest.raises(ValueError, match="path không hợp lệ"):
+        two_level.normalize(decomposition(files=files))
+
+
+def test_normalize_only_tidies_a_leading_dot_slash(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    plan = two_level.normalize(decomposition(files=["./public/a.html", r"public\js\a.js"]))
+    assert plan["subtasks"][0]["file"] == "public/a.html" and plan["subtasks"][0]["allowed_scope"] == ["public/a.html", "public/js/a.js"]
+
+
+def test_flag_without_plan_checks_warns_once_at_startup(monkeypatch, caplog):
+    from settings import get_settings
+    monkeypatch.setenv("AI_BOARD_TWO_LEVEL_PLAN", "1")
+    with caplog.at_level("WARNING", logger="settings"):
+        get_settings()
+        get_settings()
+    assert [r.getMessage() for r in caplog.records].count(
+        "AI_BOARD_TWO_LEVEL_PLAN is set without AI_BOARD_PLAN_CHECKS: two-level plan stays off") == 1
+    assert two_level.enabled() is False

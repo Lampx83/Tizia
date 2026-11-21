@@ -364,6 +364,12 @@ class HarnessPlanner:
                               old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
             ))
+            scope = [file, *subtask_files.files_of(subtask)[1:]] if two_level_on else [file]
+            if len(scope) > 1:  # the server grants a step one capability: it must cover every file of the step
+                capability = next((cap for cap in dict.fromkeys([*old_caps, *(catalog or {})]) if all(
+                    any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
+                    and not any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('deny', []))
+                    for path in scope)), capability)
             layer = subtask.get("layer") or ("backend" if path_policy.may_edit(file)
                                              else "db" if "/migrations/" in file and file.endswith(".sql")
                                              else "frontend" if file.startswith("public/") else "wiring")
@@ -374,7 +380,7 @@ class HarnessPlanner:
                 "order": index,
                 "title": subtask["title"],
                 "description": subtask["title"],
-                "allowed_scope": [file, *subtask_files.files_of(subtask)[1:]] if two_level_on else [file],
+                "allowed_scope": scope,
                 "acceptance": [subtask["verify"]],
                 "tests": [subtask["verify"]],
                 "capability": capability,

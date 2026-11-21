@@ -64,7 +64,8 @@ def normalize(plan: dict) -> dict:
         files = st.get("files")
         if not isinstance(files, list) or not files or any(not isinstance(f, str) or not f.strip() for f in files):
             raise ValueError(f"subtask[{i}].files phải là mảng đường dẫn không rỗng")
-        files = list(dict.fromkeys(subtask_files._norm(f).lstrip("./") for f in files))
+        subtask_files._check_shape(i, files)
+        files = list(dict.fromkeys(subtask_files._norm(f) for f in files))
         if len(files) > 1 and not subtask_files.enabled():
             raise ValueError(f"subtask[{i}] chỉ được một file; tách {', '.join(files[1:])} thành subtask riêng")
         for path in files:
@@ -233,7 +234,7 @@ def run_subtask(subtask: dict, *, state: dict, deps, budget, current: str | None
                 proposal_id=None) -> tuple:
     """Plan, edit, check + review, fix with one merged brief until it passes or an existing stop rule ends it.
     generate(state, current) -> _generate_one result. Fix rounds spend the shared repair cap (state['repairs_left'])."""
-    from runtime import limits
+    from runtime import limits, tool_loop
     from runtime.root_allowance import current as root_allowance
     trace = getattr(deps, "trace", None)
     session = detail_session(state, subtask, deps, budget, db_path=db_path, proposal_id=proposal_id)
@@ -276,4 +277,9 @@ def run_subtask(subtask: dict, *, state: dict, deps, budget, current: str | None
         state["repairs_left"] -= 1
         state.setdefault("reviewer_repairs", []).append({"gate": 3, "reason": f"two-level fix '{subtask['title']}': {brief}"[:200]})
         work = {**work, "repair_reason": brief}
-        current = out["code"]
+        if tool_loop.mode() in ("1", "auto") and state.get("checkout_source"):
+            # a repair round runs the tool loop: it edits from the base it pins, so last round's files are its drafts
+            work["loop_drafts"] = {"files": {subtask["file"]: out["code"], **(out.get("extra_files") or {})},
+                                   "test_file": out.get("test_file"), "test": out.get("test")}
+        else:
+            current = out["code"]
