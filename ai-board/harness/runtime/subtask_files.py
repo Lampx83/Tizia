@@ -6,6 +6,7 @@ import re
 import unicodedata
 from pathlib import PurePosixPath, PureWindowsPath
 
+from runtime import limits
 from settings import get_settings
 
 
@@ -43,8 +44,9 @@ def _doubled(task: dict) -> bool:
 
 
 def budget_factor(task: dict) -> int:
-    """Số file; plan từ 3 file nhân đôi khi budget_by_file_count bật."""
-    return 2 * len(files_of(task)) if _doubled(task) else len(files_of(task))
+    """Số file, chặn ở limits.loop.file_factor_max; plan từ 3 file nhân đôi khi budget_by_file_count bật."""
+    n = min(len(files_of(task)), limits.loop()["file_factor_max"])
+    return 2 * n if _doubled(task) else n
 
 
 def wall_clock_factor(task: dict) -> int:

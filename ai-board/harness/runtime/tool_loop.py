@@ -576,13 +576,19 @@ class Workspace:
     def _follow_vm(self, drafts: dict[str, str]) -> list[str]:
         """Adopt the VM diff after an exec; returns the out-of-scope paths put back to base."""
         try:
-            snapshot = self.sandbox.changes(drafts)
+            snapshot = self.sandbox.changes(drafts, in_scope=self._vm_scope)
             if snapshot is None:
                 return []
             self._adopt(*snapshot)
             return self._restore_vm()
         except SandboxError:
             return []  # a broken VM surfaces at finish, where the diff is read again
+
+    def _vm_scope(self, path: str) -> bool:
+        """False only for a VM path _check_scope would put back to base; denied paths stay so they still fault."""
+        return (path in (self.file, self.test_file) or path in self.extra_content or path.startswith(("test/", "tests/"))
+                or bool(MANIFEST.policy.write_reason(path)) or path_policy.denied(path, "write")
+                or bool(self.outside_role and path_policy.outside_plan_ok(path, self.outside_role)))
 
     def _restore_vm(self) -> list[str]:
         paths, self.vm_restore = self.vm_restore, []
@@ -624,7 +630,7 @@ class Workspace:
     def _vm_settle(self) -> None:
         """Finish: push pending drafts, read the final diff from git in the VM, restore out-of-scope paths, refuse path-policy faults."""
         try:
-            self._adopt(*self.sandbox.settle(self._drafts()))
+            self._adopt(*self.sandbox.settle(self._drafts(), in_scope=self._vm_scope))
             self._restore_vm()
         except SandboxError as error:
             raise sandbox_tool.VMUnavailable(error.code, error.status) from None

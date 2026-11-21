@@ -194,3 +194,14 @@ def test_gate2_ignores_extra_files_when_flag_off():
     catalog = {"custom": {"tier": "surface", "allow": ["public/"], "deny": []}}
     plan = {"capabilities": ["custom"], "subtasks": [task(file="public/a.js", files=["server/index.js"])]}
     assert not scope_check.check(plan, catalog=catalog)["blocked"]
+
+
+def test_budget_factor_is_clamped(on, monkeypatch):
+    from runtime import limits
+    cap = limits.loop()["file_factor_max"]
+    big = task(files=[f"public/f{i}.js" for i in range(21)])
+    assert len(subtask_files.files_of(big)) == 22 and subtask_files.budget_factor(big) == cap
+    monkeypatch.setenv("AI_BOARD_BUDGET_BY_FILE_COUNT", "1")
+    assert subtask_files.budget_factor(big) == 2 * cap
+    from runtime import tool_loop
+    assert tool_loop.child_caps(big)["max_model_calls"] <= 2 * cap * limits.loop()["model_calls"]

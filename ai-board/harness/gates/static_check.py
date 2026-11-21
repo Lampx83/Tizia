@@ -307,7 +307,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             out_of_plan.update(path for path in stray if path_policy.outside_plan_ok(path, role))
             stray = [path for path in stray if path not in out_of_plan]
         if stray:
-            reason = f"file ngoài plan trong diff: {', '.join(stray)}"
+            reason = f"file ngoài plan trong diff: {_clip_list(stray)}"
             return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                     "issues": [*issues, reason], "failure_class": "critical"}
 
@@ -360,7 +360,7 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
         uncovered = _uncovered_logic(sorted(out_of_plan), diffs, scratch_repo)
         if uncovered:
             state["outside_cover_tries"] = tries = state.get("outside_cover_tries", 0) + 1
-            reason = f"file logic ngoài plan thiếu test phủ: {', '.join(uncovered)}"
+            reason = f"file logic ngoài plan thiếu test phủ: {_clip_list(uncovered)}"
             return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                     "issues": [*issues, reason], "failure_class": "ordinary" if tries == 1 else "critical"}
     if outside_on:
@@ -378,6 +378,18 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     return {"gate": 4, "blocked": False, "reason": None,
             "needs_careful_review": needs_careful_review or bool(advisory),
             "issues": issues, "content_advisory": advisory, **report}
+
+
+def _clip_list(paths: list[str], limit: int = 600) -> str:
+    """Join paths up to limit chars; rest counted."""
+    shown, size = [], 0
+    for path in paths:
+        if shown and size + len(path) + 2 > limit:
+            break
+        shown.append(path)
+        size += len(path) + 2
+    rest = len(paths) - len(shown)
+    return ", ".join(shown) + (f" (+{rest} file nữa)" if rest else "")
 
 
 def _uncovered_logic(paths: list[str], diffs: list[dict], scratch_repo) -> list[str]:

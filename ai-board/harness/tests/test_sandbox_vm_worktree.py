@@ -75,9 +75,10 @@ class FakeVM(FakeClient):
             return self._out()
         if name == "add":
             if sub[1] == "-f":
-                if sub[-1] not in self.files:
+                if any(p not in self.files for p in sub[3:]):
                     return self._out(rc=128)
-                self.index[sub[-1]] = self.files[sub[-1]]
+                for p in sub[3:]:
+                    self.index[p] = self.files[p]
                 return self._out()
             force = "-f" in sub
             self.index = {p: v for p, v in self.index.items() if p in self.files}
@@ -104,6 +105,8 @@ class FakeVM(FakeClient):
                     lines.append(f":{self._mode(old) if old is not None else '000000'} {self._mode(new)} "
                                  f"{blob(old) if old is not None else ZERO} {blob(new)} {'A' if old is None else 'M'}\t{listed}")
             return self._out("\n".join(lines) + ("\n" if lines else ""))
+        if name == "ls-tree":
+            return self._out("".join(p + chr(10) for p in sub[sub.index("--") + 1:] if p in self.trees[sub[2]]))
         if name == "cat-file" and sub[1] == "-e":
             tree, _, path = sub[2].partition(":")
             return self._out(rc=0 if path in self.trees[tree] else 128)
@@ -114,11 +117,13 @@ class FakeVM(FakeClient):
                     return self._out(data.decode("utf-8", "replace"), truncated=self.truncate_cat)
             return self._out(rc=128)
         if name == "checkout":
-            self.files[sub[-1]] = self.index[sub[-1]] = self.trees[sub[1]][sub[-1]]
+            for p in sub[3:]:
+                self.files[p] = self.index[p] = self.trees[sub[1]][p]
             return self._out()
         if name == "rm":
-            self.files.pop(sub[-1], None)
-            self.index.pop(sub[-1], None)
+            for p in sub[sub.index("--") + 1:]:
+                self.files.pop(p, None)
+                self.index.pop(p, None)
             return self._out()
         raise AssertionError(sub)
 
@@ -390,11 +395,11 @@ def test_transient_error_at_finish_retries_in_a_fresh_vm(on, monkeypatch):
     ws, runner = prepared(client)
     real, calls = runner.changes, []
 
-    def flaky(drafts, ensure=False):
+    def flaky(drafts, ensure=False, in_scope=None):
         calls.append(1)
         if len(calls) == 1:
             raise SandboxError("runner_unreachable", "exec", 503)
-        return real(drafts, ensure)
+        return real(drafts, ensure, in_scope)
     monkeypatch.setattr(runner, "changes", flaky)
     assert ws.proposal()["code"] == "<h1>Z</h1>\n" and len(calls) == 2
     runner.close()
@@ -513,4 +518,16 @@ def test_declared_target_that_turns_unusable_goes_back_to_the_model_draft(on, va
     ws.run("edit_file", EDIT)
     ws.run(sandbox_tool.NAME, {"argv": FREE})
     assert ws.content == "<h1>Z</h1>\n" and client.files[TARGET] == "<h1>Z</h1>\n"
+    runner.close()
+
+
+def test_many_files_and_junk_keep_exec_count_flat(on):
+    def junk(argv, files):
+        for i in range(30):
+            files[f"junk/j{i}.txt"] = "x"
+    client = FakeVM(bash=junk)
+    ws, runner = workspace(client)
+    ws.run(sandbox_tool.NAME, {"argv": FREE})
+    assert len(client.execs) < 15
+    assert sum(c[0] == "cat-file" for c in client.git_calls) <= 2
     runner.close()
