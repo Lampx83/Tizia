@@ -212,8 +212,10 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
         raise ValueError("thiếu summary_vi")
     if two_level.decomposing(request):
         two_level.normalize(plan)
+    if "subtasks" not in plan and data_kinds.data_only(plan):
+        plan["subtasks"] = []
     subtasks = plan.get("subtasks")
-    if not isinstance(subtasks, list) or not subtasks:
+    if not isinstance(subtasks, list) or (not subtasks and not data_kinds.data_only(plan)):
         raise ValueError("subtasks rỗng")
     for i, st in enumerate(subtasks):
         if not isinstance(st, dict):

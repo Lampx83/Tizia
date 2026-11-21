@@ -400,7 +400,7 @@ class HarnessPlanner:
                    {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
                 **({"checks": planned[file]} if planned.get(file) else {}),
             })
-        steps += data_kinds.steps(old, len(steps) + 1)
+        steps += data_kinds.steps(old, len(steps) + 1, steps)
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {
             "domain": request["domain"],
@@ -538,6 +538,13 @@ class HarnessPlanner:
         if snapshot.get("clarification_incomplete"):
             signals.append("requester_still_vague")  # legacy incomplete clarification → risk high → admin cho phép plan
         plan = self._canonical(request, state["plan"], signals, state['catalog'])
+        from gates import data_kinds
+        try:
+            data_kinds.sandbox([step for step in plan["steps"] if step.get("layer") == "data"])
+        except ValueError as error:
+            raise PlanBlockedError(f"data step blocked: {error}", {
+                "gate": 1, "reason": str(error), "signals": [], "plan": json.dumps(state.get("plan"), ensure_ascii=False)[:2000],
+                "public_message": "Bước thay đổi dữ liệu chưa qua kiểm tra trên Postgres thử nghiệm."}) from None
         self.last_session = state.get("plan_session")
         self.last_approved = ({"checks": state["approved_checks"], "pin": state.get("approved_pin")}
                               if state.get("approved_checks") else None)

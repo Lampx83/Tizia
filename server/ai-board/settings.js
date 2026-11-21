@@ -20,6 +20,8 @@ export function getSettings(env = environment()) {
     promptLabels: truthy(env.AI_BOARD_PROMPT_LABELS),
     // Requesters edit mounted contexts; a candidate with a DB change waits for an admin before any push.
     requesterFullstackDb: truthy(env.AI_BOARD_REQUESTER_FULLSTACK_DB),
+    // A plan data step may target any kind of contract.json data_kinds, not only campus_layout.
+    dataRegistry: truthy(env.AI_BOARD_DATA_REGISTRY),
     tokenizerFile: text(env, 'AI_BOARD_QWEN_TOKENIZER'),
     workerKey: text(env, 'AI_BOARD_WORKER_KEY'),
     shots: {
