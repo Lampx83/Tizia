@@ -1736,7 +1736,9 @@ function resumeSummary(journal) {
     const folderHeld = await folderNotApproved(root.source_request_id);
     const stepGates = checked.stepTiers.map((tier, i) => (checked.plan.steps[i].layer === 'data' && !folderHeld
       ? DATA_GATE : planGate({ tier, authorized, folderHeld, elevation })));
-    const split = splitGates(stepGates);
+    // Registry flag on, every step a data step: nothing for a worker to run, so the root waits only for the admin's acknowledgements.
+    const dataOnly = getSettings().dataRegistry && !folderHeld && checked.plan.steps.every((step) => step.layer === 'data');
+    const split = splitGates(stepGates) ?? (dataOnly ? { ...DATA_GATE, status: 'planned', reason: 'data_only' } : null);
     const gate = split ?? planGate({ tier: checked.tier, authorized, folderHeld, elevation });
     const effectiveTier = split ? 'surface' : checked.tier;
     const rootStatus = gate.status;
@@ -1772,8 +1774,9 @@ function resumeSummary(journal) {
           description: step.description, allowed_scope: step.allowed_scope,
           acceptance: step.acceptance, tests: step.tests, risk: step.risk, non_goals: step.non_goals,
           layer: step.layer, depends_on: step.depends_on, ...(step.payload ? { payload: step.payload } : {}),
+          ...(step.data_kind ? { data_kind: step.data_kind } : {}), ...(step.db_check ? { db_check: step.db_check } : {}),
         }),
-        split ? stepGates[step.order - 1].child : childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
+        split || dataOnly ? stepGates[step.order - 1].child : childStatus, checked.plan.steps.length - step.order, publicNote, internalReason,
         checked.stepTiers[step.order - 1], revision, step.layer ?? null, JSON.stringify(step.depends_on ?? []), now, now,]);
       const childId = info;
       await db.run(insertTag, [childId, 'implementation']);
@@ -2597,17 +2600,26 @@ function resumeSummary(journal) {
     if (!root || ['cancelled', 'done'].includes(root.status) || PHASES[root.phase]?.terminal) {
       throw new WorkerContractError('request is already closed', 409, 'request_closed');
     }
-    const child = await db.get(`SELECT id, status, layer, plan_revision FROM ai_tickets WHERE id=? AND parent_id=?${db.lockRow}`,
+    const child = await db.get(`SELECT id, status, layer, plan_revision, description FROM ai_tickets WHERE id=? AND parent_id=?${db.lockRow}`,
       [Number(childId), root.id]);
     if (!child || child.layer !== 'data' || Number(child.plan_revision) !== Number(root.plan_revision)) {
       throw new WorkerContractError('data step not found in the current plan', 404, 'data_step_not_found');
     }
     if (child.status !== 'waiting_data') throw new WorkerContractError('data step is not waiting for the admin', 409, 'data_step_not_waiting');
+    // The registry names who may apply this kind; the acknowledge route only admits admins.
+    const approver = parseJson(child.description)?.data_kind?.approver;
+    if (approver && approver !== 'admin') throw new WorkerContractError(`data step must be approved by ${approver}`, 403, 'data_step_approver');
     await db.run(`UPDATE ai_tickets SET status='done', phase='acknowledged', public_note=?, internal_reason=NULL, updated_at=? WHERE id=?`,
       ['Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', now, child.id]);
     await db.run(insertEvent, [root.id, 'data_step_acknowledged', 'admin', String(adminUserId), `waiting_data->done`,
       'Quản trị viên đã áp dụng và xác nhận bước dữ liệu.', `child ${child.id}`, `data-ack:${child.id}`, now]);
-    if (root.status === 'planned') {
+    const open = await db.get(`SELECT 1 FROM ai_tickets WHERE parent_id=? AND plan_revision=? AND status NOT IN ('done', 'invalidated', 'cancelled')`,
+      [root.id, root.plan_revision]);
+    const worked = await db.get(`SELECT 1 FROM ai_tickets WHERE parent_id=? AND plan_revision=? AND layer IS DISTINCT FROM 'data'`, [root.id, root.plan_revision]);
+    if (getSettings().dataRegistry && !open && !worked) {
+      await closeRoot(root, { status: 'done', phase: 'acknowledged', note: 'Quản trị viên đã áp dụng và xác nhận mọi bước dữ liệu.', now,
+        event: { type: 'data_only_completed', actorType: 'admin', actorId: adminUserId, idem: `data-only-done:${root.id}` } });
+    } else if (root.status === 'planned') {
       await db.run(`UPDATE ai_tickets SET status='queued', phase='authorized', updated_at=? WHERE id=?`, [now, root.id]);
     }
     return { ok: true };

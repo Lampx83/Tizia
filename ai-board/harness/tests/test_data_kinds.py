@@ -13,8 +13,10 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
+from gate5 import db_check
 from gates import brainstorm, data_kinds
 from runtime import limits
+from services import db_approval
 from settings import reset_settings
 from test_gate_1_dag import feature_plan
 
@@ -40,7 +42,7 @@ def flag_on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_DATA_REGISTRY", "1")
     reset_settings()
     yield
-    monkeypatch.delenv("AI_BOARD_DATA_REGISTRY")
+    monkeypatch.delenv("AI_BOARD_DATA_REGISTRY", raising=False)
     reset_settings()
 
 
@@ -73,7 +75,7 @@ def test_flag_off_campus_layout_output_is_identical(monkeypatch):
 
 
 def test_flag_on_unknown_kind_and_bad_payload_are_refused_with_reason(flag_on):
-    with pytest.raises(ValueError, match=r"kind 'sql' không có trong registry \(campus_layout\)"):
+    with pytest.raises(ValueError, match=r"kind 'sql' không có trong registry \(campus_layout, sql_insert\)"):
         brainstorm.parse_plan(json.dumps(with_data({"title": "x", "payload": {"kind": "sql"}})))
     bad = {"title": "x", "payload": {"kind": "campus_layout", "domain": "it", "layout": {"evil": 1}}}
     with pytest.raises(ValueError, match=r"layout\.evil không được phép"):
@@ -132,3 +134,114 @@ def test_malformed_registry_entry_is_reported(monkeypatch):
     monkeypatch.setattr(limits, "contract", lambda: contract)
     with pytest.raises(ValueError, match="campus_layout thiếu approver"):
         data_kinds.kinds()
+
+
+VECTORS = json.loads((ROOT / "test" / "fixtures" / "data-schema-vectors.json").read_text(encoding="utf-8"))["cases"]
+SEED = "INSERT INTO shop_items (id, name) VALUES (1, 'Mũ phù thuỷ') ON CONFLICT DO NOTHING"
+
+
+@pytest.mark.parametrize("case", VECTORS, ids=[case["name"] for case in VECTORS])
+def test_shared_schema_vectors(case):
+    assert data_kinds.validate(case["value"], case["schema"]) == case["errors"]
+
+
+def seed(sql=SEED, **extra):
+    return {"title": "Thêm FAQ", "payload": {"kind": "sql_insert", "sql": sql}, **extra}
+
+
+def test_data_step_can_sit_between_file_steps(flag_on):
+    plan = brainstorm.parse_plan(json.dumps(with_data({**CAMPUS, "depends_on": [1], "required_by": [3]})))
+    steps = canonical(plan)["steps"]
+    assert [s["layer"] for s in steps] == ["db", "backend", "frontend", "data"]
+    assert steps[2]["depends_on"] == [2, 4] and steps[3]["depends_on"] == [1]
+
+
+def test_data_step_links_follow_a_same_file_merge(flag_on):
+    base = feature_plan()
+    base["subtasks"][1]["file"] = base["subtasks"][0]["file"]
+    base["subtasks"][1]["layer"] = "db"
+    plan = brainstorm.parse_plan(json.dumps({**base, "data_changes": [{**CAMPUS, "depends_on": [2], "required_by": [3]}]}))
+    steps = canonical(plan)["steps"]
+    assert len(steps) == 3 and 3 in steps[1]["depends_on"] and steps[2]["depends_on"] == [1]
+
+
+def test_data_dependency_cycle_is_refused(flag_on):
+    with pytest.raises(ValueError, match="vòng phụ thuộc"):
+        brainstorm.parse_plan(json.dumps(with_data({**CAMPUS, "depends_on": [3], "required_by": [1]})))
+    with pytest.raises(ValueError, match="required_by ngoài"):
+        brainstorm.parse_plan(json.dumps(with_data({**CAMPUS, "required_by": [9]})))
+
+
+def test_data_only_plan_needs_the_flag(flag_on, monkeypatch):
+    raw = json.dumps({"summary_vi": "Nạp dữ liệu mẫu.", "capabilities": [], "subtasks": [], "data_changes": [{**CAMPUS, "depends_on": []}]})
+    plan = brainstorm.parse_plan(raw)
+    out = canonical(plan)
+    assert [s["layer"] for s in out["steps"]] == ["data"] and out["steps"][0]["order"] == 1
+    assert out["allowed_scope"] == [] and out["capabilities"] == ["content"]
+    monkeypatch.delenv("AI_BOARD_DATA_REGISTRY")
+    reset_settings()
+    with pytest.raises(ValueError, match="subtasks rỗng"):
+        brainstorm.parse_plan(raw)
+
+
+def test_sql_insert_is_accepted_when_it_is_a_literal_insert(flag_on):
+    plan = brainstorm.parse_plan(json.dumps(with_data(seed())))
+    assert plan["data_changes"][0]["payload"] == {"kind": "sql_insert", "sql": SEED}
+    assert "sql_insert: Seed rows" in brainstorm.build_prompt({"id": "r"}, frozenset({"public.ui"}))
+
+
+@pytest.mark.parametrize("sql,why", [
+    ("INSERT INTO shop_items (id) SELECT 1 ON CONFLICT DO NOTHING", "VALUES hằng"),
+    ("INSERT INTO shop_items (id) VALUES (now()) ON CONFLICT DO NOTHING", "VALUES hằng"),
+    ("INSERT INTO shop_items (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET id = 2", "không khớp"),
+    ("INSERT INTO shop_items (id) VALUES (1)", "không khớp"),
+    ("INSERT INTO shop_items (id) VALUES (1); INSERT INTO shop_items (id) VALUES (2) ON CONFLICT DO NOTHING", "không khớp"),
+    ("INSERT INTO nowhere_table (id) VALUES (1) ON CONFLICT DO NOTHING", "không có trong schema base"),
+    ("INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING", "nhạy cảm"),
+    ("INSERT INTO ai_prompt_log (id) VALUES (1) ON CONFLICT DO NOTHING", "nhạy cảm"),
+])
+def test_sql_insert_refusals_carry_a_reason(flag_on, sql, why):
+    with pytest.raises(ValueError, match=why):
+        brainstorm.parse_plan(json.dumps(with_data(seed(sql))))
+
+
+def test_base_schema_sql_covers_every_manifest_table():
+    sql = db_approval.base_schema_sql()
+    assert sql.count("CREATE TABLE") == len(db_approval.base_tables()) and 'CREATE TABLE "shop_items"' in sql
+
+
+def test_sandbox_runner_loads_the_base_schema_before_the_snapshot():
+    from test_db_check_sandbox import FakeSession
+    session = FakeSession()
+    db_check.SandboxPgRunner(session, base_sql="CREATE TABLE t (id text);").run(SEED, [])
+    psql = [" ".join(argv) for argv in session.execs if "psql" in argv]
+    assert "CREATE TABLE t" in psql[0] and "information_schema" in psql[1] and SEED in psql[-2]
+
+
+def test_insert_goes_through_the_sandbox_with_the_base_schema(monkeypatch):
+    seen = {}
+
+    def fake(sql, should_stop=None, base_sql=""):
+        seen.update(sql=sql, base=base_sql)
+        return {"status": "passed", "schema_diff": {}, "checks": [], "tests": [], "error": None}
+    monkeypatch.setattr(db_approval, "run_sandbox", fake)
+    assert db_approval.evaluate_insert(SEED)["status"] == "passed"
+    assert seen["sql"] == SEED and 'CREATE TABLE "shop_items"' in seen["base"]
+
+
+def test_data_steps_are_stamped_or_refused_by_the_sandbox(flag_on, monkeypatch):
+    plan = brainstorm.parse_plan(json.dumps(with_data(seed(), CAMPUS)))
+    steps = [s for s in canonical(plan)["steps"] if s["layer"] == "data"]
+    verdicts = iter([{"status": "passed", "reason": None}])
+    monkeypatch.setattr(db_approval, "evaluate_insert", lambda sql, should_stop=None: next(verdicts))
+    data_kinds.sandbox(steps)
+    assert steps[0]["db_check"] == {"status": "passed", "profile": "db_check"} and "db_check" not in steps[1]
+    monkeypatch.setattr(db_approval, "evaluate_insert", lambda sql, should_stop=None: {"status": "transient", "reason": "tắt"})
+    with pytest.raises(ValueError, match="tắt"):
+        data_kinds.sandbox(steps)
+
+
+def test_sandbox_is_a_no_op_with_the_flag_off(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_DATA_REGISTRY", raising=False)
+    reset_settings()
+    data_kinds.sandbox([{"layer": "data", "order": 1}])

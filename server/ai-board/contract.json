@@ -45,7 +45,7 @@
     "soft": { "soft_start": 2, "soft_step": 1 }
   },
   "data_kinds": {
-    "_why": "Registry of admin data-write APIs a plan data step may target (gates/data_kinds.py). Flag off = registry ignored and the planner never sees it. A kind is one entry: route, method, context (owner), tier, approver, capability, verify (runnable command), max_bytes (JSON size of the payload), schema (JSON schema subset: type, enum, const, required, properties, additionalProperties, minProperties, maxProperties, items, minItems, maxItems, minLength, maxLength, minimum, maximum, pattern). The step is applied by the approver, never written by the worker.",
+    "_why": "Registry of admin data-write APIs a plan data step may target (gates/data_kinds.py). Flag off = registry ignored and the planner never sees it. A kind is one entry: route, method, context (owner), tier, approver, capability, verify (runnable command), max_bytes (JSON size of the payload), review (optional; db_insert = the payload sql also runs on the sandbox Postgres with the base schema, via services/db_approval.py, before the plan is accepted), schema (JSON schema subset: type, enum, const, required, properties, additionalProperties, minProperties, maxProperties, items, minItems, maxItems, minLength, maxLength, minimum, maximum, pattern). The step is applied by the approver, never written by the worker.",
     "flag": "AI_BOARD_DATA_REGISTRY", "default_enabled": false,
     "kinds": {
       "campus_layout": {
@@ -58,6 +58,19 @@
             "kind": { "const": "campus_layout" },
             "domain": { "enum": ["preschool", "primary", "secondary", "it", "pharmacy", "language", "driving"] },
             "layout": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "title": {}, "credit": {}, "grass": {}, "vroads": {}, "hroads": {}, "autoPaths": {}, "roads": {}, "buildings": {}, "facilities": {}, "fields": {}, "playthings": {}, "critters": {}, "trees": {}, "cars": {}, "props": {}, "walkways": {}, "tints": {}, "sportTargets": {}, "walls": {} } }
+          }
+        }
+      },
+      "sql_insert": {
+        "summary": "Seed rows into an existing platform table (INSERT ... ON CONFLICT DO NOTHING, literal values).",
+        "route": "/api/admin/db/query", "method": "POST", "context": "admin", "tier": "protected", "approver": "admin",
+        "capability": "content", "verify": "node --test test/ai-board-data-step.test.js", "max_bytes": 20000,
+        "review": "db_insert",
+        "schema": {
+          "type": "object", "required": ["kind", "sql"],
+          "properties": {
+            "kind": { "const": "sql_insert" },
+            "sql": { "type": "string", "minLength": 20, "maxLength": 20000, "pattern": "^INSERT INTO [^;]+ ON CONFLICT DO NOTHING;?$" }
           }
         }
       }

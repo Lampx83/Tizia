@@ -547,12 +547,15 @@ function dataSteps(t) {
     let spec = {};
     try { spec = JSON.parse(c.description || '{}'); } catch { /* mô tả hỏng: vẫn hiện tiêu đề */ }
     const payload = spec.payload;
-    const target = payload ? `POST /api/admin/campus-layout/${payload.domain}` : (spec.allowed_scope || []).join(', ');
-    const body = payload ? `<details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(payload.layout, null, 2))}</pre></details>` : '';
+    const kind = spec.data_kind && spec.data_kind.kind !== 'campus_layout' ? spec.data_kind : null;
+    const target = kind ? `${kind.method} ${kind.route}` : payload ? `POST /api/admin/campus-layout/${payload.domain}` : (spec.allowed_scope || []).join(', ');
+    const shown = kind ? payload : payload?.layout;
+    const body = payload ? `<details><summary>Payload JSON</summary><pre>${esc(JSON.stringify(shown, null, 2))}</pre></details>` : '';
+    const rule = kind ? ` <span class="meta" data-kind-rule>${esc(kind.kind)} · người duyệt: ${esc(kind.approver)} · cấp ${esc(kind.tier)}${spec.db_check ? ' · đã chạy thử trên Postgres sandbox' : ''}</span>` : '';
     const action = c.status === 'waiting_data'
       ? `<button class="btn ok" data-action="ack-data" data-root="${esc(t.root.id)}" data-child="${esc(c.id)}" data-title="${esc(c.title)}">Đã áp dụng, ghi nhận</button>`
       : `<span class="meta">${c.status === 'done' ? 'Đã ghi nhận' : esc(childStatus(c.status))}</span>`;
-    return `<li><b>${esc(c.title)}</b> <span class="meta">${code(target)}</span>${body}${action}</li>`;
+    return `<li><b>${esc(c.title)}</b> <span class="meta">${code(target)}</span>${rule}${body}${action}</li>`;
   }).join('');
   return `<div class="g-result"><div class="g-caption">Data steps</div><ul>${items}</ul>
     <span class="meta" id="data-step-result" role="status" tabindex="-1">${esc(ui.dataMsg || '')}</span></div>`;

@@ -211,8 +211,8 @@ def exec_allowed(argv) -> bool:
 class SandboxPgRunner:
     """PostgreSQL 16 container inside the microVM, no network, ready-checked over loopback TCP (the init-time server is socket-only); removed in finally."""
 
-    def __init__(self, session, timeout: float = 60.0):
-        self.session, self.timeout = session, timeout
+    def __init__(self, session, timeout: float = 60.0, base_sql: str = ""):
+        self.session, self.timeout, self.base_sql = session, timeout, base_sql
 
     def _exec(self, argv, timeout: float | None = None) -> dict:
         """session.exec for EXEC_POLICY argv only. Raise ExecRefused before the guest sees anything else."""
@@ -241,6 +241,10 @@ class SandboxPgRunner:
             ready = self._exec(_READY)
             if ready["rc"] != 0:
                 raise RuntimeError("postgres not ready")
+            if self.base_sql:
+                base = self._psql(self.base_sql, "-v", "ON_ERROR_STOP=1")
+                if base["rc"] != 0:
+                    raise RuntimeError(f"base schema failed: {base['stderr'][:200]}")
             before = self._snapshot()
             applied = self._psql(sql, "-v", "ON_ERROR_STOP=1")
             if applied["rc"] != 0:
@@ -256,10 +260,11 @@ class SandboxPgRunner:
 
 
 def run_db_check(sql: str, *, enabled: bool, session_factory, verify_sql=(), test_argv=(), allowed_argv=(),
-                 stage=None) -> dict:
+                 stage=None, base_sql: str = "") -> dict:
     """db_check profile: additive check, throwaway PG in a microVM, then related tests in the same VM.
 
     session_factory(stage_dir) -> SandboxSession-like context manager; stage(stage_dir) fills the checkout.
+    base_sql loads into the throwaway PG before the schema snapshot (tables the migration touches but does not create).
     Raise runtime.sandbox_tool.Refused on test argv outside allowed_argv, before any VM. Raise SandboxError
     cleanup_unconfirmed when teardown is unconfirmed.
     """
@@ -279,7 +284,7 @@ def run_db_check(sql: str, *, enabled: bool, session_factory, verify_sql=(), tes
             if stage:
                 stage(root)
             with session_factory(root) as session:
-                report = check_migration(sql, SandboxPgRunner(session), verify_sql)
+                report = check_migration(sql, SandboxPgRunner(session, **({"base_sql": base_sql} if base_sql else {})), verify_sql)
                 if report["status"] == "passed":
                     for argv in test_argv:
                         tests.append({"argv": list(argv), "rc": session.exec(list(argv), 120.0)["rc"]})

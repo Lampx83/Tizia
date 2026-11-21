@@ -1,9 +1,11 @@
 """DB change of a candidate (flag requester_fullstack_db): migrations, additive + idempotent rules, sandbox PostgreSQL run."""
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 from functools import lru_cache
+from pathlib import Path
 
 import path_policy
 from gates import change_class
@@ -225,13 +227,70 @@ def push_hold(diffs: list[dict], role: str, server_public: frozenset[str] | None
     return "both" if len(kinds) == 2 else kinds[0] if kinds else None
 
 
-def run_sandbox(sql: str, should_stop=None) -> dict:
+def run_sandbox(sql: str, should_stop=None, base_sql: str = "") -> dict:
     """db_check profile on the sandbox runner; report of gate5.db_check.run_db_check."""
     from settings import get_settings
     from verification.sandbox import SandboxSession
     lease_ok = (lambda: not should_stop()) if should_stop else None
-    return db_check.run_db_check(sql, enabled=get_settings().db_check,
+    return db_check.run_db_check(sql, enabled=get_settings().db_check, base_sql=base_sql,
                                  session_factory=lambda root: SandboxSession(root, lease_ok=lease_ok))
+
+
+def _outcome(sql: str, should_stop, base_sql: str = "") -> dict:
+    """Sandbox run -> {status: passed|blocked|transient, reason, sandbox}."""
+    report = run_sandbox(sql, should_stop, base_sql) if base_sql else run_sandbox(sql, should_stop)
+    sandbox = {k: report.get(k) for k in ("status", "schema_diff", "checks", "tests", "error")}
+    if report.get("status") == "passed":
+        return {"status": "passed", "reason": None, "sandbox": sandbox}
+    kind = "transient" if report.get("status") in ("disabled", "db_check_unavailable") else "blocked"
+    detail = "; ".join(report.get("violations") or []) or report.get("error") or report.get("status")
+    return {"status": kind, "reason": f"migration chưa chạy được trên Postgres sandbox ({report.get('status')}): {detail}"[:800],
+            "sandbox": sandbox}
+
+
+BASE_SCHEMA = Path(__file__).resolve().parents[3] / "server" / "db-required-schema.json"
+# Tables a data INSERT may never target: audit trail and board/AI logs.
+_INTERNAL = re.compile(r"^(?:admin_db_audit|ai_decisions|ai_prompt_log|ai_token_usage|schema_migrations)$")
+
+
+@lru_cache(maxsize=1)
+def base_tables() -> dict[str, list[str]]:
+    """Platform tables and their columns, from server/db-required-schema.json."""
+    return json.loads(BASE_SCHEMA.read_text(encoding="utf-8"))["tables"]
+
+
+def base_schema_sql() -> str:
+    """CREATE TABLE per platform table, text columns: lets the sandbox PG resolve a data INSERT's table and columns."""
+    q = chr(34)
+    return ";\n".join(f'CREATE TABLE {q}{table}{q} ({", ".join(f"{q}{col}{q} text" for col in cols)})'
+                      for table, cols in sorted(base_tables().items())) + ";"
+
+
+def insert_problems(sql: str) -> list[str]:
+    """Why sql is not one literal INSERT ... ON CONFLICT DO NOTHING into an existing, non-sensitive platform table."""
+    stmts = db_check._statements(sql)
+    if len(stmts) != 1:
+        return ["data INSERT phải đúng một câu lệnh"]
+    out = [*db_check.violations(sql), *idempotency_problems(sql)]
+    if len(sql) > SQL_CAP:
+        out.append(f"INSERT {len(sql)} ký tự, {TOO_LARGE}")
+    match = _TABLE.match(stmts[0].upper())
+    if not stmts[0].upper().startswith("INSERT INTO ") or not match:
+        return [*out, "chỉ chấp nhận INSERT INTO"]
+    table = match.group(1).strip('"').split(".")[-1].lower()
+    if table not in base_tables():
+        out.append(f"bảng {table} không có trong schema base")
+    elif _INTERNAL.match(table) or sensitive_tables(stmts[0]):
+        out.append(f"bảng {table} thuộc nhóm nhạy cảm hoặc nội bộ, không ghi bằng bước dữ liệu")
+    return out
+
+
+def evaluate_insert(sql: str, should_stop=None) -> dict:
+    """Sandbox verdict for a data INSERT: {status: passed|blocked|transient, reason}; base schema loaded first."""
+    if problems := insert_problems(sql):
+        return {"status": "blocked", "reason": "INSERT bị chặn: " + "; ".join(problems)[:800]}
+    out = _outcome(sql, should_stop, base_schema_sql())
+    return {"status": out["status"], "reason": out["reason"]}
 
 
 def evaluate(diffs: list[dict], role: str = "student", should_stop=None) -> dict | None:
@@ -242,11 +301,7 @@ def evaluate(diffs: list[dict], role: str = "student", should_stop=None) -> dict
     if change["problems"]:
         return {"status": "blocked", "reason": "thay đổi DB bị chặn: " + "; ".join(change["problems"])[:800], "db_change": None}
     sql = ";\n".join(m["sql"].rstrip().rstrip(";") for m in change["migrations"]) + ";"
-    report = run_sandbox(sql, should_stop)
-    sandbox = {k: report.get(k) for k in ("status", "schema_diff", "checks", "tests", "error")}
-    if report.get("status") == "passed":
-        return {"status": "passed", "reason": None, "db_change": {**change, "sandbox": sandbox}}
-    kind = "transient" if report.get("status") in ("disabled", "db_check_unavailable") else "blocked"
-    detail = "; ".join(report.get("violations") or []) or report.get("error") or report.get("status")
-    return {"status": kind, "reason": f"migration chưa chạy được trên Postgres sandbox ({report.get('status')}): {detail}"[:800],
-            "db_change": None}
+    out = _outcome(sql, should_stop)
+    if out["status"] == "passed":
+        return {"status": "passed", "reason": None, "db_change": {**change, "sandbox": out["sandbox"]}}
+    return {"status": out["status"], "reason": out["reason"], "db_change": None}

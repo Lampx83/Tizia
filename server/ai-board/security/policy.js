@@ -5,6 +5,8 @@ import { check as checkPath } from './path-policy.js';
 import { isSkillTaskType } from '../skill-task-types.js';
 import { ALLOWED_DOMAINS, ALLOWED_KEYS } from '../../contexts/campus/layout-schema.js';
 import { getSettings } from '../settings.js';
+import { CONTRACT } from '../repositories/store-contract.js';
+import { validate as validateSchema } from './json-schema.js';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
@@ -80,10 +82,27 @@ function inferLayer(file) {
   return 'wiring';
 }
 
-/** Payload bước data (campus_layout): kiểm tất định theo whitelist của POST /api/admin/campus-layout/:domain. */
-function dataPayload(value, field) {
+const APPROVERS = new Set(['admin']);
+const topTier = (...tiers) => tiers.reduce((top, next) => (TIERS[next] > TIERS[top] ? next : top));
+
+/** Registry of data kinds when AI_BOARD_DATA_REGISTRY is on, else null (campus_layout only). */
+const dataRegistry = () => (getSettings().dataRegistry ? CONTRACT.data_kinds?.kinds ?? {} : null);
+
+/** Payload bước data: {payload, entry}. Registry bật: kiểm theo schema của kind; tắt: chỉ campus_layout theo whitelist của POST /api/admin/campus-layout/:domain. */
+function dataPayload(value, field, registry) {
   const bad = (why) => fail('malformed_plan', `${field}: ${why}`, 'Bước thay đổi dữ liệu không hợp lệ và đang chờ xem lại.');
   if (!value || typeof value !== 'object' || Array.isArray(value)) bad('payload must be an object');
+  if (registry) {
+    const entry = typeof value.kind === 'string' && Object.hasOwn(registry, value.kind) ? registry[value.kind] : null;
+    if (!entry) bad(`unknown payload kind '${value.kind}'`);
+    if (!Object.hasOwn(TIERS, entry.tier)) bad(`registry kind '${value.kind}' has unknown tier '${entry.tier}'`);
+    if (!APPROVERS.has(entry.approver)) bad(`registry kind '${value.kind}' has unknown approver '${entry.approver}'`);
+    const problems = validateSchema(value, entry.schema);
+    if (problems.length) bad(problems.slice(0, 5).join('; '));
+    if (Buffer.byteLength(JSON.stringify(value)) > entry.max_bytes) bad('payload too large');
+    const keep = entry.schema.properties;
+    return { entry, payload: keep ? Object.fromEntries(Object.entries(value).filter(([key]) => key in keep)) : value };
+  }
   if (value.kind !== 'campus_layout') bad(`unknown payload kind '${value.kind}'`);
   if (!ALLOWED_DOMAINS.has(value.domain)) bad(`unknown campus domain '${value.domain}'`);
   const layout = value.layout;
@@ -91,7 +110,7 @@ function dataPayload(value, field) {
   const unknown = Object.keys(layout).filter((key) => !ALLOWED_KEYS.has(key));
   if (unknown.length) bad(`layout keys not allowed: ${unknown.join(', ')}`);
   if (Buffer.byteLength(JSON.stringify(layout)) > MAX_PAYLOAD_BYTES) bad('layout too large');
-  return { kind: value.kind, domain: value.domain, layout };
+  return { entry: null, payload: { kind: value.kind, domain: value.domain, layout } };
 }
 
 const MAX_CHECKS = 8;
@@ -210,10 +229,13 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     fail('domain_mismatch', `plan domain '${domain}' does not match request domain '${requestDomain}'`,
       'Kế hoạch không khớp trường của yêu cầu và đang chờ xem lại.');
   }
+  const registry = dataRegistry();
+  const dataOnly = !!registry && Array.isArray(plan.steps) && plan.steps.length > 0
+    && plan.steps.every((item) => item && item.layer === 'data' && item.payload != null);
   const normalized = {
     domain,
     goal: nonEmptyString(plan.goal, 'goal'),
-    allowed_scope: stringList(plan.allowed_scope, 'allowed_scope').map((item) => safePath(item, 'allowed_scope')),
+    allowed_scope: stringList(plan.allowed_scope, 'allowed_scope', { allowEmpty: dataOnly }).map((item) => safePath(item, 'allowed_scope')),
     acceptance: stringList(plan.acceptance, 'acceptance'),
     tests: stringList(plan.tests, 'tests'),
     capabilities: stringList(plan.capabilities, 'capabilities'),
@@ -263,7 +285,14 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     if (!policy || !topCapabilities.has(capability)) fail('unknown_capability', `step capability '${capability}' is unknown or undeclared`,
       'Kế hoạch yêu cầu quyền chưa được hỗ trợ và đang chờ xem lại.');
     const isData = step.layer === 'data';
-    const payload = isData && step.payload != null ? dataPayload(step.payload, `steps[${index}].payload`) : null;
+    const data = isData && step.payload != null ? dataPayload(step.payload, `steps[${index}].payload`, registry) : null;
+    const { payload = null, entry = null } = data ?? {};
+    const reviewed = entry?.review === 'db_insert';
+    if (reviewed && !(step.db_check?.status === 'passed' && step.db_check.profile === 'db_check')) {
+      fail('malformed_plan', `steps[${index}] ${payload.kind} needs a passed db_check from the sandbox Postgres`,
+        'Bước thay đổi dữ liệu chưa qua kiểm tra trên Postgres thử nghiệm.');
+    }
+    if (step.db_check != null && !reviewed) fail('malformed_plan', `steps[${index}].db_check is only for reviewed data kinds`);
     if (!isData && step.payload != null) fail('malformed_plan', `steps[${index}].payload is only for layer data`);
     if (isData && payload == null && !Array.isArray(step.allowed_scope)) fail('malformed_plan', `steps[${index}] data step needs payload or migration scope`);
     const allowedScope = payload ? [] : stringList(step.allowed_scope, `steps[${index}].allowed_scope`).map((item) => safePath(item, `steps[${index}].allowed_scope`));
@@ -280,7 +309,7 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
           'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
       }
     }
-    stepTiers.push(isData && TIERS[policy.tier] < TIERS.protected ? 'protected' : policy.tier);
+    stepTiers.push(isData ? topTier(policy.tier, 'protected', entry?.tier ?? 'surface') : policy.tier);
     const risk = nonEmptyString(step.risk, `steps[${index}].risk`);
     if (!RISKS.has(risk)) fail('malformed_plan', `unknown step risk '${risk}'`);
     if (step.task_type != null && !isSkillTaskType(step.task_type)) {
@@ -316,6 +345,8 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
       non_goals: stringList(step.non_goals, `steps[${index}].non_goals`, { allowEmpty: true }),
       ...(step.task_type == null ? {} : { task_type: step.task_type }),
       ...(payload ? { payload } : {}),
+      ...(entry ? { data_kind: { kind: payload.kind, route: entry.route, method: entry.method, approver: entry.approver, tier: entry.tier } } : {}),
+      ...(reviewed ? { db_check: { status: 'passed', profile: 'db_check' } } : {}),
       ...(step.checks == null ? {} : { checks: planChecks(step.checks, `steps[${index}].checks`) }),
       ...(step.check_revision == null ? {}
         : { check_revision: checkRevision(step.check_revision, `steps[${index}].check_revision`) }),

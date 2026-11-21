@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 from pathlib import Path
 
@@ -11,6 +12,10 @@ from settings import get_settings
 ENTRY_KEYS = ("summary", "route", "method", "context", "tier", "approver", "capability", "verify", "max_bytes", "schema")
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "plan_data_kinds.md").read_text(encoding="utf-8")
 _TYPES = {"object": dict, "array": list, "string": str, "boolean": bool, "null": type(None)}
+
+
+def _json(value) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 def enabled() -> bool:
@@ -31,7 +36,7 @@ def prompt_block() -> str:
     if not enabled():
         return ""
     rows = "\n".join(f"- {name}: {e['summary']} {e['method']} {e['route']}, approver {e['approver']}. Payload schema: "
-                     f"{json.dumps(e['schema'], ensure_ascii=False, separators=(',', ':'))}" for name, e in kinds().items())
+                     f"{_json(e['schema'])}" for name, e in kinds().items())
     return PROMPT.replace("KINDS_LIST", rows)
 
 
@@ -45,9 +50,9 @@ def validate(value, schema: dict, path: str = "payload") -> list[str]:
     """Problems of value against a JSON-schema subset; [] when valid."""
     out: list[str] = []
     if "const" in schema and value != schema["const"]:
-        return [f"{path} phải bằng {schema['const']!r}"]
+        return [f"{path} phải bằng {_json(schema['const'])}"]
     if "enum" in schema and value not in schema["enum"]:
-        return [f"{path}={value!r} không thuộc {schema['enum']}"]
+        return [f"{path}={_json(value)} không thuộc {_json(schema['enum'])}"]
     kind = schema.get("type")
     if kind and not _is(value, kind):
         return [f"{path} phải là {kind}"]
@@ -101,12 +106,46 @@ def check(change, index: int = 0) -> dict:
         raise ValueError("; ".join(problems[:5]))
     if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > entry["max_bytes"]:
         raise ValueError(f"{where}.payload vượt {entry['max_bytes']} byte")
-    deps = change.get("depends_on", [])
-    if not isinstance(deps, list) or any(not isinstance(n, int) or isinstance(n, bool) for n in deps):
-        raise ValueError(f"{where}.depends_on phải là mảng số thứ tự subtask")
+    links = {}
+    for field in ("depends_on", "required_by"):
+        links[field] = change.get(field, [])
+        if not isinstance(links[field], list) or any(not isinstance(n, int) or isinstance(n, bool) for n in links[field]):
+            raise ValueError(f"{where}.{field} phải là mảng số thứ tự subtask")
     keep = entry["schema"].get("properties")
-    return {"title": change["title"].strip(), "depends_on": deps,
-            "payload": {key: payload[key] for key in payload if keep is None or key in keep}}
+    payload = {key: payload[key] for key in payload if keep is None or key in keep}
+    if entry.get("review") == "db_insert":
+        from services import db_approval
+        if problems := db_approval.insert_problems(payload["sql"]):
+            raise ValueError(f"{where}: " + "; ".join(problems[:3]))
+    return {"title": change["title"].strip(), **links, "payload": payload}
+
+
+def data_only(plan: dict) -> bool:
+    """Flag on and the plan has data changes but no file subtask."""
+    return enabled() and bool(plan.get("data_changes")) and not plan.get("subtasks")
+
+
+def _cyclic(plan: dict) -> bool:
+    """True when subtask depends_on, data depends_on and required_by together form a cycle."""
+    size = len(plan.get("subtasks") or [])
+    edges = {i: list(st.get("depends_on") or []) for i, st in enumerate(plan.get("subtasks") or [], 1)}
+    for offset, item in enumerate(plan["data_changes"], size + 1):
+        edges[offset] = list(item["depends_on"])
+        for n in item["required_by"]:
+            edges[n].append(offset)
+    state: dict[int, int] = {}
+
+    def visit(node: int) -> bool:
+        if state.get(node) == 1:
+            return True
+        if state.get(node) == 2:
+            return False
+        state[node] = 1
+        if any(visit(dep) for dep in edges.get(node, [])):
+            return True
+        state[node] = 2
+        return False
+    return any(visit(node) for node in edges)
 
 
 def apply(plan: dict) -> None:
@@ -119,19 +158,54 @@ def apply(plan: dict) -> None:
     plan["data_changes"] = [check(item, i) for i, item in enumerate(items)]
     size = len(plan.get("subtasks") or [])
     for item in plan["data_changes"]:
-        if any(not 1 <= n <= size for n in item["depends_on"]):
-            raise ValueError(f"data_changes.depends_on ngoài 1..{size}")
+        for field in ("depends_on", "required_by"):
+            if any(not 1 <= n <= size for n in item[field]):
+                raise ValueError(f"data_changes.{field} ngoài 1..{size}")
+    if _cyclic(plan):
+        raise ValueError("data_changes tạo vòng phụ thuộc với subtask")
 
 
-def steps(plan: dict, first_order: int) -> list[dict]:
-    """Server-schema data steps for a checked plan, ordered after the file steps."""
+def steps(plan: dict, first_order: int, file_steps: list[dict] | None = None) -> list[dict]:
+    """Server-schema data steps for a checked plan, ordered after the file steps.
+    file_steps given: link required_by into their depends_on in place; plan subtask numbers map through the same-file merge."""
     if not enabled():
         return []
     registry, out = kinds(), []
+    shifted = _merged_numbers(plan, file_steps) if file_steps is not None else {}
+
+    def mapped(n: int) -> int:
+        return shifted.get(n, n)
+
     for offset, item in enumerate(plan.get("data_changes") or []):
         entry = registry[item["payload"]["kind"]]
-        out.append({"order": first_order + offset, "title": item["title"], "description": item["title"], "allowed_scope": [],
+        order = first_order + offset
+        for n in item.get("required_by") or []:
+            target = file_steps[mapped(n) - 1]
+            target["depends_on"] = sorted({*target["depends_on"], order})
+        out.append({"order": order, "title": item["title"], "description": item["title"], "allowed_scope": [],
                     "acceptance": [entry["verify"]], "tests": [entry["verify"]], "capability": entry["capability"], "risk": "low",
                     "non_goals": ["Worker không ghi dữ liệu; admin áp dụng payload."], "layer": "data",
-                    "depends_on": list(item["depends_on"]), "payload": item["payload"]})
+                    "depends_on": [mapped(n) for n in item["depends_on"]], "payload": item["payload"]})
     return out
+
+
+def _merged_numbers(plan: dict, file_steps: list[dict]) -> dict[int, int]:
+    """Raw subtask number -> file step order, after same-file subtasks were merged."""
+    where = {step["allowed_scope"][0]: step["order"] for step in file_steps if step["allowed_scope"]}
+    return {n: where[file] for n, st in enumerate(plan.get("subtasks") or [], 1)
+            if (file := posixpath.normpath(str(st.get("file") or "").replace("\\", "/"))) in where}
+
+
+def sandbox(data_steps: list[dict], should_stop=None) -> None:
+    """Run every db_insert step on the sandbox PG with the base schema; stamp step['db_check']. Raise ValueError unless passed."""
+    if not enabled():
+        return
+    from services import db_approval
+    registry = kinds()
+    for step in data_steps:
+        if "payload" not in step or registry[step["payload"]["kind"]].get("review") != "db_insert":
+            continue
+        outcome = db_approval.evaluate_insert(step["payload"]["sql"], should_stop)
+        if outcome["status"] != "passed":
+            raise ValueError(f"data step {step['order']}: {outcome['reason']}")
+        step["db_check"] = {"status": "passed", "profile": "db_check"}

@@ -1,0 +1,33 @@
+{
+  "_why": "Shared by ai-board/harness/tests/test_data_kinds.py and test/ai-board-data-registry.test.js: both validators must return exactly these error lists.",
+  "cases": [
+    { "name": "const ok", "schema": { "const": "a" }, "value": "a", "errors": [] },
+    { "name": "const bad", "schema": { "const": "a" }, "value": "b", "errors": ["payload phải bằng \"a\""] },
+    { "name": "enum bad", "schema": { "enum": ["x", "y"] }, "value": "z", "errors": ["payload=\"z\" không thuộc [\"x\",\"y\"]"] },
+    { "name": "type string vs number", "schema": { "type": "string" }, "value": 3, "errors": ["payload phải là string"] },
+    { "name": "integer rejects bool", "schema": { "type": "integer" }, "value": true, "errors": ["payload phải là integer"] },
+    { "name": "integer rejects fraction", "schema": { "type": "integer" }, "value": 1.5, "errors": ["payload phải là integer"] },
+    { "name": "number accepts int", "schema": { "type": "number" }, "value": 2, "errors": [] },
+    { "name": "null type", "schema": { "type": "null" }, "value": null, "errors": [] },
+    { "name": "object rejects array", "schema": { "type": "object" }, "value": [], "errors": ["payload phải là object"] },
+    { "name": "array rejects object", "schema": { "type": "array" }, "value": {}, "errors": ["payload phải là array"] },
+    { "name": "required missing", "schema": { "type": "object", "required": ["a", "b"] }, "value": { "a": 1 }, "errors": ["payload.b bắt buộc"] },
+    { "name": "min and max properties", "schema": { "minProperties": 2 }, "value": { "a": 1 }, "errors": ["payload cần ít nhất 2 khoá"] },
+    { "name": "max properties", "schema": { "maxProperties": 1 }, "value": { "a": 1, "b": 2 }, "errors": ["payload tối đa 1 khoá"] },
+    { "name": "additional false", "schema": { "properties": { "a": {} }, "additionalProperties": false }, "value": { "a": 1, "z": 2 }, "errors": ["payload.z không được phép"] },
+    { "name": "additional schema", "schema": { "additionalProperties": { "type": "integer" } }, "value": { "p": "x", "q": 1 }, "errors": ["payload.p phải là integer"] },
+    { "name": "nested property", "schema": { "properties": { "n": { "type": "object", "required": ["k"] } } }, "value": { "n": {} }, "errors": ["payload.n.k bắt buộc"] },
+    { "name": "array items", "schema": { "items": { "type": "integer" } }, "value": [1, "b", 3], "errors": ["payload[1] phải là integer"] },
+    { "name": "min items", "schema": { "minItems": 2 }, "value": [1], "errors": ["payload sai số phần tử"] },
+    { "name": "max items", "schema": { "maxItems": 1 }, "value": [1, 2], "errors": ["payload sai số phần tử"] },
+    { "name": "string length", "schema": { "minLength": 3, "maxLength": 4 }, "value": "ab", "errors": ["payload sai độ dài"] },
+    { "name": "string length counts code points", "schema": { "maxLength": 2 }, "value": "😀😀", "errors": [] },
+    { "name": "pattern", "schema": { "pattern": "^[a-z]+$" }, "value": "A1", "errors": ["payload không khớp ^[a-z]+$"] },
+    { "name": "pattern ok", "schema": { "pattern": "^[a-z]+$" }, "value": "abc", "errors": [] },
+    { "name": "minimum", "schema": { "minimum": 1 }, "value": 0, "errors": ["payload ngoài khoảng cho phép"] },
+    { "name": "maximum", "schema": { "maximum": 5 }, "value": 9, "errors": ["payload ngoài khoảng cho phép"] },
+    { "name": "bool skips range", "schema": { "minimum": 5 }, "value": false, "errors": [] },
+    { "name": "type error stops further checks", "schema": { "type": "object", "required": ["a"] }, "value": "s", "errors": ["payload phải là object"] },
+    { "name": "empty schema accepts anything", "schema": {}, "value": { "x": [1, null] }, "errors": [] }
+  ]
+}
