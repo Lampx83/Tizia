@@ -5,6 +5,7 @@ import { patchHtml } from './dom-morph.js';
 import { mountPrivatePreview } from './private-preview.js';
 import { installLightbox, pairBeforeAfter } from './lightbox.js';
 import { projectPipeline, describeEvent, TECHNICAL_EVENTS, renderVerificationClaims, budgetSummary, renderRootAllowance, renderRunnerTrace, renderRepairAgent, renderStopReport, renderRevertPr, renderSoftMisses } from './ai-board-trace.js';
+import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody } from './ai-board-mirror.js';
 import { renderHsm } from './ai-board-hsm.js';
 import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-view1';
 import { fmt as clockFmt } from './ai-board-clock.js';
@@ -27,7 +28,8 @@ const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 // `open`: khóa <details> (data-k) → đã mở/đóng, sống qua mọi lần vẽ lại do refresh().
 const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null, toolFilter: { failure: '', tool: '' },
   elevationContext: null, elevationContextLoading: false, elevationReason: '', elevationMsg: '',
-  net: { pending: [], approved: [], idx: 0, reason: '', msg: '' } };
+  net: { pending: [], approved: [], idx: 0, reason: '', msg: '' },
+  db: { pending: [], idx: 0, reason: '', msg: '', busy: false, loading: true, error: '' } };
 let view = null;
 
 async function api(path, options = {}) {
@@ -565,6 +567,46 @@ async function netDecide(btn, decision) {
   await refresh();
 }
 
+const DB_BASE = `/api/admin/ai-board/requests/${REQUEST_ID}/db-approvals`;
+function renderDbSlot() {
+  const { pending, idx, loading, error } = ui.db;
+  const shell = renderDbApprovalState({ loading, error });
+  if (shell) return shell;
+  const at = Math.min(idx, pending.length - 1);
+  return renderDbApproval(pending[at], ui.db, { n: at + 1, total: pending.length });
+}
+
+async function loadDb() {
+  const r = await api(`${DB_BASE}?status=pending`);
+  ui.db.loading = false;
+  if (r.status === 404) { ui.db.pending = []; ui.db.error = ''; }
+  else if (r.ok) { ui.db.pending = r.data.items || []; ui.db.error = ''; }
+  else ui.db.error = errText(r.data?.error || r.status);
+  if (ui.db.idx >= ui.db.pending.length) ui.db.idx = 0;
+}
+
+async function dbDecide(btn, decision) {
+  const item = ui.db.pending[Math.min(ui.db.idx, ui.db.pending.length - 1)];
+  if (!item) return refresh();
+  const body = dbDecisionBody(decision, ui.db.reason);
+  if (!body) { ui.db.msg = 'Nhập lý do trước khi từ chối.'; return render(); }
+  const approve = decision === 'approve';
+  const yes = await askConfirm(approve
+    ? { title: 'Duyệt thay đổi cơ sở dữ liệu?', message: 'Sau khi duyệt, thay đổi được phép đẩy lên dev.', lines: [`Mục: ${item.id}`], ok: 'Duyệt' }
+    : { title: 'Từ chối thay đổi cơ sở dữ liệu?', message: 'Lý do bạn ghi được lưu và gửi lại cho luồng xử lý.', lines: [`Mục: ${item.id}`], ok: 'Từ chối', danger: true });
+  if (!yes) return;
+  ui.db.busy = true; btn.disabled = true;
+  try {
+    await post(`${DB_BASE}/${encodeURIComponent(item.id)}/${decision}`, body);
+    ui.db.reason = '';
+    ui.db.msg = approve ? 'Đã duyệt thay đổi cơ sở dữ liệu.' : 'Đã từ chối thay đổi cơ sở dữ liệu.';
+  } catch (e) {
+    ui.db.msg = /already|not found|409/.test(String(e.message)) ? 'Mục này đã được quyết định hoặc đã đổi. Đã tải lại.' : `Chưa thực hiện được: ${errText(e)}`;
+  }
+  ui.db.busy = false;
+  await refresh();
+}
+
 // Screenshots of the newest message that carries any (before/after pairs go through renderAtts).
 function shotsOf(messages) {
   const withShots = [...messages].reverse().find((m) => Array.isArray(m.attachments) && m.attachments.some((a) => a?.kind === 'screenshot'));
@@ -762,6 +804,9 @@ function renderAiBoard(t, messages = []) {
       ${renderRunnerTrace(t)}
       ${renderStopReport(t)}
       ${renderSoftMisses(t)}
+      ${renderGateReview(t)}
+      ${renderRiskAndChecks(t)}
+      ${renderDbSlot()}
       ${renderRepairAgent(t)}
       ${traceLine(t.trace_ref)}
       ${managedLine(root.managed)}
@@ -844,6 +889,7 @@ async function refresh() {
     $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
     return false;
   }
+  await loadDb().catch(() => { ui.db.loading = false; ui.db.error = 'mất kết nối'; });
   ui.net.pending = netPending.ok ? (netPending.data.items || []) : [];
   ui.net.approved = netApproved.ok ? (netApproved.data.items || []) : [];
   if (ui.net.idx >= ui.net.pending.length) ui.net.idx = 0;
@@ -894,7 +940,7 @@ const poll = createPoll(async () => {
     stopLiveTrace();
     render();
   }
-  if (!ui.confirm && !ui.reconcile && !document.activeElement?.matches?.('[data-net-reason]')) await refresh();
+  if (!ui.confirm && !ui.reconcile && !document.activeElement?.matches?.('[data-net-reason],[data-db-reason]')) await refresh();
 }, () => {
   const root = view?.trace?.root;
   if (root && !root.live && ENDED.includes(root.status)) return null;
@@ -915,6 +961,8 @@ document.addEventListener('input', (e) => {
   if (input) ui.elevationReason = input.value;
   const net = e.target.closest?.('[data-net-reason]');
   if (net) ui.net.reason = net.value;
+  const dbr = e.target.closest?.('[data-db-reason]');
+  if (dbr) { ui.db.reason = dbr.value; const b = document.querySelector('[data-action="db-reject"]'); if (b) b.disabled = ui.db.busy || !dbr.value.trim(); }
 });
 // Filter selects in the execution log: failure class and tool. Re-draws the log with the chosen value.
 document.addEventListener('change', (e) => {
@@ -953,6 +1001,10 @@ document.addEventListener('click', e => {
   } else if (action === 'rollout') return rolloutDo(btn);
   else if (action === 'net-approve') return netDecide(btn, 'approved');
   else if (action === 'net-reject') return netDecide(btn, 'rejected');
+  else if (action === 'db-approve') return dbDecide(btn, 'approve');
+  else if (action === 'db-reject') return dbDecide(btn, 'reject');
+  else if (action === 'db-next') { ui.db.idx = (ui.db.idx + 1) % ui.db.pending.length; ui.db.reason = ''; ui.db.msg = ''; }
+  else if (action === 'db-retry') { ui.db.loading = true; ui.db.error = ''; render(); return refresh(); }
   else if (action === 'net-next') { ui.net.idx = (ui.net.idx + 1) % ui.net.pending.length; ui.net.reason = ''; ui.net.msg = ''; }
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;

@@ -92,6 +92,13 @@
   .kv { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 16px; margin:12px 0 6px; }
   .kv dt { color:var(--muted); } .kv dd { margin:0; }
   .sub { color:var(--muted); font-size:12px; margin:12px 0 4px; }
+  .g-mirror ul { margin:4px 0; padding-left:18px; }
+  .g-mirror .warn, .db-approval .warn { color:var(--warn); }
+  .g-mirror p { margin:4px 0; }
+  pre.sql code { background:none; padding:0; }
+  pre.sql { max-height:360px; font:12px/1.5 ui-monospace,Consolas,monospace; border:1px solid var(--border); white-space:pre; overflow:auto; }
+  .db-approval .row { display:flex; flex-wrap:wrap; gap:8px; }
+  .btn[disabled] { opacity:.5; cursor:not-allowed; }
   .plan-steps { margin:0; padding-left:22px; }
   .plan-steps li { padding:6px 0 6px 4px; border-bottom:1px solid var(--border); }
   .plan-steps li:last-child { border-bottom:0; }
