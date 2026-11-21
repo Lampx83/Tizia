@@ -2,7 +2,8 @@
 import hashlib
 import json
 
-from runtime import meter, prompt_roles
+from runtime import prompt_roles
+from runtime.budgets import meter
 from services import context
 
 OFF_SYSTEM_SHA = "46fbee4f4a3ba0dee07fedd6d9e2b1b2cdea841bd77018d16b1bd79e4f86c4aa"
