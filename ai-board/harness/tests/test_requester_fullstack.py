@@ -251,7 +251,7 @@ class _Budget:
         return True
 
 
-def _execute(tmp_path, diff, role=None):
+def _execute(tmp_path, diff, role=None, gate4_state=None):
     def run_gate(gate, _request, _deps, _budget, state):
         if gate == 3:
             state.update(diffs=[{"file": CONTEXT, "test_file": None, "diff": "x"}], branch="ai-board/2026-11-21-ticket-1",
@@ -259,6 +259,7 @@ def _execute(tmp_path, diff, role=None):
                          commits=[{"sha": "b" * 40, "title": "t", "files": [CONTEXT, MIGRATION]}])
             return {"gate": 3, "blocked": False, "reason": None}
         if gate == 4:
+            state.update(gate4_state or {})
             return {"gate": 4, "blocked": False, "reason": None, "issues": []}
         if gate == 5:
             return {"gate": 5, "blocked": False, "reason": None,
@@ -575,3 +576,59 @@ def test_worker_passes_the_server_role_to_the_gates_only_under_the_flag(flag, mo
                planner=lambda _s: ({"goal": "g", "tests": [], "steps": []}, 0), change_runner=runner,
                candidates=DiffCandidates(FE_DIFF)).run_once()
     assert seen == [None]
+
+
+# ── gate 4 import rule for mounted contexts (quick-notes demo files) ──
+
+QUICK_NOTES = """// Ghi chú nhanh của giáo viên: GET/POST /api/ghi-chu-nhanh, bảng ghi_chu_nhanh.
+import { db } from '../../db.js';
+import { requireAuth } from '../identity/auth.js';
+import { runContextMigrations } from '../../context-migrations.js';
+
+await runContextMigrations(db, new URL('./migrations/', import.meta.url));
+
+export function attachQuickNotes(router) {
+  router.get('/api/ghi-chu-nhanh', requireAuth, async (_req, res) => {
+    res.json({ notes: await db.prepare('SELECT id, noi_dung, tao_luc FROM ghi_chu_nhanh ORDER BY id DESC').all() });
+  });
+  router.post('/api/ghi-chu-nhanh', requireAuth, async (req, res) => {
+    await db.prepare('INSERT INTO ghi_chu_nhanh (noi_dung) VALUES (?)').run(String(req.body?.noi_dung || '').slice(0, 500));
+    res.json({ ok: true });
+  });
+}
+"""
+
+
+def _gate4(tmp_path, file, code):
+    from gates import static_check
+    plan = {"summary_vi": "x", "capabilities": [], "subtasks": [{"title": "t", "file": file, "verify": "v", "size": "small"}]}
+    path = tmp_path / file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(code, encoding="utf-8")
+    state = {"plan": plan, "diffs": [{"title": "t", "file": file, "diff": "+x\n"}], "scratch_repo": str(tmp_path)}
+    return static_check.run(state), state
+
+
+def test_quick_notes_context_file_passes_gate_4_and_records_its_imports(flag, tmp_path):
+    out, state = _gate4(tmp_path, CONTEXT, QUICK_NOTES)
+    assert out["blocked"] is False, out.get("reason")
+    assert state["privileged_imports"] == [f"{CONTEXT}: ../../db.js -> server/db.js",
+                                           f"{CONTEXT}: ../identity/auth.js -> server/contexts/identity/auth.js"]
+
+
+def test_import_rule_unchanged_for_generated_plugins_tests_and_flag_off(flag, tmp_path, monkeypatch):
+    out, _ = _gate4(tmp_path, "server/contexts/_ai-generated/x/index.js", "import { db } from '../../db.js';\n")
+    assert out["blocked"] is True and out["failure_class"] == "critical"
+    monkeypatch.delenv(FLAG)
+    out, state = _gate4(tmp_path, CONTEXT, QUICK_NOTES)
+    assert out["blocked"] is True and "db.js" in out["reason"] and "privileged_imports" not in state
+
+
+def test_privileged_imports_reach_the_admin_payload(flag, tmp_path):
+    from gates import static_check
+    recorded = [f"{CONTEXT}: ../../db.js -> server/db.js"]
+    out, _ = _execute(tmp_path, FE_BE_DIFF, gate4_state={"privileged_imports": recorded})
+    assert out["outcome"] == "ready_for_pr" and out["backend_change"]["privileged_imports"] == recorded
+    plain, _ = _execute(tmp_path, FE_BE_DIFF)
+    assert "privileged_imports" not in plain["backend_change"]
+    assert static_check.privileged_imports(QUICK_NOTES, CONTEXT, QUICK_NOTES) == [], "imports already at base are not new"

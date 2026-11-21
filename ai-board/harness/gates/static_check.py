@@ -107,7 +107,20 @@ def _added_lines_for_file(diff_text: str, file_path: str) -> int:
     return count
 
 
-def lint_imports(code: str, file_path: str, base_code: str = "") -> list[str]:
+def privileged_imports(code: str, file_path: str, base_code: str = "") -> list[str]:
+    """New imports of server/db.js or another context's module, as 'spec -> resolved'."""
+    base = posixpath.dirname(_posix(file_path))
+    already = {resolved for _, resolved in _resolved_imports(base_code, base)}
+    return [f"{spec} -> {resolved}" for spec, resolved in _resolved_imports(code, base)
+            if resolved not in already and _privileged(resolved, file_path)]
+
+
+def _privileged(resolved: str, file_path: str) -> bool:
+    other_context = _OTHER_CONTEXT.search(resolved) and _context_of(resolved) != _context_of(_posix(file_path))
+    return bool(resolved.endswith('db.js') or other_context)
+
+
+def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: bool = False) -> list[str]:
     """Trả list vi phạm (rỗng = sạch). Import tương đối ('./...'/'../...') được
     RESOLVE theo `file_path` trước khi so — chuỗi thô như '../../db.js' không
     tự chứa 'contexts/'/'db.js' theo nghĩa path thật nếu không resolve. Package
@@ -122,11 +135,10 @@ def lint_imports(code: str, file_path: str, base_code: str = "") -> list[str]:
     already = {resolved for _, resolved in _resolved_imports(base_code, base)}
     violations = []
     for spec, resolved in _resolved_imports(code, base):
-        if resolved in already:
+        if resolved in already or privileged_ok:
             continue
         # Context khác là ranh giới quyền thật; file cùng context thì không.
-        other_context = _OTHER_CONTEXT.search(resolved) and _context_of(resolved) != _context_of(_posix(file_path))
-        if resolved.endswith('db.js') or other_context:
+        if _privileged(resolved, file_path):
             violations.append(f"import cấm: '{spec}' (chạm {resolved})")
     if _CORE_ACCESS.search(code) and not _CORE_ACCESS.search(base_code):
         violations.append("truy cập ctx.core — plugin AI sinh chỉ nhận ctx.surface")
@@ -326,7 +338,13 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                         "issues": [*issues, reason], "failure_class": "ordinary"}
             if path.suffix != ".js":
                 continue
-            bad_imports = lint_imports(code, candidate, base_code(candidate))
+            # Flag on, mounted context: db/other-context imports are the context convention; the admin hold reviews them.
+            mounted = path_policy.fullstack_on() and path_policy.mounted_context(candidate)
+            bad_imports = lint_imports(code, candidate, base_code(candidate), privileged_ok=mounted)
+            if mounted:
+                state["privileged_imports"] = sorted({*state.get("privileged_imports", ()),
+                                                      *(f"{candidate}: {item}" for item in
+                                                        privileged_imports(code, candidate, base_code(candidate)))})
             if bad_imports:
                 reason = f"'{candidate}': {'; '.join(bad_imports)}"
                 return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,

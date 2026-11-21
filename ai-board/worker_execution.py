@@ -607,6 +607,8 @@ class _Execution:
         # Always sent under the flag: an absent list makes the server hold every public JS module.
         self.backend_change = (db_approval.backend_change(state.get("full_diff") or [], server_public, read)
                                or {"files": [], "diff": ""})
+        if state.get("privileged_imports"):
+            self.backend_change["privileged_imports"] = list(state["privileged_imports"])
         role = state.get("requester_role") or "student"
         if self.backend_change.get("clipped") and role != path_policy.ADMIN_ROLE:
             self.gates[-1] = {**self.gates[-1], "blocked": True,
