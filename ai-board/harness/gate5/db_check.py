@@ -21,6 +21,7 @@ ALLOWED = (
     re.compile(r"^INSERT INTO \S+"),
 )
 _DOLLAR = re.compile(r"\$[A-Za-z_]*\$")
+_IDENT = re.compile(r"[A-Za-z0-9_$]")
 _ALTER = re.compile(r"^ALTER TABLE(?: IF EXISTS)?(?: ONLY)? \S+ (.*)$", re.S)
 _STRING = re.compile(r"'(?:[^']|'')*'")
 
@@ -60,7 +61,8 @@ def _split(sql: str, sep: str) -> list[str]:
             buf.append(sql[i:j + 1])
             i = j + 1
             continue
-        if c == "$" and (tag := _DOLLAR.match(sql, i)):
+        # PostgreSQL lexer: `$` inside an identifier (t$x$) never opens a dollar quote.
+        if c == "$" and not (i and _IDENT.match(sql[i - 1])) and (tag := _DOLLAR.match(sql, i)):
             j = sql.find(tag.group(), tag.end())
             j = n if j < 0 else j + len(tag.group())
             buf.append(sql[i:j])

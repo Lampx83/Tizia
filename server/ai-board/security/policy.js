@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { check as checkPath } from './path-policy.js';
 import { isSkillTaskType } from '../skill-task-types.js';
 import { ALLOWED_DOMAINS, ALLOWED_KEYS } from '../../contexts/campus/layout-schema.js';
+import { getSettings } from '../settings.js';
 
 export const CAPABILITY_POLICY_VERSION = 'd0-v3'; // v3: money_paths luôn cần người
 const LEXICON = JSON.parse(fs.readFileSync(new URL('../guard-lexicon.json', import.meta.url), 'utf8'));
@@ -24,6 +25,20 @@ const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
   rationale,
 });
 
+// Read once at load: the catalog hash pins accepted plans, so the flag changes only with a restart.
+export const REQUESTER_FULLSTACK = getSettings().requesterFullstackDb;
+export const FULLSTACK_CAPABILITY = 'context.write';
+const REFUSED_CONTEXTS = ['billing', 'payment', 'economy', 'security', 'identity', 'auth', 'session', 'admin',
+  'integration', 'engagement', 'feature-gate', 'safety']
+  .map((name) => `server/contexts/${name}/`);
+const FULLSTACK_POLICY = REQUESTER_FULLSTACK ? {
+  [FULLSTACK_CAPABILITY]: capability('surface', ['server/contexts/'],
+    'Requester edits an existing mounted context; every DB change waits for an admin before any push.', {
+      deny: [...REFUSED_CONTEXTS, 'server/contexts/ai-board-', 'server/contexts/_', 'server/contexts/registry.js',
+        'server/contexts/index.js'],
+    }),
+} : {};
+
 export const CAPABILITY_POLICY = Object.freeze({
   'public.ui': capability('surface', ['public/'], 'Public static interface files.'),
   'generated.context': capability('surface', ['server/contexts/_ai-generated/'], 'Generated context output only.'),
@@ -41,6 +56,7 @@ export const CAPABILITY_POLICY = Object.freeze({
       deny: ['ai-board/harness/skills/skills.lock.json', 'ai-board/harness/prompts/prompts.lock.json',
         'ai-board/harness/prompts/AIBOARD.md'],
     }),
+  ...FULLSTACK_POLICY,
 });
 
 const TIERS = Object.freeze({ surface: 0, protected: 1, core: 2 });
@@ -49,6 +65,10 @@ const LAYERS = new Set(['db', 'backend', 'frontend', 'wiring', 'data']);
 const MAX_PAYLOAD_BYTES = 200_000;
 const GEN_CONTEXT = 'server/contexts/_ai-generated/';
 const DB_MIGRATION = /^server\/contexts\/_ai-generated\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
+const CONTEXT_MIGRATION = /^server\/contexts\/[a-z0-9][a-z0-9-]*\/migrations\/[a-z0-9][a-z0-9._-]*\.sql$/;
+/** Migration a step may carry: generated plugin, or (flag on, context.write) the context's own migrations dir. */
+const migrationScope = (item, capabilityName) => DB_MIGRATION.test(item)
+  || (REQUESTER_FULLSTACK && capabilityName === FULLSTACK_CAPABILITY && CONTEXT_MIGRATION.test(item));
 // Feature plan: acceptance/tests phải chạy được ở cổng hiện có, không phải câu mô tả.
 const RUNNABLE = /^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|grep\s|rg\s|bash\s|sh\s|docker compose\s|psql\s)/;
 
@@ -269,15 +289,16 @@ export function validatePlan(plan, requestDomain, selfTarget = null) {
     const layer = step.layer == null ? inferLayer(allowedScope[0]) : nonEmptyString(step.layer, `steps[${index}].layer`);
     if (!LAYERS.has(layer)) fail('malformed_plan', `unknown steps[${index}].layer '${layer}'`);
     const dependsOn = step.depends_on == null ? (order > 1 ? [order - 1] : []) : ordinalList(step.depends_on, `steps[${index}].depends_on`);
-    if (layer === 'data' && !payload && allowedScope.some((item) => !DB_MIGRATION.test(item))) {
+    if (layer === 'data' && !payload && allowedScope.some((item) => !migrationScope(item, capability))) {
       fail('scope_violation', `steps[${index}] data scope must be a new migration under ${GEN_CONTEXT}<name>/migrations/`,
         'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
     }
-    if (layer === 'db' && allowedScope.some((item) => !DB_MIGRATION.test(item))) {
+    if (layer === 'db' && allowedScope.some((item) => !migrationScope(item, capability))) {
       fail('scope_violation', `steps[${index}] db scope must be a new migration under ${GEN_CONTEXT}<name>/migrations/`,
         'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
     }
-    if (layer === 'backend' && allowedScope.some((item) => !item.startsWith(GEN_CONTEXT))) {
+    if (layer === 'backend' && allowedScope.some((item) => !item.startsWith(GEN_CONTEXT)
+      && !(REQUESTER_FULLSTACK && capability === FULLSTACK_CAPABILITY))) {
       fail('scope_violation', `steps[${index}] backend scope must stay under ${GEN_CONTEXT}<name>/`,
         'Kế hoạch vượt ngoài phạm vi an toàn và đang chờ xem lại.');
     }

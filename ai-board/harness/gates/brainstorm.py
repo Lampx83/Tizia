@@ -60,6 +60,19 @@ _SAFE_PATH = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 _NEW_OK = re.compile(r"^(public/[a-z0-9][a-z0-9-]*\.html|public/js/[\w/-]+\.js"
                      rf"|{_GEN}[a-z0-9][a-z0-9-]*/(?!migrations/)[\w./-]+\.(?:js|mjs|css|json|html)"
                      rf"|{_GEN}[a-z0-9][a-z0-9-]*/migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
+# Cờ requester_fullstack_db: file mới chỉ trong context đã có ở base; context mới không bao giờ được mount.
+_CONTEXT_NEW = re.compile(r"^server/contexts/([a-z0-9][a-z0-9-]*)/(?:[a-z0-9][\w-]*\.(?:js|mjs|json)|migrations/[a-z0-9][a-z0-9._-]*\.sql)$")
+
+
+def db_migration(file: str, role: str = "student") -> bool:
+    """Migration mới hợp lệ: _ai-generated/<name>/migrations, hoặc context/<name>/migrations khi cờ requester_fullstack_db."""
+    return bool(DB_MIGRATION.match(file)) or path_policy.context_migration(file, role)
+
+
+def new_path_ok(file: str, role: str = "student") -> bool:
+    """Đường file chưa có ở base được phép tạo."""
+    return bool(_NEW_OK.match(file)) or bool(path_policy.fullstack_on() and _CONTEXT_NEW.match(file)
+                                             and path_policy.may_edit(file, role))
 RETRY_SUFFIX = "\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {reason}\nFix exactly that. Output ONLY the JSON object."
 
 # Prompt sống ở file riêng (ai-board/harness/prompts/), đọc 1 lần lúc import — phần trước
@@ -91,7 +104,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "")
 
 def infer_layer(file: str, role: str = "student") -> str:
     """Suy ra lớp từ đường dẫn khi model không khai layer."""
-    if DB_MIGRATION.match(file):
+    if db_migration(file, role):
         return "db"
     if path_policy.may_edit(file, role) and not file.startswith("public/") and posixpath.basename(file) not in path_policy.MANIFESTS:
         return "backend"
@@ -301,9 +314,9 @@ def check_files(plan: dict, source, sha: str | None, approved=None, role: str = 
         elif decision["level"] != levels.SURFACE:
             granted.add(file)
         if st["layer"] == "db":
-            if not DB_MIGRATION.match(file) and file not in granted and file not in pending:
+            if not db_migration(file, role) and file not in granted and file not in pending:
                 raise ValueError("subtask db phải là migration mới: {file} (mẫu server/contexts/_ai-generated/<name>/migrations/<file>.sql)")
-            if DB_MIGRATION.match(file):
+            if db_migration(file, role):
                 db_files.append(file)
         elif st["layer"] == "backend" and not path_policy.may_edit(file, role) and file not in granted and file not in pending:
             raise ValueError("subtask backend chỉ được trong server/contexts/_ai-generated/<name>/")
@@ -311,7 +324,10 @@ def check_files(plan: dict, source, sha: str | None, approved=None, role: str = 
         for extra in st.get("files") or []:
             _check_extra_file(extra, scope, plan_hash, role)
             seen.append(extra)
-    must_exist = [f for f in seen if not _NEW_OK.match(f) and f not in granted]
+    must_exist = [f for f in seen if not new_path_ok(f, role) and f not in granted]
+    if path_policy.fullstack_on():
+        must_exist += sorted({f"server/contexts/{m.group(1)}" for f in seen
+                              if not _NEW_OK.match(f) and (m := _CONTEXT_NEW.match(f))} - set(must_exist))
     if sha is None:
         if pending and (needs := levels.requirements(plan, read, role=role)):
             raise levels.ElevationRequired(needs, plan)

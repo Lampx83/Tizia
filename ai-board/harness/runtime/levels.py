@@ -236,7 +236,7 @@ def requirements(plan: dict, read=None, surface=None, role="student") -> list[di
         if normalized is None:
             return
         level = file_level(normalized, read)
-        if path_policy.refused(normalized):
+        if path_policy.refused(normalized, role):
             level = SELF
         elif level == level_of(normalized) and level in (PROTECTED, CORE) and path_policy.may_edit(normalized, role):
             level = SURFACE
@@ -404,7 +404,7 @@ def write_check(path, scope=(), plan_hash=None, role="student") -> dict:
     normalized = path_policy.normalize(path)
     if normalized is None:
         return {"allow": False, "level": CORE, "reason": "path không hợp lệ"}
-    if path_policy.refused(normalized):
+    if path_policy.refused(normalized, role):
         return {"allow": False, "level": SELF, "reason": f"{normalized} thuộc vùng cấm mọi vai — luôn chặn"}
     level = level_of(normalized)
     if level == SELF:

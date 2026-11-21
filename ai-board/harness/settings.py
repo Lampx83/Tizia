@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     two_level_plan: bool = False  # cổng 1 chỉ chia subtask + tiêu chí chốt; mỗi subtask context mới tự lập plan, thực thi, check + reviewer, sửa; cần plan_checks
     subtask_fresh_context: bool = False  # cổng 3: mỗi subtask là phiên con context mới, nhận plan + file đã tạo + tóm tắt subtask trước; chạy tuần tự
     admin_backend_zone: bool = False  # vai admin sửa server/contexts và public/ trừ vùng cấm; cấm mọi vai với vùng cấm
+    requester_fullstack_db: bool = False  # mọi vai sửa server/contexts và public/ như admin; thay đổi DB chạy thử sandbox rồi chờ admin duyệt trước push
     deterministic_ready_oracle: bool = False  # ready_for_pr cần check tất định (literal nguyên văn + chỉ file được nêu); thiếu thì needs_review; loop dừng chưa qua = needs_review
     intent_review: bool = False  # cổng 4: reviewer AI (cùng model, context mới) chấm diff theo yêu cầu, gộp lỗi + miss tất định thành một bản sửa gửi worker; lỗi/sai schema thì đóng an toàn
     out_of_plan_files: bool = False  # admin sửa file ngoài plan trong vùng sửa, tối đa needs_review; file logic cần test phủ

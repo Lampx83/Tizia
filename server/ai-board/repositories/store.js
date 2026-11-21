@@ -7,6 +7,7 @@ import { CAPABILITY_CATALOG, PlanGuardrailError, validatePlan } from '../securit
 import { check as checkPath, normalizePath } from '../security/path-policy.js';
 import { registerRelease, assertFeatureNotIsolated } from '../services/releases.js';
 import { repeatedQuestion } from '../services/clarity-rules.js';
+import { getSettings } from '../settings.js';
 import { createNetworkRequestRepository } from './network-requests.js';
 import { recordPending as recordPendingNetwork } from '../services/network-requests.js';
 import { narrowScope } from '../services/escalation-card.js';
@@ -15,7 +16,7 @@ import {
   ACTIVE_ONLY, AI_BRANCH, ANY_QUEUE, CLAIM_INTENTS, CLARIFYING_NOTE, CLARIFY_AUTHOR, CONTRACT, DAY_MS, EVENT_TYPES, EXECUTION_GRAPH,
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
-  QUALITY_AUTHOR, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
+  DB_AUTHOR, QUALITY_AUTHOR, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
   assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
   softMissNote, validatePrePrVerdict, wallClockLimit,
 } from './store-contract.js';
@@ -1109,6 +1110,9 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
     if (!['ready_for_pr', 'needs_review'].includes(run.outcome) || !verdict?.candidate) {
       throw new WorkerContractError('a PR needs a passing verdict with its candidate');
     }
+    if (verdict.db_hold && (root.phase !== 'publishing' || Number((await approvedDbRun(root.id))?.run_id) !== run.id)) {
+      throw new WorkerContractError('a DB change needs admin approval before any PR', 409, 'db_approval_required');
+    }
     if (pr.branch !== verdict.candidate.branch || pr.head_sha !== verdict.candidate.head_sha
       || pr.base_sha !== verdict.candidate.base_sha) {
       throw new WorkerContractError('PR does not match the verified candidate');
@@ -1280,6 +1284,8 @@ export function createAsyncAiBoardStore(db, hooks = {}) {
       clarification_incomplete: !!await db.get("SELECT 1 FROM ai_ticket_tags WHERE ticket_id=? AND tag='needs_clarification'", [ticket.id]),
       ...(ticket.phase === 'rolling_back' ? { rollback_candidate: await latestCandidate(ticket.id) } : {}),
       ...(ticket.phase === 'reverifying' ? { reverify_candidate: await latestCandidate(ticket.id) } : {}),
+      ...(ticket.phase === 'publishing' ? { db_publish: await dbPublishHandoff(ticket) } : {}),
+      requester_role: (await db.get('SELECT role FROM users WHERE id=?', [request.owner_user_id]))?.role ?? null,
       // Folder: worker dựng code từ đỉnh nhánh chu kỳ này thay cho dev; brief = tầng L1/L3.
       folder: await withBrief(await db.get(`SELECT f.id, f.slug, f.title, f.branch, f.head_sha, f.pr_number, f.pr_url, f.cycle
         FROM requests q JOIN ai_feature_folders f ON f.id = q.folder_id WHERE q.id = ?`, [ticket.source_request_id])),
@@ -1866,6 +1872,29 @@ function resumeSummary(journal) {
       return JSON.parse(run.evidence_json).verdict;
     }
     if (run.outcome) throw new WorkerContractError('run already has a verdict', 409, 'idempotency_conflict');
+    // Fail closed: a worker DB marker always holds; inferring one from .sql files is the flag's extra layer.
+    const changed = [...new Set((verdict.candidate?.commits || []).flatMap((c) => c.files || []))];
+    const sqlFiles = changed.filter((f) => /\.sql$/i.test(f));
+    const fullstack = getSettings().requesterFullstackDb;
+    const ownerRole = (await db.get('SELECT u.role FROM requests r LEFT JOIN users u ON u.id=r.owner_user_id WHERE r.id=?',
+      [root.source_request_id]))?.role;
+    // Non-admin change that runs on the server: outside public/ and top-level tests, plus what the worker found by import
+    // graph (public modules the server loads, tests issuing SQL). Admins and FE-only go straight on.
+    // No worker list (older worker, harness flag off): every public JS module may be server-loaded, so it counts.
+    const reported = Array.isArray(verdict.backend_change?.files) ? verdict.backend_change.files
+      : changed.filter((f) => /^public\/.+\.[cm]?js$/.test(f));
+    const backendFiles = [...new Set([...changed.filter((f) => !/^(public|tests?)\//.test(f)), ...reported])];
+    const holdKinds = verdict.outcome === 'blocked' ? [] : [
+      ...(verdict.db_change || (fullstack && sqlFiles.length) ? ['db'] : []),
+      ...(fullstack && ownerRole !== 'admin' && backendFiles.length ? ['backend'] : []),
+    ];
+    if (holdKinds.length) {
+      verdict.db_hold = true;
+      verdict.hold_kinds = holdKinds;
+      if (holdKinds.includes('db')) verdict.db_change ??= { migrations: [], files: sqlFiles, attention: [],
+        sandbox: { status: null, schema_diff: null, checks: [], tests: [], error: 'worker sent no DB report' } };
+      if (holdKinds.includes('backend')) verdict.backend_change ??= { files: backendFiles, diff: '' };
+    }
     const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
     const runEvidence = parseJson(run.evidence_json) ?? {};
     // Trần MỖI lượt = lập plan + thực hiện của cùng run; verdict.budget_used chỉ là phần thực hiện.
@@ -1966,6 +1995,13 @@ function resumeSummary(journal) {
         phase = 'transient_blocked';
         note = 'Lỗi hạ tầng thoáng qua; chờ admin bấm "Chạy lại ngay" lúc GPU rảnh.';
       }
+    }
+    if (verdict.db_hold) {
+      status = 'waiting_admin';
+      phase = 'awaiting_db_approval';
+      note = verdict.hold_kinds?.includes('db')
+        ? 'Thay đổi có sửa cơ sở dữ liệu; chờ quản trị viên duyệt trước khi đưa lên dev.'
+        : 'Thay đổi có sửa phần máy chủ; chờ quản trị viên duyệt trước khi đưa lên dev.';
     }
     const repairSequence = (await db.get(`
       SELECT COALESCE(MAX(sequence), 0) + 1 AS nxt FROM ai_tickets WHERE parent_id=? AND plan_revision=?
@@ -2118,6 +2154,168 @@ function resumeSummary(journal) {
     const result = await requestRollbackTransaction(Number(requestId), adminUserId, now);
     await recordAdminAction({ requestId }, adminUserId, 'rollback');
     return result;
+  }
+
+  // ── DB approval gate: a held candidate is pushed only after an admin approves its exact run/head. ──
+  const CLIP_CAP = 20_000;
+  const HELD_RUNS = `SELECT r.id, r.evidence_json, r.created_at FROM ai_runs r WHERE r.ticket_id=?
+    AND r.outcome IN ('ready_for_pr', 'needs_review') AND r.evidence_json LIKE '%"db_hold":true%' ORDER BY r.id DESC`;
+  const DB_DECISIONS = `SELECT event_type, actor_id, internal_detail, created_at FROM ai_events
+    WHERE ticket_id=? AND event_type IN ('db_approved', 'db_rejected') ORDER BY id`;
+
+  async function approvedDbRun(rootId) {
+    const last = (await db.all(DB_DECISIONS, [rootId])).at(-1);
+    return last?.event_type === 'db_approved' ? parseJson(last.internal_detail) : null;
+  }
+
+  async function dbPublishHandoff(root) {
+    const approved = await approvedDbRun(root.id);
+    const run = approved && await db.get('SELECT evidence_json FROM ai_runs WHERE id=? AND ticket_id=?', [approved.run_id, root.id]);
+    const verdict = parseJson(run?.evidence_json)?.verdict;
+    if (!verdict?.candidate || verdict.candidate.head_sha !== approved.head_sha) return null;
+    const plan = root.plan_hash && await db.get('SELECT plan_json, tier FROM ai_plans WHERE root_ticket_id=? AND plan_hash=? AND revision=?',
+      [root.id, root.plan_hash, root.plan_revision]);
+    return { run_id: approved.run_id, head_sha: approved.head_sha, verdict, plan: parseJson(plan?.plan_json) ?? {}, tier: plan?.tier ?? root.tier };
+  }
+
+  const dbSummary = (change) => {
+    const sandbox = change?.sandbox || {};
+    const diff = sandbox.schema_diff;
+    const parts = [`sandbox ${sandbox.status ?? 'không có'}`];
+    if (diff) {
+      parts.push(`thêm bảng: ${(diff.added_tables || []).join(', ') || '-'}`);
+      const cols = Object.entries(diff.added_columns || {}).map(([table, names]) => `${table}(${names.join(', ')})`);
+      parts.push(`thêm cột: ${cols.join('; ') || '-'}`);
+    }
+    parts.push(`checks ${(sandbox.checks || []).filter((c) => c.ok).length}/${(sandbox.checks || []).length}`);
+    parts.push(`tests ${(sandbox.tests || []).filter((t) => t.rc === 0).length}/${(sandbox.tests || []).length}`);
+    if (sandbox.error) parts.push(`lỗi: ${sandbox.error}`);
+    return parts.join('; ');
+  };
+
+  const ITEM_STATUS = { awaiting_db_approval: 'pending', db_approved: 'approved', publishing: 'publishing',
+    pr_open: 'published', db_publish_failed: 'publish_failed' };
+
+  /** Items of one root, newest first: one per held verdict run. */
+  async function dbItems(root, request) {
+    const runs = await db.all(HELD_RUNS, [root.id]);
+    const decisions = (await db.all(DB_DECISIONS, [root.id])).map((row) => ({ ...row, detail: parseJson(row.internal_detail) ?? {} }));
+    return runs.map((run, index) => {
+      const evidence = parseJson(run.evidence_json) ?? {};
+      const verdict = evidence.verdict ?? {};
+      const change = verdict.db_change ?? {};
+      const backend = verdict.backend_change ?? {};
+      const kinds = verdict.hold_kinds ?? ['db'];
+      const decided = decisions.filter((d) => Number(d.detail.run_id) === run.id).at(-1);
+      const current = index === 0;
+      const status = decided?.event_type === 'db_rejected' ? 'rejected'
+        : current && ITEM_STATUS[root.phase] ? ITEM_STATUS[root.phase]
+          : decided ? 'approved' : 'superseded';
+      const migrations = change.migrations || [];
+      return {
+        id: run.id, request_id: request.id, ticket_id: root.id, title: request.title, status, created_at: run.created_at,
+        kind: kinds.length === 2 ? 'both' : kinds[0],
+        sql: migrations.map((m) => `-- ${m.path}\n${m.sql}`).join('\n\n'),
+        migrations, files: [...new Set([...(change.files || []), ...(backend.files || [])])].sort(),
+        diff: backend.diff ?? '', attention: change.attention || [], clipped: !!(change.clipped || backend.clipped),
+        sandbox: { ...(change.sandbox || {}), output: dbSummary(change) },
+        candidate: verdict.candidate ? { branch: verdict.candidate.branch, base_sha: verdict.candidate.base_sha, head_sha: verdict.candidate.head_sha } : null,
+        decision: decided ? { decision: decided.event_type === 'db_approved' ? 'approved' : 'rejected', reason: decided.detail.reason ?? null,
+          admin_user_id: Number(decided.actor_id) || null, at: decided.created_at } : null,
+        pull_request: evidence.pull_request ? { number: evidence.pull_request.number, url: evidence.pull_request.url } : null,
+        publish_error: current && root.phase === 'db_publish_failed' ? root.internal_reason : null,
+      };
+    });
+  }
+
+  /** requestId set: that request's items (404 when it has no root); else every pending item on the board. */
+  async function listDbApprovals({ requestId = null, status = 'pending' } = {}) {
+    const roots = requestId == null
+      ? await db.all(`SELECT t.*, r.id AS request_id, r.title AS request_title FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
+          WHERE t.parent_id IS NULL AND t.phase='awaiting_db_approval' ORDER BY t.updated_at`)
+      : await db.all(`SELECT t.*, r.id AS request_id, r.title AS request_title FROM ai_tickets t JOIN requests r ON r.id=t.source_request_id
+          WHERE t.parent_id IS NULL AND r.id=?`, [Number(requestId)]);
+    if (requestId != null && !roots.length) throw new WorkerContractError('request not found', 404, 'request_not_found');
+    const items = [];
+    for (const root of roots) items.push(...await dbItems(root, { id: root.request_id, title: root.request_title }));
+    return status === 'all' ? items : items.filter((item) => item.status === 'pending');
+  }
+
+  const decideDbApprovalTransaction = (requestId, itemId, input) => db.tx(async () => {
+    const root = await lockedRequestRoot(requestId);
+    if (!root) throw new WorkerContractError('request not found', 404, 'request_not_found');
+    if (!['awaiting_db_approval', 'db_publish_failed'].includes(root.phase)) {
+      throw new WorkerContractError('request is not waiting for a DB approval', 409, 'not_awaiting_db_approval');
+    }
+    const held = await db.get(HELD_RUNS, [root.id]);
+    const candidate = parseJson(held?.evidence_json)?.verdict?.candidate;
+    if (!held || held.id !== itemId || !candidate || (input.headSha && input.headSha !== candidate.head_sha)) {
+      throw new WorkerContractError('this DB change is not the one waiting for approval', 409, 'stale_db_approval');
+    }
+    const heldVerdict = parseJson(held.evidence_json)?.verdict ?? {};
+    // Fail closed: an item the admin cannot see in full is never approvable.
+    const clipped = heldVerdict.db_change?.clipped || heldVerdict.backend_change?.clipped
+      || (heldVerdict.backend_change?.diff || '').length >= CLIP_CAP || (heldVerdict.backend_change?.diff || '').includes('# --- clipped at')
+      || (heldVerdict.db_change?.migrations || []).some((m) => (m.sql || '').length >= CLIP_CAP);
+    if (input.decision === 'approved' && clipped) {
+      throw new WorkerContractError('the change is clipped and too large to review; reject it', 409, 'too_large_to_approve');
+    }
+    const detail = JSON.stringify({ run_id: held.id, head_sha: candidate.head_sha, reason: input.reason });
+    const decided = (await db.get(`SELECT COUNT(*) AS n FROM ai_events WHERE ticket_id=? AND event_type IN ('db_approved', 'db_rejected')`, [root.id])).n;
+    const idem = `db-decision:${held.id}:${Number(decided) + 1}`;
+    if (input.decision === 'approved') {
+      await closeRoot(root, { status: 'queued', phase: 'db_approved', reason: null, now: input.now,
+        note: 'Quản trị viên đã duyệt thay đổi cơ sở dữ liệu; đang chờ AI Board mở PR.',
+        event: { type: 'db_approved', actorType: 'admin', actorId: input.adminUserId, idem, detail } });
+      await touchAdmin(root.id, input.adminUserId, 'db_approve', input.now);
+      return { ok: true, status: 'queued', phase: 'db_approved', item_id: held.id };
+    }
+    const kinds = parseJson(held.evidence_json)?.verdict?.hold_kinds ?? ['db'];
+    const note = `Quản trị viên từ chối thay đổi ${kinds.includes('db') ? 'CSDL' : 'máy chủ'}: ${input.reason}`;
+    await closeRoot(root, { status: 'cancelled', phase: 'admin_rejected', note, reason: 'db_rejected', now: input.now,
+      event: { type: 'db_rejected', actorType: 'admin', actorId: input.adminUserId, idem, detail } });
+    await db.run(`UPDATE ai_tickets SET status='cancelled', internal_reason='db_rejected', updated_at=?
+      WHERE parent_id=? AND status NOT IN ('done', 'failed', 'invalidated', 'cancelled')`, [input.now, root.id]);
+    await db.run(`UPDATE ai_alerts SET status='resolved', updated_at=? WHERE ticket_id=? AND status='open'`, [input.now, root.id]);
+    await db.run(`INSERT INTO request_messages(request_id, role, author_name, body, attachments, created_at)
+      VALUES (?, 'ai', ?, ?, NULL, ?)`, [root.source_request_id, DB_AUTHOR, note, input.now]);
+    await touchAdmin(root.id, input.adminUserId, 'db_reject', input.now);
+    return { ok: true, status: 'cancelled', phase: 'admin_rejected', item_id: held.id };
+  });
+
+  async function decideDbApproval(requestId, itemId, { decision, reason, headSha, adminUserId, now = Date.now() }) {
+    if (!['approved', 'rejected'].includes(decision)) throw new WorkerContractError('invalid decision', 400, 'invalid_decision');
+    const why = String(reason ?? '').trim();
+    if (decision === 'rejected' && (!why || why.length > 500)) {
+      throw new WorkerContractError('a reason of 1 to 500 characters is required', 400, 'reason_required');
+    }
+    if (headSha != null && !SHA.test(String(headSha))) throw new WorkerContractError('invalid head_sha', 400, 'invalid_head_sha');
+    if (!Number.isSafeInteger(Number(itemId)) || Number(itemId) < 1) throw new WorkerContractError('invalid item id', 400, 'invalid_id');
+    return await decideDbApprovalTransaction(Number(requestId), Number(itemId), {
+      decision, reason: decision === 'rejected' ? why : null, headSha: headSha ?? null, adminUserId: Number(adminUserId), now });
+  }
+
+  const finishDbPublishTransaction = (ticketId, input) => db.tx(async () => {
+    const root = await assertLease(ticketId, input.workerId, input.leaseToken, input.now);
+    if (!['publishing', 'pr_open'].includes(root.phase)) throw new WorkerContractError('ticket is not publishing', 409, 'not_publishing');
+    const run = await db.get('SELECT id FROM ai_runs WHERE id=? AND ticket_id=?', [Number(input.runId), root.id]);
+    if (!run) throw new WorkerContractError('run does not belong to ticket');
+    const approved = await approvedDbRun(root.id);
+    const pr = await latestPullRequest(root.id);
+    const ok = input.ok === true && !!pr && !!approved && pr.head_sha === approved.head_sha;
+    const detail = ok ? null : (String(input.detail || '').slice(0, 1000) || 'PR not opened');
+    const next = ok ? ['planned', 'pr_open', 'Thay đổi đang chờ người duyệt.']
+      : ['waiting_admin', 'db_publish_failed', 'Đã duyệt thay đổi CSDL nhưng chưa mở được PR; chờ quản trị viên.'];
+    await db.run('UPDATE ai_runs SET evidence_json=?, failure_reason=?, updated_at=? WHERE id=?',
+      [JSON.stringify({ db_publish: { ok, run_id: approved?.run_id ?? null, detail } }), detail, input.now, run.id]);
+    await closeRoot(root, { status: next[0], phase: next[1], note: next[2], reason: detail, now: input.now,
+      event: { type: 'db_publish_done', actorType: 'worker', actorId: input.workerId, idem: `db-publish:${run.id}`,
+        detail: JSON.stringify({ ok, pr: pr?.number ?? null, detail }) } });
+    return { status: next[0], phase: next[1], ok };
+  });
+
+  async function finishDbPublish(ticketId, input) {
+    return await finishDbPublishTransaction(Number(ticketId), { ...input, now: input.now ?? Date.now() });
   }
 
   const submitRollbackTransaction = (ticketId, input) => db.tx(async () => {
@@ -2747,6 +2945,9 @@ function resumeSummary(journal) {
     submitPlan,
     submitPrePrVerdict,
     recordPullRequest,
+    listDbApprovals,
+    decideDbApproval,
+    finishDbPublish,
     getClarification,
     addClarifyTurn,
     requestWorkflow,

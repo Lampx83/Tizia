@@ -306,6 +306,9 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
     return check
 
 
+FULLSTACK_CAPABILITY = "context.write"  # server catalog has it only when AI_BOARD_REQUESTER_FULLSTACK_DB is on
+
+
 class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
@@ -365,13 +368,17 @@ class HarnessPlanner:
                               old_caps[0] if old_caps else (
                 "public.ui" if file.startswith("public/") else "generated.context"
             ))
+            if (path_policy.fullstack_on() and FULLSTACK_CAPABILITY in (catalog or {}) and file.startswith("server/contexts/")
+                    and not file.startswith(path_policy.GENERATED_ROOT) and path_policy.may_edit(file)):
+                capability = FULLSTACK_CAPABILITY
             scope = [file, *subtask_files.files_of(subtask)[1:]] if two_level_on else [file]
             if len(scope) > 1:  # the server grants a step one capability: it must cover every file of the step
                 capability = next((cap for cap in dict.fromkeys([*old_caps, *(catalog or {})]) if all(
                     any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('allow', []))
                     and not any(path.startswith(prefix) for prefix in (catalog or {}).get(cap, {}).get('deny', []))
                     for path in scope)), capability)
-            layer = subtask.get("layer") or ("backend" if path_policy.may_edit(file)
+            layer = subtask.get("layer") or ("db" if path_policy.context_migration(file)
+                                             else "backend" if path_policy.may_edit(file)
                                              else "db" if "/migrations/" in file and file.endswith(".sql")
                                              else "frontend" if file.startswith("public/") else "wiring")
             depends_on = subtask.get("depends_on")

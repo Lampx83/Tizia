@@ -212,6 +212,8 @@ class HttpWorker:
         existing = snapshot.get("pull_request")
         if existing:
             return f"root already has PR #{existing.get('number')}; not opening another"
+        if refusal := self._db_refusal(snapshot, verdict["candidate"]):
+            return refusal
         title, body, labels = pr_text(snapshot, plan, tier, verdict)
         try:
             pr = self._with_heartbeat(lambda _lost: self.candidates.publish(
@@ -228,6 +230,42 @@ class HttpWorker:
         except Exception as error:  # noqa: BLE001
             return f"PR not opened: {str(error)[:500]}"
         return None
+
+    def _db_refusal(self, snapshot: dict, cand: dict) -> str | None:
+        """Flag on: the real diff needs admin approval (DB change, or a non-admin change outside public/) and the snapshot
+        holds none for this exact head → reason."""
+        import path_policy
+        if not path_policy.fullstack_on():
+            return None
+        from services import db_approval
+        diff = getattr(self.candidates, "diff", None)
+        if diff is None:
+            return "db_approval_required: candidate diff unavailable"
+        try:
+            text = diff(cand)
+        except OSError as error:
+            return f"db_approval_required: candidate diff failed: {str(error)[:200]}"
+        repo = getattr(self.candidates, "repo", None)
+        server_public = db_approval.server_imported_public(str(repo), cand["base_sha"]) if repo else None
+        kind = db_approval.push_hold([{"diff": text}], snapshot.get("requester_role") or "student", server_public)
+        if kind is None or (snapshot.get("db_publish") or {}).get("head_sha") == cand.get("head_sha"):
+            return None
+        return f"db_approval_required: {cand.get('head_sha')} needs admin approval ({kind}) before any push"
+
+    def _publish(self, ticket_id: int, lease: dict, prefix: str, snapshot: dict, run: dict) -> dict:
+        """Admin approved the DB change: push the held candidate and open its PR, then report it. Failure waits for the admin."""
+        held = snapshot.get("db_publish") or {}
+        verdict, problem = held.get("verdict") or {}, None
+        if not self.open_prs or not verdict.get("candidate"):
+            problem = "PR not opened: no GitHub token" if not self.open_prs else "no held candidate"
+        else:
+            problem = self._open_pr(ticket_id, lease, prefix, snapshot, {"id": held.get("run_id")}, held.get("plan") or {},
+                                    held.get("tier"), verdict)
+        self._close_trace("planned" if problem is None else "waiting")
+        done = self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/db-publish", {
+            **lease, "run_id": run["id"], "ok": problem is None, **({"detail": problem[:1000]} if problem else {}),
+        })
+        return {"status": done.get("status"), "ticket_id": ticket_id, "run_id": run["id"], "publish": "ok" if problem is None else "failed"}
 
     def _upload_screenshots(self, ticket_id: int, lease: dict, run: dict, shots: list[dict]) -> None:
         """Đăng ảnh bản nháp vào thread yêu cầu. Best-effort: lỗi không đổi verdict (mất lease → verdict tự báo)."""
@@ -349,10 +387,16 @@ class HttpWorker:
         run_kwargs = {"source": folder_src["path"], "candidate_opts": {
             "branch_name": folder_src["branch"], "branch_restore": folder_src["tip"],
             "folder_brief": brief.get("text")}} if folder_src else {}
+        import path_policy
+        if path_policy.fullstack_on() and snapshot.get("requester_role"):
+            # Server-authenticated role: only the admin approval gate reads it, and only under the flag.
+            run_kwargs["candidate_opts"] = {**run_kwargs.get("candidate_opts", {}), "requester_role": snapshot["requester_role"]}
         if trigger == "rollback":
             return self._rollback(ticket_id, lease, snapshot, run)
         if trigger == "reverify":
             return self._reverify(ticket_id, lease, prefix, snapshot, run)
+        if trigger == "publish":
+            return self._publish(ticket_id, lease, prefix, snapshot, run)
         # 'execute' = admin đã cho phép plan (tier protected): lượt này không lập plan lại mà chạy plan đã duyệt.
         executing = trigger == "execute"
         if not executing:
@@ -502,7 +546,8 @@ class HttpWorker:
                 except Exception:
                     preview_result = {"state": "unavailable"}  # serving verdict/candidate remain unchanged
             pr_problem = None
-            if self.open_prs and verdict and verdict.get("candidate") and verdict.get("outcome") in ("ready_for_pr", "needs_review"):
+            if (self.open_prs and verdict and verdict.get("candidate") and verdict.get("outcome") in ("ready_for_pr", "needs_review")
+                    and not db_held(verdict)):
                 pr_problem = self._open_pr(ticket_id, lease, prefix, snapshot, run, plan, planned.get("tier"), verdict)
             pr_blocked = bool(pr_problem) and pr_problem.startswith("path_denied")
             self._release(ticket_id, {
@@ -522,6 +567,11 @@ class HttpWorker:
             **lease, "outcome": "shadow_ok", "idempotency_key": f"{prefix}:release",
         })
         return {"status": "shadow_ok", "ticket_id": ticket_id, "run_id": run["id"]}
+
+
+def db_held(verdict: dict) -> bool:
+    """Server kept this verdict for the DB approval gate: never push or open a PR from it."""
+    return bool(verdict.get("db_change") or verdict.get("db_hold"))
 
 
 def admin_rewrite_step(status, client, deps, worker_id, *, rewrite=None) -> dict | None:
@@ -567,6 +617,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--execute requires --mode active")
     if args.mode == "active" and not args.execute:
         parser.error("--mode active requires --execute")
+    if get_settings().requester_fullstack_db and not get_settings().db_check:
+        print("[worker] AI_BOARD_REQUESTER_FULLSTACK_DB bật nhưng AI_BOARD_DB_CHECK tắt: cờ không có hiệu lực")
     base_url = server_url()
     key = take_secret("AI_BOARD_WORKER_KEY")
     github_token = take_secret("AI_BOARD_GITHUB_TOKEN")

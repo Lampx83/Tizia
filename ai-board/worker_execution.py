@@ -243,6 +243,8 @@ class _Execution:
         self.gates: list[dict] = []
         self.kind = self.candidate = self.base_sha = self.state = self.scratch = None
         self.blocked_candidate: dict | None = None
+        self.db_change: dict | None = None
+        self.backend_change: dict | None = None
         self.attempt_checkpoint = None
         self.open = self.lease_lost = False
         self.result: dict | None = None
@@ -574,6 +576,9 @@ class _Execution:
                     self.preview_capture(state, private_candidate)
                 except Exception:
                     pass  # optional artifact must never change verdict or prevent cleanup
+        self.db_change = self.backend_change = None
+        if _passed(self.gates, self.kind) and not lease_lost and path_policy.fullstack_on():
+            self._db_gate(state)
         self.candidate = candidates.record(state) if _passed(self.gates, self.kind) and not lease_lost else None
         if self.candidate is None and not lease_lost and _keep_blocked(self.gates, self.kind):
             self.blocked_candidate = candidates.record(state)
@@ -587,6 +592,38 @@ class _Execution:
         self.produced = dict(state.get("produced") or {})
         self.base_sha = state.get("base_sha")
         self.lease_lost = lease_lost
+
+    def _db_gate(self, state: dict) -> None:
+        """DB change in the passing attempt: non-additive or failed sandbox run blocks the last gate; passed is held for the admin."""
+        from services import db_approval
+        source, base = state.get("checkout_repo") or str(self.checkout_source), state.get("base_sha")
+        server_public = db_approval.server_imported_public(str(source), base) if base else None
+        checkout = state.get("full_checkout")
+
+        def read(rel):
+            target = Path(checkout) / rel if checkout else None
+            return target.read_text(encoding="utf-8", errors="replace") if target and target.is_file() else None
+
+        # Always sent under the flag: an absent list makes the server hold every public JS module.
+        self.backend_change = (db_approval.backend_change(state.get("full_diff") or [], server_public, read)
+                               or {"files": [], "diff": ""})
+        role = state.get("requester_role") or "student"
+        if self.backend_change.get("clipped") and role != path_policy.ADMIN_ROLE:
+            self.gates[-1] = {**self.gates[-1], "blocked": True,
+                              "reason": f"thay đổi phía máy chủ {db_approval.TOO_LARGE}"}
+            self.kind = "ordinary"
+            return
+        try:
+            outcome = db_approval.evaluate(state.get("full_diff") or [], state.get("requester_role") or "student", self.should_stop)
+        except Exception as error:  # noqa: BLE001 - sandbox teardown/connection failure must not skip worktree cleanup
+            outcome = {"status": "transient", "reason": f"migration chưa chạy được trên Postgres sandbox: {str(error)[:300]}"}
+        if outcome is None:
+            return
+        if outcome["status"] == "passed":
+            self.db_change = outcome["db_change"]
+            return
+        self.gates[-1] = {**self.gates[-1], "blocked": True, "reason": outcome["reason"]}
+        self.kind = "transient" if outcome["status"] == "transient" else "ordinary"
 
     def attempt_close(self) -> str:
         self.close_attempt()
@@ -1002,6 +1039,8 @@ class _Execution:
             **progress.verdict_fields(window=self.progress_window),
             **({"repair_agent": self.agent_evidence} if self.agent_evidence else {}),
             **({"check_revision": revised} if revised else {}),
+            **({"db_change": self.db_change} if passed and self.db_change else {}),
+            **({"backend_change": self.backend_change} if passed and self.backend_change is not None else {}),
             "screenshots": self.shots,  # chỉ cục bộ: HttpWorker lấy ra trước khi gửi verdict
             **({"base_sha": self.base_sha} if self.base_sha else {}),  # task eval từ lần hỏng chạy lại đúng sha này
         }

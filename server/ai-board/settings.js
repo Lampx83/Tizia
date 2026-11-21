@@ -18,6 +18,8 @@ export function getSettings(env = environment()) {
     vllmUrl: text(env, 'VLLM_URL'),
     modelRouting: truthy(env.AI_BOARD_MODEL_ROUTING),
     promptLabels: truthy(env.AI_BOARD_PROMPT_LABELS),
+    // Requesters edit mounted contexts; a candidate with a DB change waits for an admin before any push.
+    requesterFullstackDb: truthy(env.AI_BOARD_REQUESTER_FULLSTACK_DB),
     tokenizerFile: text(env, 'AI_BOARD_QWEN_TOKENIZER'),
     workerKey: text(env, 'AI_BOARD_WORKER_KEY'),
     shots: {
