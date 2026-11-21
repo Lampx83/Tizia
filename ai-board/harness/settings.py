@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     react_schema: bool = False
     thinking_budget: bool = False
     multi_file_subtask: bool = False
+    data_registry: bool = False  # plan may carry data_changes chosen from contract data_kinds
     backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
     budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False

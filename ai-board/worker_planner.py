@@ -353,7 +353,7 @@ class HarnessPlanner:
                     else list(dict.fromkeys(old.get("capabilities") or [])))
         steps = []
         settings = get_settings()
-        from gates import two_level
+        from gates import data_kinds, two_level
         from runtime import subtask_files
         two_level_on = two_level.enabled()
         planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level_on else {}
@@ -393,6 +393,7 @@ class HarnessPlanner:
                    {'backend', 'frontend', 'database', 'review', 'test', 'merge', 'all'} else {}),
                 **({"checks": planned[file]} if planned.get(file) else {}),
             })
+        steps += data_kinds.steps(old, len(steps) + 1)
         capabilities = list(dict.fromkeys([*old_caps, *(step["capability"] for step in steps)]))
         return {
             "domain": request["domain"],

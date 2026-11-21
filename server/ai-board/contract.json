@@ -44,6 +44,25 @@
     "no_progress_rounds": 2,
     "soft": { "soft_start": 2, "soft_step": 1 }
   },
+  "data_kinds": {
+    "_why": "Registry of admin data-write APIs a plan data step may target (gates/data_kinds.py). Flag off = registry ignored and the planner never sees it. A kind is one entry: route, method, context (owner), tier, approver, capability, verify (runnable command), max_bytes (JSON size of the payload), schema (JSON schema subset: type, enum, const, required, properties, additionalProperties, minProperties, maxProperties, items, minItems, maxItems, minLength, maxLength, minimum, maximum, pattern). The step is applied by the approver, never written by the worker.",
+    "flag": "AI_BOARD_DATA_REGISTRY", "default_enabled": false,
+    "kinds": {
+      "campus_layout": {
+        "summary": "Campus map layout override for one school domain.",
+        "route": "/api/admin/campus-layout/:domain", "method": "POST", "context": "campus", "tier": "protected", "approver": "admin",
+        "capability": "content", "verify": "node --test test/ai-board-data-step.test.js", "max_bytes": 200000,
+        "schema": {
+          "type": "object", "required": ["kind", "domain", "layout"],
+          "properties": {
+            "kind": { "const": "campus_layout" },
+            "domain": { "enum": ["preschool", "primary", "secondary", "it", "pharmacy", "language", "driving"] },
+            "layout": { "type": "object", "minProperties": 1, "additionalProperties": false, "properties": { "title": {}, "credit": {}, "grass": {}, "vroads": {}, "hroads": {}, "autoPaths": {}, "roads": {}, "buildings": {}, "facilities": {}, "fields": {}, "playthings": {}, "critters": {}, "trees": {}, "cars": {}, "props": {}, "walkways": {}, "tints": {}, "sportTargets": {}, "walls": {} } }
+          }
+        }
+      }
+    }
+  },
   "default_budget_limit": 200,
   "limits": {
     "workers": {
