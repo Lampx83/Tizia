@@ -9,7 +9,8 @@ import tempfile
 from pathlib import Path
 
 from gates import acceptance_structure
-from runtime import loop_guard, subtask_files
+from runtime import subtask_files
+from runtime.loops import loop_guard
 from security import spotlight
 from settings import get_settings
 

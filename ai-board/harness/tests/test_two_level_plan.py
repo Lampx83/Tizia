@@ -9,7 +9,7 @@ import pytest
 
 from conftest import FakeModels, deps_with
 from gates import brainstorm, implement, two_level
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import Settings
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -291,7 +291,7 @@ def test_repair_cap_ends_the_loop_with_a_stop_report(repo, tmp_path, on, no_deta
     assert out["blocked"] is True and out["failure_class"] == "ordinary"
     assert "repair cap reached" in out["reason"] and "Sai chữ." in out["reason"]
     assert len(models.edits()) == 1 and not (tmp_path / "scratch/public/a.html").exists()
-    from runtime import stop_report
+    from runtime.loops import stop_report
     report = stop_report.build("blocked_gate_3", out["reason"], 3, out["failure_class"], [3])
     assert report["class"] == "model_limit" and "repair cap reached" in stop_report.render(report)
 
