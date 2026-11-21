@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     api_fallback: bool = False  # vLLM busy/unreachable at run start: roles listing the hosted API use it
     oracle_css_size: bool = False
     text_oracle_skip_selector: bool = True
+    syntax_block_context: bool = False  # gate 3 JS syntax retry shows the block enclosing the produced lines and the top-level declaration rule
     literal_exact_feedback: bool = False  # gate 4 request_literal repair names the dropped trailing characters and the exact literal
     validator_reask: bool = False  # gate 2.5: unparsable validator reply gets one re-ask naming the parse error before blocking
     inline_handler_repairable: bool = True  # inline on*=/javascript:/<script> in added markup = repairable, not critical

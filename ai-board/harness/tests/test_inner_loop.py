@@ -1,4 +1,5 @@
 """Gate 3 hỏi lại ngay trong cổng: lỗi sửa được → phản hồi + đoạn lỗi, tối đa MAX_INNER_RETRIES lần."""
+import pytest
 import subprocess
 
 from services import file_context
@@ -244,3 +245,23 @@ def test_syntax_error_feedback_shows_the_lines_the_edit_produced_so_the_model_ca
     else:
         raise AssertionError("a doubled quote must be a syntax error")
     assert "L2| " in message and "return '<b>new</b>';';" in message  # the produced line, with its real number
+
+
+MODULE = "export const a = 1;\nexport const list = [\n  'x',\n  'y',\n];\nexport const z = 2;\n"
+
+
+def _inserted_inside_array(monkeypatch, flag):
+    (monkeypatch.setenv if flag else monkeypatch.delenv)("AI_BOARD_SYNTAX_BLOCK_CONTEXT", *(["1"] if flag else []), **({} if flag else {"raising": False}))
+    out = {"edits": [{"after_line": 3, "insert": "export const getAppDomains = () => [];"}], "test_file": "test/x.test.js", "test": ESM_TEST}
+    with pytest.raises(ValueError) as caught:
+        implement.check_output(out, MODULE, "stop", file="public/js/integrations.js")
+    return str(caught.value)
+
+
+def test_syntax_error_names_enclosing_block_and_top_level_rule_when_flag_on(monkeypatch):
+    message = _inserted_inside_array(monkeypatch, True)
+    assert "khối bắt đầu ở L2| export const list = [" in message and "NGOÀI" in message
+
+
+def test_syntax_error_has_no_block_note_when_flag_off(monkeypatch):
+    assert "khối bắt đầu" not in _inserted_inside_array(monkeypatch, False)
