@@ -95,25 +95,44 @@ const diffLines = (d = {}) => [
   ...Object.entries(d.removed_columns || {}).map(([t, cols]) => `Xóa cột khỏi ${code(t)}: ${cols.map(code).join(' ')}`),
 ];
 
-/** Pending DB approval card. item per lf315 contract; ui: {reason, msg, busy}. */
+export const HOLD_KIND = { db: 'Thay đổi CSDL', backend: 'Thay đổi máy chủ', both: 'Thay đổi CSDL và máy chủ' };
+const DIFF_CAP = 20000;
+const showsSql = (kind) => kind !== 'backend';
+const showsDiff = (kind) => kind === 'backend' || kind === 'both';
+
+/** Verbatim diff in a keyboard-scrollable pre. */
+export function diffBlock(diff) {
+  const text = String(diff ?? '');
+  if (!text) return '<p class="meta">Không có diff máy chủ kèm theo.</p>';
+  const shown = text.length > DIFF_CAP ? text.slice(0, DIFF_CAP) : text;
+  return `<pre class="sql" tabindex="0" role="region" aria-label="Diff file máy chủ (chỉ đọc)"><code>${esc(shown)}</code></pre>`
+    + (text.length > DIFF_CAP ? `<p class="meta">Đã cắt, hiển thị ${DIFF_CAP} trên ${text.length} ký tự.</p>` : '');
+}
+
+/** Pending approval card for a held candidate. item per lf315 contract (kind db|backend|both); ui: {reason, msg, busy}. */
 export function renderDbApproval(item, ui = {}) {
   if (!item) return '';
+  const kind = HOLD_KIND[item.kind] ? item.kind : 'db';
   const sb = item.sandbox || {}, [state, label] = SANDBOX_STATE[sb.status] || ['idle', 'Chưa rõ kết quả chạy thử'];
   const files = item.files || [], diff = diffLines(sb.schema_diff), cand = item.candidate || {};
-  const checks = sb.checks || [], tests = sb.tests || [];
+  const checks = sb.checks || [], tests = sb.tests || [], attention = item.attention || [];
   const noReason = !String(ui.reason ?? '').trim();
   const id = esc(item.id), hid = `db-approval-${id}`;
-  return `<article class="blk db-approval" id="${hid}" aria-labelledby="${hid}-h" data-id="${id}" data-request="${esc(item.request_id)}">
-    <h3 id="${hid}-h">${item.title ? esc(item.title) : 'Thay đổi cơ sở dữ liệu'} <span class="meta">yêu cầu #${esc(item.request_id)} · lượt ${id}</span></h3>
-    <p class="meta"><a href="/admin-request.html?id=${esc(item.request_id)}" target="_top">Mở trang yêu cầu</a>${cand.branch ? ` · nhánh ${code(cand.branch)}` : ''}${cand.head_sha ? ` · ${code(String(cand.head_sha).slice(0, 7))}` : ''}</p>
+  const dbPart = showsSql(kind) ? `
     <div class="sub">SQL (chỉ đọc)</div>${sqlBlock(item.sql)}
     <div class="sub">Chạy thử trên sandbox</div>
     <p>${tag(state, label)}</p>
     ${diff.length ? list(diff) : ''}
     ${sb.output ? `<pre tabindex="0" role="region" aria-label="Tóm tắt chạy thử">${esc(sb.output)}</pre>` : ''}
     ${sb.error ? `<p class="err" role="alert">${esc(sb.error)}</p>` : ''}
-    ${checks.length || tests.length ? `<p class="meta">Kiểm tra SQL: ${checks.filter((c) => c.ok).length}/${checks.length} đạt · test: ${tests.filter((t) => t.rc === 0).length}/${tests.length} đạt</p>` : ''}
-    <div class="sub">File liên quan</div>
+    ${checks.length || tests.length ? `<p class="meta">Kiểm tra SQL: ${checks.filter((c) => c.ok).length}/${checks.length} đạt · test: ${tests.filter((t) => t.rc === 0).length}/${tests.length} đạt</p>` : ''}` : '';
+  const backendPart = showsDiff(kind) ? `<div class="sub">Diff file máy chủ (ngoài public/ và test/)</div>${diffBlock(item.diff)}` : '';
+  return `<article class="blk db-approval" id="${hid}" aria-labelledby="${hid}-h" data-id="${id}" data-request="${esc(item.request_id)}" data-kind="${esc(kind)}">
+    <h3 id="${hid}-h">${item.title ? esc(item.title) : HOLD_KIND[kind]} ${tag('warn', HOLD_KIND[kind])} <span class="meta">yêu cầu #${esc(item.request_id)} · lượt ${id}</span></h3>
+    <p class="meta"><a href="/admin-request.html?id=${esc(item.request_id)}" target="_top">Mở trang yêu cầu</a>${cand.branch ? ` · nhánh ${code(cand.branch)}` : ''}${cand.head_sha ? ` · ${code(String(cand.head_sha).slice(0, 7))}` : ''}</p>
+    ${attention.length ? `<div class="attention" role="alert"><b>Chạm bảng nhạy cảm:</b> ${attention.map(code).join(' ')}<div class="meta">Đọc kỹ SQL trước khi duyệt: bảng này chứa danh tính, quyền hoặc tiền.</div></div>` : ''}
+    ${dbPart}${backendPart}
+    <div class="sub">File bị giữ</div>
     ${files.length ? `<p>${files.map(code).join(' ')}</p>` : '<p class="meta">Chưa có file liên quan.</p>'}
     <label class="meta" for="${hid}-reason" style="display:block">Lý do từ chối (bắt buộc khi từ chối)</label>
     <input id="${hid}-reason" data-db-reason="${id}" maxlength="500" autocomplete="off" aria-describedby="${hid}-hint" value="${esc(ui.reason)}" style="width:100%;max-width:72ch;display:block;margin:4px 0">
@@ -130,7 +149,7 @@ export function renderDbApproval(item, ui = {}) {
 export function renderDbStatus(items = [], tabHref = '/admin.html#approvals') {
   const rows = items.filter((i) => i.status !== 'superseded');
   if (!rows.length) return '';
-  return `<div class="g-mirror meta" data-mirror="db"><p><b>Thay đổi cơ sở dữ liệu</b></p><ul>${rows.map((i) => {
+  return `<div class="g-mirror meta" data-mirror="db"><p><b>Thay đổi CSDL và máy chủ</b></p><ul>${rows.map((i) => {
     const [state, label] = DB_STATUS[i.status] || ['idle', i.status];
     const pr = i.pull_request?.url && /^https?:\/\//.test(i.pull_request.url) ? ` <a href="${esc(i.pull_request.url)}" target="_blank" rel="noopener">PR #${esc(i.pull_request.number)}</a>` : '';
     const why = i.decision?.reason ? ` Lý do: ${esc(i.decision.reason)}` : '';

@@ -729,7 +729,7 @@ async function renderApprovals() {
       ? `${n.total} mục: ${n.elevation} quyền, ${n.waiting} vé dừng, ${n.net} yêu cầu mạng, ${n.db} thay đổi CSDL.`
       : 'Không có mục nào đang chờ duyệt.'}</p>
     ${section('elevation', 'Quyền chạm vùng bảo vệ', n.elevation, elevationPanel(reqCache))}
-    ${section('db', 'Thay đổi cơ sở dữ liệu', n.db, dbBody + dbState, 'Duyệt xong mới được đẩy lên dev. Từ chối cần lý do.')}
+    ${section('db', 'Thay đổi CSDL và máy chủ', n.db, dbBody + dbState, 'Bị giữ vì đổi CSDL hoặc file máy chủ. Duyệt xong mới được đẩy lên dev. Từ chối cần lý do.')}
     ${section('net', 'Yêu cầu mạng', n.net, netBody + netState)}
     ${section('waiting', 'Vé đang dừng chờ quản trị viên', n.waiting, waitingPanel(), 'Thao tác nằm ở trang yêu cầu (kế hoạch, hoàn tác…).')}`;
   wireElevationInputs(host);
@@ -788,8 +788,8 @@ async function dbAction(btn) {
   if (!body) { approvalUi.dbMsg = 'Nhập lý do trước khi từ chối.'; return renderApprovals(); }
   const lines = [`Yêu cầu #${item.request_id} · lượt ${item.id}`];
   const yes = await askConfirm(approve
-    ? { title: 'Duyệt thay đổi cơ sở dữ liệu?', message: 'Sau khi duyệt, worker được phép đẩy thay đổi lên dev và mở PR.', lines, ok: 'Duyệt' }
-    : { title: 'Từ chối thay đổi cơ sở dữ liệu?', message: 'Run dừng lại. Lý do bạn ghi được gửi cho người yêu cầu.', lines, ok: 'Từ chối', danger: true });
+    ? { title: 'Duyệt thay đổi bị giữ?', message: 'Sau khi duyệt, worker được phép đẩy thay đổi lên dev và mở PR.', lines, ok: 'Duyệt' }
+    : { title: 'Từ chối thay đổi bị giữ?', message: 'Run dừng lại. Lý do bạn ghi được gửi cho người yêu cầu.', lines, ok: 'Từ chối', danger: true });
   if (!yes) return;
   approvalUi.busy = true; btn.disabled = true;
   const r = await api(dbDecisionPath(item, approve ? 'approve' : 'reject'), { method: 'POST', body: JSON.stringify(body) });

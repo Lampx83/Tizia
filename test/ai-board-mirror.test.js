@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody, dbDecisionPath, renderDbStatus, sortFindings, sqlBlock } from '../public/js/ai-board-mirror.js';
+import { renderGateReview, renderRiskAndChecks, renderDbApproval, renderDbApprovalState, dbDecisionBody, dbDecisionPath, renderDbStatus, diffBlock, sortFindings, sqlBlock } from '../public/js/ai-board-mirror.js';
 
 const run = (gates) => ({ id: 7, gates });
 const g = (gate, evidence) => ({ gate, evidence });
@@ -90,4 +90,30 @@ test('db state shell: loading, error, empty', () => {
   assert.match(renderDbApprovalState({ loading: true }), /Đang tải/);
   assert.match(renderDbApprovalState({ error: 'x<' }), /x&lt;/);
   assert.equal(renderDbApprovalState({}), '');
+});
+
+test('db card by kind: backend hides SQL and sandbox, db hides diff, both shows each', () => {
+  const base = { id: 1, request_id: 2, files: ['server/a.js', 'server/m.sql'], sql: '', diff: 'diff --git a/server/a.js\n+<script>x</script>', sandbox: { status: null, output: 'sandbox không có' } };
+  const backend = renderDbApproval({ ...base, kind: 'backend' }, {});
+  assert.doesNotMatch(backend, /SQL \(chỉ đọc\)|Chạy thử trên sandbox/);
+  assert.match(backend, /Diff file máy chủ/);
+  assert.match(backend, /&lt;script&gt;x&lt;\/script&gt;/);
+  assert.doesNotMatch(backend, /<script>/);
+  const db = renderDbApproval({ ...base, kind: 'db', sql: 'CREATE TABLE t(a int)', diff: '', sandbox: { status: 'passed' } }, {});
+  assert.match(db, /SQL \(chỉ đọc\)/);
+  assert.doesNotMatch(db, /Diff file máy chủ \(ngoài/);
+  const both = renderDbApproval({ ...base, kind: 'both', sql: 'CREATE TABLE t(a int)', sandbox: { status: 'passed' } }, {});
+  assert.match(both, /SQL \(chỉ đọc\)[\s\S]*Diff file máy chủ/);
+  assert.match(both, /Thay đổi CSDL và máy chủ/);
+});
+
+test('attention tables are highlighted and escaped; absent means no banner', () => {
+  const item = { id: 1, request_id: 2, kind: 'db', sql: 's', attention: ['users', '<x>'], sandbox: { status: 'passed' } };
+  assert.match(renderDbApproval(item, {}), /class="attention" role="alert"[\s\S]*<code>users<\/code> <code>&lt;x&gt;<\/code>/);
+  assert.doesNotMatch(renderDbApproval({ ...item, attention: [] }, {}), /class="attention"/);
+});
+
+test('diff block clips at 20000 chars and handles empty', () => {
+  assert.match(diffBlock('x'.repeat(20001)), /Đã cắt/);
+  assert.match(diffBlock(''), /Không có diff/);
 });
