@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from preview import commit_archive
-from verification import guest_inputs
+from gate5 import guest_inputs
 
 
 def test_preview_archives_the_commit_not_mutable_working_tree(tmp_path):

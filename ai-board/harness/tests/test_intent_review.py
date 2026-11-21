@@ -8,9 +8,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from gates import intent_review, static_check  # noqa: E402
-from runtime import exec_graph, loop_guard, repair_class  # noqa: E402
+from runtime import exec_graph, repair_class
+from runtime.loops import loop_guard  # noqa: E402
 from runtime import pipeline as main  # noqa: E402
-from runtime.budget import Budget  # noqa: E402
+from runtime.budgets.budget import Budget  # noqa: E402
 
 FLAG = "AI_BOARD_INTENT_REVIEW"
 REQUEST = ("[Trang: Pet] /pet.html\nĐổi chữ liên kết '🌳 Cây Tri Thức' thành 'Luyện kiểm sao điểm thẻ.' "

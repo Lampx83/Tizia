@@ -39,7 +39,7 @@ def _grounding(data, case):
 
 
 def _text_expectation(data, case):
-    from verification import functional
+    from gate5 import functional
     request = _request(data, case["request"])
     slug = "so-tay-git"
     shown = functional.text_expectation({"request_title": request["title"], "request_detail": request["detail"]})
@@ -70,14 +70,14 @@ def _verify_runnable(data, case):
 
 def _selector_oracle(data, case):
     """Text oracle on a request quoting a CSS selector: block when the selector is demanded as visible text."""
-    from verification import functional
+    from gate5 import functional
     shown = functional.text_expectation(dict(case["request"]))
     return "block" if any(functional._is_css_selector(text) for text in shown["present"]) else "pass"
 
 
 def _acceptance_tool(data, case):
     """Acceptance failure text -> infra (missing tool, no repair turn) or repair. Same path as gate 5 + repair_class."""
-    from gates.gate5_session import failure_class, missing_tool
+    from gate5.session import failure_class, missing_tool
     from runtime import repair_class
     tool = missing_tool(case["output"], case.get("returncode"), case["command"])
     if not tool:
@@ -92,8 +92,8 @@ def _acceptance_tool(data, case):
 def _no_oracle(data, case):
     """No-oracle needs_review decision (gate 5) on recorded gate flags; tests_absent only counts with the review_any flag."""
     import settings
-    from gates import verify
-    from verification import functional
+    from gate5 import verify
+    from gate5 import functional
     tests_absent_ok = bool(case.get("tests_absent")) and settings.get_settings().no_oracle_review_any
     result = {"reason": functional.NO_ORACLE, "probe_id": None}
     if verify.no_oracle_review(case["generated_ok"], case["smoke_ok"], result, tests_absent_ok):

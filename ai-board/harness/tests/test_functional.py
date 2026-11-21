@@ -1,5 +1,5 @@
-from verification import functional
-from gates import verify
+from gate5 import functional
+from gate5 import verify
 
 
 def test_queue_oracle_is_selected_from_request_not_candidate_tests():

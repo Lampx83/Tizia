@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from gates import verify, visual
+from gate5 import verify, visual
 from tests.test_gate_5_verify import FakeRunner, checkout, served, state  # noqa: F401 (served: autouse fake app)
 
 

@@ -3,7 +3,7 @@ import pytest
 
 from gates import best_match, static_check
 from test_code_index import _commit, _git
-from verification import functional
+from gate5 import functional
 
 pytestmark = pytest.mark.usefixtures('high_target_confidence')
 

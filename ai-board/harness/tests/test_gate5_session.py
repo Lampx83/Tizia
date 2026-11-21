@@ -1,7 +1,7 @@
 """Gate 5 failure classes, unit-tested without Docker or microVM."""
 import pytest
 
-from gates import gate5_session as session
+from gate5 import session
 
 
 @pytest.mark.parametrize("stage, expected", [

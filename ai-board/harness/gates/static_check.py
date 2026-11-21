@@ -25,12 +25,12 @@ import path_policy
 
 from services import candidate
 from security import classifier, spotlight
-from verification import functional
+from gate5 import functional
 from gates import adversarial_review, best_match, change_class, guard, intake_guard, intent_review, reviewer_fix, risk_triage, subtask_contract
 from repositories import code_index, repo_at_commit, server_hsm
 from settings import get_settings
 from runtime import levels, limits, subtask_files
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 
 CONTENT_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "content_guard.md").read_text(encoding="utf-8")
 CONTENT_LABELS = tuple(x for x in intake_guard.LABELS

@@ -418,7 +418,7 @@ test('loop tools run only under an admin-approved manifest and revoke bites on t
   } finally {await f.close();}
 });
 
-const REGISTRY=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/verification/check_registry.json',import.meta.url),'utf8'));
+const REGISTRY=JSON.parse(fs.readFileSync(new URL('../ai-board/harness/gate5/check_registry.json',import.meta.url),'utf8'));
 const REGISTRY_HASH=registryHash(REGISTRY);
 const adminRegistryDecide=(f,hash,action)=>fetch(`${f.base}/api/admin/ai-board/check-registries/${hash}/${action}`,{method:'POST',headers:{'x-test-admin':'yes'}}).then(async r=>({status:r.status,body:await r.json()}));
 

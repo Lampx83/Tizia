@@ -2,7 +2,7 @@ import json
 import subprocess
 
 import pytest
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import plan_validate
 
@@ -198,7 +198,7 @@ def test_a_new_file_feature_is_grounded_without_a_source_quote(tmp_path):
 
 def test_gate_2_5_trace_shows_the_evidence_it_read_and_why_the_plan_was_or_was_not_grounded(tmp_path):
     import dataclasses
-    from runtime import meter
+    from runtime.budgets import meter
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     file = tmp_path / 'public' / 'js' / 'suggestion-fab.js'
     file.parent.mkdir(parents=True)
@@ -311,7 +311,7 @@ def test_advquote_still_blocks_quote_copied_from_another_file(tmp_path, monkeypa
 
 def test_advquote_unverified_quote_is_listed_in_trace_evidence(tmp_path, monkeypatch):
     import dataclasses
-    from runtime import meter
+    from runtime.budgets import meter
     monkeypatch.setenv('AI_BOARD_GATE25_FIXES', 'quotes,ellipsis,advquote')
     _repo_with(tmp_path, {'public/js/domains/it/modules.js': 'export const MODULES = [];'})
     request = {'subject': 'Thêm trang Sổ tay Git', 'body': 'x', 'grounding_required': True, 'complexity_by_server': True,

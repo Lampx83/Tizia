@@ -11,8 +11,8 @@ if str(AI_BOARD_DIR) not in sys.path:
 
 import worker_execution  # noqa: E402
 import worker_planner  # noqa: E402
-from runtime import stop_report  # noqa: E402
-from verification import checks  # noqa: E402
+from runtime.loops import stop_report  # noqa: E402
+from gate5 import checks  # noqa: E402
 from test_gate_feedback_cap import _execution  # noqa: E402
 
 CHECK = {"primitive": "text_present", "path": "/x.html", "text": "Liên hệ"}
@@ -249,7 +249,7 @@ def test_stamp_puts_the_record_on_the_step_that_owned_the_check():
 
 
 def test_replan_lease_hands_the_reason_to_gate_1_and_stamps_the_new_plan(flags):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     old = [{"file": "public/x.html", "check": OTHER, "reason": "diff đã chứa giá trị yêu cầu"}]
     snapshot = {"request": {"id": 3, "title": "Sửa trang", "detail": "thêm Liên hệ", "domain": "primary"},
                 "ticket": {"internal_reason": stop_report.render(stop_report.build(

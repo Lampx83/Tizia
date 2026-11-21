@@ -6,11 +6,12 @@ from pathlib import Path
 
 from gates import guard
 from repositories import server_hsm
-from runtime import meter, model_json, prompt_roles
-from runtime.budget import BudgetExhausted
+from runtime import model_json, prompt_roles
+from runtime.budgets import meter
+from runtime.budgets.budget import BudgetExhausted
 from security import spotlight
 from settings import get_settings
-from verification import functional
+from gate5 import functional
 
 MAX_DIFF_CHARS = 16000
 MAX_PAGE_CHARS = 8000
@@ -61,7 +62,7 @@ def enabled() -> bool:
 
 def _page_hint(state: dict) -> str | None:
     """Public page path from the request's `[Trang: …] /path` line."""
-    from gates import verify
+    from gate5 import verify
     page = verify._request_page(state.get("request_detail")) or verify._request_page(state.get("request_title"))
     return _PAGE_QUERY.sub("", page) if page else None
 

@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Callable
 
 from worker_client import CONTRACT, LeaseLostError, REPO_ROOT
-from runtime import feedback_cap, loop_guard, progress, stop_report  # noqa: E402
+from runtime.loops import feedback_cap, loop_guard, progress, stop_report  # noqa: E402
 from runtime.limits import config_sha256, loop_guard as loop_limits, progress as progress_limits, repair_agent as repair_agent_limits, run_wall_clock_s, scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
 from gates import ready_oracle  # noqa: E402
-from verification import checks  # noqa: E402
+from gate5 import checks  # noqa: E402
 import path_policy  # noqa: E402
 
 
@@ -24,7 +24,7 @@ def _load_harness():
     harness_dir = Path(__file__).resolve().parent / "harness"
     if str(harness_dir) not in os.sys.path:
         os.sys.path.insert(0, str(harness_dir))
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from runtime.pipeline import Deps, run_gate
     return Budget, Deps, run_gate
 

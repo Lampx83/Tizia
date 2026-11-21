@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import implement
 from test_http_worker import MemCursorCheckpoint, ONE_STEP_PLAN, TickBudget, execute_pre_pr, scripted_gates
@@ -149,7 +149,7 @@ class MemProgress:
 def test_a_root_allowance_block_inside_a_model_call_still_reports_partial(tmp_path):
     """Root allowance hết NGAY TRONG lời gọi model (reserve bị server từ chối): các subtask đã xong phải được
     ghi lại và verdict là `partial`, không phải một gate 3 văng lỗi `budget` mất tiến độ."""
-    from runtime.budget import BudgetExhausted
+    from runtime.budgets.budget import BudgetExhausted
 
     checkpoint = MemProgress()
 

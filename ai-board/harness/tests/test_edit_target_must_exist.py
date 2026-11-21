@@ -6,8 +6,8 @@ import pytest
 import tools
 from conftest import FakeModels, deps_with
 from gates import best_match, brainstorm, plan_validate, react_plan
-from runtime import meter
-from runtime.budget import Budget
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from services import context
 from test_code_index import _SeqModels, _commit, _git
 from test_repomap import _real_matching

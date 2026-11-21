@@ -4,7 +4,7 @@ import os
 import psycopg
 import pytest
 
-from verification import db_check
+from gate5 import db_check
 
 ADDITIVE = "CREATE TABLE IF NOT EXISTS faq_items (id bigserial PRIMARY KEY, question text NOT NULL);\n" \
            "ALTER TABLE faq_items ADD COLUMN IF NOT EXISTS slug text;\n"

@@ -9,7 +9,8 @@ import hashlib
 import time
 from dataclasses import dataclass, field
 
-from runtime import limits, loop_guard
+from runtime import limits
+from runtime.loops import loop_guard
 
 DEFAULT_TASK = "default"
 

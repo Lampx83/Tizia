@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from verification import loop_checks
 
 
@@ -78,7 +78,7 @@ class Checks:
 
 
 def test_verified_loop_records_platform_claims_with_pins_and_check_evidence(repo, monkeypatch):
-    from runtime.meter import Tracer
+    from runtime.budgets.meter import Tracer
     source, sha = repo
     monkeypatch.setenv('AI_BOARD_VERIFIED_LOOP', '1')
     monkeypatch.setattr(loop_checks, 'CheckSession', Checks)

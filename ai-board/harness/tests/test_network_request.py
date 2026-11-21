@@ -3,7 +3,7 @@ import pytest
 
 import tools
 from runtime import network_request, repair_class, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_tool_checkpoint import MemSteps
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
 

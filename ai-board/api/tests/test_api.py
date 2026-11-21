@@ -121,7 +121,7 @@ def test_real_http_remote_planner_uses_shared_guard_without_model_calls(monkeypa
                 return {'response': json.dumps({'labels': ['money'], 'reason': 'fixture review'}),
                         'prompt_eval_count': 12, 'eval_count': 3, 'eval_duration': 1000000}
         monkeypatch.setattr(worker_planner, '_real_deps', lambda Deps, tracer, progress: Deps(models=GuardModel(), notify=None, trace=tracer))
-        from runtime.meter import Tracer
+        from runtime.budgets.meter import Tracer
         observed = []
         trace = Tracer(path=None)
         trace.begin(11, observed.extend)

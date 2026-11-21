@@ -196,8 +196,8 @@ def run_second_attempt(pair: dict, flag_on: bool, source: str, deps_factory=None
     import tempfile
     import settings
     from gates import implement
-    from runtime.budget import Budget
-    from runtime import meter
+    from runtime.budgets.budget import Budget
+    from runtime.budgets import meter
     os.environ["AI_BOARD_REPAIR_SAMPLING_DIVERSITY"] = "1" if flag_on else "0"
     settings.reset_settings()
     temps: list = []

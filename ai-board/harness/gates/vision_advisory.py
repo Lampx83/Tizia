@@ -5,9 +5,10 @@ import json
 import re
 
 from repositories import server_hsm
-from runtime import meter, prompt_roles, repair_agent
-from runtime.budget import BudgetExhausted
-from verification.guest_inputs import guest_input
+from runtime import prompt_roles, repair_agent
+from runtime.budgets import meter
+from runtime.budgets.budget import BudgetExhausted
+from gate5.guest_inputs import guest_input
 
 RESERVE = {"model_calls": 1, "tool_calls": 0, "tokens": 8_000, "wall_clock_s": 60.0}
 MAX_TEXTS, MAX_SELECTORS, MAX_REQUEST_CHARS = 2, 1, 600

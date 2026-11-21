@@ -5,7 +5,7 @@ import pytest
 
 import tools
 from runtime import sandbox_tool, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_sandbox_tool import FakeClient
 from test_tool_checkpoint import MemSteps
 

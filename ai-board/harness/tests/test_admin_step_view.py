@@ -1,8 +1,9 @@
 """Native tool calls keep their tool and arguments in the trace; an unparseable reply is recorded as an error."""
 import json
 
-from runtime import meter, tool_loop
-from runtime.budget import Budget
+from runtime import tool_loop
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from test_tool_call_id import Deps, PAGE, SUBTASK, native, setup  # noqa: F401
 
 

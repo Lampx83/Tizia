@@ -5,7 +5,7 @@ import json
 import pytest
 
 from runtime import pipeline as main
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from repositories.dbconn import harness_db
 from runtime.pipeline import Deps, Unavailable, load_inbox, run_once
 

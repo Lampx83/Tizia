@@ -9,7 +9,7 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-from runtime import progress  # noqa: E402
+from runtime.loops import progress  # noqa: E402
 import worker  # noqa: E402
 import worker_execution  # noqa: E402
 

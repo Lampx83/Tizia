@@ -12,7 +12,7 @@ import worker
 from conftest import deps_with, plan_with
 from repositories import plan_session
 from runtime import pipeline
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 FLAG = "AI_BOARD_SESSION_PLAN_EXECUTE"
 PLAN = {"capabilities": ["public.ui"],

@@ -9,11 +9,12 @@ import json
 import logging
 import re
 
-from runtime import coverage, limits, meter, model_json
-from runtime.loop_budget import LoopBudget, Stop
+from runtime import coverage, limits, model_json
+from runtime.budgets import meter
+from runtime.budgets.loop_budget import LoopBudget, Stop
 from security import spotlight
 from tools import readonly
-from verification import functional
+from gate5 import functional
 from settings import get_settings
 
 PROTOCOL = """

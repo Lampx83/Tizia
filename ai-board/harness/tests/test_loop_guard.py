@@ -4,7 +4,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from runtime import exec_graph, loop_guard  # noqa: E402
+from runtime import exec_graph
+from runtime.loops import loop_guard  # noqa: E402
 
 SPEC = {"entries": {"go": "work"}, "recursion_limit": 50,
         "nodes": [{"id": "work"}, {"id": "check"}, {"id": "verdict", "end": True}],

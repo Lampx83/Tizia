@@ -52,7 +52,7 @@ def record_of(row: dict) -> dict:
                  for t in subtasks if "file" in t]
         record_plan = {"steps": steps, **({"clarify": True} if plan.get("clarify") else {})}
         handed = sorted({t["kind"] for t in subtasks if t.get("kind")})
-    from verification import checks
+    from gate5 import checks
     diff = capture.get("full_diff") or row.get("diff") or ""
     criteria = {"acceptance": [a for a in (plan or {}).get("acceptance") or [] if isinstance(a, str)] if isinstance(plan, dict) else [],
                 "checks": checks.collect(plan) if isinstance(plan, dict) else []}
@@ -76,7 +76,7 @@ def _real_trial(task: dict) -> dict:
     from dotenv import load_dotenv
     from evaluation import eval_run
     from evaluation.suite import trial
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from runtime.pipeline import Deps, ENV_FILE, ROOT
     from providers.routing import local_only
     from settings import get_settings

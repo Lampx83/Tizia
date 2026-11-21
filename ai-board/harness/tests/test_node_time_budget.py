@@ -1,9 +1,9 @@
 """Local providers spend no tokens; a graph node past node_wall_clock_s exhausts the budget."""
 import time
 
-from runtime import budget as budget_mod
+from runtime.budgets import budget as budget_mod
 from runtime import exec_graph, limits
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 
 def test_node_deadline_exhausts_budget_then_clears():

@@ -1,7 +1,7 @@
 """One owner of model-call attempts: candidate failover, shared attempt cap, backoff. Providers supply single-attempt calls."""
 import time
 
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 
 BACKOFF_S = (2.0, 5.0)
 MAX_ATTEMPTS = len(BACKOFF_S) + 1

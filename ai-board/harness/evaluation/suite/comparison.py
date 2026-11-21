@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from evaluation.suite import candidate_grade, interleaved, mini_swe, runner, trial
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 ARMS = ('ai-board', 'mini-swe')
 

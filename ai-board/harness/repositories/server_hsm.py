@@ -65,7 +65,8 @@ class RemoteGate4:
     def register_prompt_labels(self):
         """Report disk prompt versions, take the server label table; return its fingerprint. Raise AuthorityError on drift."""
         from urllib.error import HTTPError
-        from runtime import meter, prompt_labels
+        from runtime import prompt_labels
+        from runtime.budgets import meter
         versions=prompt_labels.disk_versions()
         try:
             labels=self.client.post(self.path[:-len('/hsm')]+'/prompt-labels',{**self.identity,'versions':versions}).get('labels',{})

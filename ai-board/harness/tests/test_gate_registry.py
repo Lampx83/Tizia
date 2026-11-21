@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import deps_with, plan_with
 from runtime.pipeline import run_once
 from runtime import pipeline

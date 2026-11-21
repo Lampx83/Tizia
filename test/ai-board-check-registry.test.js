@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { canonicalHash, createCheckRegistryStore } from '../server/ai-board/repositories/check-registries.js';
 
-// Băm do runtime/Python tính (verification/check_registry.py): sai lệch là worker và server không cùng byte.
+// Băm do runtime/Python tính (gate5/check_registry.py): sai lệch là worker và server không cùng byte.
 const PYTHON_HASH = '8c85b991af6f27697cf5be319674a3296693080abf3ef7da85c8b94de6b59811';
-const registry = JSON.parse(fs.readFileSync(new URL('../ai-board/harness/verification/check_registry.json', import.meta.url), 'utf8'));
+const registry = JSON.parse(fs.readFileSync(new URL('../ai-board/harness/gate5/check_registry.json', import.meta.url), 'utf8'));
 
 function fakeDb() {
   const rows = new Map();

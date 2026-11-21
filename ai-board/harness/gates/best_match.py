@@ -7,7 +7,7 @@ import tools
 from repositories import code_index
 from services import context, file_context, target_confidence
 from settings import get_settings
-from verification import functional
+from gate5 import functional
 
 ADVISORY = "advisory"
 REASON_CODE = "best_match_advisory"

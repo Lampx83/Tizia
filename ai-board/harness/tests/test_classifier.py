@@ -5,7 +5,7 @@ import math
 from types import SimpleNamespace
 
 from security import classifier
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import intake_guard, static_check
 from providers.client import OllamaClient

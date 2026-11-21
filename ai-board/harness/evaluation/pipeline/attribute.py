@@ -35,7 +35,7 @@ SNAPSHOT = (HARNESS_REL, f":(exclude){HARNESS_REL}/tests", "server/ai-board", ":
 GATE_MODULES = {
     "1": ["gates/brainstorm.py", "gates/best_match.py", "gates/grounding_paths.py", "gates/react_plan.py",
           "gates/intake_guard.py", "gates/risk_triage.py", "services/context.py", "services/file_context.py",
-          "services/target_confidence.py", "verification/functional.py", "security/spotlight.py", "prompts/*"],
+          "services/target_confidence.py", "gate5/functional.py", "security/spotlight.py", "prompts/*"],
     "2.5": ["gates/plan_validate.py", "gates/best_match.py", "gates/evidence.py", "gates/grounding_paths.py",
             "services/context.py", "services/file_context.py", "services/target_confidence.py", "runtime/coverage.py",
             "prompts/*"],
@@ -43,8 +43,8 @@ GATE_MODULES = {
           "services/candidate.py", "services/file_context.py", "services/repomap.py", "runtime/tool_loop.py", "prompts/*"],
     "4": ["gates/static_check.py", "gates/guard.py", "gates/adversarial_review.py", "gates/change_class.py",
           "gates/risk_triage.py", "gates/reviewer_fix.py", "gates/subtask_contract.py", "gates/scope_check.py",
-          "security/classifier.py", "verification/functional.py"],
-    "5": ["gates/gate5_*.py", "gates/verify.py", "gates/visual.py", "gates/vision_advisory.py", "verification/*"],
+          "security/classifier.py", "gate5/functional.py"],
+    "5": ["gate5/*", "gates/vision_advisory.py", "verification/*"],
     "loop": ["runtime/*"],
 }
 GUARD_CHECKS = {"content", "external_link", "external_script", "image", "injection", "inline_script", "network_call",

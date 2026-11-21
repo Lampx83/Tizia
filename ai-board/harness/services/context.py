@@ -23,7 +23,7 @@ from runtime import coverage, limits
 from security import spotlight
 from services import file_context, skill_frontmatter, skill_selection
 import tools
-from verification import functional
+from gate5 import functional
 from services.file_context import keywords
 from settings import get_settings, retrieval_choice
 

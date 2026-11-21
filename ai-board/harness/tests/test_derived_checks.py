@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from gates import brainstorm, derived_checks, plan_validate
-from verification import checks
+from gate5 import checks
 
 PAGE = "public/tro-giup.html"
 HTML = "<html><body><h1>Chào bạn</h1><style>.nut-chinh { padding: 4px; color: #16a34a; }</style></body></html>"

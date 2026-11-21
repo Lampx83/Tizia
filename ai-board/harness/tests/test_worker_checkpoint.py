@@ -12,7 +12,7 @@ import tools
 from conftest import connect
 from repositories.tool_steps import Checkpoint, PgSteps
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
 from worker import execute_pre_pr
 

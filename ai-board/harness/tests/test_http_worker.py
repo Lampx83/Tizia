@@ -679,7 +679,7 @@ def test_retries_run_up_to_the_cap_and_none_once_it_is_reached():
 
 
 def test_reaching_the_retry_cap_does_not_exhaust_the_run_budget():
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     budget = Budget(max_retries=1, max_wall_clock_s=999)
     budget.spend("retries")
     assert budget.tick() is True
@@ -811,7 +811,7 @@ def test_worker_id_defaults_to_a_valid_per_machine_name(monkeypatch):
 def test_complexity_gated_plan_records_reason_signals_and_truncated_plan():
     import json
     from worker import HarnessPlanner
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
 
     big_plan = {'summary_vi': 'x' * 5000, 'capabilities': ['features', 'quiz'],
                 'subtasks': [{'title': 'a', 'file': 'server/index.js', 'verify': 'v', 'size': 'small'}]}
@@ -942,7 +942,7 @@ def test_catalog_changed_since_plan_acceptance_is_a_plan_failure_before_any_gate
 
 
 def test_model_call_traces_are_posted_under_the_lease_and_run():
-    from runtime import meter
+    from runtime.budgets import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -962,7 +962,7 @@ def test_model_call_traces_are_posted_under_the_lease_and_run():
 
 
 def test_worker_pauses_claims_over_the_hourly_gpu_cap():
-    from runtime import meter
+    from runtime.budgets import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -975,7 +975,7 @@ def test_worker_pauses_claims_over_the_hourly_gpu_cap():
 
 def test_trace_posts_are_split_under_the_server_body_limit():
     import json
-    from runtime import meter
+    from runtime.budgets import meter
 
     tracer = meter.Tracer(None)
     batches = []
@@ -990,7 +990,7 @@ def test_trace_posts_are_split_under_the_server_body_limit():
 
 
 def test_pending_traces_are_sent_before_the_lease_is_released():
-    from runtime import meter
+    from runtime.budgets import meter
 
     transport = FakeTransport()
     tracer = meter.Tracer(None)
@@ -1061,7 +1061,7 @@ def test_http_execution_missing_contract_never_calls_change_runner():
 
 
 def test_gate_start_is_reported_as_an_idempotent_event():
-    from runtime import meter
+    from runtime.budgets import meter
 
     import runtime.pipeline as harness_main
 
@@ -1457,7 +1457,7 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
             state['plan'] = {'summary_vi': 'x', 'subtasks': [{'title': 't', 'file': 'public/x.html', 'verify': 'v'}]}
         return {'gate': gate, 'blocked': False}
 
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     planner = HarnessPlanner.__new__(HarnessPlanner)
     planner.Budget, planner.deps, planner.run_gate = Budget, object(), run_gate
     plan, _ = planner(snapshot)
@@ -1466,7 +1466,7 @@ def test_planner_reads_the_clarified_spec_and_flags_a_still_vague_request():
 
 def test_per_run_caps_scale_with_the_plan_and_come_from_the_shared_contract():
     """Same formula as store.js scaledLimit; worker hourly cap fits the biggest run."""
-    from runtime import meter
+    from runtime.budgets import meter
     from worker import LIMITS, scaled_limit
     units = LIMITS["per_run"]["units"]
     assert scaled_limit("units", 3) == units["base"] + 3 * units["per_subtask"]

@@ -3,7 +3,7 @@
 
 python -m evaluation.feature_expectation [data.json]   # two-way self-check, exit 1 on any problem
 Browser checks run on the after tree served from a temp dir; default DOM probe is a static approximation
-(tag/#id/.class/[attr], style rules), pass dom_probe= a real-browser probe (gates.verify.probe_dom shape) to run for real.
+(tag/#id/.class/[attr], style rules), pass dom_probe= a real-browser probe (gate5.verify.probe_dom shape) to run for real.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from evaluation import behaviour_oracle as BO
 from evaluation import expectation_predicates as EP
-from verification import checks as gate_checks
+from gate5 import checks as gate_checks
 
 DATA_FILE = Path(__file__).with_name("feature_tuning.json")
 SETS = ("tuning", "validation")
@@ -239,7 +239,7 @@ def static_dom(site: Path, base: str):
 
 def browser_verdict(checks: list[dict], after: dict, dom_probe=None) -> Verdict:
     """All checks green on the served after tree; reason names the first red check."""
-    from gates import verify
+    from gate5 import verify
     with tempfile.TemporaryDirectory(prefix="feature-site-") as tmp:
         site = Path(tmp)
         for path, text in after.items():

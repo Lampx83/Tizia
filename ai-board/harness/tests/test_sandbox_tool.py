@@ -4,7 +4,8 @@ import time
 
 import pytest
 
-from runtime import loop_budget, sandbox_tool, tool_loop
+from runtime import sandbox_tool, tool_loop
+from runtime.budgets import loop_budget
 from runtime.tool_loop import Forbidden, ToolError
 from verification.sandbox import SandboxError, SandboxSession
 
@@ -130,7 +131,7 @@ def test_transient_error_retries_in_fresh_vm_up_to_two_retries():
 
 
 def test_each_retry_is_charged_to_the_step_budget():
-    from runtime.budget import Budget, ChildBudget
+    from runtime.budgets.budget import Budget, ChildBudget
     budget = ChildBudget(Budget())
     client = FakeClient([SandboxError("runner_unreachable", "exec", 503)] * 5)
     json.loads(runner(client, budget=budget)(ALLOWED, {}))
@@ -138,7 +139,7 @@ def test_each_retry_is_charged_to_the_step_budget():
 
 
 def test_retry_stops_when_step_budget_is_spent():
-    from runtime.budget import Budget, ChildBudget
+    from runtime.budgets.budget import Budget, ChildBudget
     budget = ChildBudget(Budget(), max_tool_calls=1)
     client = FakeClient([SandboxError("runner_unreachable", "exec", 503)] * 5)
     out = json.loads(runner(client, budget=budget)(ALLOWED, {}))

@@ -59,7 +59,7 @@ def main() -> None:
     from evaluation import eval_fast
     from evaluation.suite import ablation, trial
     from evaluation.suite.launcher import sqlite_launcher
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from runtime.pipeline import Deps, ENV_FILE
     from providers.routing import local_only
 

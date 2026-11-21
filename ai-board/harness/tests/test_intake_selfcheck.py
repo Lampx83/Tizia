@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from gates import intake_guard
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import get_settings
 
 BENIGN = ("Thêm chế độ tối", "Trang flashcard thuốc sáng quá, cần nút nền tối.")

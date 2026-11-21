@@ -6,7 +6,7 @@ from pathlib import Path
 from repositories import server_hsm
 from runtime import prompt_roles
 from runtime import limits
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 
 INSTRUCTION = (Path(__file__).resolve().parents[1] / 'prompts/context_compaction.md').read_text(encoding='utf-8')
 

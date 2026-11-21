@@ -9,7 +9,7 @@ if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
 from repositories.server_graph_saver import HttpGraphSaver
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_graph_persistence import LEASE, FakeServer
 from worker import _Execution, resume_pins
 

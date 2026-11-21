@@ -2463,7 +2463,7 @@ function resumeSummary(journal) {
   const OBJECTION_PATH = /(?<![\w/.-])((?:public|server|test|scripts|ai-board)\/[\w./-]*[\w-]\.\w+)/g;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-  /** Same shape as the harness runtime/objection_repeat.signature: gate + reason class + quoted paths. */
+  /** Same shape as the harness runtime/loops/objection_repeat.signature: gate + reason class + quoted paths. */
   function objectionSignature(detail) {
     const history = Array.isArray(detail?.objection_history) ? detail.objection_history : [];
     const last = history.at(-1);

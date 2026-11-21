@@ -8,7 +8,7 @@ import pytest
 
 import tools
 from runtime import limits, network_request, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from runtime.network_request import FetchBroker, Queue, tool_request
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps
 

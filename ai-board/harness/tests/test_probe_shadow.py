@@ -6,8 +6,9 @@ import tarfile
 import pytest
 
 from evaluation import replay_probe_shadow as replay
-from gates import verify
-from verification import functional, guest_inputs, sandbox as sandbox_verify
+from gate5 import verify
+from verification import sandbox as sandbox_verify
+from gate5 import functional, guest_inputs
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 
 FLAG = "AI_BOARD_LEGACY_PROBE_SHADOW"

@@ -4,9 +4,9 @@ import urllib.error
 
 import pytest
 
-from gates import verify
+from gate5 import verify
 from runtime import repair_class
-from verification import checks, functional, guest_inputs
+from gate5 import checks, functional, guest_inputs
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 from test_plan_checks_tracer import base_mode, pages, serve  # noqa: F401  (fixtures)
 

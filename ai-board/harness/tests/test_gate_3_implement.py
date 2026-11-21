@@ -25,7 +25,7 @@ def test_revoked_authority_prevents_candidate_file_writes(tmp_path):
     assert not (tmp_path / 'public/new.html').exists()
     assert not (tmp_path / 'test/new.test.js').exists()
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import implement, subtask_contract
 

@@ -7,7 +7,7 @@ import pytest
 import tools
 from providers.client import OllamaClient
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "Thêm dòng", "file": "public/a.html", "verify": "thấy B"}

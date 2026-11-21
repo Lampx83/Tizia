@@ -7,8 +7,8 @@ import urllib.parse
 import urllib.request
 
 from settings import get_settings
-from verification import checks
-from verification.guest_inputs import guest_input
+from gate5 import checks
+from gate5.guest_inputs import guest_input
 
 
 NO_ORACLE = 'No trusted behavioral oracle for this request'
@@ -314,8 +314,8 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
     if fixture is None:
         return {**fail('Session fixture unavailable'), 'infra': True}
     from playwright.sync_api import sync_playwright
-    from gates import visual
-    from gates.verify import _launch
+    from gate5 import visual
+    from gate5.verify import _launch
     present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
     shown, in_dom, lines = {}, {}, []
     with sync_playwright() as p:
@@ -408,7 +408,7 @@ _CLIPBOARD_SPY = r"""(() => {
 
 
 def _open(p, base, token, clipboard=False):
-    from gates.verify import _launch
+    from gate5.verify import _launch
     browser = _launch(p)
     context = browser.new_context()
     if clipboard:
@@ -553,7 +553,7 @@ def _added_routes(state):
 
 def _added_texts(state):
     """Visible text the diff adds to changed HTML; 12+ chars, at most 3 (short words appear everywhere)."""
-    from gates import visual
+    from gate5 import visual
     return [t for t in visual.changed_texts(guest_input(state, 'full_diff'), '+') if len(t) >= 12][:3]
 
 
@@ -623,7 +623,7 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
     if probe_id == ROUTE_PROBE:
         return run_route(base, state or {})
     if probe_id == STYLE_PROBE:
-        from verification import style
+        from gate5 import style
         return style.run_style(base, state or {}, fixture, list(pages))
     if probe_id == COPY_PROBE:
         return run_copy(base, fixture)
@@ -634,7 +634,7 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
     if fixture is None:
         return {'probe_id': probe_id, 'passed': False, 'reason': 'Requester API and mounted UI fixture unavailable'}
     from playwright.sync_api import sync_playwright
-    from gates.verify import _launch
+    from gate5.verify import _launch
     with sync_playwright() as p:
         browser = _launch(p)
         try:

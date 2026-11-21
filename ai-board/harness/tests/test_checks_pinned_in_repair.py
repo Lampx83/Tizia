@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from gates import verify
-from gates.gate5_session import STAGE_CLASS
+from gate5 import verify
+from gate5.session import STAGE_CLASS
 from runtime import repair_agent
-from verification import checks, functional
+from gate5 import checks, functional
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 
 BODY = b"// x\nChu moi\n"

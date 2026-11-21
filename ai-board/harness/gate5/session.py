@@ -6,7 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from runtime.meter import redact
+from runtime.budgets.meter import redact
 
 STAGE_CLASS = {
     "preflight": "transient",   # missing checkout/skill/Dockerfile: environment

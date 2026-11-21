@@ -4,7 +4,7 @@ import copy
 import pytest
 
 from gates import acceptance_structure as acc, brainstorm, ready_oracle
-from verification import checks
+from gate5 import checks
 
 SEE = {"page": "/gallery.html", "text": "Thư viện ảnh", "action": "see"}
 GONE = {"page": "/gallery.html", "text": "Sắp ra mắt", "action": "not_see"}

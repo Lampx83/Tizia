@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from runtime import pipeline as main
 from gates import adversarial_review
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 PAY = 'diff --git a/server/contexts/payment/index.js b/server/contexts/payment/index.js\n--- a/server/contexts/payment/index.js\n+++ b/server/contexts/payment/index.js\n@@ -1 +1 @@\n+charge(user, amount)\n'
 CONTEXT = 'IMPLEMENTER-RATIONALE-xyz request: add payment'

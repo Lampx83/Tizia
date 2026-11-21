@@ -1,5 +1,5 @@
 """tizia.skill.id on chat span (LF/163): one primary skill per span, absent when no skills."""
-from runtime import meter
+from runtime.budgets import meter
 
 REC = {"provider": "vllm", "model": "qwen", "gate": 3, "child": 0, "iteration": 1, "call_id": "c1",
        "result": "ok", "prompt_name": "gate1", "at": 1000}

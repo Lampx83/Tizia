@@ -88,7 +88,7 @@ def run(repo, client, budget=None):
 
 
 def test_pre_request_bound_stops_before_spending_or_calling_provider(repo):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     client = ModelClient([])
     result, runner = run(repo, client, Budget(tokens=180000, max_request_tokens=32768))
     assert result['outcome'] == 'LimitsExceeded' and result['error'] is None
@@ -97,14 +97,14 @@ def test_pre_request_bound_stops_before_spending_or_calling_provider(repo):
 
 
 def test_exhausted_budget_is_not_an_export_infrastructure_failure(repo):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     result, runner = run(repo, ModelClient([reply('edit fixture')]), Budget(max_model_calls=1))
     assert result['outcome'] == 'LimitsExceeded' and result['error'] is None
     assert result['candidate'] == {} and runner.closed and not result['cleanup_pending']
 
 
 def test_context_sized_responses_stop_before_the_next_request_can_overshoot(repo):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     responses = [reply('edit fixture') for _ in range(6)]
     for response in responses:
         response['usage'] = {'prompt_tokens': 32760, 'completion_tokens': 8}

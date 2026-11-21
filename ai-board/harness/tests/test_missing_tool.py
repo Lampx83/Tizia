@@ -1,6 +1,6 @@
 import pytest
 
-from gates.gate5_session import missing_tool
+from gate5.session import missing_tool
 
 
 @pytest.mark.parametrize("output,expected", [

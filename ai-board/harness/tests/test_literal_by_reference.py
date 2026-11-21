@@ -5,7 +5,7 @@ import pytest
 
 import tools
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"
 SUBTASK = {"title": "t", "file": "public/a.html", "verify": "v"}

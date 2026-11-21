@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from services import prescreen
 from conftest import FakeModels, connect, deps_with, plan_with
 from runtime.pipeline import record_proposal, run_once
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 NOW = datetime(2026, 9, 12, tzinfo=timezone.utc)
 

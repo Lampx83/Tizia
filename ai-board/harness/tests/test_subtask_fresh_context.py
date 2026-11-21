@@ -4,7 +4,7 @@ import pytest
 
 from conftest import deps_with
 from gates import implement
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import Settings
 from test_parallel_subtasks import FileModels, MemProgress, plan_of, run_gate_3, step
 

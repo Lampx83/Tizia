@@ -5,7 +5,7 @@ import pytest
 
 import tools
 from runtime import sandbox_tool, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from test_sandbox_vm_worktree import BASE, FREE, KEPT, TARGET, TEST, WORKTREE, FakeVM, write
 from test_tool_checkpoint import Crash, MemSteps
 from test_tool_loop import Deps, FINISH, SUBTASK

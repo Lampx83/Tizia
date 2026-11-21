@@ -13,7 +13,8 @@ from typing import Callable
 from worker_client import CONTRACT, DEFAULT_BUDGET_LIMIT, LIMITS, PLAN_GATES
 from worker_execution import CHECK_REVISE, _load_harness, _real_deps, node_span
 import path_policy  # noqa: E402
-from runtime import coverage, objection_repeat  # noqa: E402
+from runtime import coverage
+from runtime.loops import objection_repeat  # noqa: E402
 from settings import get_settings  # noqa: E402
 
 
@@ -155,7 +156,7 @@ def _merge_same_file(subtasks: list[dict]) -> list[dict]:
 
 def _checks_by_file(plan: dict) -> dict[str, list[dict]]:
     """Plan checks per normalised file, read before the same-file merge (it keeps only the first subtask's)."""
-    from verification import checks
+    from gate5 import checks
     out: dict[str, list[dict]] = {}
     for subtask in plan.get("subtasks") or []:
         if isinstance(subtask, dict) and subtask.get("file"):
@@ -260,7 +261,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
 
     def check() -> dict | None:
         if getattr(ollama, 'routing', None):
-            from runtime.budget import Budget
+            from runtime.budgets.budget import Budget
             from runtime.pipeline import Deps
             # Classifier is fail-open: with no calibrated candidate it must not block intake.
             for role in ('gate1', *(('classifier',) if ollama.routing.candidates('classifier') else ())):
@@ -282,7 +283,7 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
                     ollama.routing.cooldowns.update(cooldowns)
                     ok_at.pop(role, None)
                     from runtime import root_allowance as _root
-                    from runtime import budget as _budget
+                    from runtime.budgets import budget as _budget
                     detail = (f"{error} | exhausted={budget.exhausted()} | node={_budget._NODE}"
                               f" | root={_root.current() is not None}")
                     return {'status': 'model_unavailable', 'model': role, 'error': detail[:300]}

@@ -3,8 +3,8 @@ import dataclasses
 
 import pytest
 
-from runtime import meter
-from runtime.budget import Budget
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from runtime import limits
 

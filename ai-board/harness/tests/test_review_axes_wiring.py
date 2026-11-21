@@ -4,7 +4,7 @@ import pytest
 from runtime import pipeline as main
 from gates import adversarial_review, reviewer_fix
 from runtime import pipeline, prompt_roles
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 import settings
 from services import context, default_skills, skill_plan
 from test_adversarial_review import Models as ReviewModels, state

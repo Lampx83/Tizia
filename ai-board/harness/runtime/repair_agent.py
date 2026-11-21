@@ -13,7 +13,8 @@ import tempfile
 from pathlib import Path
 
 import path_policy
-from runtime import levels, model_json, progress
+from runtime import levels, model_json
+from runtime.loops import progress
 from settings import get_settings
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "repair_agent.md").read_text(encoding="utf-8")
@@ -53,7 +54,7 @@ def routable(failure_class) -> bool:
 
 
 def visual(result: dict) -> bool:
-    """Gate 5 blocked because the new UI is worse than the base (reason prefix of gates/verify.py)."""
+    """Gate 5 blocked because the new UI is worse than the base (reason prefix of gate5/verify.py)."""
     return "giao diện tệ hơn" in str(result.get("reason") or "")
 
 

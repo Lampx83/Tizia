@@ -1,7 +1,7 @@
 """Guardrail phạm vi thay đổi ở cổng 4 (spec .scratch/ai-board-guardrails §B): màu/bảng màu cờ,
 WCAG, chủ đề nhạy cảm trong chữ hiển thị, link/script/network ngoài, ảnh mới, form cá nhân,
 đáp án, bản đồ — kèm ca âm để nội dung học hợp lệ không bị chặn oan. Cộng LLM soát chữ (static_check)."""
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import guard, intake_guard, static_check
 
@@ -301,7 +301,7 @@ def test_content_review_fences_the_data_block():
 
 def test_content_review_trace_shows_the_text_judged_and_the_verdict():
     import dataclasses
-    from runtime import meter
+    from runtime.budgets import meter
     for labels, ok in ((["ok"], True), (["politics_sovereignty"], False)):
         tracer, batches = meter.Tracer(None), []
         tracer.begin(1, batches.append)

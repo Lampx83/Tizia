@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from gates import verify
+from gate5 import verify
 from test_gate_5_verify import FakeRunner, checkout, state
-from verification import functional
+from gate5 import functional
 
 
 @pytest.fixture(autouse=True)
@@ -109,7 +109,7 @@ def test_functional_probe_span_kind_follows_probe_id(tmp_path, monkeypatch, prob
 
 
 def test_failed_route_probe_span_is_error(tmp_path, monkeypatch):
-    from verification import functional
+    from gate5 import functional
     monkeypatch.setattr(functional, "select", lambda _state: functional.ROUTE_PROBE)
     trace = Trace()
     out = verify.run(state(checkout(tmp_path), visual=True), SimpleNamespace(trace=trace), runner=FakeRunner(),

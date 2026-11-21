@@ -6,7 +6,7 @@ import pytest
 import tools
 from providers.client import OllamaClient
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from repositories import server_hsm
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"

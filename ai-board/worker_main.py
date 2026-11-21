@@ -104,7 +104,7 @@ class HttpWorker:
             return {"status": "gpu_paused", "gpu_s_last_hour": round(self.tracer.gpu_s_last_hour(), 1)}
         # A finished run may leave a node deadline or allowance in this process; clear both before probing models.
         from runtime import root_allowance
-        from runtime.budget import start_node
+        from runtime.budgets.budget import start_node
         start_node(None)
         root_allowance.reset()
         # Not-before backoff: after a failed probe, wait before touching the GPU again (LF/100).
@@ -582,7 +582,7 @@ def main(argv: list[str] | None = None) -> int:
         github = _forge(candidate, github_token)
         print(json.dumps(sync_pull_requests(WorkerClient(base_url, key), github), ensure_ascii=False))
         return 0
-    from runtime import meter
+    from runtime.budgets import meter
     from repositories.memory import DEFAULT_PATH
     from runtime import prompt_labels
     if drift := prompt_labels.check_all(lock=meter.prompt_lock(), labels=prompt_labels.load()):

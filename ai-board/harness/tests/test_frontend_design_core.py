@@ -50,8 +50,8 @@ def test_gate3_covers_a11y_and_copy_rules():
 def test_machine_checked_rules_map_to_existing_gates():
     root = Path(__file__).resolve().parents[1]
     assert 'low_contrast' in (root / 'gates' / 'guard.py').read_text(encoding='utf-8')
-    assert 'overflow' in (root / 'gates' / 'visual.py').read_text(encoding='utf-8')
-    assert 'focus' in (root / 'gates' / 'verify.py').read_text(encoding='utf-8')
+    assert 'overflow' in (root / 'gate5' / 'visual.py').read_text(encoding='utf-8')
+    assert 'focus' in (root / 'gate5' / 'verify.py').read_text(encoding='utf-8')
 
 
 def test_variant_attaches_to_frontend_picks_only(monkeypatch):

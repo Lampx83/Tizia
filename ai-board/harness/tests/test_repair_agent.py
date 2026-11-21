@@ -10,7 +10,8 @@ AI_BOARD_DIR = Path(__file__).resolve().parents[2]
 if str(AI_BOARD_DIR) not in sys.path:
     sys.path.insert(0, str(AI_BOARD_DIR))
 
-from runtime import progress, repair_agent as agent, tool_manifest  # noqa: E402
+from runtime import repair_agent as agent, tool_manifest
+from runtime.loops import progress  # noqa: E402
 
 CODE = {"public/js/campus/building.js": "const a = 1;\nrender();\n",
         "test/building.test.js": "test('a', () => {});\n"}

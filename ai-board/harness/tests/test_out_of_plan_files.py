@@ -8,7 +8,7 @@ import path_policy
 import tools
 from gates import static_check
 from runtime import tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 
 FLAG, ZONE = "AI_BOARD_OUT_OF_PLAN_FILES", "AI_BOARD_ADMIN_BACKEND_ZONE"
 SUBTASK = {"title": "t", "file": "public/a.js", "verify": "node --test"}

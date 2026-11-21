@@ -1,6 +1,6 @@
 """Guardrail yêu cầu học viên (spec .scratch/ai-board-guardrails §A): luật tất định trước, LLM tập nhãn
 đóng sau, fail closed về human_review, không bao giờ tự duyệt, public_message không nhắc lại nội dung."""
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 from gates import guard, intake_guard
 

@@ -25,8 +25,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from verification import functional  # noqa: E402
-from gates import guard, implement, static_check, verify  # noqa: E402
+from gate5 import functional  # noqa: E402
+from gates import guard, implement, static_check
+from gate5 import verify  # noqa: E402
 from runtime.pipeline import ROOT  # noqa: E402
 from settings import get_settings
 

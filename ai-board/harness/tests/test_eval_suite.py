@@ -87,7 +87,7 @@ def test_e2e_right_plan_is_resolved_and_counts_both_stages(world):
 
 
 def test_trial_does_not_replenish_model_budget_after_planning(world):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
 
     root, tasks = world
     deps, models = deps_for(world)
@@ -117,7 +117,7 @@ def test_trial_model_timeout_does_not_retry_or_claim_complete_usage(world, mode,
 
 
 def test_trial_request_bound_is_shared_after_planning_without_remote_cleanup(world):
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     root, tasks = world
     deps, models = deps_for(world)
     budget = Budget(max_request_tokens=200000, max_wall_clock_s=300)

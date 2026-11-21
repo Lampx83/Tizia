@@ -4,8 +4,9 @@ import json
 import pytest
 
 import tools
-from runtime import meter, pipeline, tool_loop
-from runtime.budget import Budget
+from runtime import pipeline, tool_loop
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST
 
 

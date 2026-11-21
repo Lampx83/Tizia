@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from runtime import limits
-from runtime.budget import BudgetExhausted
+from runtime.budgets.budget import BudgetExhausted
 from security import spotlight
 from settings import get_settings
 

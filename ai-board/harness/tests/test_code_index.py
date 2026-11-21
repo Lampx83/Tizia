@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 from repositories import code_index
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with
 
 SCHOOL = """<!DOCTYPE html>

@@ -11,7 +11,7 @@ root = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(root / 'ai-board'), str(root / 'ai-board/harness')]
 from worker import WorkerClient
 from runtime.root_allowance import root_scope
-from runtime.budget import Budget, BudgetExhausted
+from runtime.budgets.budget import Budget, BudgetExhausted
 from runtime.pipeline import Deps
 from providers.client import OllamaClient
 from api.client import RemotePlanner

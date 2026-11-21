@@ -33,7 +33,7 @@ ROTATE_KEEP = _MEMORY["traces_keep"]  # file hiện tại + (KEEP-1) bản cũ
 HOURLY_GPU_S = limits.contract()["limits"]["gpu_s_per_worker_hour"]["value"]
 
 # Mẫu che dùng chung với server/ai-board/services/tool-step-view.js.
-_SHARED = json.loads((Path(__file__).resolve().parents[3] / "server" / "ai-board" / "redaction-patterns.json").read_text(encoding="utf-8"))
+_SHARED = json.loads((Path(__file__).resolve().parents[4] / "server" / "ai-board" / "redaction-patterns.json").read_text(encoding="utf-8"))
 _SECRET = [re.compile(p["regex"], re.IGNORECASE if "i" in p["flags"] else 0) for p in _SHARED["patterns"]]
 
 
@@ -41,7 +41,7 @@ def _ms(ns) -> int | None:
     return None if ns is None else int(ns) // 1_000_000
 
 
-_LOCK_PATH = Path(__file__).resolve().parent.parent / "prompts" / "prompts.lock.json"
+_LOCK_PATH = Path(__file__).resolve().parents[2] / "prompts" / "prompts.lock.json"
 _lock_cache: dict[str, str] | None = None
 INLINE_PROMPTS: dict[str, str] = {"model_probe": "ok"}
 unidentified_calls = 0

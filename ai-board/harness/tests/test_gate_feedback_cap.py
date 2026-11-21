@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from runtime import feedback_cap  # noqa: E402
+from runtime.loops import feedback_cap  # noqa: E402
 from settings import get_settings  # noqa: E402
 
 

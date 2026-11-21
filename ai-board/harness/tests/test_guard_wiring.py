@@ -1,6 +1,6 @@
 """Guardrail đã nối vào pipeline: intake chặn trước Gate 1, cờ high của guard đẩy Gate 5.5 lên needs_review."""
 from runtime import pipeline as main
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import FakeModels, deps_with, plan_with
 from gates import risk_triage
 

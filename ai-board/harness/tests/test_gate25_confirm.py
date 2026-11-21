@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from conftest import deps_with, plan_with
 from gates import plan_validate
 from test_gate25_answered import Scripted

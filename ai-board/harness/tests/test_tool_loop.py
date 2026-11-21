@@ -6,7 +6,7 @@ import pytest
 
 import tools
 from runtime import tool_loop
-from runtime.budget import Budget, ChildBudget
+from runtime.budgets.budget import Budget, ChildBudget
 from repositories import server_hsm
 
 PAGE = "<main>\n<h1>A</h1>\n</main>\n"

@@ -43,7 +43,7 @@ def test_claim_evidence_shape_is_checked():
 
 
 def test_request_7_replay_objection_is_advisory_and_plan_goes_on():
-    from runtime.budget import Budget
+    from runtime.budgets.budget import Budget
     from conftest import FakeModels, deps_with, plan_with
 
     plan = plan_with(["features"])

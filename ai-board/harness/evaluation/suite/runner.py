@@ -23,7 +23,7 @@ from evaluation import eval_corpus
 from evaluation import eval_fast
 from gates import gate3_guards, plan_validate
 from runtime import limits, tool_loop, tool_manifest
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from services.context import VARIANT_FILES
 from evaluation import requests_dataset
 from evaluation.suite import ablation, case_select, grading, isolated, metrics, reconcile, taskpack, trial
@@ -41,7 +41,7 @@ def provenance(root_repo: Path, model: str, router) -> dict:  # router None = in
     git = lambda *a: subprocess.run(["git", "-C", str(root_repo), *a], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()  # noqa: E731
     harness = root_repo / "ai-board" / "harness"
     suite_files = sorted(HERE.glob("*.py")) + [HERE / "queue_fixture_sqlite.mjs"]
-    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").glob("*.py")) + sorted((harness / "verification").glob("*.py"))
+    gates = sorted((harness / "gates").glob("*.py")) + sorted((harness / "runtime").rglob("*.py")) + sorted((harness / "verification").glob("*.py")) + sorted((harness / "gate5").glob("*.py"))
     return {
         "ref": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain", "--untracked-files=no")),
         "model": model, "routing_catalog": _sha(root_repo / "server" / "ai-board" / "model-routing.json"),

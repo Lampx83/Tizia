@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import shlex
 
-from verification import functional
+from gate5 import functional
 
 KINDS = ("css_color", "replace_text", "insert_text", "remove_element", "size_hide")
 SOURCE = "derived"

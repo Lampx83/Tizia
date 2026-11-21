@@ -20,19 +20,21 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from runtime.budget import Budget, BudgetExhausted          # noqa: E402
+from runtime.budgets.budget import Budget, BudgetExhausted          # noqa: E402
 from repositories.dbconn import harness_db      # noqa: E402
 from services import candidate                   # noqa: E402
 from repositories import gate_trace                  # noqa: E402
-from runtime import limits, meter, prompt_roles, state_file  # noqa: E402
+from runtime import limits, prompt_roles, state_file
+from runtime.budgets import meter  # noqa: E402
 from services import context                     # noqa: E402
 from services import attachments                 # noqa: E402
-from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check, verify  # noqa: E402
+from gates import brainstorm, implement, intake_guard, plan_validate, risk_triage, scope_check, static_check
+from gate5 import verify  # noqa: E402
 from providers.client import OllamaClient    # noqa: E402
 from providers import thinking as thinking_policy  # noqa: E402
 from services import prescreen                   # noqa: E402
 from security import prompt_guard, spotlight     # noqa: E402
-from verification import checks                  # noqa: E402
+from gate5 import checks                  # noqa: E402
 from evaluation import self_eval                   # noqa: E402
 from settings import get_settings
 

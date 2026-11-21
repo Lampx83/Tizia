@@ -5,8 +5,9 @@ import tarfile
 
 import pytest
 
-from gates import verify
-from verification import checks, functional, guest_inputs, sandbox as sandbox_verify
+from gate5 import verify
+from verification import sandbox as sandbox_verify
+from gate5 import checks, functional, guest_inputs
 from test_gate_5_verify import FakeRunner, checkout as make_checkout, state as make_state
 
 FLAG = "AI_BOARD_QUOTED_CHECKS"

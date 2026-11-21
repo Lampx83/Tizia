@@ -3,7 +3,7 @@ import pytest
 
 import tools
 from runtime import repair_session, tool_loop
-from runtime.budget import Budget
+from runtime.budgets.budget import Budget
 from settings import get_settings
 from test_tool_checkpoint import Crash, Store2
 from test_tool_loop import EDIT, FINISH, PAGE, SUBTASK, TEST, Deps

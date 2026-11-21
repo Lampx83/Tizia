@@ -8,8 +8,8 @@ import pytest
 
 from services import default_skills
 from runtime import pipeline
-from runtime import meter
-from runtime.budget import Budget
+from runtime.budgets import meter
+from runtime.budgets.budget import Budget
 from test_prompt_roles import FakeModels
 
 
