@@ -63,6 +63,11 @@ def enabled() -> bool:
 def _page_hint(state: dict) -> str | None:
     """Public page path from the request's `[Trang: …] /path` line."""
     from gate5 import verify
+    if get_settings().model_first:
+        planned = [d["target"] for d in state.get("ledger") or [] if d.get("decision") == "new_file" and str(d.get("target", "")).endswith(".html")
+                   and str(d["target"]).startswith("public/")]
+        if planned:
+            return "/" + planned[0][len("public/"):]
     page = verify._request_page(state.get("request_detail")) or verify._request_page(state.get("request_title"))
     return _PAGE_QUERY.sub("", page) if page else None
 

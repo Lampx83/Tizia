@@ -24,13 +24,14 @@ def base(monkeypatch):
 
 class Deps:
     def __init__(self, script):
-        self.script, self.prompts = list(script), []
+        self.script, self.prompts, self.calls = list(script), [], []
 
     def call_model(self, model, prompt, *, budget, **kw):
         budget.spend("model_calls")
         self.prompts.append(prompt)
+        self.calls.append({"prompt": prompt, **kw})
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
-        return {"response": json.dumps(item)}
+        return item if "response" in item else {"response": json.dumps(item)}
 
 
 def finish(decisions=None):
@@ -99,3 +100,37 @@ def test_flag_off_loop_is_unchanged(monkeypatch):
     assert not any("DECISION LEDGER" in p or "[step" in p for p in deps.prompts)
     out, deps = run(NEW, None, [OUTLINE, EDIT_NEW, TEST, finish(new_file([WIRED])), finish()])
     assert out["status"] == "proposed" and "vượt trần 100 byte" in deps.prompts[4]
+
+
+def _native(call, n):
+    return {"response": "", "tool_calls": [{"id": f"c{n}", "type": "function",
+            "function": {"name": call["tool"], "arguments": json.dumps(call["arguments"])}}]}
+
+
+def _finish_props(call):
+    schemas = {t["function"]["name"]: t["function"]["parameters"] for t in call["extra"]["tools"]}
+    return schemas["finish"]["properties"]
+
+
+def test_native_mode_new_file_ledger_is_accepted_and_finish_schema_offers_decisions(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_TOOL_NATIVE", "1")
+    script = [_native(c, i) for i, c in enumerate([OUTLINE, EDIT_NEW, TEST, finish(new_file([WIRED]))])]
+    out, deps = run(NEW, None, script)
+    assert out["status"] == "proposed", out
+    assert out["ledger"][0]["target"] == "public/notes.html"
+    assert "decisions" in _finish_props(deps.calls[0])
+    assert "`decisions`" in deps.prompts[0]
+
+
+def test_native_mode_without_ledger_flag_keeps_finish_schema_empty(monkeypatch):
+    monkeypatch.delenv("AI_BOARD_MODEL_FIRST", raising=False)
+    monkeypatch.setenv("AI_BOARD_TOOL_NATIVE", "1")
+    _, deps = run(OLD, INDEX, [_native(c, i) for i, c in enumerate([EDIT_OLD, TEST, finish()])])
+    assert "decisions" not in _finish_props(deps.calls[0])
+
+
+def test_react_schema_branch_for_finish_allows_decisions(on, monkeypatch):
+    monkeypatch.setenv("AI_BOARD_REACT_SCHEMA", "1")
+    out, deps = run(NEW, None, [OUTLINE, EDIT_NEW, TEST, finish(new_file([WIRED]))])
+    branch = next(b for b in deps.calls[0]["format"]["anyOf"] if b["properties"]["tool"]["const"] == "finish")
+    assert "decisions" in branch["properties"]["arguments"]["properties"] and out["status"] == "proposed", out

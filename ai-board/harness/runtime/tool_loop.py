@@ -103,6 +103,7 @@ THOUGHT_MAX = 200
 THOUGHT_TEXT = ('\nPut one short line (max 200 characters) of reasoning in `thought`: reply as '
                 '{"thought": "...", "tool": "<name>", "arguments": {...}}.\n')
 THOUGHT_NATIVE = "\nPut one short line (max 200 characters) of reasoning in the `thought` argument of every call.\n"
+NATIVE_LEDGER = "\nPass the decision ledger in the `decisions` argument of the finish call.\n"
 NATIVE = "\nCall the tools through the tool-calling interface, one call per reply; do not write the call as JSON text.\n"
 
 
@@ -119,8 +120,15 @@ def native_enabled() -> bool:
     return get_settings().tool_native
 
 
+def _params(name: str, spec) -> dict:
+    """Manifest parameters; finish also takes the decision ledger under model_first."""
+    if name != "finish" or not decision_ledger.enabled():
+        return spec.parameters
+    return {**spec.parameters, "properties": {**spec.parameters["properties"], "decisions": {"type": "array", "items": {"type": "object"}}}}
+
+
 def _tool_schemas() -> list[dict]:
-    return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": spec.parameters}}
+    return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": _params(name, spec)}}
             for name, spec in _specs().items()]
 
 
@@ -148,14 +156,14 @@ def turn_schema() -> dict:
     """JSON Schema of one text-path reply: thought + one manifest tool with its own parameters."""
     return {"type": "object", "anyOf": [
         {"type": "object", "additionalProperties": False, "required": ["thought", "tool", "arguments"],
-         "properties": {"thought": _thought_prop(), "tool": {"const": name}, "arguments": spec.parameters}}
+         "properties": {"thought": _thought_prop(), "tool": {"const": name}, "arguments": _params(name, spec)}}
         for name, spec in _specs().items()]}
 
 
 def _native_schemas() -> list[dict]:
     """Native tool schemas with a required `thought` argument added to each manifest tool."""
     return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": {
-        **spec.parameters, "properties": {"thought": _thought_prop(), **spec.parameters["properties"]},
+        **_params(name, spec), "properties": {"thought": _thought_prop(), **_params(name, spec)["properties"]},
         "required": ["thought", *spec.parameters["required"]]}}} for name, spec in _specs().items()]
 
 
@@ -1160,7 +1168,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
     if current is None:
         prompt += "\nFile đích chưa tồn tại: dùng edit_file với after_line=0 để tạo nội dung trong bản nháp.\n"
     if ledger_log is not None:
-        prompt += "\n" + decision_ledger.GATE3_PROMPT
+        prompt += "\n" + decision_ledger.GATE3_PROMPT + (NATIVE_LEDGER if native_enabled() else "")
         pins = {**(pins or {}), "ledger": "on"}
     feedback, prior = None, None
     if repair_reason and store and session_from and repair_session.enabled():

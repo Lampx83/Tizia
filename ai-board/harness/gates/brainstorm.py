@@ -37,6 +37,7 @@ import path_policy
 from gates import acceptance_structure, best_match, data_kinds, decision_ledger, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
+from runtime import plan_merge
 from runtime.plan_merge import merge_same_file
 from security import spotlight
 from settings import get_settings
@@ -215,6 +216,25 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
+def _model_first() -> bool:
+    return bool(getattr(get_settings(), "model_first", False))
+
+
+def _suggestion(text: str, files: set[str]) -> str:
+    """model_first: the command the prose would compile to, offered to the planner instead of rewriting its verify."""
+    command = compile_prose_verify(text, files) if _model_first() and get_settings().compile_prose_verify else None
+    return f" (gợi ý, dùng nếu đúng ý bạn: {command})" if command else ""
+
+
+def duplicate_file_problem(subtasks: list[dict]) -> str:
+    """model_first: observation when subtasks share a file (the planner merges them); '' otherwise or flag off."""
+    if not _model_first():
+        return ""
+    dup = plan_merge.duplicate_files(subtasks)
+    return "; ".join(f"subtask {' và '.join(map(str, numbers))} cùng sửa {file}: gộp thành một subtask (title, verify, depends_on do bạn viết)"
+                     for file, numbers in dup)
+
+
 def plan_repairing(request: dict) -> bool:
     """True on a plan repair round; the validator learns only this bit, never the planner-only hint."""
     return bool(request.get("plan_repair"))
@@ -258,7 +278,7 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
         if 'task_type' in st:
             from services.default_skills import TASK_TYPES
             if not isinstance(st['task_type'], str) or st['task_type'] not in TASK_TYPES:
-                raise ValueError(f'subtask[{i}].task_type không hợp lệ')
+                raise ValueError(f'subtask[{i}].task_type không hợp lệ' + (f' (chọn một trong {sorted(TASK_TYPES)} hoặc bỏ trường)' if _model_first() else ''))
         if st.get("layer") is not None and st["layer"] not in LAYERS:
             raise ValueError(f"subtask[{i}].layer='{st['layer']}' không thuộc {LAYERS}")
         deps = st.get("depends_on")
@@ -276,23 +296,24 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
                 not isinstance(item, str) or not item.strip() for item in acceptance):
             raise ValueError("acceptance phải là mảng chuỗi không rỗng")
     settings = get_settings()
-    if request is not None and getattr(settings, "derived_checks", False) and not two_level.decomposing(request):
+    if request is not None and getattr(settings, "derived_checks", False) and not _model_first() and not two_level.decomposing(request):
         from gates import derived_checks
         derived_checks.apply(plan, request, with_checks=bool(getattr(settings, "plan_checks", False)))
-    if get_settings().compile_prose_verify:
+    if get_settings().compile_prose_verify and not _model_first():
         files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
         for st in subtasks:
             st["verify"] = compile_prose_verify(st["verify"], files) or st["verify"]
         if acceptance is not None:
             acceptance = [compile_prose_verify(item, files) or item for item in acceptance]
             plan["acceptance"] = acceptance
+    files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
     if is_feature_plan(plan):
         for i, st in enumerate(subtasks):
             if not is_runnable(st["verify"]):
-                form(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}")
+                form(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}{_suggestion(st['verify'], files)}")
         for item in acceptance or []:
             if not is_runnable(item):
-                form(f"acceptance phải là lệnh chạy được: {item[:80]}")
+                form(f"acceptance phải là lệnh chạy được: {item[:80]}{_suggestion(item, files)}")
     caps = plan.get("capabilities") or []
     if not isinstance(caps, list):
         raise ValueError("capabilities phải là mảng")
@@ -503,6 +524,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             # Gộp subtask cùng file NGAY sau khi parse: validator cổng 1 từ chối plan trùng file
             # trước khi tới _canonical, nên gộp muộn hơn là vô nghĩa.
             if isinstance(plan, dict) and plan.get("subtasks"):
+                if shared := duplicate_file_problem(plan["subtasks"]):
+                    raise ValueError(shared)
                 plan = {**plan, "subtasks": merge_same_file(plan["subtasks"])}
                 acceptance_structure.apply(plan)
             judge(stage, True, plan.get("summary_vi", ""))
@@ -593,6 +616,7 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
         return {"gate": 1, "blocked": False, "reason": None, "plan": plan,
                 "skill": ctx["skill"], "context_chars": ctx["chars"], "repo_context": ctx['text'],
                 'source_targets': ctx.get('targets') or [], 'best_match': ctx.get('best_match'),
+                'render_only': ctx.get('render_only') or [],
                 'form_warnings': list(form_warnings),
                 **({'manifest_changes': names} if (names := manifest_changes(plan)) else {}),
                 **({'react_quotes': react['quotes']} if react else {}),

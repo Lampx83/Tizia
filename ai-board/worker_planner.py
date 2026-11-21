@@ -112,6 +112,12 @@ def _uncovered_conditions(request: dict, plan: dict, deps, budget) -> list[str]:
     return coverage.uncovered_items(items, plan)
 
 
+def _waived(state: dict) -> set[str]:
+    """model_first: requested items the planner chose to skip, each with evidence in its ledger."""
+    from gates import decision_ledger
+    return decision_ledger.decided(state.get("ledger"), "skip_alternative") if get_settings().model_first else set()
+
+
 def _has_runnable_verify(plan: dict) -> bool:
     return coverage.has_runnable(plan)
 
@@ -514,7 +520,8 @@ class HarnessPlanner:
             result = dict(stopped)
             if not result:
                 reason = coverage.plan_block(plan_now := state.get("plan") or {}, lambda: _uncovered_conditions(request, plan_now, self.deps, budget),
-                                            lambda: coverage.requested_missing(plan_now, coverage.user_text(request)))
+                                            lambda: coverage.requested_missing(plan_now, coverage.user_text(request),
+                                                                                    waived=_waived(state)))
                 if reason:
                     result = {"gate": 1, "result": {"gate": 1, "blocked": True, "plan": None, "signals": [],
                                                     "reason": f"plan không hợp lệ: {reason}"}}

@@ -113,7 +113,7 @@ def test_css_verify_really_runs(tmp_path):
 
 
 def _settings(monkeypatch, derived, plan_checks=True):
-    ns = SimpleNamespace(compile_prose_verify=False, gate1_unified_verify=False, derived_checks=derived, plan_checks=plan_checks)
+    ns = SimpleNamespace(compile_prose_verify=False, gate1_unified_verify=False, derived_checks=derived, plan_checks=plan_checks, model_first=False)
     monkeypatch.setattr(brainstorm, "get_settings", lambda: ns)
 
 
@@ -152,3 +152,10 @@ def test_flag_on_without_plan_checks_adds_no_checks_field(monkeypatch):
     _settings(monkeypatch, True, plan_checks=False)
     st = _parse(_feature(), REQ)["subtasks"][0]
     assert "checks" not in st and st["checks_source"] == "derived"
+
+
+def test_model_first_does_not_derive_checks_from_quoted_phrasing(monkeypatch):
+    _settings(monkeypatch, True)
+    brainstorm.get_settings().model_first = True
+    single = _plan(_sub(PAGE))
+    assert "checks_source" not in _parse(single, REQ)["subtasks"][0]

@@ -9,6 +9,9 @@ export const netTitle = (item) => (item.kind === 'package' ? `${item.name || '?'
 export const netMetaRows = (item) => Object.entries(NET_META).filter(([k]) => item.metadata?.[k] != null && item.metadata[k] !== '')
   .map(([k, label]) => `<div><span class="meta">${esc(label)}</span> ${esc(netValue(item.metadata[k]))}</div>`).join('');
 
+/** Request-page anchor of one plan step; '' when the id or order is not a number. */
+export const planStepHref = (rid, order) => (Number.isInteger(Number(rid)) && order != null && Number.isInteger(Number(order)) ? `/admin-request.html?id=${Number(rid)}#plan-step-${Number(order)}` : '');
+
 /** Counts per kind and total; waiting excludes tickets already shown as elevation. */
 export function approvalCounts({ requests = [], tickets = [], netCounts = {}, dbItems = [] } = {}) {
   const elevating = new Set(requests.filter((r) => r.elevation === 'requested').map((r) => r.id));

@@ -19,6 +19,16 @@ def acyclic_edges(edges: dict[int, list[int]]) -> dict[int, list[int]]:
     return kept
 
 
+def duplicate_files(subtasks: list[dict]) -> list[tuple[str, list[int]]]:
+    """[(file, [1-based subtask numbers])] for every file that more than one subtask edits."""
+    seen: dict[str, list[int]] = {}
+    for index, task in enumerate(subtasks, start=1):
+        file = str(task.get("file") or "").strip()
+        if file:
+            seen.setdefault(file, []).append(index)
+    return [(file, numbers) for file, numbers in seen.items() if len(numbers) > 1]
+
+
 def merge_same_file(subtasks: list[dict]) -> list[dict]:
     """Gộp các subtask cùng file; nối title/verify, giữ layer/size, remap depends_on."""
     order: list[int] = []

@@ -696,14 +696,24 @@ def _names_page(text: str, file: str) -> bool:
     return any(m.group(1).lower() not in _NOT_A_PAGE for m in _PAGE_PHRASE.finditer(text))
 
 
-def names_edit(request: dict, plan: dict) -> bool:
-    """Request names the page and quotes old and new text (two distinct spans) the plan carries, one target file: scope is decided."""
+def render_constraint(state: dict) -> bool:
+    """Gate 1 found the quoted text only in a render module: structured flag with model_first, else the sentence in its context."""
+    if get_settings().model_first and 'render_only' in state:
+        return bool(state['render_only'])
+    return 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '')
+
+
+def names_edit(request: dict, plan: dict, ledger: list | None = None) -> bool:
+    """Request names the page (model_first: or the planner's evidenced choose_file entry does) and quotes old and new text (two distinct spans) the plan carries, one target file: scope is decided."""
     text = " ".join(str(request.get(k) or "") for k in ("subject", "body"))
     spans = {next(g for g in m.groups() if g).strip() for m in _QUOTED.finditer(text)}
     carried = json.dumps(plan, ensure_ascii=False)
     spans = {s for s in spans if s in carried}
     files = {task["file"] for task in plan["subtasks"]}
-    return len(spans) >= 2 and len(files) == 1 and _names_page(text, next(iter(files)))
+    if len(spans) < 2 or len(files) != 1:
+        return False
+    file = next(iter(files))
+    return _names_page(text, file) or (get_settings().model_first and file in decision_ledger.decided(ledger, 'choose_file'))
 
 
 def asks_repo_rule(question: str | None) -> bool:
@@ -837,12 +847,15 @@ def _anchors(text: str) -> list[str]:
     return [next(g for g in m.groups() if g).strip() for m in _QUOTED.finditer(text)] + [m.group(2).strip() for m in _TAG_TEXT.finditer(text)]
 
 
-def confirms_plan(question: str | None, request: dict, plan: dict) -> bool:
-    """Either/or question whose first option is the plan's single-file reading, stated by a request that gives page and new text."""
+def confirms_plan(question: str | None, request: dict, plan: dict, ledger: list | None = None) -> bool:
+    """Either/or question whose first option is the plan's single-file reading, stated by a request that gives page and new text.
+    model_first: the planner's evidenced placement entry for that file answers it instead of phrasing rules."""
     parts = _EITHER.split((question or "").strip())
     files = {task["file"] for task in plan.get("subtasks") or []}
     if len(parts) != 2 or not parts[1].endswith("?") or len(files) != 1:
         return False
+    if get_settings().model_first:
+        return next(iter(files)) in decision_ledger.decided(ledger, 'placement')
     first, second = parts
     fold = lambda s: _squash(s).lower()
     asked = " ".join(str(request.get(k) or "") for k in ("subject", "body"))
@@ -1025,11 +1038,11 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         state['assumption'] = validation['question']
         judge('code question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
-    if not validation['clear'] and not validation.get('reason') and confirms_plan(validation.get('question'), request, plan):
+    if not validation['clear'] and not validation.get('reason') and confirms_plan(validation.get('question'), request, plan, state.get('ledger')):
         state['assumption'] = validation['question']
         judge('confirmation question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
-    if clarify_rules_on() and not validation['clear'] and validation.get('question') and names_edit(request, plan):
+    if clarify_rules_on() and not validation['clear'] and validation.get('question') and names_edit(request, plan, state.get('ledger')):
         state['assumption'] = validation['question']
         judge('named edit: question dropped', True, validation['question'])
         validation = {**validation, 'clear': True, 'question': None}
@@ -1113,7 +1126,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 # Oracle is advisory: a plan that names other files is reported, not forced to edit the oracle's file.
                 state['oracle_conflict'] = 'plan không sửa renderer oracle gợi ý: ' + ', '.join(sorted(required))
                 judge('oracle advisory', True, state['oracle_conflict'])
-            if 'LƯU Ý: chữ người dùng nhắc KHÔNG nằm' in (state.get('planning_context') or '') and not targets.intersection(state.get('source_targets') or []):
+            if render_constraint(state) and not targets.intersection(state.get('source_targets') or []):
                 if _named_new_files(plan, files, request):
                     state['renderer_advisory'] = 'plan adds requested new files; renderer constraint is advisory'
                     judge('renderer advisory', True, state['renderer_advisory'])
@@ -1200,7 +1213,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
             judge("source grounding", False, str(error))
             # Trích dẫn không khớp: phân biệt "sai file" với "sai trích dẫn" bằng tín hiệu tất định trước khi chặn.
             confidence = target_confidence.assess(
-                anchor_quoted(plan, files), {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha)
+                anchor_quoted(plan, files), {**state, 'request': request}, state.get('checkout_source') or Path(__file__).resolve().parents[3], sha,
+                decided_new=decision_ledger.decided(state.get('ledger'), 'new_file'))
             uncertain = (confidence['level'] == 'low' and not final_hit(plan, request, state, files)
                          and 'không tìm thấy trích dẫn' in str(error))
             if advisory:

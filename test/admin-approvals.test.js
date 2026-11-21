@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { approvalCounts, renderNetItem, section, approvalsNotice, netTitle } from '../public/js/admin-approvals.js';
+import { approvalCounts, planStepHref, renderNetItem, section, approvalsNotice, netTitle } from '../public/js/admin-approvals.js';
 
 const tag = (tone, label) => `<i>${label}</i>`;
 const escalationCard = (card, { extra, buttons }) => `<dl>${extra.evidence}${extra.risk}${buttons}</dl>`;
@@ -45,4 +45,10 @@ test('Duyệt tab is registered, badged, and the Góp ý tab only points at it',
   assert.match(dash, /dbDecisionPath\(item, approve \? 'approve' : 'reject'\)/);
   assert.match(dash, /too_large_to_approve: 'Thay đổi quá lớn để duyệt an toàn; chỉ có thể từ chối\.'/);
   assert.match(dash, /item\.clipped === true/);
+});
+
+test('planStepHref points to the plan step anchor on the request page; invalid ids give no link', () => {
+  assert.equal(planStepHref(12, 3), '/admin-request.html?id=12#plan-step-3');
+  assert.equal(planStepHref('x', 3), '');
+  assert.equal(planStepHref(12, undefined), '');
 });
