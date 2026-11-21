@@ -17,15 +17,17 @@ test('the Tools view shows manifest and check-registry cards with only the serve
 });
 
 test('waiting tickets get a read-only card that points at the existing actions', () => {
-  assert.match(dashboard, /\$\{waitingPanel\(\)\}/);
+  assert.match(dashboard, /n\.waiting, waitingPanel\(\)/);
   assert.match(dashboard, /aiTicketCache\.filter\(t => t\.card && !elevating\.has\(t\.source_request_id\)\)/);
   assert.match(dashboard, /data-act="detail" data-rid="\$\{t\.source_request_id\}">Mở trang yêu cầu</);
   assert.doesNotMatch(dashboard.slice(dashboard.indexOf('function waitingPanel'), dashboard.indexOf('function renderRequests')), /method: 'POST'/);
 });
 
-test('the request page renders the network item as a card and keeps its confirm-then-post flow', () => {
-  assert.match(detail, /escalationCard\(item\.card, \{ tag, extra: \{ evidence:/);
-  assert.match(detail, /data-action="net-approve" data-id="\$\{esc\(item\.id\)\}">Duyệt</);
-  assert.match(detail, /data-action="net-reject" data-id="\$\{esc\(item\.id\)\}">Từ chối</);
-  assert.match(detail, /esc\(NET_WARNING\)/);
+test('the Duyệt tab renders the network item as a card with approve and reject', () => {
+  const tab = readFileSync(new URL('../public/js/admin-approvals.js', import.meta.url), 'utf8');
+  assert.match(tab, /escalationCard\(item\.card, \{ tag, extra: \{ evidence:/);
+  assert.match(tab, /data-act="net-approve" data-id="\$\{id\}"[^>]*>Duyệt</);
+  assert.match(tab, /data-act="net-reject" data-id="\$\{id\}"[^>]*>Từ chối</);
+  assert.match(tab, /esc\(NET_WARNING\)/);
+  assert.doesNotMatch(detail, /net-approve|net-reject/, 'the request page only points at the tab');
 });

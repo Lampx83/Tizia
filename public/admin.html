@@ -222,6 +222,31 @@
   .btn.primary { background:var(--accent); color:#0f172a; border-color:var(--accent); font-weight:700; }
   .btn.primary:hover { filter:brightness(1.08); background:var(--accent); }
   .btn.danger { color:#fca5a5; border-color:rgba(239,68,68,0.4); }
+  /* Tab Duyệt */
+  .appr-title { font-size:18px; margin:0; font-weight:650; }
+  .appr-h { font-size:16px; margin:28px 0 10px; font-weight:650; display:flex; align-items:center; gap:8px; }
+  .appr-notice { margin:0 0 12px; padding:10px 14px; border:1px solid var(--warn); border-radius:10px; color:var(--warn); }
+  .appr-section .meta, #tabbody .meta { color:var(--muted); font-size:13px; }
+  .appr-section .err, #tabbody .err { color:#fca5a5; }
+  .appr-section .sub { color:var(--muted); font-size:12px; margin:12px 0 4px; }
+  .appr-section .warn { color:var(--warn); }
+  .appr-section .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .db-approval, .net-item { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; overflow-wrap:anywhere; }
+  .db-approval h3 { font-size:15px; margin:0 0 4px; }
+  .db-approval input, .net-item input { padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg3,#16213d); color:inherit; font:inherit; }
+  .db-approval :focus-visible, .net-item :focus-visible, .appr-section a:focus-visible { outline:3px solid var(--accent2,#60a5fa); outline-offset:2px; }
+  pre.sql { max-height:360px; font:12px/1.5 ui-monospace,Consolas,monospace; border:1px solid var(--border); background:var(--bg); padding:8px; border-radius:6px; white-space:pre; overflow:auto; }
+  .attention { margin:10px 0; padding:10px 12px; border:2px solid var(--bad); border-radius:8px; background:rgba(239,68,68,.12); color:#fecaca; }
+  .attention .meta { color:#fecaca; }
+  pre.sql code { background:none; padding:0; }
+  .db-approval pre { white-space:pre-wrap; max-height:240px; overflow:auto; background:var(--bg); padding:8px; border-radius:6px; }
+  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; border:1px solid var(--c,var(--muted)); color:var(--c,var(--muted)); }
+  .st-ok { --c:var(--ok); } .st-warn { --c:var(--warn); } .st-bad { --c:var(--bad); } .st-idle { --c:var(--muted); } .st-run { --c:var(--accent2,#60a5fa); }
+  .btn.ok { background:var(--ok); border-color:var(--ok); color:#04210f; font-weight:700; }
+  .btn.danger-outline { color:#fca5a5; border-color:rgba(239,68,68,0.5); }
+  .btn[disabled] { opacity:.5; cursor:not-allowed; }
+  .net-warn { margin:12px 0 0; padding:10px 12px; border-radius:8px; border:1px solid var(--warn); color:var(--warn); }
+  @media (pointer:coarse) { .db-approval .btn, .net-item .btn { min-height:44px; } }
   .btn.danger:hover { background:rgba(239,68,68,0.12); }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
   .btn:disabled:hover { background:transparent; border-color:var(--border); filter:none; }
