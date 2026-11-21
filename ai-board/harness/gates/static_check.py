@@ -287,12 +287,6 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
     check_header = get_settings().file_header_check
     outside_on, role = get_settings().out_of_plan_files, state.get("requester_role") or "student"
     out_of_plan: set[str] = set()
-    if outside_on:
-        touched = {_posix(p) for d in diffs for p in (d["file"], d.get("test_file"), *(d.get("extra_files") or [])) if p}
-        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
-            reason = f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}"
-            return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True, "issues": [reason],
-                    "failure_class": "critical"}
     issues: list[str] = oversize_issues(state) if check_size else []
     needs_careful_review = bool(issues)
     for d in diffs:

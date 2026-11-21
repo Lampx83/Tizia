@@ -399,8 +399,6 @@ class Runner:
                 rejected.append((_unquote(path) or path, "quoted" if _unquote(path) else "path"))
             elif path_policy.normalize(path) != path:
                 rejected.append((path, "path"))
-            elif number >= path_policy.OUT_OF_PLAN_CAP:
-                rejected.append((path, "extra"))
             elif status == "D":
                 rejected.append((path, "deleted"))
             elif mode not in REGULAR_MODES:

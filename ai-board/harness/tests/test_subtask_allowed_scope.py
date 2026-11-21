@@ -13,7 +13,6 @@ from test_multi_file_subtask_scope import multi_state, source  # noqa: F401
 @pytest.fixture
 def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
-    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "3")
 
 
 def task(**kw):
@@ -34,10 +33,11 @@ def test_allowed_scope_becomes_the_file_set(on):
     assert st["allowed_scope"] == ["public/a.html", "public/b.html", "public/js/c.js"]
 
 
-def test_fourth_file_in_scope_is_rejected(on):
-    plan = plan_of(allowed_scope=["public/a.html", "public/b.html", "public/c.html", "public/d.html"])
-    with pytest.raises(ValueError, match="tối đa"):
-        subtask_files.validate(plan)
+def test_seven_files_in_scope_validate(on):
+    plan = plan_of(allowed_scope=["public/a.html", *(f"public/f{i}.html" for i in range(6))])
+    subtask_files.validate(plan)
+    assert len(subtask_files.files_of(plan["subtasks"][0])) == 7
+    assert plan_validate.scope_problems(plan, None) == []
 
 
 def test_scope_must_contain_the_primary_file(on):
@@ -101,12 +101,6 @@ def test_gate_rejects_a_path_outside_write_policy(on):
     assert problems and "ai-board/harness/x.py" in problems[0]
 
 
-def test_gate_rejects_a_set_over_the_limit_even_if_validate_was_skipped(on):
-    plan = plan_of(files=["public/b.html", "public/c.html", "public/d.html"],
-                   allowed_scope=["public/a.html", "public/b.html", "public/c.html", "public/d.html"])
-    assert any("tối đa" in p for p in plan_validate.scope_problems(plan, None))
-
-
 def test_gate_skips_existence_without_a_source(on):
     plan = plan_of(allowed_scope=["public/a.html", "public/notes.txt"])
     subtask_files.validate(plan)
@@ -166,6 +160,14 @@ def test_loop_edits_every_declared_file(on, repo):
     assert sorted(result["out"]["extra_files"]) == ["public/b.html", "public/c.html"]
 
 
+def test_loop_edits_seven_declared_files(on, repo, monkeypatch):
+    names = [f"public/{n}.html" for n in "abcdefg"]
+    monkeypatch.setattr(tools, "_show", lambda source, sha, path: FILES["public/a.html"])
+    result = run_loop([*(edit(n) for n in names), TEST, FINISH], declared(*names))
+    assert result["status"] == "proposed", result.get("reason")
+    assert len(result["out"]["extra_files"]) == 6
+
+
 def test_loop_refuses_a_file_outside_the_declared_scope(on, repo):
     result = run_loop([edit("public/a.html"), edit("public/d.html"), TEST, FINISH],
                       declared("public/a.html", "public/b.html", "public/c.html"))
@@ -192,7 +194,7 @@ def test_planner_is_told_about_allowed_scope_only_when_flag_on(monkeypatch):
     assert "allowed_scope" not in off and "allowed_scope" in on_ and on_.startswith(off.split("REPO DATA")[0][:200])
 
 
-def test_out_of_plan_growth_cannot_add_a_fourth_file(on, monkeypatch):
+def test_out_of_plan_growth_blocked_for_declared_scope(on, monkeypatch):
     monkeypatch.setenv("AI_BOARD_OUT_OF_PLAN_FILES", "1")
     monkeypatch.setenv("AI_BOARD_ADMIN_BACKEND_ZONE", "1")
     monkeypatch.setattr(tools, "_show", lambda source, sha, path: FILES.get(path, "x\n"))
@@ -237,10 +239,8 @@ def test_primary_dotfile_scope_stays_in_step_with_check_files(on):
     assert st["file"] in st["allowed_scope"]
 
 
-def test_prompt_limit_follows_the_setting(monkeypatch):
+def test_prompt_states_no_file_count_limit(monkeypatch):
     request = {"id": "1", "type": "feature", "subject": "s", "body": "b"}
     monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
-    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "5")
-    assert "at most 5 repo paths" in brainstorm.build_prompt(request, frozenset())
-    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "2")
-    assert "at most 2 repo paths" in brainstorm.build_prompt(request, frozenset())
+    prompt = brainstorm.build_prompt(request, frozenset())
+    assert "allowed_scope" in prompt and "at most" not in prompt.split("allowed_scope", 1)[1][:200]

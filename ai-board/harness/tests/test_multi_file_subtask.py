@@ -7,7 +7,6 @@ from runtime import subtask_files
 @pytest.fixture
 def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
-    monkeypatch.setenv("AI_BOARD_MULTI_FILE_MAX", "3")
 
 
 def task(**kw):
@@ -30,9 +29,10 @@ def test_flag_on_without_files_is_single(on):
     assert not subtask_files.is_multi(task())
 
 
-def test_validate_rejects_more_than_max(on):
-    with pytest.raises(ValueError, match="tối đa 3"):
-        subtask_files.validate({"subtasks": [task(files=["public/b.js", "public/c.js", "public/d.js"])]})
+def test_validate_accepts_seven_files(on):
+    plan = {"subtasks": [task(files=[f"public/f{i}.js" for i in range(6)])]}
+    subtask_files.validate(plan)
+    assert len(subtask_files.files_of(plan["subtasks"][0])) == 7
 
 
 def test_validate_rejects_bad_shapes(on):
@@ -135,9 +135,9 @@ def test_parse_plan_flag_on_keeps_files(on):
     assert plan["subtasks"][0]["files"] == ["public/b.html"]
 
 
-def test_parse_plan_flag_on_rejects_over_max(on):
-    with pytest.raises(ValueError, match="tối đa"):
-        brainstorm.parse_plan(plan_json(files=["public/b.html", "public/c.html", "public/d.html"]))
+def test_parse_plan_flag_on_accepts_seven_files(on):
+    plan = brainstorm.parse_plan(plan_json(files=[f"public/f{i}.html" for i in range(6)]))
+    assert len(plan["subtasks"][0]["files"]) == 6
 
 
 def test_check_files_extra_must_be_surface(on):

@@ -232,11 +232,6 @@ class ScopeMiss(Forbidden):
     error_kind = "scope"
 
 
-class ScopeTooLarge(Forbidden):
-    """Agent chạm quá trần file: dừng, không cắt diff."""
-    error_kind = "scope_too_large"
-
-
 class NetworkPause(Exception):
     """Network request chưa có quyết định: dừng loop, chờ admin."""
 
@@ -448,22 +443,14 @@ class Workspace:
             raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
             raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}")
-        if test and self.outside_role:
-            self._cap({path})
         if not test and path != self.file and path not in self.extra_content and self.outside_role \
                 and path_policy.outside_plan_ok(path, self.outside_role):
-            self._cap({path})
             base = tools._show(self.source, self.sha, path)
             self.extra_base[path], self.extra_content[path] = base, base or ""
             self.out_of_plan.append(path)
         if not test and path != self.file and path not in self.extra_content:
             raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
         return path
-
-    def _cap(self, adding: set[str]) -> None:
-        touched = {self.file, *self.extra_content, *([self.test_file] if self.test_file else []), *adding}
-        if len(touched) > path_policy.OUT_OF_PLAN_CAP:
-            raise ScopeTooLarge(f"scope too large: {len(touched)} files > cap {path_policy.OUT_OF_PLAN_CAP}")
 
     def _expand(self, edits: list) -> list:
         """Replace {{LIT_n}} in insert/replace with the constant; unknown name -> ToolError."""
