@@ -18,7 +18,7 @@ from contextvars import copy_context
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import services.context as repo_context
-from services import file_context
+from services import edit_shape, file_context
 import path_policy
 from gates import change_class, gate3_guards, plan_rules, subtask_context, subtask_contract, two_level
 from repositories import repo_at_commit
@@ -378,6 +378,7 @@ def check_output(out: dict, current: str | None, done_reason: str | None, file: 
         raise ValueError(message)
     if current is not None:
         try:
+            edit_shape.check(out["edits"])
             out["code"] = file_context.apply_edits(current, out["edits"], filename=file)
         except ValueError as error:
             report("apply edits", False, str(error))

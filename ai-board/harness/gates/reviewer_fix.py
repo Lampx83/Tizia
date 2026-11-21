@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from services import file_context
+from services import edit_shape, file_context
 from gates import change_class, gate3_guards, implement
 from repositories import server_hsm
 from runtime import prompt_roles, subtask_files
@@ -74,6 +74,7 @@ def run(state: dict, deps, budget, findings: list[dict], *, db_path=None, propos
         target = str(parsed['file']).replace('\\', '/')
         if target not in contents:
             raise ValueError(f'file outside change: {target}')
+        edit_shape.check(parsed['edits'])
         new = file_context.apply_edits(contents[target], parsed['edits'], filename=target)
         if new == contents[target]:
             raise ValueError('no-op edit')

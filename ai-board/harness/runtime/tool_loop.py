@@ -20,7 +20,7 @@ from runtime.budgets.loop_budget import Stop, make_adaptive
 from repositories import server_hsm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from services import file_context  # noqa: E402
+from services import edit_shape, file_context  # noqa: E402
 import tools  # noqa: E402
 from repositories import code_index
 import path_policy
@@ -535,6 +535,7 @@ class Workspace:
             if self.constants is not None:
                 args = {**args, "edits": self._expand(args["edits"])}
             try:
+                edit_shape.check(args["edits"])
                 if path == self.file:
                     self.content = file_context.apply_edits(self.content, args["edits"], filename=self.file)
                 else:
