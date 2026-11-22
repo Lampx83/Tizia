@@ -115,11 +115,25 @@ def feature_block(contexts: list[str]) -> str:
     return common + "\n" + (server.replace("CONTEXTS_LIST", ", ".join(contexts)) if contexts else browser)
 
 
+# WHY: the literal example steers the model to content.write; v2 points at the enum block instead.
+_CAPABILITY_EXAMPLE = (('"capabilities": ["content.write"]', '"capabilities": ["<one name from CAPABILITY NAMES>"]'),
+                       ('exactly ["content.write"] when', 'exactly one name from CAPABILITY NAMES: content.write when'),
+                       ('core capability content.write.', 'core capability from CAPABILITY NAMES.'))
+
+
+def _neutral_capability(prompt: str) -> str:
+    if not readonly.v2():
+        return prompt
+    for old, new in _CAPABILITY_EXAMPLE:
+        prompt = prompt.replace(old, new)
+    return prompt
+
+
 def build_prompt(request: dict, surface: frozenset[str], context_text: str = "", contexts: list[str] = ()) -> str:
     """AIBOARD.md + prompt đã khoá (prefix cố định) rồi mới tới context/request thay đổi theo lượt."""
     thread = context.thread_text(request.get("thread"), request.get("clarified_spec")) or "(không có)"
     scrub = spotlight.scrub
-    return context.manual() + spotlight.fence(PROMPT).format(
+    return context.manual() + _neutral_capability(spotlight.fence(PROMPT)).format(
         id=scrub(request.get("id")),
         domain=scrub(request.get("domain") or "(core)"),
         type=scrub(request.get("type")),

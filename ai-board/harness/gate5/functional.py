@@ -566,8 +566,65 @@ _ROUTE = re.compile(r"""\b(?:app|router|route)\.(get|post|put|patch|delete)\s*\(
 
 
 def _added_routes(state):
-    """[(METHOD, path)] the diff registers; parameterised paths (':id') are not probed."""
-    return [(m.group(1).upper(), m.group(2)) for line in _added(state) for m in _ROUTE.finditer(line)][:5]
+    """[(METHOD, path)] the diff registers, plus edited existing handlers when critical_only_checks; ':id' paths not probed."""
+    added = [(m.group(1).upper(), m.group(2)) for line in _added(state) for m in _ROUTE.finditer(line)]
+    if tolerant_literals():
+        added += [route for route in _edited_routes(state) if route not in added]
+    return added[:5]
+
+
+_ANY_ROUTE = re.compile(r"""\b[A-Za-z_$][\w$]*\.(get|post|put|patch|delete)\s*\(\s*['"`](/[\w\-/.]*)['"`]""")
+_HUNK = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)')
+
+
+def _changed_lines(diff):
+    """{server file: new-side line numbers touched by + or - lines}."""
+    out, file, line = {}, None, 0
+    for text in diff.splitlines():
+        if text.startswith('+++ '):
+            file = text[6:].strip() if text.startswith('+++ b/') else None
+        elif (hunk := _HUNK.match(text)):
+            line = int(hunk.group(1))
+        elif file and text.startswith('+'):
+            out.setdefault(file, set()).add(line)
+            line += 1
+        elif file and text.startswith('-') and not text.startswith('---'):
+            out.setdefault(file, set()).add(line)
+        elif file and text.startswith(' '):
+            line += 1
+    return {f: lines for f, lines in out.items() if f.startswith('server/') and f.endswith(('.js', '.mjs'))}
+
+
+def _enclosing_route(lines, number):
+    """Nearest route registration above 1-based line `number` whose call is still open there, else None."""
+    # ponytail: paren count ignores strings/comments; a parser if handlers start carrying ')' literals.
+    depth = 0
+    for index in range(min(number, len(lines) + 1) - 2, -1, -1):
+        text = lines[index]
+        depth += text.count('(') - text.count(')')
+        if (m := _ANY_ROUTE.search(text)):
+            return (m.group(1).upper(), m.group(2)) if depth > 0 else None
+    return None
+
+
+def _edited_routes(state):
+    """[(METHOD, path)] of existing server route handlers the diff edits, read from the candidate checkout."""
+    from pathlib import Path
+    root = state.get('full_checkout')
+    if not root:
+        return []
+    diff = '\n'.join(str(item.get('diff', '')) for item in guest_input(state, 'full_diff') or [])
+    found = []
+    for file, numbers in _changed_lines(diff).items():
+        try:
+            lines = (Path(root) / file).read_text(encoding='utf-8').splitlines()
+        except OSError:
+            continue
+        for number in sorted(numbers):
+            route = _enclosing_route(lines, number)
+            if route and route not in found:
+                found.append(route)
+    return found
 
 
 def _added_texts(state):
@@ -598,7 +655,7 @@ def _fetch(method, url):
 
 
 def run_route(base, state):
-    """GET added route must answer 2xx; a write route must not answer 404 or 5xx (a CSRF refusal is a valid answer)."""
+    """GET added/edited route must answer 2xx; a write route must not answer 404 or 5xx (a CSRF refusal is a valid answer)."""
     unavailable = lambda note: {'probe_id': None, 'passed': False, 'reason': NO_ORACLE, 'note': note[:300]}
     routes = _added_routes(state)
     if not routes:
