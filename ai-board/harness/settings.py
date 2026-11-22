@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     multi_file_subtask: bool = False
     data_registry: bool = False  # plan may carry data_changes chosen from contract data_kinds
     model_first: bool = False  # heuristics that guess intent from phrasing become observations; the model decides (spec ai-board-model-first)
+    requester_profile_context: bool = False  # role picks the stop-message voice; domain_expertise adds a gate 1 hint (advice only)
     backend_contexts_surface: bool = False  # context owner đã duyệt + test node:test = surface
     budget_by_file_count: bool = False  # plan từ 3 file: gấp đôi trần bước và giây của loop
     graph_persistence: bool = False

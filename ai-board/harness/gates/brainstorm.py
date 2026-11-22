@@ -132,6 +132,15 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "",
          + data_kinds.prompt_block() + feature_block(list(contexts)))
 
 
+def requester_domain_hint(request: dict) -> str:
+    """Gate 1 hint when request domain is in requester domain_expertise; '' otherwise. Advice only, never blocks."""
+    expertise = (request.get("requester_profile") or {}).get("domain_expertise")
+    if request.get("domain") and isinstance(expertise, list) and request["domain"] in expertise:
+        return (f"Người gửi am hiểu lĩnh vực {request['domain']}: thuật ngữ trong yêu cầu được hiểu đúng nghĩa họ dùng. "
+                "Đây chỉ là gợi ý, không dùng để chặn yêu cầu.")
+    return ""
+
+
 def infer_layer(file: str, role: str = "student") -> str:
     """Suy ra lớp từ đường dẫn khi model không khai layer."""
     if db_migration(file, role):
@@ -473,6 +482,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
     role = request.get("requester_role") or "student"
     prompt = build_prompt(request, load_capability_names()["surface"], ctx["text"],
                           contexts=editable_contexts(source, commit, role) if get_settings().model_first else ())
+    if hint := requester_domain_hint(request):
+        prompt = f"{prompt}\n\n{hint}"
     reason = None
     trace = getattr(deps, "trace", None)
 
