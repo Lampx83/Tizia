@@ -5,7 +5,8 @@
 # re-layered first: overlays on ~400 layers fail with "mount options is too long", and one layer above 10 GiB fails
 # "total extracted size exceeded" at sandbox create. Re-layering needs about 2x the image size free disk.
 # Run from anywhere: sh ai-board/sandbox-runner/scripts/rebuild-guest.sh [registry]   (the dev stack must be up)
-# RECREATE_RUNNER=1 also recreates sandbox-runner; default only prints the command.
+# Recreates sandbox-runner after pinning (it loads the policy at boot), then drops unpinned guest images and stale
+# microsandbox extraction temp. RECREATE_RUNNER=0 only prints the command and skips the cleanup.
 set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
@@ -96,8 +97,14 @@ echo "pinned $digest (tag $pin_tag)"
 
 overlays=""
 for f in ${AI_BOARD_COMPOSE_OVERLAYS:-}; do overlays="$overlays -f $f"; done
+compose="docker compose --env-file ai-board-host.env -f docker-compose.dev.local.yml$overlays --profile ai-board"
 echo "runner recreate (only sandbox-runner; run with the same host env the bootstrap wrote):"
-echo "  COMPOSE_PROJECT_NAME=tizia-local docker compose --env-file ai-board-host.env -f docker-compose.dev.local.yml$overlays --profile ai-board up -d --force-recreate --no-deps sandbox-runner"
-if [ "${RECREATE_RUNNER:-0}" = 1 ]; then
-  COMPOSE_PROJECT_NAME=tizia-local docker compose --env-file ai-board-host.env -f docker-compose.dev.local.yml $overlays --profile ai-board up -d --force-recreate --no-deps sandbox-runner
+echo "  COMPOSE_PROJECT_NAME=tizia-local $compose up -d --force-recreate --no-deps sandbox-runner"
+if [ "${RECREATE_RUNNER:-1}" = 1 ]; then
+  COMPOSE_PROJECT_NAME=tizia-local $compose up -d --force-recreate --no-deps sandbox-runner
+  runner=$(docker ps --format '{{.Names}}' | grep -E '^(aiboard|tizia)-sandbox-runner$' | head -1)
+  [ -n "$runner" ] || { echo "sandbox-runner is not running after recreate" >&2; exit 1; }
+  node ai-board/sandbox-runner/scripts/gc-guest-images.mjs
+  # WHY: only right after a recreate is no run active; extraction temp of earlier runs is never reused.
+  docker exec "$runner" sh -c 'find /home/node/.microsandbox/cache/tmp -mindepth 1 -delete 2>/dev/null || true'
 fi
