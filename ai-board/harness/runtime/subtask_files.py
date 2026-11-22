@@ -108,3 +108,16 @@ def validate(plan: dict) -> None:
             if path in owner and owner[path] != index:
                 raise ValueError(f"file '{path}' thuộc 2 subtask ({owner[path]} và {index}) — gộp thành 1")
             owner[path] = index
+
+
+SCOPE_RETRY = ("Keep every change inside this subtask's allowed files; another subtask owns the other files, "
+               "so use what it provides instead of editing it.")
+
+
+def scope_hint(path: str, current: dict, plan: list | None) -> str:
+    """Retry hint for an out-of-scope write: owner subtask of path, allowed files, options."""
+    path = _norm(path)
+    owner = next((st for st in plan or () if st is not current and path in files_of(st)), None)
+    who = (f"'{path}' thuộc subtask '{owner.get('title')}'; dùng thứ subtask đó cung cấp, đừng sửa nó ở đây."
+           if owner else f"không subtask nào sở hữu '{path}'; giữ thay đổi trong file được phép.")
+    return f"{who} Subtask này chỉ được sửa: {', '.join(files_of(current))}. {SCOPE_RETRY}"

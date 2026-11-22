@@ -92,6 +92,8 @@ def retry_hint(error: str, iteration: int) -> str:
                 "Copy search verbatim as 1-3 lines from FILE CONTEXT, without the `LN| ` prefix; or use after_line.")
     if "ESM" in error:
         return "Start the test with: import test from 'node:test'; import assert from 'node:assert/strict';"
+    if "phạm vi" in error and getattr(get_settings(), "critical_only_checks", False):
+        return subtask_files.SCOPE_RETRY
     return "Sửa đúng lỗi trên, giữ nguyên file và phạm vi."
 
 
@@ -772,6 +774,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
             contract=contract, repair_evidence=state.get("repair_evidence"),
             session_from=_earlier_sessions(state, child), request_text=(state.get("request_title"), state.get("request_detail")),
+            plan_subtasks=(state.get("plan") or {}).get("subtasks"),
             **({"drafts": state["loop_drafts"]} if state.get("loop_drafts") else {}),
             **({"requester_role": state.get("requester_role")} if get_settings().out_of_plan_files else {}))
         if looped.get("stale_reset") and trace:

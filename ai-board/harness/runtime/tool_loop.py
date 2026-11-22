@@ -254,6 +254,10 @@ class ScopeMiss(Forbidden):
     """File ngoài phạm vi subtask: cờ scope_first_warning bật thì lần đầu chỉ là observation."""
     error_kind = "scope"
 
+    def __init__(self, message: str, path: str = ""):
+        super().__init__(message)
+        self.path = path
+
 
 class NetworkPause(Exception):
     """Network request chưa có quyết định: dừng loop, chờ admin."""
@@ -490,14 +494,14 @@ class Workspace:
         if reason := MANIFEST.policy.write_reason(path):
             raise Forbidden(reason)
         if test and not path.startswith(("test/", "tests/")):
-            raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}")
+            raise ScopeMiss(f"test chỉ được nằm trong test/: {path!r}", path)
         if not test and path != self.file and path not in self.extra_content and self.outside_role \
                 and path_policy.outside_plan_ok(path, self.outside_role):
             base = tools._show(self.source, self.sha, path)
             self.extra_base[path], self.extra_content[path] = base, base or ""
             self.out_of_plan.append(path)
         if not test and path != self.file and path not in self.extra_content:
-            raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})")
+            raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})", path)
         return path
 
     def _expand(self, edits: list) -> list:
@@ -1169,7 +1173,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 child: int | None = None, store=None, pins: dict | None = None, repair_reason: str | None = None,
                 context: str | None = None, contract: str | None = None, checks=None,
                 sandbox_log: list | None = None, sandbox_runners: list | None = None, repair_evidence: dict | None = None, session_from=(),
-                requester_role: str | None = None, request_text: tuple | str | None = None, drafts: dict | None = None) -> dict:
+                requester_role: str | None = None, request_text: tuple | str | None = None, drafts: dict | None = None,
+                plan_subtasks: list | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -1430,14 +1435,20 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
             return _result("blocked", observation, "transient" if klass == INFRA else "critical", steps=steps,
                            error_class=klass, error_kind=kd)
         except ScopeMiss as error:
-            if not get_settings().scope_first_warning or ws.scope_warned:
+            if getattr(get_settings(), "critical_only_checks", False) and budget.spend_repair():
+                if store:
+                    store.save_ledger(budget.snapshot())
+                kind = SCOPE_WARNING
+                observation = f"{error}. Không có thay đổi nào được áp. {subtask_files.scope_hint(error.path, subtask, plan_subtasks)}"
+            elif not get_settings().scope_first_warning or ws.scope_warned:
                 if store and name in WRITE_TOOLS:
                     store.done(n, name, args, str(error), "forbidden", cid)
                 _tool_span(deps, name, n, child, "forbidden", str(error), started_ms, cid, model_call, _error_of(error))
                 return _result("blocked", str(error), "critical", steps=steps)
-            ws.scope_warned = True
-            kind = SCOPE_WARNING
-            observation = f"{error}. Không có thay đổi nào được áp. Lần ghi ngoài phạm vi tiếp theo sẽ dừng run."
+            else:
+                ws.scope_warned = True
+                kind = SCOPE_WARNING
+                observation = f"{error}. Không có thay đổi nào được áp. Lần ghi ngoài phạm vi tiếp theo sẽ dừng run."
         except Forbidden as error:
             if store and name in WRITE_TOOLS:
                 store.done(n, name, args, str(error), "forbidden", cid)
