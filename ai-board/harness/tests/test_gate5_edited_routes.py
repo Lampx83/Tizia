@@ -133,3 +133,69 @@ def test_brainstorm_v2_prompt_has_no_literal_capability_example(monkeypatch):
     assert '["content.write"]' not in on and "core capability content.write" not in on
     assert "CAPABILITY NAMES (enum" in on
     assert brainstorm.build_prompt(request, frozenset({"public.ui"})) == off
+
+
+def routes_for(source, changed_lines):
+    """_edited_routes over `source` with new-side `changed_lines` edited."""
+    diff = "--- a/server/x.js\n+++ b/server/x.js\n" + "".join(f"@@ -{n},1 +{n},1 @@\n-a\n+b\n" for n in changed_lines)
+    return functional._edited_routes({"full_checkout": str(_write(source)), "full_diff": [{"file": "server/x.js", "diff": diff}]})
+
+
+def _write(source):
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp())
+    (root / "server").mkdir()
+    (root / "server" / "x.js").write_text(source, encoding="utf-8")
+    return root
+
+
+def test_closing_paren_inside_strings_and_comments_does_not_end_the_handler():
+    src = ("r.get('/api/a', (req, res) => {\n"
+           "  const s = ')))';\n"
+           "  // ) stray\n"
+           "  const t = `x ${fn(')')} )`;\n"
+           "  res.json({ a: 1 });\n"
+           "});\n"
+           "r.get('/api/b', (req, res) => res.json({}));\n")
+    assert routes_for(src, [5]) == [("GET", "/api/a")]
+    assert routes_for(src, [7]) == [("GET", "/api/b")]
+
+
+def test_route_chain_and_app_method_are_detected():
+    src = ("router.route('/api/c')\n"
+           "  .get((req, res) => {\n"
+           "    res.json({});\n"
+           "  })\n"
+           "  .post((req, res) => {\n"
+           "    res.json({});\n"
+           "  });\n"
+           "app.delete('/api/d', (req, res) => {\n"
+           "  res.end();\n"
+           "});\n")
+    assert routes_for(src, [3]) == [("GET", "/api/c")]
+    assert routes_for(src, [6]) == [("POST", "/api/c")]
+    assert routes_for(src, [9]) == [("DELETE", "/api/d")]
+
+
+def test_undeterminable_handler_falls_back_to_every_route_in_the_file():
+    src = ("r.get('/api/a', (req, res) => {\n"
+           "  res.json({ note: `open ${x} });\n"
+           "});\n"
+           "r.post('/api/b', (req, res) => res.json({}));\n")
+    assert routes_for(src, [2]) == [("GET", "/api/a"), ("POST", "/api/b")]
+
+
+def test_edit_between_handlers_is_still_no_route():
+    src = "const LIMIT = 5;\nr.get('/api/a', (req, res) => res.json({}));\n"
+    assert routes_for(src, [1]) == []
+
+
+def test_regex_literal_with_quote_does_not_hide_later_routes():
+    src = ("const esc = (v) => {\n"
+           "  return /[\",\n]/.test(v) ? `\"${v}\"` : v;\n"
+           "};\n"
+           "r.get('/api/a', (req, res) => {\n"
+           "  res.json({});\n"
+           "});\n")
+    assert routes_for(src, [5]) == [("GET", "/api/a")]

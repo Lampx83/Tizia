@@ -573,7 +573,13 @@ def _added_routes(state):
     return added[:5]
 
 
-_ANY_ROUTE = re.compile(r"""\b[A-Za-z_$][\w$]*\.(get|post|put|patch|delete)\s*\(\s*['"`](/[\w\-/.]*)['"`]""")
+_METHODS = r'(get|post|put|patch|delete)'
+_CALL = re.compile(rf"""\b[A-Za-z_$][\w$]*\.{_METHODS}\s*(\()\s*(['"`])""")
+_CHAIN_ROUTE = re.compile(r"""\.route\s*(\()\s*(['"`])""")
+_CHAIN_METHOD = re.compile(rf'\s*\.{_METHODS}\s*(\()')
+_ROUTE_PATH = re.compile(r'/[\w\-/.]*')
+_REGEX_AFTER = frozenset('(,=:[!&|?{};')
+_REGEX_KEYWORDS = frozenset({'return', 'typeof', 'case', 'in', 'of', 'delete', 'void', 'throw', 'yield', 'await'})
 _HUNK = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)')
 
 
@@ -595,16 +601,125 @@ def _changed_lines(diff):
     return {f: lines for f, lines in out.items() if f.startswith('server/') and f.endswith(('.js', '.mjs'))}
 
 
-def _enclosing_route(lines, number):
-    """Nearest route registration above 1-based line `number` whose call is still open there, else None."""
-    # ponytail: paren count ignores strings/comments; a parser if handlers start carrying ')' literals.
+def _mask(src):
+    """(src with string/template/comment/regex bodies blanked, same offsets; False when a literal never closed)."""
+    # ponytail: regex-literal detection is a prev-char heuristic; a real JS parser if a handler defeats it.
+    out, n, i, prev, ok, tpl, cur, last = list(src), len(src), 0, '', True, [], '', ''
+
+    def blank(lo, hi):
+        for k in range(lo, hi):
+            if out[k] != '\n':
+                out[k] = ' '
+
+    def template(lo):
+        """Blank template text from `lo`; (next offset, True when the closing backtick was reached, False at '${')."""
+        nonlocal ok
+        j = lo
+        while j < n:
+            if src[j] == '\\':
+                j += 2
+            elif src[j] == '`' or src.startswith('${', j):
+                blank(lo, j)
+                return j + (1 if src[j] == '`' else 2), src[j] == '`'
+            else:
+                j += 1
+        ok = False
+        blank(lo, n)
+        return n, True
+
+    while i < n:
+        c = src[i]
+        if src.startswith('//', i):
+            j = src.find('\n', i)
+            j = n if j < 0 else j
+            blank(i, j)
+            i = j
+        elif src.startswith('/*', i):
+            j = src.find('*/', i + 2)
+            ok = ok and j >= 0
+            j = n if j < 0 else j + 2
+            blank(i, j)
+            i = j
+        elif c in '\'"':
+            j = i + 1
+            while j < n and src[j] != c and src[j] != '\n':
+                j += 2 if src[j] == '\\' else 1
+            ok = ok and j < n and src[j] == c
+            blank(i + 1, min(j, n))
+            i, prev = j + 1, c
+        elif c == '`' or (c == '}' and tpl and tpl[-1] == 0):
+            if c == '}':
+                tpl.pop()
+            i, closed = template(i + 1)
+            if not closed:
+                tpl.append(0)
+            prev = c
+        elif c == '/' and not cur and (not prev or prev in _REGEX_AFTER or (prev.isalnum() and last in _REGEX_KEYWORDS)):
+            j, cls = i + 1, False
+            while j < n and src[j] != '\n' and (cls or src[j] != '/'):
+                cls = src[j] == '[' or (cls and src[j] != ']')
+                j += 2 if src[j] == '\\' else 1
+            if j < n and src[j] == '/':
+                blank(i + 1, j)
+                i, prev = j + 1, '/'
+            else:
+                i, prev = i + 1, c
+        else:
+            if tpl and c in '{}':
+                tpl[-1] += 1 if c == '{' else -1
+            if c.isalnum() or c in '_$':
+                cur += c
+            elif cur:
+                last, cur = cur, ''
+            if not c.isspace():
+                prev = c
+            i += 1
+    return ''.join(out), ok
+
+
+def _call_end(masked, open_at):
+    """Offset of the ')' closing the '(' at `open_at`; None when unbalanced."""
     depth = 0
-    for index in range(min(number, len(lines) + 1) - 2, -1, -1):
-        text = lines[index]
-        depth += text.count('(') - text.count(')')
-        if (m := _ANY_ROUTE.search(text)):
-            return (m.group(1).upper(), m.group(2)) if depth > 0 else None
+    for k in range(open_at, len(masked)):
+        depth += (masked[k] == '(') - (masked[k] == ')')
+        if depth == 0:
+            return k
     return None
+
+
+def _literal_path(src, masked, quote_at):
+    """Path in the string literal opening at `quote_at`; None when dynamic or not a probeable path."""
+    close = masked.find(src[quote_at], quote_at + 1)
+    text = src[quote_at + 1:close] if close > 0 else ''
+    return text if _ROUTE_PATH.fullmatch(text) else None
+
+
+def _declared_routes(src):
+    """([(METHOD, path, first line, last line)] of literal-path route calls, True when every literal and call closed)."""
+    masked, ok = _mask(src)
+    line = lambda offset: src.count('\n', 0, offset) + 1
+    found = []
+
+    def add(method, path, open_at):
+        nonlocal ok
+        end = _call_end(masked, open_at)
+        ok = ok and end is not None
+        if path:
+            found.append((method.upper(), path, line(open_at), line(end if end is not None else len(src))))
+        return end
+
+    for m in _CALL.finditer(masked):
+        add(m.group(1), _literal_path(src, masked, m.start(3)), m.start(2))
+    for m in _CHAIN_ROUTE.finditer(masked):
+        path, end = _literal_path(src, masked, m.start(2)), _call_end(masked, m.start(1))
+        while end is not None and (chain := _CHAIN_METHOD.match(masked, end + 1)):
+            end = add(chain.group(1), path, chain.start(2))
+    if not ok:
+        # A swallowed region hides routes from the masked text; the raw text names them (lines unknown, 0).
+        known = {(m, p) for m, p, *_ in found}
+        found += [(m.group(1).upper(), p, 0, 0) for m in _CALL.finditer(src)
+                  if (p := _literal_path(src, src, m.start(3))) and (m.group(1).upper(), p) not in known]
+    return found, ok
 
 
 def _edited_routes(state):
@@ -617,13 +732,16 @@ def _edited_routes(state):
     found = []
     for file, numbers in _changed_lines(diff).items():
         try:
-            lines = (Path(root) / file).read_text(encoding='utf-8').splitlines()
+            src = (Path(root) / file).read_text(encoding='utf-8')
         except OSError:
             continue
-        for number in sorted(numbers):
-            route = _enclosing_route(lines, number)
-            if route and route not in found:
-                found.append(route)
+        declared, ok = _declared_routes(src)
+        # Handler boundaries unknown (unclosed literal/call, diff past EOF): probe every route the file declares.
+        if ok and max(numbers) <= src.count('\n') + 1:
+            routes = [(m, p) for number in sorted(numbers) for m, p, lo, hi in declared if lo <= number <= hi]
+        else:
+            routes = [(m, p) for m, p, *_ in declared]
+        found += [route for route in dict.fromkeys(routes) if route not in found]
     return found
 
 
