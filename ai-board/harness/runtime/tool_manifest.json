@@ -3,12 +3,13 @@
   "tools": [
     {
       "name": "tree",
-      "description": "List the files and direct subfolders of one folder at the base sha.",
+      "description": "List the files and direct subfolders of one folder at the base sha. Use only to discover which files exist; to find where text lives use grep without file. Returns `folder/: name, name/, ...`.",
       "parameters": {
         "type": "object",
         "properties": {
           "path": {
-            "type": "string"
+            "type": "string",
+            "description": "Folder relative to the repo root, no leading slash, e.g. \"public/js\"."
           }
         },
         "required": [
@@ -25,12 +26,13 @@
     },
     {
       "name": "outline",
-      "description": "Outline of one file: tags/ids/classes, CSS selectors, JS exports/imports, and the page's linked css/js.",
+      "description": "Structure of one file without its body: tags/ids/classes, CSS selectors, JS exports/imports, linked css/js. Use before reading a large file to pick a line window; not for exact lines (use read_file).",
       "parameters": {
         "type": "object",
         "properties": {
           "file": {
-            "type": "string"
+            "type": "string",
+            "description": "Repo-relative file path, e.g. \"public/index.html\"."
           }
         },
         "required": [
@@ -47,7 +49,7 @@
     },
     {
       "name": "grep",
-      "description": "Window of lines around keywords in one file; with no file, list the files matching in path.",
+      "description": "Find keywords. With file: returns numbered line windows around the matches in that file. Without file: returns the files under path that contain any keyword. Use to locate the lines to edit; do not use to read a whole file.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -55,13 +57,16 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Keywords, case-insensitive, any one may match, e.g. [\"login\", \"signup\"]."
           },
           "file": {
-            "type": "string"
+            "type": "string",
+            "description": "Optional repo-relative file to search in, e.g. \"public/index.html\"."
           },
           "path": {
-            "type": "string"
+            "type": "string",
+            "description": "Optional folder to list matching files in when file is absent; default \"public\"."
           }
         },
         "required": [
@@ -82,18 +87,21 @@
     },
     {
       "name": "read_file",
-      "description": "Read the target file (with `Lnn| ` prefixes). Optional start_line/end_line (1-based, inclusive) pick a window; without them you get the head plus the total line count and how to continue.",
+      "description": "Read an allowed file of this subtask from the current draft, with `Lnn| ` line prefixes for edit_file. Without start_line/end_line returns the head plus the total line count and how to continue. Do not re-read a window you already have.",
       "parameters": {
         "type": "object",
         "properties": {
           "file": {
-            "type": "string"
+            "type": "string",
+            "description": "Repo-relative path of the target (or listed) file, e.g. \"public/index.html\"."
           },
           "start_line": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Optional first line, 1-based inclusive, e.g. 40."
           },
           "end_line": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Optional last line, 1-based inclusive, e.g. 80."
           }
         },
         "required": [
@@ -112,12 +120,13 @@
     },
     {
       "name": "read_skill_resource",
-      "description": "Read one file under references/ of an active skill, as <skill>/references/<file>. Allowed only when the skill body mentions that file; scripts/ is never readable or run.",
+      "description": "Read one file under references/ of an active skill. Use only when the skill body names that file; scripts/ is never readable or run.",
       "parameters": {
         "type": "object",
         "properties": {
           "path": {
-            "type": "string"
+            "type": "string",
+            "description": "<skill>/references/<file>, e.g. \"frontend-design-core/references/tokens.md\"."
           }
         },
         "required": [
@@ -131,18 +140,20 @@
     },
     {
       "name": "edit_file",
-      "description": "Apply edits {after_line, insert} or {search, replace} to the target file; line numbers follow the current draft.",
+      "description": "Change the draft of an allowed file. Each edit is {after_line, insert} (insert after that line; 0 = top) or {search, replace} (search copied verbatim from the file). Line numbers follow the current draft. Returns the new line count.",
       "parameters": {
         "type": "object",
         "properties": {
           "file": {
-            "type": "string"
+            "type": "string",
+            "description": "Repo-relative path of the target (or listed) file, e.g. \"public/index.html\"."
           },
           "edits": {
             "type": "array",
             "items": {
               "type": "object"
-            }
+            },
+            "description": "List of edits, e.g. [{\"after_line\": 12, \"insert\": \"<p>Hi</p>\"}] or [{\"search\": \"<h1>A</h1>\", \"replace\": \"<h1>B</h1>\"}]."
           }
         },
         "required": [
@@ -166,15 +177,17 @@
     },
     {
       "name": "write_test",
-      "description": "Set the test (ESM node:test) under test/.",
+      "description": "Set the one test file (ESM node:test) for this subtask; calling it again replaces the earlier test. The test must import or name the target file.",
       "parameters": {
         "type": "object",
         "properties": {
           "test_file": {
-            "type": "string"
+            "type": "string",
+            "description": "Path under test/, e.g. \"test/index-login.test.js\"."
           },
           "test": {
-            "type": "string"
+            "type": "string",
+            "description": "Full file text of the test."
           }
         },
         "required": [
@@ -193,12 +206,18 @@
     },
     {
       "name": "run_check",
-      "description": "Run a named check on the current draft in a network-less sandbox: light, platform or relevant. Takes no shell/argv.",
+      "description": "Run a named check on the current draft in a network-less sandbox. light = syntax/lint of changed files; platform = repo-wide checks; relevant = the written Node test. Takes no shell/argv.",
       "parameters": {
         "type": "object",
         "properties": {
           "profile": {
-            "type": "string"
+            "type": "string",
+            "description": "Which check to run.",
+            "enum": [
+              "light",
+              "platform",
+              "relevant"
+            ]
           }
         },
         "required": [
@@ -215,18 +234,21 @@
     },
     {
       "name": "request_package",
-      "description": "Ask the admin to approve an npm package you need. The run pauses until a decision; a rejection comes back as `denied: <reason>`. Never edit package.json yourself.",
+      "description": "Ask the admin to approve an npm package you need. The run pauses until a decision; a rejection comes back as `denied: <reason>`. Never edit package.json yourself. Use only when no existing code can do it.",
       "parameters": {
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "npm package name, e.g. \"dayjs\"."
           },
           "version_range": {
-            "type": "string"
+            "type": "string",
+            "description": "semver range, e.g. \"^1.11.0\"."
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "One sentence: what the subtask needs it for."
           }
         },
         "required": [
@@ -242,15 +264,17 @@
     },
     {
       "name": "fetch_url",
-      "description": "Ask to read one external documentation URL. The run pauses until a decision; a rejection comes back as `denied: <reason>`.",
+      "description": "Ask to read one external documentation URL. The run pauses until the admin decides; a rejection comes back as `denied: <reason>`. Use only when the repo has no answer.",
       "parameters": {
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "Full https URL, e.g. \"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog\"."
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "One sentence: what you need to learn from it."
           }
         },
         "required": [
@@ -265,7 +289,7 @@
     },
     {
       "name": "finish",
-      "description": "Propose finishing; the harness checks, then passes to the next gates.",
+      "description": "Propose finishing after edit_file and write_test; the harness checks, then passes to the next gates. Rejected before an edit and a test.",
       "parameters": {
         "type": "object",
         "properties": {},

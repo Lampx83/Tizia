@@ -41,15 +41,26 @@ WRITE_TOOLS = MANIFEST.names("draft_write")
 # Tool ghi chỉ chạm bản nháp trong bộ nhớ; file thật chỉ được ghi ở cổng 3 sau khi loop đề xuất xong.
 SCHEMAS = {name: spec.parameters for name, spec in MANIFEST.tools.items()}
 DESCRIPTIONS = {name: spec.description for name, spec in MANIFEST.tools.items()}
+_LEGACY = {name: tool_manifest.legacy_view(spec) for name, spec in MANIFEST.tools.items()}
 
 
 _SANDBOX_OFFERED = ContextVar("sandbox_offered", default=False)
 _EXPAND_OFFERED = ContextVar("expand_offered", default=False)
 
 
+def v2() -> bool:
+    return get_settings().tool_defs_v2
+
+
+def shown(name: str) -> str:
+    """Model-facing name: verb_noun under tool_defs_v2, internal id otherwise."""
+    return tool_manifest.RENAMES.get(name, name) if v2() else name
+
+
 def _specs() -> dict:
-    """Tool của manifest + run_in_sandbox khi subtask đang chạy được phép (flag + task_type)."""
-    return {**MANIFEST.tools, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {}), **(expand_tool.specs() if _EXPAND_OFFERED.get() else {})}
+    """Tool của manifest (lọc theo phase implement khi tool_defs_v2) + run_in_sandbox/expand khi được phép."""
+    base = {n: s for n, s in MANIFEST.tools.items() if n in tool_manifest.PHASES["implement"]} if v2() else _LEGACY
+    return {**base, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {}), **(expand_tool.specs() if _EXPAND_OFFERED.get() else {})}
 
 PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "tool_loop.md").read_text(encoding="utf-8")
 MAX_REPEATS = _LOOP["repeats"]
@@ -80,8 +91,8 @@ def constants_of(*texts: str | None) -> dict[str, str]:
 def _tool_doc(name: str) -> str:
     """Schema + manifest example of one tool, for the observation after a repeated invalid call."""
     spec = _specs()[name]
-    call = json.dumps({"tool": name, "arguments": spec.example}, ensure_ascii=False) if spec.example is not None else ""
-    return TOOL_DOC.format(name=name, schema=json.dumps(spec.parameters, ensure_ascii=False), call=call).rstrip()
+    call = json.dumps({"tool": shown(name), "arguments": spec.example}, ensure_ascii=False) if spec.example is not None else ""
+    return TOOL_DOC.format(name=shown(name), schema=json.dumps(spec.parameters, ensure_ascii=False), call=call).rstrip()
 
 
 def _observation(tool: str, text: str, cid: str | None = None) -> str:
@@ -128,7 +139,7 @@ def _params(name: str, spec) -> dict:
 
 
 def _tool_schemas() -> list[dict]:
-    return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": _params(name, spec)}}
+    return [{"type": "function", "function": {"name": shown(name), "description": spec.description, "parameters": _params(name, spec)}}
             for name, spec in _specs().items()]
 
 
@@ -140,7 +151,7 @@ def _native_turn(messages: list, n: int, name: str, args: dict, observation: str
         return
     tool = name if name in _specs() else INVALID_CALL
     messages += [{"role": "assistant", "content": "", "tool_calls": [{"id": cid, "type": "function",
-                  "function": {"name": tool, "arguments": json.dumps(args if tool == name else {}, ensure_ascii=False)}}]},
+                  "function": {"name": shown(tool), "arguments": json.dumps(args if tool == name else {}, ensure_ascii=False)}}]},
                  {"role": "tool", "tool_call_id": cid, "content": text}]
 
 
@@ -156,13 +167,13 @@ def turn_schema() -> dict:
     """JSON Schema of one text-path reply: thought + one manifest tool with its own parameters."""
     return {"type": "object", "anyOf": [
         {"type": "object", "additionalProperties": False, "required": ["thought", "tool", "arguments"],
-         "properties": {"thought": _thought_prop(), "tool": {"const": name}, "arguments": _params(name, spec)}}
+         "properties": {"thought": _thought_prop(), "tool": {"const": shown(name)}, "arguments": _params(name, spec)}}
         for name, spec in _specs().items()]}
 
 
 def _native_schemas() -> list[dict]:
     """Native tool schemas with a required `thought` argument added to each manifest tool."""
-    return [{"type": "function", "function": {"name": name, "description": spec.description, "parameters": {
+    return [{"type": "function", "function": {"name": shown(name), "description": spec.description, "parameters": {
         **_params(name, spec), "properties": {"thought": _thought_prop(), **_params(name, spec)["properties"]},
         "required": ["thought", *spec.parameters["required"]]}}} for name, spec in _specs().items()]
 
@@ -315,8 +326,9 @@ def parse_request(body: dict) -> tuple[str, dict]:
             args = json.loads(args or "{}")
         except ValueError:
             raise ToolError("arguments không phải JSON") from None
+    name = tool_manifest.ALIASES.get(name, name) if isinstance(name, str) else name
     if not isinstance(name, str) or name not in _specs():
-        raise ToolError(f"tool lạ: {name!r}; có: {', '.join(_specs())}")
+        raise ToolError(f"tool lạ: {name!r}; có: {', '.join(map(shown, _specs()))}")
     if not isinstance(args, dict):
         raise ToolError("arguments phải là object")
     if native and schema_enabled():
@@ -325,7 +337,23 @@ def parse_request(body: dict) -> tuple[str, dict]:
 
 
 def validate(name: str, args: dict) -> None:
-    """Kiểm tham số theo JSON Schema thu gọn (kiểu string/array + required). Raise ToolError."""
+    """Kiểm tham số; tool_defs_v2 thêm enum và cách sửa (lời gọi mẫu). Raise ToolError."""
+    try:
+        _validate(name, args)
+        if v2():
+            for key, value in args.items():
+                allowed = _specs()[name].parameters["properties"].get(key, {}).get("enum")
+                if allowed and value not in allowed:
+                    raise ToolError(f"{shown(name)}.{key}={value!r} không hợp lệ; chọn một trong: {', '.join(allowed)}")
+    except ToolError as error:
+        if not v2():
+            raise
+        example = _specs()[name].example
+        raise ToolError(f"{error}. Sửa: đúng tham số theo schema"
+                        + (f", ví dụ {json.dumps({'tool': shown(name), 'arguments': example}, ensure_ascii=False)}" if example is not None else "")) from None
+
+
+def _validate(name: str, args: dict) -> None:
     spec = _specs()[name]
     schema = spec.parameters
     cap = decision_ledger.MAX_ARG_BYTES if name == "finish" and "decisions" in args and decision_ledger.enabled() else spec.max_arg_bytes
@@ -533,7 +561,8 @@ class Workspace:
                     if len(hits) >= 20:
                         break
                 return _fit('\n'.join(hits), name)
-            return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name) or "(không có kết quả)"
+            return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name) or (
+                NO_HIT_V2 if v2() else "(không có kết quả)")
         if name == "read_skill_resource":
             return _fit(_skill_resource(self.skills, args["path"]), name)
         if name == "read_file":
@@ -771,8 +800,22 @@ def _read_window(content: str, start: int | None, end: int | None, tool: str = "
     return f"{body}\n[dòng {shown(start)}-{shown(low)}/{shown(total)}; đọc tiếp: {tool} {ref}start_line={after(low)}]"
 
 
+NO_HIT_V2 = ("(không có kết quả: không dòng/file nào khớp ở base sha; thử từ khoá ngắn hơn hoặc khác, bỏ `file` để tìm cả thư mục, "
+             "hoặc dùng read_file nếu đã biết file)")
+DEDUPE = ("tree", "outline", "grep", "read_file", "read_skill_resource")
+ALREADY = "\nAlready read in this subtask (results are above; repeating returns the same text):\n{rows}\n"
+
+
+def _read_row(n: int, name: str, args: dict) -> str:
+    """One compact line of an earlier read for the already-read list."""
+    where = args.get("file") or args.get("path") or ""
+    span = f" L{args.get('start_line', 1)}-{args['end_line']}" if "end_line" in args else (" head" if name == "read_file" else "")
+    words = f" {args['words']}" if "words" in args else ""
+    return f"- step {n}: {shown(name)}{words} {where}{span}".rstrip()
+
+
 def _tool_list() -> str:
-    return "\n".join(f"- {n}: {spec.description} params={json.dumps(spec.parameters['properties'], ensure_ascii=False)}"
+    return "\n".join(f"- {shown(n)}: {spec.description} params={json.dumps(spec.parameters['properties'], ensure_ascii=False)}"
                      for n, spec in _specs().items())
 
 
@@ -1150,7 +1193,11 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         ws.extra_content.update({path: text for path, text in drafts["files"].items() if path in ws.extra_content})
         ws.test_file, ws.test = drafts.get("test_file"), drafts.get("test")
         pins = {**(pins or {}), "drafts": sha_of(json.dumps(drafts, ensure_ascii=False, sort_keys=True))}
-    prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + ORDER
+    prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + (
+        ORDER.replace("grep", shown("grep")))
+    reads: dict[str, tuple[int, str]] = {}  # tool_defs_v2: signature -> (step, observation); cleared by any draft write
+    if v2():
+        pins = {**(pins or {}), "tool_defs_v2": True}
     if extras:
         prompt += MULTI.format(files=", ".join(paths))
         pins = {**(pins or {}), "extras": {path: None if base is None else sha_of(base) for path, base in extras.items()}}
@@ -1272,7 +1319,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                        **({"tool_choice": "required"} if use else {})})
                      if messages is not None else call_extra)
             fmt = None if messages is not None else turn_schema() if use else "json"
-            return deps.call_model(model, call_prompt + tail, gate=3, budget=loop_budget, format=fmt,
+            seen = ALREADY.format(rows="\n".join(_read_row(n, *json.loads(sig)) for sig, (n, _) in list(reads.items())[-15:])) if reads else ""
+            return deps.call_model(model, call_prompt + tail + seen, gate=3, budget=loop_budget, format=fmt,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="tool_loop.md", child=child,
                                    iteration=len(steps), role=role, skill_context=skill_context,
                                    **({"extra": extra} if extra else {}))
@@ -1313,11 +1361,13 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
             validate(name, args)
             sig = None if name == "finish" else json.dumps([name, args], sort_keys=True, ensure_ascii=False)
             server_hsm.authorize_action(name, tool_manifest=MANIFEST.hash)
-            loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
+            cached = reads.get(sig) if name in DEDUPE else None
+            if cached is None:
+                loop_budget.spend("tool_calls")  # trần chạm thì tool này là lần cuối, vòng sau dừng
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args, cid)
             try:
-                observation = (_network(deps, name, args) if name in network_request.TOOLS
+                observation = f"(đã có ở bước {cached[0]}, không tính lượt đọc)\n{cached[1]}" if cached is not None else (_network(deps, name, args) if name in network_request.TOOLS
                                else _expand(history, args) if name == expand_tool.NAME else ws.run(name, args))
             except (ToolError, Forbidden, NetworkPause, server_hsm.AuthorityError, BudgetExhausted, sandbox_tool.RunnerBusy):
                 raise
@@ -1326,6 +1376,11 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                     raise
                 raise ToolCrash(error) from error
             failure = _observed_error(name, observation)
+            if v2() and not failure:
+                if name in WRITE_TOOLS:
+                    reads.clear()
+                elif name in DEDUPE and cached is None:
+                    reads[sig] = (n, observation)
             if failure:
                 kind = KIND_INFRA
             elif ledger_log is not None and name in LEDGER_READS:
@@ -1391,7 +1446,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 _tool_span(deps, name, n, child, "repeated", observation, started_ms, cid, model_call)
                 return _result("blocked", f"model lặp lại đúng một request {repeats + 1} lần ({name})", "ordinary", steps=steps)
         if repeats and name != "finish":
-            observation += REPEAT_HINT
+            observation += REPEAT_HINT.replace("grep", shown("grep"))
         if name == "finish":
             try:
                 out = ws.proposal()

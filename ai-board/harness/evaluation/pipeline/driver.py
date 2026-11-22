@@ -136,6 +136,8 @@ def _arm_env(arm: str) -> dict[str, str]:
         return {**arm_env("B0"), "AI_BOARD_CRITICAL_ONLY_CHECKS": "1"}
     if arm == "B1":
         return on
+    if arm == "B1-tooldefs":
+        return {**arm_env("B1"), "AI_BOARD_TOOL_DEFS_V2": "1"}
     if arm in context_budget.ARM_FLAGS:
         return {**arm_env(context_budget.BASE_ARM), **context_budget.ARM_FLAGS[arm]}
     if arm.startswith(ARM_ABLATION_PREFIX):
@@ -150,7 +152,7 @@ def _arm_env(arm: str) -> dict[str, str]:
 
 def arm_table() -> dict[str, dict[str, str]]:
     """Every named arm and its env; written to the freeze manifest."""
-    names = ["A", "B", "B0", "B0-mf", "B0-m2fix", "B0-mf-m2fix", "B0-crit", "B1", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
+    names = ["A", "B", "B0", "B0-mf", "B0-m2fix", "B0-mf-m2fix", "B0-crit", "B1", "B1-tooldefs", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
     return {name: arm_env(name) for name in names}
 
 # student owners beyond localtest/localadmin; created once, then reused

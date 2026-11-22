@@ -26,7 +26,7 @@ def tokens(text):
 def test_manifest_v5_declares_range_params():
     assert tool_loop.MANIFEST.version == 5
     props = tool_loop.SCHEMAS["read_file"]["properties"]
-    assert props["start_line"] == props["end_line"] == {"type": "integer"}
+    assert props["start_line"]["type"] == props["end_line"]["type"] == "integer"
     assert tool_loop.SCHEMAS["read_file"]["required"] == ["file"]
 
 

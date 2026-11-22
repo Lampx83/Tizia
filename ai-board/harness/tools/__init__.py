@@ -8,10 +8,12 @@ trả text ≤ `budget` ký tự, và không bao giờ raise (lỗi git → chu�
 from __future__ import annotations
 
 import functools
+import json
 import math
 import posixpath
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from repositories import code_index
@@ -380,13 +382,12 @@ def exemplar(source, sha: str, *, words: list[str], budget: int = 2500) -> str:
             f"đầu trang mẫu {best} (theme dùng lại):\n{_cap(head, budget // 2)}")
 
 
+# Shared with the tool loop so the model-facing docs and the prefetch registry cannot drift.
+_LOOP_DOC = {t["name"]: (t["description"], t["parameters"]) for t in json.loads(
+    (Path(__file__).resolve().parent.parent / "runtime" / "tool_manifest.json").read_text(encoding="utf-8"))["tools"]}
+
 TOOLS: dict[str, Tool] = {t.name: t for t in (
-    Tool("tree", "List the files and direct subfolders of one folder at the base sha.",
-         {"type": "object", "properties": {"path": _STR}, "required": ["path"]}, tree),
-    Tool("outline", "Outline of one file: tags/ids/classes, CSS selectors, JS exports/imports, and the page's linked css/js.",
-         {"type": "object", "properties": {"file": _STR}, "required": ["file"]}, outline),
-    Tool("grep", "Window of lines around keywords in one file; with no file, list the files matching in path.",
-         {"type": "object", "properties": {"words": _WORDS, "file": _STR, "path": _STR}, "required": ["words"]}, grep),
+    *(Tool(name, *_LOOP_DOC[name], fn) for name, fn in (("tree", tree), ("outline", outline), ("grep", grep))),
     Tool("locate", "Find visible text the user mentions (diacritics and case not needed) in public/ html/js; return file:line.",
          {"type": "object", "properties": {"phrases": _WORDS}, "required": ["phrases"]}, locate),
     Tool("exemplar", "Existing page most similar to the newest feature (by visible text) + its outline and head, to use as a frame.",
