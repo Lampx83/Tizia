@@ -1937,15 +1937,26 @@ def check_manifest_approved(arm: str, probe: bool = False) -> dict:
                     "detail": f"không có row v{WORKER_MANIFEST_VERSION}; --probe-manifest cho 1 trial thăm dò B1 sinh row pending"}
         return {"name": "manifest_approved", "ok": False,
                 "detail": f"không có row v{WORKER_MANIFEST_VERSION}: chạy một trial thăm dò B1 để worker POST manifest (--probe-manifest)"}
-    statuses = {r["status"] for r in rows}
     desc = [(r["manifest_hash"][:12], r["status"]) for r in rows]
-    if "approved" in statuses:
-        return {"name": "manifest_approved", "ok": True, "detail": f"v{WORKER_MANIFEST_VERSION} approved {desc}"}
-    if "pending" in statuses:
-        hashes = [r["manifest_hash"] for r in rows if r["status"] == "pending"]
-        return {"name": "manifest_approved", "ok": False,
-                "detail": f"pending hash={hashes}: chờ owner approve"}
-    return {"name": "manifest_approved", "ok": False, "detail": f"v{WORKER_MANIFEST_VERSION} rows {desc}, không approved"}
+    for _, name in WORKER_PAIRS:
+        current = _worker_manifest_hash(name)
+        status = next((r["status"] for r in rows if r["manifest_hash"] == current), None)
+        if status == "pending":
+            return {"name": "manifest_approved", "ok": False, "detail": f"{name} pending hash={current}: chờ owner approve"}
+        if status != "approved":
+            return {"name": "manifest_approved", "ok": False,
+                    "detail": f"{name} hash={current}: {status or 'chưa có row'}, không approved; rows {desc}"}
+    return {"name": "manifest_approved", "ok": True, "detail": f"v{WORKER_MANIFEST_VERSION} approved hash={current[:12]} {desc}"}
+
+
+def _worker_manifest_hash(name: str) -> str:
+    """Canonical tool-manifest hash the worker's baked harness computes (what it POSTs)."""
+    code = ("import json; from runtime import tool_manifest as m; "
+            "print(m.canonical_hash(json.loads(m.PATH.read_text(encoding='utf-8'))))")
+    p = _docker(["docker", "exec", "-w", "/opt/ai-board/ai-board/harness", name, "python", "-c", code])
+    if p.returncode:
+        raise RuntimeError(f"{name}: không đọc được manifest hash: {(p.stderr or b'').decode('utf-8', 'replace').strip()[:200]}")
+    return p.stdout.decode("utf-8", "replace").strip()
 
 
 def uses_tool_loop(arm: str) -> bool:

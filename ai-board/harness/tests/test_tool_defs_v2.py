@@ -70,12 +70,12 @@ def test_old_names_still_resolve_with_flag_on(v2):
 
 
 def test_flag_off_keeps_the_legacy_tool_list():
-    listing = tool_loop._tool_list()
+    listing = tool_loop.tool_list()
     assert "- tree:" in listing and "- grep:" in listing and "search_text" not in listing
 
 
 def test_flag_on_shows_new_names_and_filters_the_implement_phase(v2):
-    listing = tool_loop._tool_list()
+    listing = tool_loop.tool_list()
     assert "- search_text:" in listing and "- outline_file:" in listing
     assert "list_files" not in listing and "- tree:" not in listing and "- grep:" not in listing
 
@@ -118,6 +118,6 @@ def test_flag_off_does_not_dedupe():
 
 
 def test_flag_off_prompt_view_has_no_new_docs():
-    listing = tool_loop._tool_list()
+    listing = tool_loop.tool_list()
     assert '"description"' not in listing and '"enum"' not in listing
     assert "Window of lines around keywords in one file" in listing

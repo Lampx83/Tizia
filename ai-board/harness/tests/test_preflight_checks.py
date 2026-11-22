@@ -29,6 +29,7 @@ def test_manifest_pending_is_red(monkeypatch):
     monkeypatch.setattr(driver, "uses_tool_loop", lambda arm: True)
     rows = [{"manifest_hash": "abcdef123456", "version": driver.WORKER_MANIFEST_VERSION, "status": "pending"}]
     monkeypatch.setattr(driver, "psql_json", lambda db, sql, timeout=120: rows)
+    monkeypatch.setattr(driver, "_worker_manifest_hash", lambda name: "abcdef123456")
     res = driver.check_manifest_approved("B1")
     assert not res["ok"] and "pending" in res["detail"]
 
@@ -37,7 +38,18 @@ def test_manifest_approved_is_green(monkeypatch):
     monkeypatch.setattr(driver, "uses_tool_loop", lambda arm: True)
     rows = [{"manifest_hash": "abcdef123456", "version": driver.WORKER_MANIFEST_VERSION, "status": "approved"}]
     monkeypatch.setattr(driver, "psql_json", lambda db, sql, timeout=120: rows)
+    monkeypatch.setattr(driver, "_worker_manifest_hash", lambda name: "abcdef123456")
     assert driver.check_manifest_approved("B1")["ok"]
+
+
+def test_manifest_red_when_only_another_hash_is_approved(monkeypatch):
+    monkeypatch.setattr(driver, "uses_tool_loop", lambda arm: True)
+    rows = [{"manifest_hash": "old000", "version": driver.WORKER_MANIFEST_VERSION, "status": "approved"},
+            {"manifest_hash": "new111", "version": driver.WORKER_MANIFEST_VERSION, "status": "pending"}]
+    monkeypatch.setattr(driver, "psql_json", lambda db, sql, timeout=120: rows)
+    monkeypatch.setattr(driver, "_worker_manifest_hash", lambda name: "new111")
+    res = driver.check_manifest_approved("B1")
+    assert not res["ok"] and "new111" in res["detail"]
 
 
 def test_guest_probe_red_when_base_image_missing(monkeypatch):
