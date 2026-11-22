@@ -148,3 +148,23 @@ def test_b0_crit_arm():
     env = driver.arm_env("B0-crit")
     assert env[FLAG] == "1" and {k: v for k, v in env.items() if k != FLAG} == driver.arm_env("B0")
     assert "B0-crit" in driver.arm_table()
+
+
+def test_guest_switch_reaches_gate5_without_env(monkeypatch):
+    from gate5 import functional, guest_inputs, verify
+    seen = []
+    monkeypatch.setattr(verify, "_run", lambda state, *a, **k: seen.append(functional.tolerant_literals()))
+    verify.run({"critical_only_checks": True})
+    verify.run({})
+    assert seen == [True, False]
+    assert functional.tolerant_literals() is False
+
+
+def test_host_ships_switch_only_when_on(monkeypatch):
+    from types import SimpleNamespace
+    from gate5 import guest_inputs
+    spec = guest_inputs.GUEST_INPUTS["critical_only_checks"]
+    monkeypatch.setattr(guest_inputs, "get_settings", lambda: SimpleNamespace(critical_only_checks=True))
+    assert spec.derive({}, "student") is True
+    monkeypatch.setattr(guest_inputs, "get_settings", lambda: SimpleNamespace(critical_only_checks=False))
+    assert spec.derive({}, "student") is None

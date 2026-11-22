@@ -1,4 +1,5 @@
 """Harness-owned behavioral oracles. Candidate-authored tests are supplementary."""
+import contextvars
 import html
 import json
 import re
@@ -289,8 +290,12 @@ def literal_key(text: str) -> str:
     return ' '.join(unicodedata.normalize('NFC', html.unescape(text)).split()).rstrip('.!?…:;。 ')
 
 
+# WHY: the guest has no AI_BOARD_* env; verify.run sets this from the shipped guest input.
+GUEST_CRITICAL_ONLY = contextvars.ContextVar("critical_only_checks", default=False)
+
+
 def tolerant_literals() -> bool:
-    return bool(getattr(get_settings(), "critical_only_checks", False))
+    return GUEST_CRITICAL_ONLY.get() or bool(getattr(get_settings(), "critical_only_checks", False))
 
 
 def _want(text):

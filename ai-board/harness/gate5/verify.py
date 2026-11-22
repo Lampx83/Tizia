@@ -646,7 +646,16 @@ def _check_passes(check: dict, base: str, http_probe, dom_probe, node_ok) -> boo
     return gate_checks.passed(check, status, body, dom)
 
 
-def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
+def run(state: dict, *args, **kwargs):
+    """Gate 5 entry: apply the shipped critical_only_checks switch for this run, then verify."""
+    token = functional.GUEST_CRITICAL_ONLY.set(bool(guest_input(state, "critical_only_checks")))
+    try:
+        return _run(state, *args, **kwargs)
+    finally:
+        functional.GUEST_CRITICAL_ONLY.reset(token)
+
+
+def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None = None,
         runner=None, http_probe=None, functional_probe=None, dom_probe=None) -> dict:
     """Caller supplies a full checkout; a gate-3 scratch repo is never buildable."""
     checkout = checkout_dir if checkout_dir is not None else state.get("full_checkout")
@@ -798,7 +807,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
                     failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
-                    if not probe_id and not getattr(get_settings(), "critical_only_checks", False):
+                    if not probe_id and not functional.tolerant_literals():
                         raise RuntimeError(f"{failure}: {detail}") from exc
                     if not probe_id:
                         # A model-written test is no oracle: red alone sends the candidate to an admin, never blocks it.
@@ -1068,7 +1077,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     soft_only = bool(soft_misses) and not reason
     if soft_misses:
         evidence["soft_misses"] = soft_misses
-    if soft_only and getattr(get_settings(), "critical_only_checks", False):
+    if soft_only and functional.tolerant_literals():
         evidence["needs_review"] = True
         soft_only = False
     elif soft_only:  # repairable like a failed test; the worker lets it pass after one soft repair round
