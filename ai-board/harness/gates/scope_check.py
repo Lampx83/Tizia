@@ -24,6 +24,9 @@ FULLSTACK_CAPABILITY = "context.write"
 
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES_JS = ROOT / "server" / "contexts" / "capabilities.js"
+POLICY_JS = ROOT / "server" / "ai-board" / "security" / "policy.js"
+_POLICY_ENTRY = re.compile(r"^  '?([\w.]+)'?: capability\('(\w+)',\s*\[[^\]]*\],\s*'([^']*)'", re.M)
+FULLSTACK_MEANING = "[surface] Edits an existing mounted server context (requester fullstack zone)."
 
 # ponytail: regex bám vào format `export const <tier> = xxx({` ... `});` với key
 # cấp 1 thụt đúng 2 space. Đổi format file JS là test
@@ -44,6 +47,28 @@ def load_capability_names(path: Path = CAPABILITIES_JS) -> dict[str, frozenset[s
             raise ValueError(f"không tìm thấy `export const {tier}` trong {path}")
         out[tier] = frozenset(_TOP_KEY.findall(m.group(1)))
     return out
+
+
+@lru_cache(maxsize=None)
+def catalog_meanings(path: Path = POLICY_JS) -> dict[str, str]:
+    """Static CAPABILITY_POLICY names -> one-line meaning, parsed from policy.js."""
+    return {m[1]: f"[{m[2]}] {m[3]}" for m in _POLICY_ENTRY.finditer(path.read_text(encoding="utf-8"))}
+
+
+def valid_capabilities() -> dict[str, str]:
+    """Every name gate 2 can accept -> meaning: catalog, capabilities.js surface, context.write when the zone is on."""
+    out = dict(catalog_meanings())
+    for name in sorted(load_capability_names()["surface"]):
+        out.setdefault(name, "[surface] Helper from server/contexts/capabilities.js.")
+    if path_policy.fullstack_on():
+        out[FULLSTACK_CAPABILITY] = FULLSTACK_MEANING
+    return out
+
+
+def capability_enum() -> str:
+    """Prompt block: allowed capability names, one meaning each."""
+    rows = "\n".join(f"- {name}: {meaning}" for name, meaning in valid_capabilities().items())
+    return f'\nCAPABILITY NAMES (enum: "capabilities" may hold only these exact strings):\n{rows}\n'
 
 
 # State/request keys this gate reads (LF/125): plan + catalog từ state, elevation từ cả hai.
@@ -134,11 +159,25 @@ def _zone_capability(file: str) -> str | None:
     return None
 
 
+def path_capability(file: str) -> str | None:
+    """Catalog capability a path needs, editable zone or not; None outside every capability."""
+    if file.startswith(path_policy.GENERATED_ROOT):
+        return "generated.context"
+    if file.startswith("public/"):
+        return "public.ui"
+    if path_policy.mounted_context(file):
+        name = file.split("/")[2]
+        if name in ("content", "integration"):
+            return f"{name}.write"
+        return FULLSTACK_CAPABILITY if path_policy.may_edit(file) else "core.server"
+    return None
+
+
 def expected_capability(plan: dict) -> str | None:
-    """Zone capability every planned file maps to, when the plan declares another one; else None."""
+    """Capability every planned file maps to, when the plan declares another one; else None."""
     files = [posixpath.normpath(path.replace('\\', '/'))
              for task in plan.get('subtasks') or [] for path in subtask_files.files_of(task)]
-    caps = {_zone_capability(file) for file in files}
+    caps = {path_capability(file) for file in files}
     declared = [cap for cap in plan.get("capabilities") or [] if isinstance(cap, str)]
     if len(caps) != 1 or None in caps or not declared or set(declared) == caps:
         return None
