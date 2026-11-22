@@ -12,6 +12,7 @@ Không import JavaScript, vì import sẽ khởi tạo database của ứng dụ
 """
 from __future__ import annotations
 
+import json
 import re
 import posixpath
 from functools import lru_cache
@@ -20,13 +21,20 @@ from pathlib import Path
 import path_policy
 from runtime import levels, subtask_files
 
-FULLSTACK_CAPABILITY = "context.write"
-
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES_JS = ROOT / "server" / "contexts" / "capabilities.js"
-POLICY_JS = ROOT / "server" / "ai-board" / "security" / "policy.js"
-_POLICY_ENTRY = re.compile(r"^  '?([\w.]+)'?: capability\('(\w+)',\s*\[[^\]]*\],\s*'([^']*)'", re.M)
-FULLSTACK_MEANING = "[surface] Edits an existing mounted server context (requester fullstack zone)."
+CATALOG_JSON = ROOT / "server" / "ai-board" / "capability-catalog.json"
+
+
+@lru_cache(maxsize=None)
+def load_catalog(path: Path = CATALOG_JSON) -> dict:
+    """capability-catalog.json, the file policy.js also reads; cached, static within a run."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+_FULLSTACK = load_catalog()["fullstack"]
+FULLSTACK_CAPABILITY = _FULLSTACK["name"]
+FULLSTACK_MEANING = f"[{_FULLSTACK['tier']}] {_FULLSTACK['meaning']}"
 
 # ponytail: regex bám vào format `export const <tier> = xxx({` ... `});` với key
 # cấp 1 thụt đúng 2 space. Đổi format file JS là test
@@ -50,9 +58,9 @@ def load_capability_names(path: Path = CAPABILITIES_JS) -> dict[str, frozenset[s
 
 
 @lru_cache(maxsize=None)
-def catalog_meanings(path: Path = POLICY_JS) -> dict[str, str]:
-    """Static CAPABILITY_POLICY names -> one-line meaning, parsed from policy.js."""
-    return {m[1]: f"[{m[2]}] {m[3]}" for m in _POLICY_ENTRY.finditer(path.read_text(encoding="utf-8"))}
+def catalog_meanings(path: Path = CATALOG_JSON) -> dict[str, str]:
+    """Static catalog names -> one-line meaning."""
+    return {name: f"[{c['tier']}] {c['rationale']}" for name, c in load_catalog(path)["capabilities"].items()}
 
 
 def valid_capabilities() -> dict[str, str]:
@@ -148,29 +156,26 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None, catalog: d
     return {"blocked": False, "reason": None}
 
 
-def _zone_capability(file: str) -> str | None:
-    """Capability of a file the fullstack zone opens, from its path alone; None outside the zone."""
-    if file.startswith(path_policy.GENERATED_ROOT):
-        return "generated.context"
-    if file.startswith("public/") and path_policy.may_edit(file):
-        return "public.ui"
-    if path_policy.mounted_context(file) and path_policy.may_edit(file):
-        return FULLSTACK_CAPABILITY
-    return None
-
-
 def path_capability(file: str) -> str | None:
     """Catalog capability a path needs, editable zone or not; None outside every capability."""
-    if file.startswith(path_policy.GENERATED_ROOT):
-        return "generated.context"
-    if file.startswith("public/"):
-        return "public.ui"
+    rules = load_catalog()["path_rules"]
+    for rule in rules["prefixes"]:
+        if file.startswith(rule["prefix"]):
+            return rule["capability"]
     if path_policy.mounted_context(file):
-        name = file.split("/")[2]
-        if name in ("content", "integration"):
-            return f"{name}.write"
-        return FULLSTACK_CAPABILITY if path_policy.may_edit(file) else "core.server"
+        ctx = rules["mounted_context"]
+        return ctx["named"].get(file.split("/")[2]) or (ctx["editable"] if path_policy.may_edit(file) else ctx["otherwise"])
     return None
+
+
+def _zone_capability(file: str) -> str | None:
+    """Capability of a file the fullstack zone opens, from its path alone; None outside the zone."""
+    cap = path_capability(file)
+    if cap == "generated.context":
+        return cap
+    if cap is None or not path_policy.may_edit(file):
+        return None
+    return cap if cap == "public.ui" else FULLSTACK_CAPABILITY
 
 
 def expected_capability(plan: dict) -> str | None:
