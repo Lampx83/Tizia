@@ -188,6 +188,11 @@ def is_runnable(text: str) -> bool:
     return bool(RUNNABLE.match(text) or (unified_verify() and READONLY_CHECK.match(text)))
 
 
+def prose_verify_ok() -> bool:
+    """critical_only_checks: a verify that is not a command is advice for the coder, not a plan fault."""
+    return bool(getattr(get_settings(), "critical_only_checks", False))
+
+
 def is_feature_plan(plan: dict) -> bool:
     """Plan nhiều lớp/có acceptance: verify và acceptance phải chạy được."""
     subtasks = plan.get("subtasks") or []
@@ -216,13 +221,18 @@ def compile_prose_verify(text: str, files: set[str]) -> str | None:
     return f"sh -c {shlex.quote(' && '.join(cmds))}"
 
 
+def _compile_prose() -> bool:
+    s = get_settings()
+    return bool(s.compile_prose_verify or getattr(s, "critical_only_checks", False))
+
+
 def _model_first() -> bool:
     return bool(getattr(get_settings(), "model_first", False))
 
 
 def _suggestion(text: str, files: set[str]) -> str:
     """model_first: the command the prose would compile to, offered to the planner instead of rewriting its verify."""
-    command = compile_prose_verify(text, files) if _model_first() and get_settings().compile_prose_verify else None
+    command = compile_prose_verify(text, files) if _model_first() and _compile_prose() else None
     return f" (gợi ý, dùng nếu đúng ý bạn: {command})" if command else ""
 
 
@@ -299,7 +309,7 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
     if request is not None and getattr(settings, "derived_checks", False) and not _model_first() and not two_level.decomposing(request):
         from gates import derived_checks
         derived_checks.apply(plan, request, with_checks=bool(getattr(settings, "plan_checks", False)))
-    if get_settings().compile_prose_verify and not _model_first():
+    if _compile_prose() and not _model_first():
         files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
         for st in subtasks:
             st["verify"] = compile_prose_verify(st["verify"], files) or st["verify"]
@@ -308,6 +318,8 @@ def parse_plan(text: str, *, lenient: bool = False, warnings: list | None = None
             plan["acceptance"] = acceptance
     files = {unicodedata.normalize("NFC", st["file"].strip()) for st in subtasks}
     if is_feature_plan(plan):
+        if prose_verify_ok():
+            form = warnings.append if warnings is not None else (lambda message: None)
         for i, st in enumerate(subtasks):
             if not is_runnable(st["verify"]):
                 form(f"subtask[{i}].verify phải là lệnh chạy được (node --test/curl/pytest/...): {st['verify'][:80]}{_suggestion(st['verify'], files)}")

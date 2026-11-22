@@ -790,16 +790,20 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     command([*compose, "exec", "-T", "tizia", "mkdir", "-p", parent])
                     command([*compose, "cp", test_file, f"tizia:/app/{test_file}"])
                 stage = "ordinary"
-                generated_ok = False
+                generated_ok = tests_advisory = False
                 try:
                     if test_files:  # `node --test` with no file would run the whole suite
                         command([*compose, "exec", "-T", "tizia", "node", "--test",
                                  *(f"/app/{test_file}" for test_file in test_files)], timeout=60)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
                     failure = "generated tests timed out" if isinstance(exc, subprocess.TimeoutExpired) else "generated tests failed"
-                    if not probe_id:
-                        detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                    detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                    if not probe_id and not getattr(get_settings(), "critical_only_checks", False):
                         raise RuntimeError(f"{failure}: {detail}") from exc
+                    if not probe_id:
+                        # A model-written test is no oracle: red alone sends the candidate to an admin, never blocks it.
+                        tests_advisory = True
+                        soft_misses.append(_soft_miss("generated_tests", 1, f"{failure}: {detail}"))
                     # A harness oracle judges this request; a model-written test is supplementary and often mangles quotes/escapes.
                     logs.append(f"{failure} (advisory: the harness oracle '{probe_id}' decides): {', '.join(test_files)}")
                 else:
@@ -928,7 +932,7 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Oracle fail kèm acceptance của người dùng, generated tests và smoke đều xanh: needs_review, không chặn: '
                                 + str(functional_result.get('reason')))
-                elif no_oracle_review(generated_ok, smoke_ok, functional_result, review_any and not test_files):
+                elif no_oracle_review(generated_ok, smoke_ok, functional_result, (review_any and not test_files) or tests_advisory):
                     functional_result = {**functional_result, 'passed': True, 'oracle_passed': False, 'needs_review': True}
                     logs.append('Không có oracle hành vi cho yêu cầu này; generated tests, smoke và acceptance của plan đều xanh: '
                                 'needs_review, admin xem xét, không tự đạt: ' + str(functional_result.get('reason')))
@@ -1064,7 +1068,10 @@ def run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None 
     soft_only = bool(soft_misses) and not reason
     if soft_misses:
         evidence["soft_misses"] = soft_misses
-    if soft_only:  # repairable like a failed test; the worker lets it pass after one soft repair round
+    if soft_only and getattr(get_settings(), "critical_only_checks", False):
+        evidence["needs_review"] = True
+        soft_only = False
+    elif soft_only:  # repairable like a failed test; the worker lets it pass after one soft repair round
         reason = "kiểm mềm dưới ngưỡng: " + " | ".join(soft_line(m) for m in soft_misses)[:1000]
     state["evidence"] = evidence
     return {"gate": 5, "blocked": bool(reason), "reason": reason, "evidence": evidence,
