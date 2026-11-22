@@ -39,6 +39,7 @@ from pathlib import Path
 from evaluation.pipeline import DATA, WORKTREE
 from evaluation.pipeline import history_cases as hc
 from evaluation.pipeline import context_budget
+from evaluation.pipeline import driver_lock
 
 TRIALS = DATA / "trials"
 RAW = DATA / "raw"
@@ -2138,6 +2139,15 @@ def cmd_run(args) -> int:
     return 0
 
 
+LOCK_FILE = DATA / "driver.lock"
+
+
+def cmd_stop(_args) -> int:
+    pid = driver_lock.stop(LOCK_FILE)
+    print(f"[driver] stopped pid {pid}" if pid else "[driver] no live driver")
+    return 0
+
+
 def _arm_name(text: str) -> str:
     try:
         arm_env(text)
@@ -2236,6 +2246,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cases", default="", help="subset of plan.json cases; same syntax as plan --cases")
     p.set_defaults(func=cmd_run)
 
+    sub.add_parser("stop", help="terminate the live driver holding driver.lock").set_defaults(func=cmd_stop)
+
     p = sub.add_parser("seeds-clean", help="remove history seeds not referenced by plan.json or --keep")
     p.add_argument("--dry-run", action="store_true", help="report sizes only, delete nothing")
     p.add_argument("--keep", action="append", default=[], help="extra case id to treat as referenced")
@@ -2253,8 +2265,13 @@ def main(argv: list[str] | None = None) -> int:
     global PROBE_MANIFEST, ANSWER_CLARIFICATIONS
     ANSWER_CLARIFICATIONS = bool(getattr(args, "answer_clarifications", False))
     PROBE_MANIFEST = bool(getattr(args, "probe_manifest", False))
+    long_running = args.cmd in ("trial", "run") and not getattr(args, "dry_run", False)
     try:
-        return args.func(args)
+        with driver_lock.guard(LOCK_FILE, args.cmd) if long_running else contextlib.nullcontext():
+            return args.func(args)
+    except driver_lock.DriverBusy as exc:
+        print(f"[driver] STOP: {exc}")
+        return 5
     except PreflightRed as exc:
         print(f"[driver] STOP: {exc}")
         return 3
