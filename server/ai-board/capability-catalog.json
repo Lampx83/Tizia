@@ -1,0 +1,36 @@
+{
+  "_doc": "Single source for gate 2 and server/ai-board/security/policy.js: static capability catalog, self/fullstack entries, and the path -> capability rules. Read by policy.js and ai-board/harness/gates/scope_check.py.",
+  "capabilities": {
+    "public.ui": {"tier": "surface", "allow": ["public/"], "rationale": "Public static interface files."},
+    "generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"], "rationale": "Generated context output only."},
+    "features": {"tier": "surface", "allow": ["public/", "server/contexts/_ai-generated/"], "rationale": "Feature presentation without server core changes."},
+    "content": {"tier": "surface", "allow": ["public/", "server/contexts/_ai-generated/"], "rationale": "Domain content and presentation."},
+    "experiments": {"tier": "surface", "allow": ["public/", "server/contexts/_ai-generated/"], "rationale": "Experiment presentation and generated context."},
+    "quiz": {"tier": "surface", "allow": ["public/", "server/contexts/_ai-generated/"], "rationale": "Quiz presentation and generated context."},
+    "content.write": {"tier": "protected", "allow": ["server/contexts/content/", "public/"], "rationale": "Changes the shared content service."},
+    "integration.write": {"tier": "protected", "allow": ["server/contexts/integration/"], "rationale": "Changes external service integrations."},
+    "core.server": {"tier": "core", "allow": ["server/", "scripts/"], "rationale": "Core server or operational code always needs a human."}
+  },
+  "self": {
+    "name": "self.config",
+    "tier": "protected",
+    "allow": ["ai-board/harness/skills/", "ai-board/harness/prompts/", "ai-board/harness/retrieval_weights.json"],
+    "deny": ["ai-board/harness/skills/skills.lock.json", "ai-board/harness/prompts/prompts.lock.json", "ai-board/harness/prompts/AIBOARD.md"],
+    "rationale": "The board edits its own skills, gate prompts or retrieval weights; an admin approves every plan."
+  },
+  "fullstack": {
+    "name": "context.write",
+    "tier": "surface",
+    "allow": ["server/contexts/"],
+    "deny": ["server/contexts/ai-board-", "server/contexts/_", "server/contexts/registry.js", "server/contexts/index.js"],
+    "rationale": "Requester edits an existing mounted context; every DB change waits for an admin before any push.",
+    "meaning": "Edits an existing mounted server context (requester fullstack zone)."
+  },
+  "path_rules": {
+    "prefixes": [
+      {"prefix": "server/contexts/_ai-generated/", "capability": "generated.context"},
+      {"prefix": "public/", "capability": "public.ui"}
+    ],
+    "mounted_context": {"root": "server/contexts/", "named": {"content": "content.write", "integration": "integration.write"}, "editable": "context.write", "otherwise": "core.server"}
+  }
+}

@@ -30,34 +30,33 @@ const capability = (tier, allow, rationale, overrides = {}) => Object.freeze({
 
 // Read once at load: the catalog hash pins accepted plans, so the flag changes only with a restart.
 export const REQUESTER_FULLSTACK = getSettings().requesterFullstackDb;
-export const FULLSTACK_CAPABILITY = 'context.write';
+const CATALOG = JSON.parse(fs.readFileSync(new URL('../capability-catalog.json', import.meta.url), 'utf8'));
+export const FULLSTACK_CAPABILITY = CATALOG.fullstack.name;
 const FULLSTACK_POLICY = REQUESTER_FULLSTACK ? {
-  [FULLSTACK_CAPABILITY]: capability('surface', ['server/contexts/'],
-    'Requester edits an existing mounted context; every DB change waits for an admin before any push.', {
-      deny: [...REFUSED_CONTEXTS, 'server/contexts/ai-board-', 'server/contexts/_', 'server/contexts/registry.js',
-        'server/contexts/index.js'],
-    }),
+  [FULLSTACK_CAPABILITY]: capability(CATALOG.fullstack.tier, CATALOG.fullstack.allow, CATALOG.fullstack.rationale, {
+    deny: [...REFUSED_CONTEXTS, ...CATALOG.fullstack.deny],
+  }),
 } : {};
 
 export const CAPABILITY_POLICY = Object.freeze({
-  'public.ui': capability('surface', ['public/'], 'Public static interface files.'),
-  'generated.context': capability('surface', ['server/contexts/_ai-generated/'], 'Generated context output only.'),
-  features: capability('surface', ['public/', 'server/contexts/_ai-generated/'], 'Feature presentation without server core changes.'),
-  content: capability('surface', ['public/', 'server/contexts/_ai-generated/'], 'Domain content and presentation.'),
-  experiments: capability('surface', ['public/', 'server/contexts/_ai-generated/'], 'Experiment presentation and generated context.'),
-  quiz: capability('surface', ['public/', 'server/contexts/_ai-generated/'], 'Quiz presentation and generated context.'),
-  'content.write': capability('protected', ['server/contexts/content/', 'public/'], 'Changes the shared content service.'),
-  'integration.write': capability('protected', ['server/contexts/integration/'], 'Changes external service integrations.'),
-  'core.server': capability('core', ['server/', 'scripts/'], 'Core server or operational code always needs a human.'),
+  ...Object.fromEntries(Object.entries(CATALOG.capabilities).map(([name, c]) => [name, capability(c.tier, c.allow, c.rationale)])),
   // Board tự sửa: prefix thô cho catalog cổng 4/5.5; file chính xác do isSelfEditable + guard.
-  [SELF_CAPABILITY]: capability('protected',
-    ['ai-board/harness/skills/', 'ai-board/harness/prompts/', 'ai-board/harness/retrieval_weights.json'],
-    'The board edits its own skills, gate prompts or retrieval weights; an admin approves every plan.', {
-      deny: ['ai-board/harness/skills/skills.lock.json', 'ai-board/harness/prompts/prompts.lock.json',
-        'ai-board/harness/prompts/AIBOARD.md'],
-    }),
+  [SELF_CAPABILITY]: capability(CATALOG.self.tier, CATALOG.self.allow, CATALOG.self.rationale, { deny: CATALOG.self.deny }),
   ...FULLSTACK_POLICY,
 });
+
+/** Capability a path needs (same rules as the harness scope_check.path_capability); `editable` = requester zone may edit it. */
+export function pathCapability(file, editable = false) {
+  const path = String(file ?? '');
+  const { prefixes, mounted_context: ctx } = CATALOG.path_rules;
+  const hit = prefixes.find((rule) => path.startsWith(rule.prefix));
+  if (hit) return hit.capability;
+  if (!path.startsWith(ctx.root)) return null;
+  const rest = path.slice(ctx.root.length);
+  const name = rest.includes('/') ? rest.split('/')[0] : '';
+  if (!name || name.startsWith('_') || name.startsWith('ai-board')) return null;
+  return ctx.named[name] || (editable ? ctx.editable : ctx.otherwise);
+}
 
 const TIERS = Object.freeze({ surface: 0, protected: 1, core: 2 });
 const RISKS = new Set(['low', 'medium', 'high']);

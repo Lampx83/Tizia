@@ -43,8 +43,9 @@ def test_variant_is_locked_and_resolves_to_its_hash():
 def test_manual_db_line_follows_placeholder_flag(monkeypatch):
     class S:
         requester_fullstack_db = True
+        model_first = False
     monkeypatch.setattr(context, "get_settings", lambda: S())
     on = context.manual()
     assert "admin sees the SQL" in on and context._DB_LINE not in on
-    monkeypatch.setattr(context, "get_settings", lambda: object())
+    S.requester_fullstack_db = False
     assert _sha(context.manual()) == OFF_MANUAL_SHA

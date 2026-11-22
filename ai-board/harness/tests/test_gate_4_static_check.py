@@ -519,3 +519,42 @@ def test_gate_4_evidence_records_the_contract_without_any_diff(tmp_path):
     assert [step["file"] for step in out["contract"]["steps"]] == [API, PAGE]
     assert len(json.dumps(out["contract"], ensure_ascii=False)) <= subtask_contract.MAX_EVIDENCE_CHARS
     assert "fetch('/api/faq')" not in json.dumps(out, ensure_ascii=False)  # evidence không mang nội dung diff
+
+
+# ── generated test importing a server file the plan edits ───────────────────
+
+EDITED = "server/contexts/portal-apps/builtin-catalog.js"
+
+
+def _test_import_run(tmp_path, monkeypatch, spec, flags=("critical", "zone")):
+    from settings import reset_settings
+    if "critical" in flags:
+        monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1")
+    if "zone" in flags:
+        monkeypatch.setenv("AI_BOARD_REQUESTER_FULLSTACK_DB", "1")
+        monkeypatch.setenv("AI_BOARD_DB_CHECK", "1")
+    reset_settings()
+    plan = _plan([{"title": "t", "file": EDITED, "verify": "v", "size": "small"}])
+    _write(tmp_path, EDITED, "export const x = 1;\n")
+    _write(tmp_path, "test/builtin-catalog.test.js", f"import {{ x }} from '{spec}';\n")
+    diffs = [{"title": "t", "file": EDITED, "test_file": "test/builtin-catalog.test.js", "diff": "+x\n"}]
+    try:
+        return static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+    finally:
+        reset_settings()
+
+
+def test_test_may_import_a_server_file_the_plan_edits(tmp_path, monkeypatch):
+    assert _test_import_run(tmp_path, monkeypatch, "../server/contexts/portal-apps/builtin-catalog.js")["blocked"] is False
+
+
+@pytest.mark.parametrize("flags", [("zone",), ("critical",), ()])
+def test_plan_edited_import_stays_blocked_without_both_flags(tmp_path, monkeypatch, flags):
+    out = _test_import_run(tmp_path, monkeypatch, "../server/contexts/portal-apps/builtin-catalog.js", flags)
+    assert out["blocked"] is True and "import cấm" in out["reason"]
+
+
+@pytest.mark.parametrize("spec", ["../server/db.js", "../server/contexts/admin/index.js"])
+def test_other_privileged_test_imports_stay_blocked(tmp_path, monkeypatch, spec):
+    out = _test_import_run(tmp_path, monkeypatch, spec)
+    assert out["blocked"] is True and "import cấm" in out["reason"]

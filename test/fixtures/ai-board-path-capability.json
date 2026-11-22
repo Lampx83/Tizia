@@ -1,0 +1,13 @@
+[
+  {"file": "server/contexts/_ai-generated/x/a.js", "editable": false, "capability": "generated.context"},
+  {"file": "public/a.html", "editable": false, "capability": "public.ui"},
+  {"file": "server/contexts/content/index.js", "editable": false, "capability": "content.write"},
+  {"file": "server/contexts/content/index.js", "editable": true, "capability": "content.write"},
+  {"file": "server/contexts/integration/x.js", "editable": true, "capability": "integration.write"},
+  {"file": "server/contexts/teacher/index.js", "editable": true, "capability": "context.write"},
+  {"file": "server/contexts/teacher/index.js", "editable": false, "capability": "core.server"},
+  {"file": "server/contexts/_hidden/a.js", "editable": false, "capability": null},
+  {"file": "server/contexts/ai-board-x/a.js", "editable": false, "capability": null},
+  {"file": "server/contexts/index.js", "editable": false, "capability": null},
+  {"file": "server/db.js", "editable": false, "capability": null}
+]

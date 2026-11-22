@@ -120,7 +120,8 @@ def _privileged(resolved: str, file_path: str) -> bool:
     return bool(resolved.endswith('db.js') or other_context)
 
 
-def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: bool = False) -> list[str]:
+def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: bool = False,
+                 allowed: frozenset = frozenset()) -> list[str]:
     """Trả list vi phạm (rỗng = sạch). Import tương đối ('./...'/'../...') được
     RESOLVE theo `file_path` trước khi so — chuỗi thô như '../../db.js' không
     tự chứa 'contexts/'/'db.js' theo nghĩa path thật nếu không resolve. Package
@@ -135,7 +136,7 @@ def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: 
     already = {resolved for _, resolved in _resolved_imports(base_code, base)}
     violations = []
     for spec, resolved in _resolved_imports(code, base):
-        if resolved in already or privileged_ok:
+        if resolved in already or privileged_ok or resolved in allowed:
             continue
         # Context khác là ranh giới quyền thật; file cùng context thì không.
         if _privileged(resolved, file_path):
@@ -340,7 +341,10 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                 continue
             # Flag on, mounted context: db/other-context imports are the context convention; the admin hold reviews them.
             mounted = path_policy.fullstack_on() and path_policy.mounted_context(candidate)
-            bad_imports = lint_imports(code, candidate, base_code(candidate), privileged_ok=mounted)
+            # A generated test may import a server file the plan itself edits (critical_only_checks + fullstack zone).
+            plan_edits = (frozenset(planned_files) if candidate == _posix(d.get("test_file") or "") and candidate != file_path
+                          and functional.tolerant_literals() and path_policy.fullstack_on() else frozenset())
+            bad_imports = lint_imports(code, candidate, base_code(candidate), privileged_ok=mounted, allowed=plan_edits)
             if mounted:
                 state["privileged_imports"] = sorted({*state.get("privileged_imports", ()),
                                                       *(f"{candidate}: {item}" for item in
