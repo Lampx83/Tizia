@@ -35,11 +35,13 @@ from services import context
 from gate5 import functional
 import path_policy
 from gates import acceptance_structure, best_match, data_kinds, decision_ledger, grounding_paths, plan_rules, react_plan, subtask_contract, two_level
+from gates import scope_check
 from gates.scope_check import load_capability_names
 from runtime import levels, limits, model_json, subtask_files
 from runtime import plan_merge
 from runtime.plan_merge import merge_same_file
 from security import spotlight
+from tools import readonly
 from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -129,7 +131,7 @@ def build_prompt(request: dict, surface: frozenset[str], context_text: str = "",
         context=context_text or "REPO DATA: (không có)",  # carries its own nonce fences; scrub would strip them
     ) + (two_level.DECOMPOSE_PROMPT if two_level.decomposing(request)
          else acceptance_structure.prompt_block(request) + (SCOPE_PROMPT if subtask_files.enabled() else "")
-         + data_kinds.prompt_block() + feature_block(list(contexts)))
+         + data_kinds.prompt_block() + feature_block(list(contexts))) + (scope_check.capability_enum() if readonly.v2() else "")
 
 
 def requester_domain_hint(request: dict) -> str:

@@ -31,6 +31,31 @@ meter.register_prompt("react_plan.md", PROTOCOL)
 
 
 RULE_ROUNDS = 2  # plan-rule objections answered in the session before the plan goes on to the gates
+CAPABILITY_ROUNDS = 2  # unknown-name objections before the plan goes on to gate 2 as declared
+_RUN_READS: dict = {}  # tool_defs_v2: one ticket run's identical-read cache, kept across planner attempts
+
+
+def _run_reads(proposal_id, source, sha) -> dict[str, tuple[int, str]]:
+    """Read cache shared by planner attempts of one proposal at one base sha; fresh dict without a proposal."""
+    if not readonly.v2() or proposal_id is None:
+        return {}
+    key = (proposal_id, str(source), sha)
+    if key not in _RUN_READS:
+        _RUN_READS.clear()
+        _RUN_READS[key] = {}
+    return _RUN_READS[key]
+
+
+def _capability_objection(plan) -> str | None:
+    """Observation for capability names gate 2 cannot know, with the valid list and the path-implied one."""
+    valid = scope_check.valid_capabilities()
+    bad = [cap for cap in (plan or {}).get("capabilities") or [] if not isinstance(cap, str) or cap not in valid]
+    if not bad:
+        return None
+    expected = scope_check.expected_capability(plan)
+    names = "; ".join(f"{name} = {meaning}" for name, meaning in valid.items())
+    hint = f' Theo path của plan: đặt "capabilities": ["{expected}"].' if expected else ""
+    return f"BỊ LOẠI (capability): {', '.join(map(repr, bad))} không phải capability hợp lệ. Hợp lệ: {names}.{hint} Sửa rồi finish lại."
 
 
 def enabled() -> bool:
@@ -223,8 +248,8 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
     if ledger is not None:
         protocol += "\n" + decision_ledger.PROMPT
     trace = getattr(deps, "trace", None)
-    transcript, observed, reads, objected, hinted = "", "", 0, 0, False
-    seen: dict[str, tuple[int, str]] = {}  # tool_defs_v2: identical-read signature -> (step, observation)
+    transcript, observed, reads, objected, hinted, unknown = "", "", 0, 0, False, 0
+    seen = _run_reads(proposal_id, source, sha)  # tool_defs_v2: identical-read signature -> (step, observation)
     steps, step_log, ledger_rounds = 0, decision_ledger.StepLog(), 0
     while loop.allow():
         steps += 1
@@ -251,8 +276,12 @@ def _react(prompt: str, deps, budget, *, model: str, source, sha: str, db_path=N
                         ledger["reason"], ledger_rounds = str(error), ledger_rounds + 1
                 else:
                     text = json.dumps(args["plan"], ensure_ascii=False)
+                    objection = _capability_objection(args["plan"]) if readonly.v2() and unknown < CAPABILITY_ROUNDS else None
                     expected = scope_check.expected_capability(args["plan"]) if readonly.v2() and not hinted else None
-                    if expected:
+                    if objection:
+                        unknown += 1
+                        observation, ok = objection, False
+                    elif expected:
                         hinted = True
                         observation, ok = (f"BỊ LOẠI (capability): mọi file của plan thuộc capability {expected!r}; "
                                            f'đặt "capabilities": ["{expected}"] rồi finish lại.'), False

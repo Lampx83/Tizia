@@ -103,3 +103,54 @@ def test_rewoo_accepts_v2_names(repo, monkeypatch, v2):
     steps = {"steps": [{"id": "#E1", "tool": "search_text", "arguments": {"words": ["go"], "file": "public/a.html"}}]}
     deps = Scripted(steps, finish([[QUOTE]]))
     assert plan(deps, source=root, sha=sha)["quotes"] == [[QUOTE]] and len(deps.prompts) == 2
+
+
+def test_valid_capabilities_come_from_the_policy_catalog():
+    valid = scope_check.valid_capabilities()
+    assert {"public.ui", "generated.context", "features", "content", "content.write", "core.server"} <= set(valid)
+    assert scope_check.FULLSTACK_CAPABILITY not in valid  # zone off
+    assert all(meaning.startswith("[") for meaning in valid.values())
+
+
+def test_expected_capability_fires_without_the_editable_zone():
+    assert scope_check.expected_capability(mixed_plan("content.write")) == "core.server"
+    assert scope_check.expected_capability(mixed_plan("core.server")) is None
+
+
+def test_invented_capability_gets_the_valid_list_and_the_path_one(repo, react_on, v2):
+    root, sha = repo
+    wrong = finish([[QUOTE]])
+    wrong["arguments"]["plan"]["capabilities"] = ["content.writes"]
+    deps = Scripted(READ, wrong, finish([[QUOTE]]))
+    out = plan(deps, source=root, sha=sha)
+    assert "'content.writes' không phải capability hợp lệ" in deps.prompts[2]
+    assert "core.server = " in deps.prompts[2] and '["public.ui"]' in deps.prompts[2]
+    assert json.loads(out["response"])["capabilities"] == []
+
+
+def test_invented_capability_is_not_objected_with_flag_off(repo, react_on):
+    root, sha = repo
+    wrong = finish([[QUOTE]])
+    wrong["arguments"]["plan"]["capabilities"] = ["content.writes"]
+    deps = Scripted(READ, wrong)
+    assert json.loads(plan(deps, source=root, sha=sha)["response"])["capabilities"] == ["content.writes"]
+    assert len(deps.prompts) == 2
+
+
+def test_identical_read_is_deduped_across_planner_attempts(repo, react_on, v2):
+    root, sha = repo
+    assert plan(Scripted(READ, finish([[QUOTE]])), source=root, sha=sha, proposal_id="p1") is not None
+    deps = Scripted(READ, finish([[QUOTE]]))
+    assert plan(deps, source=root, sha=sha, proposal_id="p1") is not None
+    assert "Already read" in deps.prompts[0] and "(đã có ở bước 1, không tính lượt đọc)" in deps.prompts[1]
+    other = Scripted(READ, finish([[QUOTE]]))
+    plan(other, source=root, sha=sha, proposal_id="p2")
+    assert "Already read" not in other.prompts[0]
+
+
+def test_flag_off_planner_keeps_no_reads_across_attempts(repo, react_on):
+    root, sha = repo
+    plan(Scripted(READ, finish([[QUOTE]])), source=root, sha=sha, proposal_id="p1")
+    deps = Scripted(READ, finish([[QUOTE]]))
+    plan(deps, source=root, sha=sha, proposal_id="p1")
+    assert "đã có ở bước" not in deps.prompts[1]
