@@ -16,7 +16,7 @@ from typing import Any, Callable
 from worker_client import (DEFAULT_BUDGET_LIMIT, REPO_ROOT, LeaseLostError, WorkerClient, _is_stale_lease, _plan_rejection,
                            _with_body, default_worker_id, server_url, take_secret)
 from worker_execution import _load_harness, _real_deps, drop_screenshots, harness_change_runner
-from worker_planner import HarnessPlanner, PlanBlockedError, _repaired_snapshot, gate1_probe_client, lease_provider, model_preflight
+from worker_planner import HarnessPlanner, PlanBlockedError, _repaired_snapshot, gate1_probe_client, lease_provider, model_preflight, stop_voice
 from worker_publish import SHOTS_TYPE, _forge, observe_base, pr_text, screenshot_payload, sync_pull_requests
 from runtime.limits import scaled_limit  # noqa: E402
 from settings import get_settings  # noqa: E402
@@ -456,8 +456,8 @@ class HttpWorker:
                           else str(error))
                 self.client.post(f"/api/ai-board/worker/tickets/{ticket_id}/events", {
                     **lease, "run_id": run["id"], "event_type": "plan_blocked",
-                    "public_message": (getattr(error, "detail", None) or {}).get("public_message")
-                    or "Kế hoạch chưa vượt qua kiểm tra an toàn.",
+                    "public_message": stop_voice((getattr(error, "detail", None) or {}).get("public_message")
+                                                 or "Kế hoạch chưa vượt qua kiểm tra an toàn.", snapshot),
                     "internal_detail": detail,
                     "idempotency_key": f"{prefix}:plan-blocked",
                 })
