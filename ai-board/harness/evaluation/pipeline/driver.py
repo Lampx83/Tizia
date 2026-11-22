@@ -135,7 +135,8 @@ def _arm_env(arm: str) -> dict[str, str]:
     if arm == "B0-crit":
         return {**arm_env("B0"), "AI_BOARD_CRITICAL_ONLY_CHECKS": "1"}
     if arm == "B1-tooldefs-fs":  # backend cases need the requester fullstack zone to get a grantable capability
-        return {**arm_env("B1-tooldefs"), "AI_BOARD_REQUESTER_FULLSTACK_DB": "1", "AI_BOARD_DB_CHECK": "1"}
+        return {**arm_env("B1-tooldefs"), "AI_BOARD_REQUESTER_FULLSTACK_DB": "1", "AI_BOARD_DB_CHECK": "1",
+                "AI_BOARD_CRITICAL_ONLY_CHECKS": "1", "AI_BOARD_MULTI_FILE_SUBTASK": "1", "AI_BOARD_BUDGET_BY_FILE_COUNT": "1"}
     if arm == "B1":
         return on
     if arm == "B1-tooldefs":
