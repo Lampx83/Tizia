@@ -1223,7 +1223,8 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
                 evidence_ = getattr(error, 'evidence', None) or {'why': str(error)}
                 observe(state, judge, 'plan_target_uncertain' if uncertain else 'plan_ungrounded',
                         '; '.join(filter(None, [confidence['reason'] if uncertain else '', str(error)])), evidence_)
-                state['grounding'] = {'sha': sha, 'evidence': []}
+                # WHY: server requires one evidence row per step; an ungrounded plan ships no grounding at all.
+                state.pop('grounding', None)
             elif uncertain:
                 judge('target confidence', False, confidence['reason'])
                 # Khám phá chỉ thêm bằng chứng cho admin; plan vẫn bị chặn, không tự chấp nhận file model chọn.

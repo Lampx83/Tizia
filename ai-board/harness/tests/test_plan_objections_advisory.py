@@ -158,6 +158,7 @@ def test_gate25_wrong_quote_is_ungrounded_off_and_advice_with_evidence_on(monkey
     objection = state["plan_objections"][0]
     assert objection["kind"] == "plan_ungrounded" and objection["evidence"]["quote"].startswith("KHÔNG CÓ")
     assert any(subtask_contract.OBJECTION_TAG in w for w in state["form_warnings"])
+    assert "grounding" not in state  # server refuses grounding whose evidence count differs from the steps
 
 
 def test_gate25_target_uncertain_is_advice_on(monkeypatch, tmp_path):
