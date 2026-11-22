@@ -2029,6 +2029,44 @@ def check_runner_guest_pin() -> dict:
     return {"name": "runner_guest_pin", "ok": ok, "detail": want[-20:] if ok else f"runner {got[-20:] or '?'} != code {want[-20:] or '?'}"}
 
 
+GUEST_FLAG_KEYS = {"AI_BOARD_CRITICAL_ONLY_CHECKS": "critical_only_checks", "AI_BOARD_QUOTED_CHECKS": "quoted_checks",
+                   "AI_BOARD_LEGACY_PROBE_SHADOW": "legacy_probe_shadow", "AI_BOARD_ORACLE_CSS_SIZE": "oracle_css_size",
+                   "AI_BOARD_RED_CHECK_CLASSIFY": "red_check_classify"}
+HARNESS_IN_WORKER = "/opt/ai-board/ai-board/harness"
+HARNESS_HASH_CMD = f"cd {HARNESS_IN_WORKER} && find gate5 -name '*.py' | sort | xargs sha256sum | sha256sum"
+
+
+def check_guest_flags(arm: str) -> dict:
+    """Each worker's guest state for a dummy request carries exactly the arm's guest flags; the guest VM has no env."""
+    expected = {key for env, key in GUEST_FLAG_KEYS.items() if arm_env(arm).get(env) == "1"}
+    code = ("import json; from gate5 import guest_inputs as g; "
+            f"print(json.dumps(sorted(set(g.build({{}})) & set({sorted(GUEST_FLAG_KEYS.values())!r}))))")
+    bad = []
+    for _, name in WORKER_PAIRS:
+        p = _docker(["docker", "exec", "-w", HARNESS_IN_WORKER, name, "python", "-c", code])
+        got = set(json.loads(p.stdout.decode("utf-8", "replace") or "[]")) if not p.returncode else None
+        if got != expected:
+            bad.append(f"{name}: guest keys {sorted(got) if got is not None else 'exec failed'} != {sorted(expected)}")
+    return {"name": "guest_flags", "ok": not bad, "detail": "; ".join(bad) or f"arm {arm}: {sorted(expected)}"}
+
+
+def _harness_hash(cmd: list[str]) -> str:
+    p = _docker(cmd, timeout=600)
+    return p.stdout.decode("utf-8", "replace").split()[0] if not p.returncode and p.stdout.strip() else "?"
+
+
+def check_guest_harness() -> dict:
+    """The guest image the runner will boot holds the same gate5 harness files as the workers; a stale guest runs old code."""
+    p = _docker(["docker", "exec", "aiboard-sandbox-runner", "sh", "-c", 'cat "${SANDBOX_POLICY_FILE:-/etc/sandbox/sandbox-policy.yaml}"'])
+    digest = re.search(r"@(sha256:[0-9a-f]{64})", _guest_line(p.stdout.decode("utf-8", "replace"))) if not p.returncode else None
+    if not digest:
+        return {"name": "guest_harness", "ok": False, "detail": "runner policy has no guest pin"}
+    guest = _harness_hash(["docker", "run", "--rm", "--entrypoint", "sh", f"localhost:5000/gate5@{digest.group(1)}", "-c", HARNESS_HASH_CMD])
+    workers = {name: _harness_hash(["docker", "exec", name, "sh", "-c", HARNESS_HASH_CMD]) for _, name in WORKER_PAIRS}
+    ok = guest != "?" and set(workers.values()) == {guest}
+    return {"name": "guest_harness", "ok": ok, "detail": f"guest={guest[:12]} " + " ".join(f"{k}={v[:12]}" for k, v in workers.items())}
+
+
 def check_worker_base() -> dict:
     """Every worker's repo is at the same base commit; a worker on a stale base builds a different Dockerfile."""
     heads = {}
@@ -2052,6 +2090,8 @@ def run_preflight(write: bool, arm: str = "B0", probe: bool = False) -> dict:
         _guarded("worker_env", lambda: check_worker_env(arm)),
         _guarded("routing_mount", check_routing_mount),
         _guarded("runner_guest_pin", check_runner_guest_pin),
+        _guarded("guest_flags", lambda: check_guest_flags(arm)),
+        _guarded("guest_harness", check_guest_harness),
         _guarded("worker_base", check_worker_base),
     ]
     passed = all(c["ok"] for c in checks)

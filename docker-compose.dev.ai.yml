@@ -158,6 +158,8 @@ services:
     networks: !override [boardnet, sandbox-api]
     volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
       - sandbox-runner-state:/home/node/.microsandbox
+      # WHY: the baked copy in the image would keep the old guest pin after a repin
+      - ./ai-board/sandbox-runner/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml:/etc/sandbox/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml:ro
     secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
 
   # Runner microVM không mạng cho backend sinh tự động của chức năng online. Web gọi http://online-runner:8090 qua tizia-bridge.
