@@ -1993,6 +1993,29 @@ def check_routing_mount() -> dict:
     return {"name": "routing_mount", "ok": not bad, "detail": "; ".join(bad) or "readable"}
 
 
+def _guest_line(text: str) -> str:
+    return next((line.strip() for line in text.splitlines() if line.strip().startswith("guest_image:")), "")
+
+
+def check_runner_guest_pin() -> dict:
+    """Runner mounts its policy from a compose dir that may differ from CODE: its guest pin must equal CODE's."""
+    want = _guest_line((CODE / "ai-board" / "sandbox-runner" / "sandbox-policy.dev.yaml").read_text(encoding="utf-8"))
+    p = _docker(["docker", "exec", "aiboard-sandbox-runner", "cat", "/etc/sandbox/sandbox-policy.yaml"])
+    got = _guest_line(p.stdout.decode("utf-8", "replace")) if not p.returncode else ""
+    ok = bool(want) and got == want
+    return {"name": "runner_guest_pin", "ok": ok, "detail": want[-20:] if ok else f"runner {got[-20:] or '?'} != code {want[-20:] or '?'}"}
+
+
+def check_worker_base() -> dict:
+    """Every worker's repo is at the same base commit; a worker on a stale base builds a different Dockerfile."""
+    heads = {}
+    for _, name in WORKER_PAIRS:
+        p = _docker(["docker", "exec", name, "git", "-c", "safe.directory=*", "-C", "/repo", "rev-parse", "--short", "HEAD"])
+        heads[name] = p.stdout.decode("utf-8", "replace").strip() if not p.returncode else "?"
+    ok = "?" not in heads.values() and len(set(heads.values())) == 1
+    return {"name": "worker_base", "ok": ok, "detail": ", ".join(f"{k}={v}" for k, v in heads.items())}
+
+
 def run_preflight(write: bool, arm: str = "B0", probe: bool = False) -> dict:
     """Four pre-trial checks for one arm; write=True stores result in manifest.json under 'preflight'."""
     manifest_path = DATA / "manifest.json"
@@ -2005,6 +2028,8 @@ def run_preflight(write: bool, arm: str = "B0", probe: bool = False) -> dict:
         _guarded("guest_probes", check_guest_probes),
         _guarded("worker_env", lambda: check_worker_env(arm)),
         _guarded("routing_mount", check_routing_mount),
+        _guarded("runner_guest_pin", check_runner_guest_pin),
+        _guarded("worker_base", check_worker_base),
     ]
     passed = all(c["ok"] for c in checks)
     print(f"[preflight] arm {arm}" + (" (--probe-manifest)" if probe else ""))
