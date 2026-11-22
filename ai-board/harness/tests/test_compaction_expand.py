@@ -74,7 +74,7 @@ def test_expand_needs_compaction_on(monkeypatch):
     monkeypatch.setenv('AI_BOARD_CONTEXT_COMPACTION', '0')
     seen = []
     real = tool_loop._specs
-    monkeypatch.setattr(tool_loop, '_specs', lambda: seen.extend(real()) or real())
+    monkeypatch.setattr(tool_loop, '_specs', lambda *a: seen.extend(real(*a)) or real(*a))
     trial(CompactingDeps())
     assert seen and 'expand' not in seen
 
@@ -83,7 +83,7 @@ def test_expand_offered_with_both_flags(monkeypatch):
     monkeypatch.setenv('AI_BOARD_COMPACTION_EXPAND', '1')
     seen = []
     real = tool_loop._specs
-    monkeypatch.setattr(tool_loop, '_specs', lambda: seen.extend(real()) or real())
+    monkeypatch.setattr(tool_loop, '_specs', lambda *a: seen.extend(real(*a)) or real(*a))
     trial(scripted())
     assert 'expand' in seen
 

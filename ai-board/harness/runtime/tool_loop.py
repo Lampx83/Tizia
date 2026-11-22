@@ -57,8 +57,10 @@ def shown(name: str) -> str:
     return tool_manifest.RENAMES.get(name, name) if v2() else name
 
 
-def _specs() -> dict:
-    """Tool của manifest (lọc theo phase implement khi tool_defs_v2) + run_in_sandbox/expand khi được phép."""
+def _specs(phase: str = "implement") -> dict:
+    """Tool của manifest (lọc theo phase khi tool_defs_v2) + run_in_sandbox/expand khi được phép (implement)."""
+    if phase != "implement":
+        return {n: s for n, s in MANIFEST.tools.items() if n in tool_manifest.PHASES[phase]}
     base = {n: s for n, s in MANIFEST.tools.items() if n in tool_manifest.PHASES["implement"]} if v2() else _LEGACY
     return {**base, **(sandbox_tool.specs() if _SANDBOX_OFFERED.get() else {}), **(expand_tool.specs() if _EXPAND_OFFERED.get() else {})}
 
@@ -320,7 +322,10 @@ def parse_request(body: dict) -> tuple[str, dict]:
             raise ToolError(f"không phải JSON: {error}") from None
         if not isinstance(call, dict):
             raise ToolError("kết quả phải là object {tool, arguments}")
-        name, args = call.get("tool"), call.get("arguments", {})
+        try:
+            name, args = call.get("tool"), tool_manifest.call_args(call, lift=v2())
+        except ValueError as error:
+            raise ToolError(str(error)) from None
     if isinstance(args, str):
         try:
             args = json.loads(args or "{}")
@@ -336,25 +341,25 @@ def parse_request(body: dict) -> tuple[str, dict]:
     return name, args
 
 
-def validate(name: str, args: dict) -> None:
+def validate(name: str, args: dict, phase: str = "implement") -> None:
     """Kiểm tham số; tool_defs_v2 thêm enum và cách sửa (lời gọi mẫu). Raise ToolError."""
     try:
-        _validate(name, args)
+        _validate(name, args, phase)
         if v2():
             for key, value in args.items():
-                allowed = _specs()[name].parameters["properties"].get(key, {}).get("enum")
+                allowed = _specs(phase)[name].parameters["properties"].get(key, {}).get("enum")
                 if allowed and value not in allowed:
                     raise ToolError(f"{shown(name)}.{key}={value!r} không hợp lệ; chọn một trong: {', '.join(allowed)}")
     except ToolError as error:
         if not v2():
             raise
-        example = _specs()[name].example
+        example = _specs(phase)[name].example
         raise ToolError(f"{error}. Sửa: đúng tham số theo schema"
                         + (f", ví dụ {json.dumps({'tool': shown(name), 'arguments': example}, ensure_ascii=False)}" if example is not None else "")) from None
 
 
-def _validate(name: str, args: dict) -> None:
-    spec = _specs()[name]
+def _validate(name: str, args: dict, phase: str = "implement") -> None:
+    spec = _specs(phase)[name]
     schema = spec.parameters
     cap = decision_ledger.MAX_ARG_BYTES if name == "finish" and "decisions" in args and decision_ledger.enabled() else spec.max_arg_bytes
     if len(json.dumps(args, ensure_ascii=False).encode("utf-8")) > cap:
@@ -814,9 +819,18 @@ def _read_row(n: int, name: str, args: dict) -> str:
     return f"- step {n}: {shown(name)}{words} {where}{span}".rstrip()
 
 
-def _tool_list() -> str:
+def already(reads: dict) -> str:
+    """Already-read list of the last 15 deduped reads; '' when none."""
+    return ALREADY.format(rows="\n".join(_read_row(n, *json.loads(sig)) for sig, (n, _) in list(reads.items())[-15:])) if reads else ""
+
+
+def repeated(cached: tuple[int, str]) -> str:
+    return f"(đã có ở bước {cached[0]}, không tính lượt đọc)\n{cached[1]}"
+
+
+def tool_list(phase: str = "implement") -> str:
     return "\n".join(f"- {shown(n)}: {spec.description} params={json.dumps(spec.parameters['properties'], ensure_ascii=False)}"
-                     for n, spec in _specs().items())
+                     for n, spec in _specs(phase).items())
 
 
 def _result(status: str, reason: str | None = None, failure_class: str | None = None, **extra) -> dict:
@@ -825,7 +839,7 @@ def _result(status: str, reason: str | None = None, failure_class: str | None = 
 
 def _pins(subtask: dict, sha: str, ws: Workspace, extra: dict | None) -> dict:
     return {"subtask": sha_of(json.dumps(subtask, sort_keys=True, ensure_ascii=False, default=str)), "base": sha,
-            "file": ws.base_hash, "prompt": sha_of(PROMPT + ORDER + _tool_list()),
+            "file": ws.base_hash, "prompt": sha_of(PROMPT + ORDER + tool_list()),
             "tools": MANIFEST.hash[:16], "verified_loop": ws.checks is not None, **(extra or {})}
 
 
@@ -1193,7 +1207,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
         ws.extra_content.update({path: text for path, text in drafts["files"].items() if path in ws.extra_content})
         ws.test_file, ws.test = drafts.get("test_file"), drafts.get("test")
         pins = {**(pins or {}), "drafts": sha_of(json.dumps(drafts, ensure_ascii=False, sort_keys=True))}
-    prompt = PROMPT.format(tools=_tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + (
+    prompt = PROMPT.format(tools=tool_list(), title=subtask["title"], file=subtask["file"], verify=subtask["verify"]) + (
         ORDER.replace("grep", shown("grep")))
     reads: dict[str, tuple[int, str]] = {}  # tool_defs_v2: signature -> (step, observation); cleared by any draft write
     if v2():
@@ -1319,7 +1333,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                        **({"tool_choice": "required"} if use else {})})
                      if messages is not None else call_extra)
             fmt = None if messages is not None else turn_schema() if use else "json"
-            seen = ALREADY.format(rows="\n".join(_read_row(n, *json.loads(sig)) for sig, (n, _) in list(reads.items())[-15:])) if reads else ""
+            seen = already(reads)
             return deps.call_model(model, call_prompt + tail + seen, gate=3, budget=loop_budget, format=fmt,
                                    db_path=db_path, proposal_id=proposal_id, prompt_name="tool_loop.md", child=child,
                                    iteration=len(steps), role=role, skill_context=skill_context,
@@ -1367,7 +1381,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
             if store and name in WRITE_TOOLS:
                 store.intent(n, name, args, cid)
             try:
-                observation = f"(đã có ở bước {cached[0]}, không tính lượt đọc)\n{cached[1]}" if cached is not None else (_network(deps, name, args) if name in network_request.TOOLS
+                observation = repeated(cached) if cached is not None else (_network(deps, name, args) if name in network_request.TOOLS
                                else _expand(history, args) if name == expand_tool.NAME else ws.run(name, args))
             except (ToolError, Forbidden, NetworkPause, server_hsm.AuthorityError, BudgetExhausted, sandbox_tool.RunnerBusy):
                 raise
@@ -1496,7 +1510,7 @@ PROBE_CASES = (
 
 def probe(call) -> dict:
     """Candidate qua probe: đúng cấu trúc, đúng kiểu tham số, và sửa được sau 1 lỗi. `call(prompt) -> body`."""
-    base = PROMPT.format(tools=_tool_list(), title="probe", file="public/x.html", verify="-")
+    base = PROMPT.format(tools=tool_list(), title="probe", file="public/x.html", verify="-")
     report = {}
     for label, ask, ok in PROBE_CASES:
         try:

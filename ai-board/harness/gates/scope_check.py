@@ -134,6 +134,17 @@ def _zone_capability(file: str) -> str | None:
     return None
 
 
+def expected_capability(plan: dict) -> str | None:
+    """Zone capability every planned file maps to, when the plan declares another one; else None."""
+    files = [posixpath.normpath(path.replace('\\', '/'))
+             for task in plan.get('subtasks') or [] for path in subtask_files.files_of(task)]
+    caps = {_zone_capability(file) for file in files}
+    declared = [cap for cap in plan.get("capabilities") or [] if isinstance(cap, str)]
+    if len(caps) != 1 or None in caps or not declared or set(declared) == caps:
+        return None
+    return caps.pop()
+
+
 def derive_capabilities(plan: dict) -> tuple[list[str], list[str]]:
     """Flag on: (capabilities from the plan's files, model names dropped). A file outside the zone keeps the model's names
     so this gate still judges it."""

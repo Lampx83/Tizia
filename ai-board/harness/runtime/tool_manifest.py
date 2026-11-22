@@ -21,6 +21,19 @@ PHASES = {"plan": ("tree", "outline", "grep", "read_file"),
                         "request_package", "fetch_url", "finish")}
 
 
+CALL_KEYS = ("tool", "name", "arguments", "thought")
+
+
+def call_args(call: dict, *, lift: bool) -> dict:
+    """Arguments of a text {tool, arguments} call; params flattened beside "tool" lifted when lift, else ValueError."""
+    stray = {k: v for k, v in call.items() if k not in CALL_KEYS}
+    if "arguments" in call or not stray:
+        return call.get("arguments", {})
+    if lift:
+        return stray
+    raise ValueError(f'tham số {", ".join(stray)} nằm ngoài "arguments"; gửi {{"tool": "<name>", "arguments": {{...}}}}')
+
+
 class ManifestError(ValueError):
     """Manifest sai hình dạng hoặc khai báo tool không có hiện thực."""
 
