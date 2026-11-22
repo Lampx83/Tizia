@@ -670,6 +670,16 @@ def _progress_entry(out: dict, model: str) -> dict:
             **({"verification": out["verification"]} if out.get("verification") else {})}
 
 
+def _prior_drafts(state: dict) -> dict[str, tuple[str, str]]:
+    """{path: (text, owner subtask title)} for every file finished subtasks of this run produced."""
+    titles = {st.get("file"): st.get("title") or st.get("file") for st in (state.get("plan") or {}).get("subtasks") or []}
+    drafts = {}
+    for file, entry in (state.get("produced") or {}).items():
+        drafts[file] = (entry["code"], titles.get(file, file))
+        drafts.update({path: (text, titles.get(file, file)) for path, text in (entry.get("extra_files") or {}).items()})
+    return drafts
+
+
 def _allowed_extras(subtask: dict, out: dict, role: str | None = None) -> dict[str, str]:
     """Extra files of a proposal, each required to be in the plan-approved list (or the loop's out-of-plan list for role). Raise ValueError otherwise."""
     extras = out.get("extra_files") or {}
@@ -774,7 +784,7 @@ def _generate_one(child: int, subtask: dict, *, state: dict, deps, budget, curre
             pins={"role": role}, repair_reason=state.get("repair_reason"), context=context,
             contract=contract, repair_evidence=state.get("repair_evidence"),
             session_from=_earlier_sessions(state, child), request_text=(state.get("request_title"), state.get("request_detail")),
-            plan_subtasks=(state.get("plan") or {}).get("subtasks"),
+            plan_subtasks=(state.get("plan") or {}).get("subtasks"), prior=_prior_drafts(state),
             **({"drafts": state["loop_drafts"]} if state.get("loop_drafts") else {}),
             **({"requester_role": state.get("requester_role")} if get_settings().out_of_plan_files else {}))
         if looped.get("stale_reset") and trace:

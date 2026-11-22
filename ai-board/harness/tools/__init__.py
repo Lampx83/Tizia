@@ -43,13 +43,15 @@ def _show(source, sha: str, file: str) -> str | None:
         return None
 
 
-def tree(source, sha: str, *, path: str = "public") -> str:
+def tree(source, sha: str, *, path: str = "public", overlay: dict | None = None) -> str:
     try:
         raw = code_index.git(source, "ls-tree", sha, "--", path.rstrip("/") + "/").decode("utf-8", "replace")
     except OSError:
         return ""
     names = [posixpath.basename(line.split("\t", 1)[1]) + ("/" if " tree " in line else "")
              for line in raw.splitlines() if "\t" in line]
+    names += [posixpath.basename(f) for f in overlay or ()
+              if posixpath.dirname(f) == path.rstrip("/") and posixpath.basename(f) not in names]
     if get_settings().file_header_context:
         names = [_with_header(source, sha, path.rstrip("/") + "/" + n) for n in names[:HEADER_FILES]] + names[HEADER_FILES:]
     return f"{path.rstrip('/')}/: " + ", ".join(names) if names else ""
@@ -65,15 +67,15 @@ def _with_header(source, sha: str, file: str) -> str:
     return f"{posixpath.basename(file)} — {head[:80]}" if head else posixpath.basename(file)
 
 
-def outline(source, sha: str, *, file: str, index_path=None) -> str:
-    text = _show(source, sha, file)
+def outline(source, sha: str, *, file: str, index_path=None, overlay: dict | None = None) -> str:
+    text = overlay[file] if overlay and file in overlay else _show(source, sha, file)
     if text is None:
         return f"{file}: (chưa tồn tại ở base)"
     out = code_index.outline_text(file, code_index.parse(file, file_context.strip_comments(text, file)))  # export trong comment không tính
     head = code_index.file_header(file, text) if get_settings().file_header_context else None
     if head:
         out += f"\nmục đích: {head}"
-    if index_path:
+    if index_path and not (overlay and file in overlay):
         note = _note(source, sha, file, index_path)
         if note:
             out += f"\nghi chú: {note['summary']}" + (f" (anchor: {', '.join(note['anchors'])})" if note["anchors"] else "")
@@ -89,20 +91,28 @@ def _note(source, sha, file, index_path) -> dict | None:
 
 
 def grep(source, sha: str, *, words: list[str], file: str | None = None, path: str = "public",
-         budget: int = 2000) -> str:
-    """file → cửa sổ dòng quanh từ khoá (file_context.excerpt). Không file → file khớp nhiều nhất trong path."""
+         budget: int = 2000, overlay: dict | None = None) -> str:
+    """file → cửa sổ dòng quanh từ khoá (file_context.excerpt). Không file → file khớp nhiều nhất trong path.
+    `overlay` {path: text} thay nội dung base của path đó (bản nháp)."""
     if not words:
         return ""
     if file:
-        text = _show(source, sha, file)
+        text = overlay[file] if overlay and file in overlay else _show(source, sha, file)
         return f"{file} (trích):\n" + file_context.excerpt(text, words, budget=budget, filename=file) if text else ""
     args = ["grep", "-c", "-i", "-F", "-I"] + [x for w in words for x in ("-e", w)] + [sha, "--", path]
     try:
         raw = code_index.git(source, *args).decode("utf-8", "replace")
     except OSError:
-        return ""  # exit 1 = không khớp
-    hits = sorted(((int(n), f.split(":", 1)[1]) for f, n in (line.rsplit(":", 1) for line in raw.splitlines())),
-                  reverse=True)
+        raw = ""  # exit 1 = không khớp
+    counts = {f.split(":", 1)[1]: int(n) for f, n in (line.rsplit(":", 1) for line in raw.splitlines())}
+    folded = [w.lower() for w in words]
+    for f, text in (overlay or {}).items():
+        counts.pop(f, None)
+        if not path or f == path or f.startswith(path.rstrip("/") + "/"):
+            n = sum(1 for line in text.splitlines() if any(w in line.lower() for w in folded))
+            if n:
+                counts[f] = n
+    hits = sorted(((n, f) for f, n in counts.items()), reverse=True)
     return "file khớp từ khoá: " + ", ".join(f"{f} ({n})" for n, f in hits[:file_context.WEIGHTS["grep_top_files"]]) if hits else ""
 
 

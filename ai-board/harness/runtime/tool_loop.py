@@ -412,8 +412,10 @@ class Workspace:
 
     def __init__(self, source, sha: str, file: str, current: str | None, *, checks=None, budget=None, trace=None, sandbox=None,
                  extras: dict[str, str | None] | None = None, skills: dict[str, ActiveSkill] | None = None, plan_checks: bool = False,
-                 outside_role: str | None = None, constants: dict[str, str] | None = None):
+                 outside_role: str | None = None, constants: dict[str, str] | None = None,
+                 prior: dict[str, tuple[str, str]] | None = None):
         self.constants = constants
+        self.prior = {path: draft for path, draft in (prior or {}).items() if path != file and path not in (extras or {})}
         self.source, self.sha, self.file, self.base = source, sha, file, current
         self.skills = dict(skills or {})
         self.extra_base = dict(extras or {})
@@ -441,6 +443,8 @@ class Workspace:
             return self.content
         if path in self.extra_content:
             return self.extra_content[path]
+        if path in self.prior:
+            return self.prior[path][0]
         meta = code_index.git(self.source, 'ls-tree', self.sha, '--', path).decode('utf-8')
         if not meta.startswith(('100644 blob ', '100755 blob ')):
             raise Forbidden(f"dependency is missing or is not a regular pinned file: {path!r}")
@@ -504,6 +508,12 @@ class Workspace:
             raise ScopeMiss(f"ngoài phạm vi subtask: {path!r} (chỉ {', '.join([self.file, *self.extra_content])})", path)
         return path
 
+    def _mark_prior(self, out: str, file: str | None) -> str:
+        """Append which earlier subtask produced each non-base file the observation shows."""
+        shown = [path for path in self.prior if path == file or (file is None and path in out)]
+        return out + "".join(f"\n(nguồn: {path} là bản nháp sau subtask '{self.prior[path][1]}' trong lượt này, không phải base)"
+                             for path in shown)
+
     def _expand(self, edits: list) -> list:
         """Replace {{LIT_n}} in insert/replace with the constant; unknown name -> ToolError."""
         def sub(match):
@@ -556,9 +566,12 @@ class Workspace:
                     raise Forbidden('repository read path denied')
                 listed = code_index.git(self.source, 'ls-tree', '-r', '--name-only', self.sha, '--', path).decode('utf-8').splitlines()
                 listed = [file for file in listed if loop_checks.readable(file)]
+                drafts = [file for file in self.prior if file.startswith(path.rstrip('/') + '/')]
                 if name == 'tree':
-                    return _fit('\n'.join(listed), name)
-                hits = []
+                    return _fit('\n'.join(dict.fromkeys(listed + drafts)), name)
+                folded = [word.lower() for word in args['words']]
+                hits = [file for file in drafts if any(word in self.prior[file][0].lower() for word in folded)]
+                listed = [file for file in listed if file not in self.prior]
                 for start in range(0, min(len(listed), 2000), 40):
                     try:
                         output = code_index.git(self.source, 'grep', '-l', '-F', '-I', '-i',
@@ -569,12 +582,17 @@ class Workspace:
                     hits.extend(line.split(':', 1)[1] for line in output.splitlines())
                     if len(hits) >= 20:
                         break
-                return _fit('\n'.join(hits), name)
-            return _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name) or (
-                NO_HIT_V2 if v2() else "(không có kết quả)")
+                return self._mark_prior(_fit('\n'.join(hits), name), None)
+            if self.prior:
+                args = {**args, "overlay": {path: text for path, (text, _) in self.prior.items()}}
+            out = _fit(tools.run(name, self.source, self.sha, args, _cap(name) * token_count.CHARS_PER_TOKEN), name)
+            return self._mark_prior(out, args.get("file")) if out else (NO_HIT_V2 if v2() else "(không có kết quả)")
         if name == "read_skill_resource":
             return _fit(_skill_resource(self.skills, args["path"]), name)
         if name == "read_file":
+            if _clean_path(args["file"]) in self.prior:
+                path = _clean_path(args["file"])
+                return self._mark_prior(_read_window(self.prior[path][0], args.get("start_line"), args.get("end_line")), path)
             if self.checks:
                 content = self._read(args['file'])
             else:
@@ -1174,7 +1192,7 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                 context: str | None = None, contract: str | None = None, checks=None,
                 sandbox_log: list | None = None, sandbox_runners: list | None = None, repair_evidence: dict | None = None, session_from=(),
                 requester_role: str | None = None, request_text: tuple | str | None = None, drafts: dict | None = None,
-                plan_subtasks: list | None = None) -> dict:
+                plan_subtasks: list | None = None, prior: dict[str, tuple[str, str]] | None = None) -> dict:
     """Loop tuần tự cho 1 subtask dưới parent `budget`. File mới bắt đầu rỗng, edit_file chèn tại after_line=0.
     `check(out)` = kiểm nội dung (ValueError nếu hỏng).
 
@@ -1205,7 +1223,8 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                    extras=extras, plan_checks=get_settings().plan_checks and bool(subtask.get("checks")),
                    outside_role=requester_role if get_settings().out_of_plan_files and not subtask_files.declared(subtask) else None,
                    constants=constants_of(*(request_text if isinstance(request_text, tuple) else (request_text,)))
-                   if get_settings().literal_by_reference else None)
+                   if get_settings().literal_by_reference else None,
+                   prior=prior if v2() else None)
     ws.step_log = ledger_log
     if drafts:  # earlier round's files are the starting drafts; freshness still checks against base
         ws.content = drafts["files"].get(subtask["file"], ws.content)
