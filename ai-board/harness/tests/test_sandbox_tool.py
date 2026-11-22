@@ -258,7 +258,7 @@ def test_tool_offered_in_gate3_loop_only_when_flag_and_task_type_allow(monkeypat
 def test_flag_off_leaves_tool_loop_unchanged(monkeypatch):
     monkeypatch.delenv(FLAG, raising=False)
     assert sandbox_tool.specs() == {}
-    assert tool_loop._specs() == tool_loop.MANIFEST.tools
+    assert tool_loop._specs() == tool_loop._LEGACY
     with pytest.raises(ToolError):
         tool_loop.parse_request(CALL)
 

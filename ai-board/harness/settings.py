@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     repair_sampling_diversity: bool = False
     scope_first_warning: bool = False
     tool_doc_inject: bool = False
+    tool_defs_v2: bool = False  # tool loop: verb_noun names, implement-phase set, enum/actionable errors, dedupe of identical reads
     gate_feedback_cap: bool = True
     repair_skip_broken_check: bool = True
     prompt_role_split: bool = False

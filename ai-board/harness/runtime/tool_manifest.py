@@ -5,13 +5,20 @@ import fnmatch
 import hashlib
 import json
 import posixpath
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 PATH = Path(__file__).resolve().parent / "tool_manifest.json"
 EFFECTS = ("read", "draft_write", "control")
 FIELDS = ("name", "description", "parameters", "effect", "max_arg_bytes", "max_output_chars", "max_seconds")
 OPTIONAL = ("example",)
+# Model-facing names under tool_defs_v2; manifest/HSM/trace ids stay the old names, both spellings resolve.
+RENAMES = {"tree": "list_files", "outline": "outline_file", "grep": "search_text"}
+ALIASES = {new: old for old, new in RENAMES.items()}
+# Planner reads (gates/react_plan via tools.readonly) vs the implement loop; tree is redundant once planning ran.
+PHASES = {"plan": ("tree", "outline", "grep", "read_file"),
+          "implement": ("outline", "grep", "read_file", "read_skill_resource", "edit_file", "write_test", "run_check",
+                        "request_package", "fetch_url", "finish")}
 
 
 class ManifestError(ValueError):
@@ -66,6 +73,28 @@ class Manifest:
 
     def names(self, effect: str) -> tuple[str, ...]:
         return tuple(name for name, spec in self.tools.items() if spec.effect == effect)
+
+
+# Tool-loop view with tool_defs_v2 off: pre-v2 descriptions, no param docs/enums, so B0/B1 prompts stay byte-identical.
+LEGACY_DESCRIPTIONS = {
+    'tree': "List the files and direct subfolders of one folder at the base sha.",
+    'outline': "Outline of one file: tags/ids/classes, CSS selectors, JS exports/imports, and the page's linked css/js.",
+    'grep': "Window of lines around keywords in one file; with no file, list the files matching in path.",
+    'read_file': "Read the target file (with `Lnn| ` prefixes). Optional start_line/end_line (1-based, inclusive) pick a window; without them you get the head plus the total line count and how to continue.",
+    'read_skill_resource': "Read one file under references/ of an active skill, as <skill>/references/<file>. Allowed only when the skill body mentions that file; scripts/ is never readable or run.",
+    'edit_file': "Apply edits {after_line, insert} or {search, replace} to the target file; line numbers follow the current draft.",
+    'write_test': "Set the test (ESM node:test) under test/.",
+    'run_check': "Run a named check on the current draft in a network-less sandbox: light, platform or relevant. Takes no shell/argv.",
+    'request_package': "Ask the admin to approve an npm package you need. The run pauses until a decision; a rejection comes back as `denied: <reason>`. Never edit package.json yourself.",
+    'fetch_url': "Ask to read one external documentation URL. The run pauses until a decision; a rejection comes back as `denied: <reason>`.",
+    'finish': "Propose finishing; the harness checks, then passes to the next gates.",
+}
+
+
+def legacy_view(spec: "ToolSpec") -> "ToolSpec":
+    """Spec as the model saw it before tool_defs_v2."""
+    props = {k: {f: v for f, v in p.items() if f not in ("description", "enum")} for k, p in spec.parameters["properties"].items()}
+    return replace(spec, description=LEGACY_DESCRIPTIONS.get(spec.name, spec.description), parameters={**spec.parameters, "properties": props})
 
 
 def canonical_hash(data: dict) -> str:

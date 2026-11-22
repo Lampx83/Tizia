@@ -95,7 +95,7 @@ def test_text_on_sends_schema_over_every_manifest_tool_and_traces_thought(on):
     branches = {b["properties"]["tool"]["const"]: b for b in schema["anyOf"]}
     assert set(branches) == set(tool_loop.MANIFEST.tools) and {"request_package", "fetch_url", "read_skill_resource"} <= set(branches)
     for name, branch in branches.items():
-        assert branch["properties"]["arguments"] == tool_loop.MANIFEST.tools[name].parameters
+        assert branch["properties"]["arguments"] == tool_loop._specs()[name].parameters
         assert branch["required"][0] == "thought" and branch["properties"]["thought"]["maxLength"] == tool_loop.THOUGHT_MAX
     assert out["status"] == "proposed" and thoughts(deps) == ["step 0", "step 1", "step 2"]
 
