@@ -2022,7 +2022,8 @@ def _guest_line(text: str) -> str:
 def check_runner_guest_pin() -> dict:
     """Runner mounts its policy from a compose dir that may differ from CODE: its guest pin must equal CODE's."""
     want = _guest_line((CODE / "ai-board" / "sandbox-runner" / "sandbox-policy.dev.yaml").read_text(encoding="utf-8"))
-    p = _docker(["docker", "exec", "aiboard-sandbox-runner", "cat", "/etc/sandbox/sandbox-policy.yaml"])
+    # WHY: read the file the runner actually loads, not a fixed path
+    p = _docker(["docker", "exec", "aiboard-sandbox-runner", "sh", "-c", 'cat "${SANDBOX_POLICY_FILE:-/etc/sandbox/sandbox-policy.yaml}"'])
     got = _guest_line(p.stdout.decode("utf-8", "replace")) if not p.returncode else ""
     ok = bool(want) and got == want
     return {"name": "runner_guest_pin", "ok": ok, "detail": want[-20:] if ok else f"runner {got[-20:] or '?'} != code {want[-20:] or '?'}"}
