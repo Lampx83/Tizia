@@ -26,18 +26,6 @@ class PlanBlockedError(RuntimeError):
         self.detail = detail
 
 
-PLAIN_STOP_LEAD = "Yêu cầu của bạn chưa xong ở bước này. Bạn chưa cần làm gì thêm."
-PLAIN_STOP_ROLES = frozenset({"pupil", "parent"})
-
-
-def stop_voice(message: str, snapshot: dict) -> str:
-    """Stop text for requester; pupil/parent get a plain lead sentence first. Flag off or no role = unchanged."""
-    if not get_settings().requester_profile_context:
-        return message
-    role = (snapshot.get("requester_profile") or {}).get("role")
-    return f"{PLAIN_STOP_LEAD} {message}" if role in PLAIN_STOP_ROLES else message
-
-
 def _scannable_decisions(text: str | None) -> str:
     """Decision records minus blocked/cancelled entries (a stopped request's title/spec must not re-trigger the folder guard)."""
     keep, skipping = [], False

@@ -107,12 +107,18 @@ ARBITER_ON = {"AI_BOARD_GATE1_ARBITER": "1"}
 FEEDBACK_FLAGS = ("AI_BOARD_PLAN_REPAIR", "AI_BOARD_REPAIR_SAME_SESSION", "AI_BOARD_GATE_FEEDBACK_CAP",
                   "AI_BOARD_STOP_REPORT_V2", "AI_BOARD_GATE1_ARBITER", "AI_BOARD_VERIFY_PRELOADED_BASES",
                   "AI_BOARD_NO_ORACLE_REVIEW_ANY")
+# WHY: eval owners have different profiles; pin the profile hint off so rotation does not mix conditions.
+PROFILE_OFF = {"AI_BOARD_REQUESTER_PROFILE_CONTEXT": "0"}
 M2_FIX_FLAGS = ("AI_BOARD_LITERAL_EXACT_FEEDBACK", "AI_BOARD_VALIDATOR_REASK", "AI_BOARD_SYNTAX_BLOCK_CONTEXT")
 B1_FEEDBACK_OFF = tuple(k for k in FEEDBACK_FLAGS if k not in ("AI_BOARD_STOP_REPORT_V2", "AI_BOARD_GATE1_ARBITER"))
 
 
 def arm_env(arm: str) -> dict[str, str]:
     """Env dict for one arm; ValueError on unknown name."""
+    return dict(ARMS[arm]) if arm in ARMS else {**_arm_env(arm), **PROFILE_OFF}
+
+
+def _arm_env(arm: str) -> dict[str, str]:
     if arm in ARMS:
         return dict(ARMS[arm])
     on = {**{k: flag_value(k, k not in B1_OFF) for k in NEW_FLAGS}, **{k: "1" for k in LOOP_FLAGS}, **ARBITER_ON,
