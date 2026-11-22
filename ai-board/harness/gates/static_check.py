@@ -560,8 +560,10 @@ def _replacement_misses(pairs: list[tuple[str, str]], hunks, several, checkout=N
                 added = _shown(rows, {_kind(line) for _, line in before})
                 for seg, line in before:
                     want = seg.replace(old, text)
-                    if added[want]:
-                        added[want] -= 1
+                    alike = added[want] and want or next((a for a in added if added[a] and _tolerant_hit(want, [a])
+                                                          and functional.literal_key(a) == functional.literal_key(want)), None)
+                    if alike:
+                        added[alike] -= 1
                     elif any(line.replace(old, text) in other for j, other in enumerate(moved) if j != i):
                         continue
                     else:
@@ -588,6 +590,9 @@ def _colon_misses(texts: list[str], hunks) -> list[str]:
         if any(any(sign == "-" for sign, _ in rows) and _shown(rows, {_kind(line) for sign, line in rows if sign == "-"})[text]
                for _, rows in hunks):
             continue
+        if any(any(sign == "-" for sign, _ in rows) and _tolerant_hit(text, list(_shown(rows, {_kind(line) for sign, line in rows if sign == "-"})))
+               for _, rows in hunks):
+            continue
         path, closest = next(((path, line) for path, rows in hunks for sign, line in rows
                               if sign == "+" and text.rstrip(".!?…") in line), (", ".join(dict.fromkeys(p for p, _ in hunks)), None))
         misses.append(f'{path}: chữ yêu cầu "{text}" phải là đúng nguyên văn một phần tử trong dòng thêm thay cho chữ cũ (từng ký tự, cả dấu câu)'
@@ -611,9 +616,17 @@ def _several(state: dict, homes: list[str], checkout) -> bool:
 def _missing_tail(text: str, closest: str | None) -> str:
     """Repair hint naming the dropped trailing punctuation and the exact literal to paste; "" when flag off or nothing dropped."""
     stem = text.rstrip(".!?…")
-    if not get_settings().literal_exact_feedback or not closest or stem == text or stem not in closest or text in closest:
+    if not (get_settings().literal_exact_feedback or functional.tolerant_literals()) or not closest or stem == text or stem not in closest or text in closest:
         return ""
     return f'; thiếu ký tự "{text[len(stem):]}" ngay sau "{stem}"; dán đúng nguyên văn "{text}"'
+
+
+def _tolerant_hit(text: str, lines) -> bool:
+    """critical_only_checks: `text` sits in one of `lines` up to entities, Unicode form, spacing and trailing punctuation."""
+    if not functional.tolerant_literals():
+        return False
+    key = functional.literal_key(text)
+    return bool(key) and any(key in functional.literal_key(line) for line in lines)
 
 
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
@@ -636,8 +649,9 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]
     if functional.quoted(raw) and not want["absent"] and len(new) > 1:
         new = []  # a plain add quoting several texts: which one is new is not pinned down
+    plus = [line for _, hunk in hunks for sign, line in hunk if sign == "+"]
     for text in new:
-        if not added[text]:
+        if not added[text] and not _tolerant_hit(text, plus):
             path, closest = next(((path, line) for path, hunk in hunks for sign, line in hunk
                                   if sign == "+" and text.rstrip(".!?…") in line), (", ".join(paths), None))
             misses.append(f'{path}: chữ yêu cầu "{text}" phải có nguyên văn (từng ký tự, cả dấu câu) trong dòng thêm'

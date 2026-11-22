@@ -535,7 +535,7 @@ _STRING_OR_COMMENT = re.compile(r"""//.*|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?
 
 def _block_note(old: str, new: str) -> str:
     """Flag on: name block enclosing first produced line (naive bracket count), say top-level declarations go outside it; "" otherwise."""
-    if not get_settings().syntax_block_context:
+    if not (get_settings().syntax_block_context or getattr(get_settings(), "critical_only_checks", False)):
         return ""
     ops = difflib.SequenceMatcher(None, old.splitlines(), new.splitlines(), autojunk=False).get_opcodes()
     first = next((j1 for tag, _i1, _i2, j1, _j2 in ops if tag in ("replace", "insert")), None)

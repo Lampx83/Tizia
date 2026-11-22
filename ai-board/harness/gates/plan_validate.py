@@ -800,7 +800,7 @@ def unfit_issues(plan: dict) -> list[str]:
     for index, task in enumerate(subtasks, 1):
         file = str(task.get("file") or "")
         verify = str(task.get("verify") or "").strip()
-        if not _runnable(verify):
+        if not _runnable(verify) and not getattr(get_settings(), "critical_only_checks", False):
             issues.append(f"bước {index} '{file}': verify phải là lệnh chạy được (node --test/curl/pytest/...): "
                           f"{verify[:80] or '(không có)'}")
         if not isinstance(task.get("depends_on"), list):
@@ -1014,7 +1014,7 @@ def run(request: dict, deps, budget, state: dict, *, db_path=None, proposal_id: 
         try:
             result = parse_validation(body.get("response", ""))
         except ValueError as e:
-            if get_settings().validator_reask and not reasked:
+            if (get_settings().validator_reask or getattr(get_settings(), "critical_only_checks", False)) and not reasked:
                 return validate(req, think, f"Lần trước bạn trả sai định dạng: {str(e)[:200]}. Trả lại đúng một JSON hợp lệ theo schema.", True)
             return None, {"gate": 2.5, "blocked": True, "reason": f"validator trả sai schema: {e}"}
         judge("validator", result["clear"],

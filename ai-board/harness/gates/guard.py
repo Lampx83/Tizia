@@ -598,7 +598,7 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             # Dưới 3:1 sai với mọi cỡ chữ → sửa 1 lần; 3–4.5 chỉ sai với chữ nhỏ (trắng trên #16a34a = 3.3,
             # mẫu phổ biến trong public/ hiện có) → cờ người soát, tránh vòng sửa vô ích.
             for ratio, need in low_contrast(body):
-                (add if ratio < 3.0 else flag)("contrast", "medium",
+                (add if ratio < 3.0 and not getattr(get_settings(), "critical_only_checks", False) else flag)("contrast", "medium",
                                                f"{path}: tương phản chữ/nền {ratio}:1 dưới WCAG AA {need}:1")
         text = visible_text(path, added)
         visible_changed |= bool(text.strip())

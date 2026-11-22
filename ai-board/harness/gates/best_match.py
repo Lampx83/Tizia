@@ -24,7 +24,8 @@ def mode() -> str:
 
 def objections_advisory() -> bool:
     """Flag: grounding objections go to the coder as advice instead of blocking."""
-    return bool(get_settings().plan_objections_advisory)
+    s = get_settings()
+    return bool(s.plan_objections_advisory or getattr(s, "critical_only_checks", False))
 
 
 def enforce(best_match, plan_files, message: str, judge, *, contradicted: bool = False) -> None:

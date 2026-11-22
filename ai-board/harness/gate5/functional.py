@@ -1,4 +1,5 @@
 """Harness-owned behavioral oracles. Candidate-authored tests are supplementary."""
+import html
 import json
 import re
 import unicodedata
@@ -283,6 +284,19 @@ def _norm(text):
     return ' '.join(unicodedata.normalize('NFC', text).split()).casefold()
 
 
+def literal_key(text: str) -> str:
+    """Literal compare key: NFC, HTML entities decoded, whitespace collapsed, trailing sentence punctuation dropped; case kept."""
+    return ' '.join(unicodedata.normalize('NFC', html.unescape(text)).split()).rstrip('.!?…:;。 ')
+
+
+def tolerant_literals() -> bool:
+    return bool(getattr(get_settings(), "critical_only_checks", False))
+
+
+def _want(text):
+    return _norm(literal_key(text)) if tolerant_literals() else _norm(text)
+
+
 _SHOWN = r"""() => [document.title, document.body.innerText, ...[...document.querySelectorAll('[placeholder],[aria-label],[title],[alt]')]
   .flatMap(e => ['placeholder', 'aria-label', 'title', 'alt'].map(a => e.getAttribute(a) || ''))].join('\n')"""
 
@@ -316,7 +330,7 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
     from playwright.sync_api import sync_playwright
     from gate5 import visual
     from gate5.verify import _launch
-    present, absent = [_norm(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
+    present, absent = [_want(t) for t in expected['present']], [_norm(t) for t in expected['absent']]
     shown, in_dom, lines = {}, {}, []
     with sync_playwright() as p:
         browser = _launch(p)
@@ -341,9 +355,9 @@ def run_text(base, state, fixture, pages, expected=None, probe_id=TEXT_PROBE):
         finally:
             browser.close()
     seen = ' '.join(shown.values())
-    unseen = [t for t in expected['present'] if _norm(t) not in seen]
+    unseen = [t for t in expected['present'] if _want(t) not in seen]
     dom_seen = ' '.join(in_dom.values())
-    hidden = [t for t in unseen if _norm(t) in dom_seen]
+    hidden = [t for t in unseen if _want(t) in dom_seen]
     missing = [t for t in unseen if t not in hidden]
     lingering = [t for t in expected['absent'] if _still_shown(t, lines)]
     reason = None
