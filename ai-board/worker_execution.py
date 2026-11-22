@@ -98,6 +98,8 @@ def _public_gate_result(result: dict) -> dict:
         out["http_observed"] = bool((result.get("evidence") or {}).get("http_observed"))
         out["runner"] = (result.get("evidence") or {}).get("runner")
         out['functional'] = (result.get('evidence') or {}).get('functional')
+        if result.get('guest_switches'):
+            out['guest_switches'] = result['guest_switches']
         if (result.get('evidence') or {}).get('text'):
             out['evidence'] = {'text': result['evidence']['text'][-16000:]}
         if (result.get("evidence") or {}).get("eval"):  # yêu cầu self: kết quả eval 2 sha (self_eval.py)

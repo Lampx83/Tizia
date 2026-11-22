@@ -650,7 +650,11 @@ def run(state: dict, *args, **kwargs):
     """Gate 5 entry: apply the shipped critical_only_checks switch for this run, then verify."""
     token = functional.GUEST_CRITICAL_ONLY.set(bool(guest_input(state, "critical_only_checks")))
     try:
-        return _run(state, *args, **kwargs)
+        out = _run(state, *args, **kwargs)
+        if isinstance(out, dict):  # WHY: lets a trace show whether a guest flag actually arrived
+            out["guest_switches"] = {"critical_only": functional.tolerant_literals(),
+                                     "keys": sorted(k for k in state if not k.startswith("_"))[:40]}
+        return out
     finally:
         functional.GUEST_CRITICAL_ONLY.reset(token)
 
