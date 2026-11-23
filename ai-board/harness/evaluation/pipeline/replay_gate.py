@@ -102,7 +102,9 @@ def checkout_at(source: Path, sha: str):
     try:
         for cmd in (["git", "-c", "safe.directory=*", "clone", "-q", "--shared", "--no-checkout", str(source), str(tmp)],
                     ["git", "-c", "safe.directory=*", "-C", str(tmp), "checkout", "-q", "--detach", sha]):
-            done = subprocess.run(cmd, capture_output=True)
+            # WHY: -c does not reach the upload-pack child of a local clone; GIT_CONFIG_* env does
+            done = subprocess.run(cmd, capture_output=True, env={**os.environ, "GIT_CONFIG_COUNT": "1",
+                                  "GIT_CONFIG_KEY_0": "safe.directory", "GIT_CONFIG_VALUE_0": "*"})
             if done.returncode:
                 raise ReplayError(f"{' '.join(cmd[:4])}: {done.stderr.decode('utf-8', 'replace')[:300]}")
         yield tmp
