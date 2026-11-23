@@ -20,6 +20,16 @@ from gate5 import checks  # noqa: E402
 import path_policy  # noqa: E402
 
 
+
+def grounding_block(plan: dict, request_type) -> str | None:
+    """Reason to refuse a plan without source grounding; None when it may run."""
+    from gates import best_match
+    # Advisory gate 2.5 drops grounding on purpose (objection goes to the coder); refusing here would undo it.
+    if request_type == 'self' or plan.get('grounding') or best_match.objections_advisory():
+        return None
+    return 'accepted plan predates required source grounding; admin must request a new plan'
+
+
 def _load_harness():
     harness_dir = Path(__file__).resolve().parent / "harness"
     if str(harness_dir) not in os.sys.path:
@@ -1275,8 +1285,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
     deps = _real_deps(Deps, tracer, progress)
 
     def run(plan: dict, ticket_id: int, max_units: int, source=None, **kwargs) -> dict:
-        if kwargs.get('request_type') != 'self' and not plan.get('grounding'):
-            reason = 'accepted plan predates required source grounding; admin must request a new plan'
+        if reason := grounding_block(plan, kwargs.get('request_type')):
             return {'outcome':'blocked','gate_reached':3,'reason':reason,'failure_class':'plan',
                     'repairs':[],'candidate':None,'budget_used':0,
                     'gates':[{'gate':3,'blocked':True,'reason':reason}]}
