@@ -474,8 +474,10 @@ def apply_candidate(ws: Path, patch: Path) -> str:
     """Apply the captured candidate diff onto the seed copy: 'applied', 'no_candidate_diff' or 'apply_failed: ...'."""
     if not patch.is_file() or not patch.read_text(encoding="utf-8", errors="replace").strip():
         return "no_candidate_diff"
+    # ws may sit inside another checkout: git would apply against that repo's root and skip every path silently.
+    env = {**os.environ, "GIT_CEILING_DIRECTORIES": str(ws.resolve().parent)}
     p = subprocess.run(["git", "apply", "--whitespace=nowarn", str(patch.resolve())], cwd=str(ws),
-                       capture_output=True, timeout=120)
+                       capture_output=True, timeout=120, env=env)
     return "applied" if p.returncode == 0 else "apply_failed: " + p.stderr.decode("utf-8", "replace")[:300]
 
 

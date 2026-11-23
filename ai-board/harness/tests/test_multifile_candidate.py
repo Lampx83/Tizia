@@ -1,4 +1,5 @@
 """Multi-file trials: capture keeps the candidate diff, and the oracle runs on the seed with that diff applied."""
+import subprocess
 import pytest
 
 from evaluation.pipeline import DATA
@@ -73,3 +74,13 @@ def test_apply_candidate_reports_why_it_did_not_apply(tmp_path):
     bad.write_text(DIFF.replace("-export const a = 1;", "-export const a = 9;"), encoding="utf-8", newline="\n")
     assert driver.apply_candidate(ws, bad).startswith("apply_failed")
     assert (ws / "public" / "b.html").read_text(encoding="utf-8") == "<p>old</p>\n"
+
+
+def test_apply_candidate_inside_another_checkout_still_patches(tmp_path):
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    subprocess.run(["git", "init", "-q", str(outer)], check=True)
+    ws, patch = seed(outer / "scratch"), tmp_path / "c.diff"
+    patch.write_text(DIFF, encoding="utf-8", newline="\n")
+    assert driver.apply_candidate(ws, patch) == "applied"
+    assert (ws / "public" / "a.js").read_text(encoding="utf-8") == "export const a = 2;\n"
