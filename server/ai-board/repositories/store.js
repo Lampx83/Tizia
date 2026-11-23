@@ -17,7 +17,7 @@ import {
   IDEMPOTENCY_KEY as KEY, LEASE_MS, LIMITS, MAX_BUDGET_EXTENSION, MAX_BUDGET_EXTENSIONS, MAX_BUDGET_LIMIT, MAX_TRACE_BATCH,
   PHASES, PLAN_QUEUE, PR_BASE, PR_URL, REQUEST_TYPES, ROLLBACK_OUTCOMES, RUN_TRIGGERS, RequestValidationError, SELF_TAG,
   DB_AUTHOR, QUALITY_AUTHOR, SHA, SPEC_AUTHOR, WORKER_MODES, WorkerContractError, allowedWorkers, assertConfirmed, backlogSeconds, cleanAttachments, cleanModelCall,
-  assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, summarizeCalls, triggerFor, validateCandidate,
+  assertWithinCeiling, parseAttachments, parseJson, progressDetail, runProgress, scaledLimit, PLAN_UNITS_LIMIT, summarizeCalls, triggerFor, validateCandidate,
   softMissNote, validatePrePrVerdict, wallClockLimit,
 } from './store-contract.js';
 
@@ -1672,7 +1672,7 @@ function resumeSummary(journal) {
       if (!sameSubmission) {
         const rounds = root.auto_rounds; // resuming an identical valid plan (worker restart) is not a new automatic round
         const budget = root.cumulative_budget + input.budgetUsed;
-        if (rounds > 2 || input.budgetUsed > root.budget_limit) { // budget_limit là trần MỖI lượt, không phải cả ticket
+        if (rounds > 2 || input.budgetUsed > PLAN_UNITS_LIMIT) {
           const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';
           await db.run(`
             UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
@@ -1721,9 +1721,8 @@ function resumeSummary(journal) {
 
     const rounds = root.auto_rounds + 1;
     const budget = root.cumulative_budget + input.budgetUsed;
-    // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới. Chi phí lập plan so với trần của chính plan này.
-    const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
-    if (rounds > 2 || input.budgetUsed > runLimit) { // trần MỖI lượt, không phải cả ticket
+    // Lập plan có trần riêng; budget_limit chỉ cho phần thực thi của lượt.
+    if (rounds > 2 || input.budgetUsed > PLAN_UNITS_LIMIT) {
       const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';
       await db.run(`
         UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
@@ -1757,6 +1756,8 @@ function resumeSummary(journal) {
       checked.policyHash, publicNote, internalReason, now]);
     // Approved elevation covering this plan's targets is the plan authorization (gate 3 does not wait for a manual one).
     await authorizeElevatedPlan(Number(ticketId), checked.planHash, revision, checked.tier, elevation, now);
+    // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới.
+    const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
     await db.run(`
       UPDATE ai_tickets SET status=?, phase='ticketized', public_note=?, internal_reason=?,
         tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, budget_limit=?, updated_at=?
@@ -1902,8 +1903,8 @@ function resumeSummary(journal) {
     }
     const cumulativeBudget = root.cumulative_budget + verdict.budget_used;
     const runEvidence = parseJson(run.evidence_json) ?? {};
-    // Trần MỖI lượt = lập plan + thực hiện của cùng run; verdict.budget_used chỉ là phần thực hiện.
-    if (verdict.budget_used + (Number(runEvidence.plan_budget) || 0) > root.budget_limit) {
+    // Trần MỖI lượt chỉ cho phần thực hiện; lập plan đã qua trần riêng ở submitPlan.
+    if (verdict.budget_used > root.budget_limit) {
       throw new WorkerContractError('run budget exhausted', 409, 'run_budget_exhausted');
     }
     const evidence = JSON.stringify({ ...runEvidence, verdict });
