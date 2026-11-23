@@ -62,11 +62,7 @@ cat > "$stage/Dockerfile" <<EOF
 FROM $overlay_base
 RUN rm -rf /opt/ai-board/ai-board/harness
 COPY ai-board/harness /opt/ai-board/ai-board/harness
-COPY server/ai-board/guard-lexicon.json /opt/ai-board/server/ai-board/guard-lexicon.json
-COPY server/ai-board/contract.json /opt/ai-board/server/ai-board/contract.json
-COPY server/ai-board/classifier-calibration.json /opt/ai-board/server/ai-board/classifier-calibration.json
-COPY server/ai-board/model-routing.json /opt/ai-board/server/ai-board/model-routing.json
-COPY server/ai-board/redaction-patterns.json /opt/ai-board/server/ai-board/redaction-patterns.json
+COPY server/ai-board/*.json /opt/ai-board/server/ai-board/
 COPY scripts/smoke-user-state.sh /opt/ai-board/scripts/smoke-user-state.sh
 COPY ai-board/sandbox-runner/guest/guest-boot.sh /usr/local/bin/guest-boot.sh
 RUN chmod +x /usr/local/bin/guest-boot.sh
@@ -77,7 +73,7 @@ RUN ls /usr/share/fonts/opentype/inter > /dev/null 2>&1 || (apt-get update && ap
 EOF
 docker build -t "$registry/gate5:overlay" "$host_stage"
 # A harness file read at import that the overlay did not copy crashes every Gate 5 run in the guest.
-docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import gates.gate5_guest"' \
+docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'cd /opt/ai-board/ai-board/harness && python -c "import importlib, pkgutil, gates, gates.gate5_guest; [importlib.import_module(\"gates.\" + m.name) for m in pkgutil.iter_modules(gates.__path__)]"' \
   || { echo "guest harness does not import; add the missing file to guest-inputs.mjs and this overlay" >&2; exit 1; }
 # No egress in the guest: Gate 5 compose and db_check start postgres only if warm-guest.mjs baked it in.
 docker run --rm --entrypoint sh "$registry/gate5:overlay" -c 'grep -qs "\"postgres:16-alpine\"" /var/lib/docker/image/*/repositories.json' \
