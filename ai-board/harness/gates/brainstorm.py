@@ -210,10 +210,21 @@ def is_runnable(text: str) -> bool:
     return bool(RUNNABLE.match(text) or (unified_verify() and READONLY_CHECK.match(text)))
 
 
+_SHELL_WRAP = re.compile(r"""^(?:sh|bash)\s+-c\s+(['"])(.*)\1$""", re.S)
+
+
+def _greps_only(item: str) -> bool:
+    """Every && / ; segment, after unwrapping sh -c '...', is a grep/rg of a file."""
+    if wrapped := _SHELL_WRAP.match(item):
+        item = wrapped.group(2).replace("'\"'\"'", "'")
+    parts = [p.strip() for p in re.split(r"&&|;|\|\|", item) if p.strip()]
+    return bool(parts) and all(READONLY_CHECK.match(p) for p in parts)
+
+
 def source_only_acceptance(plan: dict) -> str | None:
     """Fault when every acceptance of a feature plan only greps repo source; None when one runs the code."""
     items = [str(item).strip() for item in plan.get("acceptance") or []]
-    if not items or not is_feature_plan(plan) or not all(READONLY_CHECK.match(item) for item in items):
+    if not items or not is_feature_plan(plan) or not all(_greps_only(item) for item in items):
         return None
     module = next((t["file"] for t in plan.get("subtasks") or [] if str(t.get("file", "")).endswith(".js")), "public/js/<module>.js")
     # A grep of the file being edited passes as soon as the text is typed: it never proves the feature works.
