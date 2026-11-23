@@ -643,6 +643,8 @@ class _Execution:
 
     def repair_check(self) -> str:
         last = self.gates[-1]
+        if self.kind == "ordinary" and self._acceptance_revise(last):
+            return "done"
         if self.kind != "ordinary" or len(self.repairs) >= repair_cap():
             return "done"
         if self._package_request(last):
@@ -679,6 +681,14 @@ class _Execution:
         from runtime import repair_session
         self.repair_evidence = repair_session.compact(last.get("evidence"))
         return "repair"
+
+    def _acceptance_revise(self, last: dict) -> bool:
+        """Plan acceptance still red after a code repair: end as a plan failure once, carrying command and app answer."""
+        if not (self.repairs and get_settings().critical_only_checks and not revision_of(self.plan)
+                and str(last.get("reason") or "").startswith("feature acceptance failed")):
+            return False
+        self.kind, self.stop_note = "plan", f"{ACCEPT_REVISE} {str(last['reason'])[:_REVISE_JSON]}"
+        return True
 
     def _repeat_suspect(self, last: dict) -> bool:
         """Two consecutive repairs with near-identical diffs while Gate 5 checks stay red: the check is suspect, stop repairing."""
@@ -758,12 +768,6 @@ class _Execution:
                     if cls["action"] not in window.tried:
                         window.tried.append(cls["action"])
                     window.reset()
-        if (cls["class"] == "acceptance_command" and self.repairs and get_settings().critical_only_checks
-                and not revision_of(self.plan)):
-            cls["action"] = repair_class.REPLAN
-            last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
-            self.kind, self.stop_note = "plan", f"{ACCEPT_REVISE} {str(last['reason'])[:_REVISE_JSON]}"
-            return False
         last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
         progress.record(getattr(self.deps, "trace", None), node="repair_check",
                         failure_class=cls["class"], action=cls["action"])
