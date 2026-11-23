@@ -686,6 +686,15 @@ def _tolerant_hit(text: str, lines) -> bool:
     return bool(key) and any(key in functional.literal_key(line) for line in lines)
 
 
+# Placeholder slot: lone N/M/X/Y/K, <name> or {name}; "Lớp A" stays a literal.
+_SLOT = re.compile(r"(?<![\w])(?:[NMXYK]|<[^<>]+>|\{[^{}]+\})(?![\w])")
+
+
+def is_template(text: str) -> bool:
+    """Quoted text is a format with value slots ("N chế độ · M sẵn sàng"), not words to copy verbatim."""
+    return bool(_SLOT.search(text))
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -700,7 +709,7 @@ def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     misses += _colon_misses(colon, hunks)
     present = [text for _, text in pairs] or want["present"]
     new = list(dict.fromkeys(_ws(t) for t in present if _ws(t) != _ws(anchor or "") and not functional._is_css_selector(t)))
-    new = [text for text in new if text not in judged and text not in colon]
+    new = [text for text in new if text not in judged and text not in colon and not is_template(text)]
     added = {text: sum(line.count(text) for _, hunk in hunks for sign, line in hunk if sign == "+") for text in new}
     # Only the changed files count: text that sits on another page still has to be added where the request asks.
     new = [text for text in new if not _existing(checkout, paths, text, added[text])]

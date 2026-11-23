@@ -25,3 +25,10 @@ def test_one_behavioural_check_clears_it():
 def test_single_file_and_no_acceptance_plans_are_untouched():
     assert source_only_acceptance(_plan(["grep -q x public/a.css"], [{"file": "public/a.css"}])) is None
     assert source_only_acceptance(_plan(None)) is None
+
+
+def test_grep_wrapped_in_sh_c_is_still_source_only():
+    wrapped = ["sh -c 'grep -qF -- '\"'\"'export function getTopicSummary(topicId)'\"'\"' public/js/topic-modes.js'",
+               "sh -c 'grep -qF -- x public/bao-che-hub.html && grep -qF -- y public/bao-che-hub.html'"]
+    assert source_only_acceptance(_plan(wrapped))
+    assert source_only_acceptance(_plan(["sh -c 'node -e \"1\" && grep -q x public/a.js'"])) is None
