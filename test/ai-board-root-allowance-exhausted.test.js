@@ -11,7 +11,7 @@ const KIND = { model_calls: 'model', semantic_repairs: 'semantic_repair', qualit
 
 /** Cạn nhóm `group` ở trần execute của plan 1 bước; trả về trần. */
 async function exhaust(db, ticket, group) {
-  const scaled = ['model_calls', 'semantic_repairs'].includes(group);
+  const scaled = ['model_calls', 'semantic_repairs', 'tokens'].includes(group);
   const limit = scaled ? scaledFor(group, 1) : LIMITS.root_work[group];
   await db.prepare('INSERT INTO ai_root_allowances(root_ticket_id, created_at) VALUES (?, ?)').run(ticket.id, Date.now());
   const rows = group === 'tokens' ? 1 : limit;
@@ -51,4 +51,14 @@ test('root_allowance_exhausted is rerunnable after a redeploy, not via retry-tra
   const trace = await store.getRequestTrace((await db.prepare('SELECT source_request_id FROM ai_tickets WHERE id=?').get(ticket.id)).source_request_id);
   assert.deepEqual({ ...trace.root.allowance.hit }, { group: 'quality_switches', used: 1, limit: 1 });
   assert.equal(trace.root.rerun_stage, 'execute');
+});
+
+test('paid tokens spent while planning do not count against the execute allowance', async () => {
+  const { db, submit, ticket } = await plannedRoot();
+  await db.prepare('INSERT INTO ai_root_allowances(root_ticket_id, created_at) VALUES (?, ?)').run(ticket.id, Date.now());
+  await db.prepare(`INSERT INTO ai_work_reservations(root_ticket_id, attempt_key, kind, provider, lease_hash, tokens_reserved, created_at)
+    VALUES (?, 'attempt-plan-xxxx', 'model', 'api', 'h', ?, ?)`).run(ticket.id, LIMITS.root_work.tokens, Date.now());
+  await db.prepare(`INSERT INTO ai_work_reservation_phases(root_ticket_id, attempt_key, phase) VALUES (?, 'attempt-plan-xxxx', 'plan')`).run(ticket.id);
+  await submit('budget');
+  assert.equal((await db.prepare('SELECT phase FROM ai_tickets WHERE id=?').get(ticket.id)).phase, 'budget_exhausted');
 });

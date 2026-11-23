@@ -99,7 +99,8 @@
     "root_work_scaling": {
       "_why": "Execute-phase root allowance grows with the approved plan's step count: base (root_work value) + per_step * steps, clamped to max. Plan-phase work has its own budget at the root_work base; hard caps never grow with progress. Read live from this file on every read/reserve: a redeploy raises the limits of existing roots (a stored limits_json can only raise, never lower).",
       "model_calls": { "per_step": 40, "max": 2000 },
-      "semantic_repairs": { "per_step": 2, "max": 60 }
+      "semantic_repairs": { "per_step": 2, "max": 60 },
+      "tokens": { "per_step": 100000, "max": 1200000, "_why": "Paid API tokens: planning and execution are capped apart; a 2-step multi-file request used ~160k before its second step" }
     },
     "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
     "per_run": {

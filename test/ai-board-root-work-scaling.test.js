@@ -82,6 +82,6 @@ test('tokens stay capped only for api; vllm tokens never hit the cap', async () 
   const free = await readRootAllowance(db.d, ticket.id);
   assert.equal(free.used.metered_tokens, 0);
   assert.equal(free.groups.find(g => g.reason === 'root_tokens').hit, false);
-  await reserve(db, ticket, 'attempt-api-0001', 'model', 'execute', { provider: 'api', tokens: LIMITS.root_work.tokens + 1 });
+  await reserve(db, ticket, 'attempt-api-0001', 'model', 'execute', { provider: 'api', tokens: scaledRootLimit('tokens', 1) + 1 });
   assert.equal(hitRootGroup(await readRootAllowance(db.d, ticket.id)).group, 'tokens');
 });
