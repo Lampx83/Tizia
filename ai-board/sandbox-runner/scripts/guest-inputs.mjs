@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 const HARNESS = 'ai-board/harness';
 const SKIP_DIRS = new Set(['tests', 'eval', 'evaluation', '__pycache__']);
-const FILES = ['server/ai-board/guard-lexicon.json', 'server/ai-board/contract.json',
-  'server/ai-board/classifier-calibration.json', 'server/ai-board/model-routing.json', 'server/ai-board/redaction-patterns.json',
-  'scripts/smoke-user-state.sh', 'ai-board/sandbox-runner/guest/guest-boot.sh',
+// Harness reads server/ai-board/*.json at import; bake them all.
+const DATA_DIR = 'server/ai-board';
+const FILES = ['scripts/smoke-user-state.sh', 'ai-board/sandbox-runner/guest/guest-boot.sh',
   'ai-board/sandbox-runner/guest/isolate-evaluator.sh'];
 const MARKER = /^# guest-inputs: ([0-9a-f]{64})\r?$/m;
 
@@ -27,6 +27,7 @@ function walk(root, rel, out) {
 export function guestInputs(root) {
   const rels = [];
   walk(root, HARNESS, rels);
+  for (const n of fs.readdirSync(path.join(root, DATA_DIR))) if (n.endsWith('.json')) rels.push(`${DATA_DIR}/${n}`);
   for (const f of FILES) if (fs.existsSync(path.join(root, f))) rels.push(f);
   return rels.sort().map((rel) => ({ rel, body: fs.readFileSync(path.join(root, rel)) }));
 }
