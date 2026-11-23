@@ -152,14 +152,14 @@ const FAIR_ORDER = `r.type = 'self' ASC, t.priority DESC,
 /** Trần mỗi lượt theo số subtask n (contract.json limits.per_run): base + per_subtask·n, kẹp ở max. */
 export function scaledLimit(kind, n) {
   const { base, per_subtask: step, max } = LIMITS.per_run[kind];
-  const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
+  const count = Math.max(Number(n) || 0, 0);
   return Math.min(base + step * count, max);
 }
 export const LOCAL_PROVIDERS = new Set(['vllm', 'ollama']);
 /** Trần giây cả lượt cho provider local (limits.local_wall_clock_s): base + node_wall_clock_s·n, kẹp ở max. */
 export function localWallClockLimit(n) {
   const { base, max } = LIMITS.local_wall_clock_s;
-  const count = Math.min(Math.max(Number(n) || 0, 0), LIMITS.max_subtasks_per_run);
+  const count = Math.max(Number(n) || 0, 0);
   return Math.min(base + LIMITS.budget.node_wall_clock_s * count, max);
 }
 /** Trần giây cả lượt: provider vllm/ollama dùng công thức local, còn lại scaledLimit('wall_clock_s'). */

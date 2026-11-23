@@ -34,7 +34,7 @@
     {
       "kind": "units",
       "n": 11,
-      "expected": 3240
+      "expected": 3540
     },
     {
       "kind": "units",
@@ -114,7 +114,7 @@
     {
       "kind": "model_calls",
       "n": 11,
-      "expected": 700
+      "expected": 760
     },
     {
       "kind": "model_calls",

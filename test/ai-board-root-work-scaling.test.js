@@ -19,7 +19,7 @@ const setSteps = async (db, ticket, n) => {
 
 test('execute limits follow base + per_step * steps and the max cap', () => {
   const { model_calls: calls, semantic_repairs: repairs } = LIMITS.root_work_scaling;
-  const expectCalls = n => Math.min(LIMITS.root_work.model_calls + calls.per_step * Math.min(n, LIMITS.max_subtasks_per_run), calls.max);
+  const expectCalls = n => Math.min(LIMITS.root_work.model_calls + calls.per_step * n, calls.max);
   assert.deepEqual([0, 1, 4, 10, 99].map(n => scaledRootLimit('model_calls', n)), [0, 1, 4, 10, 99].map(expectCalls));
   assert.equal(scaledRootLimit('model_calls', 0), LIMITS.root_work.model_calls);
   assert.ok(scaledRootLimit('model_calls', 4) >= 100 && scaledRootLimit('model_calls', 10) >= 190);

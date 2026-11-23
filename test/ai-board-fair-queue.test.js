@@ -96,8 +96,8 @@ test('pending requests are capped per requester; a replay of the same key is not
 test('per-run caps grow with the plan size and stop at the configured max', () => {
   const { base, per_subtask: step, max } = LIMITS.per_run.units;
   assert.equal(scaledLimit('units', 3), base + 3 * step);
-  assert.equal(scaledLimit('units', 999), Math.min(base + LIMITS.max_subtasks_per_run * step, max));
-  assert.ok(scaledLimit('units', LIMITS.max_subtasks_per_run) <= max);
+  assert.equal(scaledLimit('units', 999), max, 'the plan picks its own step count; only the hard max bounds the budget');
+  assert.ok(scaledLimit('units', 25) <= max);
   assert.ok(LIMITS.gpu_s_per_worker_hour.value > max, 'one worker hour must fit the biggest run');
 });
 

@@ -82,7 +82,7 @@ def test_local_run_wall_clock_is_sum_of_node_caps():
     assert limits.run_wall_clock_s(2, local=True) == 600 + 2 * node
     assert limits.run_wall_clock_s(2, local=True) > 1073  # run 100: 2 steps ran 1073 s, api cap 1020 s
     assert limits.run_wall_clock_s(2, local=False) == limits.scaled_limit("wall_clock_s", 2) == 2040
-    assert limits.run_wall_clock_s(99, local=True) == 24600 <= limits._parsed()["limits"]["local_wall_clock_s"]["max"]
+    assert limits.run_wall_clock_s(99, local=True) == 28800 <= limits._parsed()["limits"]["local_wall_clock_s"]["max"]
 
 
 def test_progress_flag_raises_the_soft_loop_caps_and_nothing_else():
