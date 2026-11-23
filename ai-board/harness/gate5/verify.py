@@ -511,6 +511,12 @@ def _phase_span(trace, name: str):
             trace.add_span(name, {}, start_ms=start, end_ms=int(time.time() * 1000), status=status)
 
 
+def _acceptance_probe(item: str) -> str | None:
+    """Curl half of `curl ... | grep ...`, so a failed check can show what the app answered; None otherwise."""
+    head, sep, _ = item.partition(" | ")
+    return head.strip() if sep and head.strip().startswith("curl ") else None
+
+
 def _acceptance_target(item: str) -> str:
     """Đường dẫn URL đầu tiên trong lệnh acceptance (không query); không có URL thì 'acceptance'."""
     url = re.search(r"https?://[^\s'\"]+", item)
@@ -861,6 +867,13 @@ def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None
                         stage = 'tooling'
                         raise RuntimeError(f"thiếu công cụ trong container: {tool} (acceptance: {item})") from exc
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
+                    if (probe := _acceptance_probe(item)):
+                        try:
+                            seen = command([*compose, "exec", "-T", *session_env, "tizia", "sh", "-lc", probe],
+                                           timeout=30, log_output=False).stdout
+                            detail = f"{detail} | response: {' '.join(seen.split())[:500]}"
+                        except (subprocess.TimeoutExpired, RuntimeError):
+                            pass
                     if not soft or functional.tolerant_literals():  # acceptance is the feature itself: critical even when other checks are soft
                         raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
                     soft_misses.append(_soft_miss("acceptance", 1, f"{item} | {detail}"))
