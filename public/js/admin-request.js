@@ -211,20 +211,16 @@ function renderPlan(p, root, children, trace) {
   const fileList = plan.allowed_scope || p.allowed_scope || [];
   const capList = plan.capabilities || p.capabilities || [];
   const requestTitle = view?.thread?.request?.title || '';
-  return `<section id="current-plan"><h2>Plan</h2>
+  return `<section id="current-plan"><h2>Kế hoạch chờ cho phép</h2>
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
       <dl class="kv">
         ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện. Không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
-        <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
         <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</dd>
-        <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || 'chưa có'}</dd>
-        <dt>Quyền</dt><dd>${(plan.capabilities || p.capabilities || []).map(capText).join(', ') || 'chưa có'}</dd>
-        <dt>Bản kế hoạch</dt><dd>${esc(p.revision)}</dd>
+        <dt>File được sửa</dt><dd>${fileList.slice(0, 5).map(code).join(', ') || 'chưa có'}${fileList.length > 5 ? ` <span class="meta">và ${fileList.length - 5} file khác</span>` : ''}</dd>
       </dl>
       ${plan.grounding ? `<details><summary>Dẫn chứng code tại ${esc(plan.grounding.sha)}</summary>${plan.grounding.evidence.map(e => `<div class="blk"><b>${esc(e.target)}</b><pre>${esc(e.quote)}</pre><div>Trước: ${esc(e.before)}</div><div>Sau: ${esc(e.after)}</div><div>Kiểm chứng: ${esc(e.verify)}</div></div>`).join('')}</details>` : ''}
-      <div class="sub">Các bước</div>
-      <ol class="plan-steps">${steps.map(st => {
+      ${det('plan-steps', `Các bước (${steps.length + extra.length})`, `<ol class="plan-steps">${steps.map(st => {
         const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root, execution, st.order);
         return `<li class="st-${state}"><div class="line1"><b>${esc(st.title)}</b>${tag(state, label)}</div>
           <div class="meta">Sửa ${(st.allowed_scope || []).map(code).join(', ')} · quyền ${capText(st.capability)} · rủi ro ${esc(RISK_TEXT[st.risk] || st.risk)}</div>
@@ -233,7 +229,7 @@ function renderPlan(p, root, children, trace) {
         const [state, label] = CHILD_STATE[c.status] || ['idle', c.status];
         return `<li class="st-${state}"><div class="line1"><b>${esc(c.title)}</b>${tag(state, label)}</div>
           <div class="meta">AI tự sửa thêm sau khi kiểm tra chưa đạt</div></li>`;
-      }).join('')}</ol>
+      }).join('')}</ol>`)}
       ${folderWait ? `<div class="confirm folder-wait" role="status"><div class="confirm-title">Chức năng này chưa được duyệt</div>
         <div class="meta">Duyệt chức năng một lần ở tab "Chức năng". Kế hoạch này sẽ tự được cho phép chạy.</div>
         <div class="row"><a class="btn ok" href="/admin.html#features" target="_top">Mở tab Chức năng</a></div></div>` : ''}
@@ -535,7 +531,6 @@ function renderNetApproval() {
     <div class="line1"><b>${code(netTitle(item))}</b> ${tag('warn', item.kind === 'package' ? 'Gói npm' : 'URL')}</div>
     ${item.reason ? `<div class="meta">Lý do của model: ${esc(item.reason)}</div>` : ''}
     ${rows ? `<div class="meta">${rows}</div>` : '<div class="meta">Chưa có metadata cho mục này.</div>'}
-    <div class="net-warn" role="note">${esc(NET_WARNING)}</div>
     <label class="meta" style="display:block;margin-top:10px">Lý do từ chối (không bắt buộc)
       <input data-net-reason maxlength="500" autocomplete="off" value="${esc(reason)}" style="width:100%;max-width:72ch;display:block;margin-top:4px"></label>
     <div class="row">
@@ -574,19 +569,20 @@ function shotsOf(messages) {
   return withShots ? renderAtts(withShots.attachments.filter((a) => a?.kind === 'screenshot')) : '';
 }
 
-// Result box: what was asked, which files change, acceptance and subtasks.
+// Kết quả: mục tiêu, file đổi, ảnh chụp. Tiêu chí và việc con gập lại.
 function resultBox(t, messages = []) {
   const plan = t.plan?.plan;
   if (!plan) return '';
-  const files = (plan.allowed_scope || []).map((f) => code(f)).join(' ');
+  const all = plan.allowed_scope || [];
+  const files = all.slice(0, 4).map((f) => code(f)).join(' ') + (all.length > 4 ? ` <span class="meta">và ${all.length - 4} file khác</span>` : '');
   const subtasks = (t.children || []).map((c) => `<li>${esc(c.title)} <span class="meta">${esc(childStatus(c.status))}</span></li>`).join('');
   const row = (k, v) => (v ? `<div class="g-result-row"><span class="meta">${k}</span><span>${v}</span></div>` : '');
-  return `<div class="g-result"><div class="g-caption">Result</div>
+  const more = `${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}`;
+  return `<div class="g-result"><div class="g-caption">Kết quả</div>
     ${row('Mục tiêu', esc(plan.goal))}
     ${row('File thay đổi', files)}
-    ${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}
-    ${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}
     ${row('Ảnh chụp', shotsOf(messages))}
+    ${more ? det('result-more', 'Tiêu chí đạt và việc con', more) : ''}
   </div>`;
 }
 
@@ -654,7 +650,10 @@ async function ensureElevationContext(trace) {
   return true;
 }
 
-// Thẻ duyệt: duyệt cái gì · vì sao · rủi ro · bằng chứng. Duyệt cần lý do admin gõ + xác nhận lần hai.
+const elevationPathFlag = (row) => (!row.named_in_request && !row.in_plan ? ' <span class="pill warn">ngoài yêu cầu/plan</span>' : '');
+
+// Thẻ duyệt: kết luận trước (file · lý do · rủi ro); bước kế hoạch, câu hỏi, bằng chứng gập trong "Chi tiết".
+// Duyệt cần lý do admin gõ + xác nhận lần hai.
 function elevationContextCard(ctx) {
   if (ctx?.error) {
     return `<div class="err">Không tải được ngữ cảnh duyệt: ${esc(ctx.error)}
@@ -666,22 +665,30 @@ function elevationContextCard(ctx) {
   const scope = ctx.elevation?.scope || [];
   const steps = ctx.plan?.steps || [];
   const evidence = ctx.evidence || {};
+  const reasons = risk.reasons || [];
+  const scopeRow = (row, full) => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span>${full ? ` ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}` : elevationPathFlag(row)}</li>`;
+  const oddFlags = `${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b> ' : ''}${ctx.flags?.scope_changed_since_request ? '<b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}`;
+  const more = `<div class="g-caption">Phạm vi đầy đủ</div>
+      <ul>${scope.map(row => scopeRow(row, true)).join('')}</ul>
+      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
+      : `<div class="meta">${ctx.flags?.plan_missing ? 'Không có bước kế hoạch để đối chiếu.' : 'Worker không gửi bước kế hoạch. Chỉ có phạm vi path.'}</div>`}
+      ${ctx.request?.excerpt ? `<div class="g-caption">Yêu cầu gốc</div><blockquote class="meta" style="white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</blockquote>` : ''}
+      ${reasons.length > 2 ? `<div class="g-caption">Mọi lý do rủi ro</div><ul>${reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <div class="g-caption">Bằng chứng</div>
+      <div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''}</div>`;
   return `<div class="elevation-card" style="margin:8px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px">
     <div class="g-caption">Duyệt cái gì</div>
-    <ul>${scope.map(row => `<li>${code(row.path)} <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}</span> ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">kế hoạch: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
-    ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol>${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · ${code(step.paths.join(', '))}` : ''}${step.tier ? ` <span class="meta">mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}</span>` : ''}</li>`).join('')}</ol>`
-    : '<div class="meta">Worker không gửi bước kế hoạch. Chỉ có phạm vi path.</div>'}
+    <ul>${scope.slice(0, 3).map(row => scopeRow(row, false)).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+    ${scope.length > 3 ? `<div class="meta">và ${scope.length - 3} file khác (xem ở Chi tiết)</div>` : ''}
     <div class="g-caption">Vì sao</div>
     <div>${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
-    ${ctx.request?.excerpt ? `<blockquote class="meta" style="white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</blockquote>` : ''}
-    <div class="meta">${ctx.flags?.outside_request ? '<b class="warn">Có path không được yêu cầu nêu tên và không có trong kế hoạch.</b>' : 'Mọi path đều khớp yêu cầu hoặc kế hoạch.'}${ctx.flags?.scope_changed_since_request ? ' <b class="warn">Phạm vi đã đổi so với lúc xin.</b>' : ''}${ctx.flags?.plan_missing ? ' Không có bước kế hoạch để đối chiếu.' : ''}</div>
+    ${oddFlags ? `<div class="meta">${oddFlags}</div>` : ''}
     <div class="g-caption">Rủi ro</div>
-    <div>${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span></div>
+    <div>${tag(badge.tone, badge.label)} <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}</span></div>
     ${risk.level === 'high' || ctx.flags?.self_scope ? `<div class="err" role="alert"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'Rủi ro cao. Đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
-    ${risk.reasons?.length ? `<ul>${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
-    ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul>${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    <div class="g-caption">Bằng chứng</div>
-    <div class="meta">kế hoạch ${code(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}${evidence.revision_request != null ? ` · bản ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · bản ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="#ticket-trace">vết đầy đủ</a></div>
+    ${reasons.length ? `<ul>${reasons.slice(0, 2).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${det('elevation-more', 'Chi tiết: phạm vi đầy đủ, kế hoạch, bằng chứng', more)}
   </div>`;
 }
 
@@ -754,29 +761,30 @@ async function decideElevation(btn) {
   $('#elevation-result')?.focus();
 }
 
+// Hai tầng: tóm tắt (trạng thái, việc cần admin làm, kết quả) luôn hiện; phần còn lại gập trong "Chi tiết kỹ thuật".
 function renderAiBoard(t, messages = []) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
   const shownState = root.live ? 'run' : state;
-  const summary = `<div class="g-summary">
-      ${resultBox(t, messages)}
+  const settled = root.live || ['done', 'cancelled'].includes(root.status);
+  const summary = `<section class="blk g-summary" id="request-summary">
       <div class="line1">${tag(shownState, root.live ? 'Đang xử lý' : label)}<span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
-      ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
+      ${root.internal_reason && !settled ? reasonBlock(root.internal_reason) : ''}
       ${root.lost_worker ? `<div class="meta warn">Worker mất kết nối khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Cần quản trị viên quyết định.</div>` : ''}
-      ${renderRunnerTrace(t)}
-      ${renderStopReport(t)}
-      ${renderSoftMisses(t)}
-      ${renderRepairAgent(t)}
-      ${traceLine(t.trace_ref)}
-      ${managedLine(root.managed)}
       ${renderWrites(t)}
       ${dataSteps(t)}
       ${elevationBlock(t)}
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
-    </div>`;
+      ${resultBox(t, messages)}
+      ${traceLine(t.trace_ref)}
+      ${managedLine(root.managed)}
+    </section>`;
   const events = minimalEvents(t.events || []);
-  return renderTicketGraph(t, ui.node, Date.now(), { summary, events, filter: ui.toolFilter });
+  const diagnostics = [renderRunnerTrace(t), renderStopReport(t), renderSoftMisses(t), renderRepairAgent(t)].join('');
+  const needsLook = ['waiting_admin', 'human_owned'].includes(root.status) || Boolean(root.lost_worker);
+  return `${summary}${det('technical', 'Chi tiết kỹ thuật: sơ đồ, nhật ký, ngân sách',
+    `${diagnostics}${renderTicketGraph(t, ui.node, Date.now(), { summary: '', events, filter: ui.toolFilter })}`, { dopen: needsLook })}`;
 }
 
 // Last few user-facing events only; technical ones stay out of the page.

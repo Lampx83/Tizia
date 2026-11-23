@@ -443,6 +443,9 @@ function aiTone(t) {
   if (/waiting|human_owned/.test(t.status || '') || t.phase === 'pre_pr_review') return 'ai-warn';
   return '';
 }
+const AI_STATUS_LABEL = { queued: 'Chờ worker', running: 'Đang xử lý', planned: 'Đã có kế hoạch', waiting_authorization: 'Chờ admin cho phép',
+  waiting_admin: 'Chờ admin', waiting: 'Chờ xem xét', human_owned: 'Chuyển cho người làm', cancelled: 'Đã dừng', done: 'Xong', failed: 'Lỗi' };
+const aiLabel = (t) => (t.phase === 'pre_pr_ready' ? 'Đã qua kiểm tra' : AI_STATUS_LABEL[t.status] || t.status);
 // Dòng phụ dưới tiêu đề: nhánh · commit ngắn · PR (chỉ API admin có trace_ref). Bấm để copy.
 function traceSub(ref) {
   if (!ref?.branch && !ref?.head_sha) return '';
@@ -475,8 +478,12 @@ const ELEVATION_RISK = {
 const ELEVATION_REC_LABEL = { approve: 'có thể duyệt', review: 'cần xem thêm', reject: 'không nên duyệt' };
 const ELEVATION_REASON = { approve: 'Quản trị viên duyệt quyền chạm phần bảo vệ/lõi qua tab Góp ý.',
   reject: 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' };
-const elevationScopeText = (r) => (r.elevation_scope || [])
-  .map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`).join('<br>') || '-';
+const elevationScopeText = (r) => {
+  const items = r.elevation_scope || [];
+  const lines = items.slice(0, 3).map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`);
+  if (items.length > 3) lines.push(`và ${items.length - 3} file khác`);
+  return lines.join('<br>') || '-';
+};
 
 // Ngữ cảnh duyệt đã tải (rid → {data|error|loading}) và lý do admin đã gõ, sống qua các lần vẽ lại.
 const elevationContexts = new Map();
@@ -525,6 +532,8 @@ const elevationPathTag = (row) => (row.named_in_request
     ? '<span class="pill ai-warn">chỉ có trong kế hoạch</span>'
     : '<span class="pill ai-bad">không có trong yêu cầu/plan</span>');
 
+const elevationPathFlag = (row) => (!row.named_in_request && !row.in_plan ? ' <span class="pill ai-bad">ngoài yêu cầu/plan</span>' : '');
+
 // Nhãn rủi ro ở dòng danh sách: cùng màu với thẻ để admin quét nhanh trước khi mở.
 const elevationRiskPill = (r) => {
   const ctx = elevationCtx(r.id);
@@ -549,23 +558,31 @@ function elevationCard(r) {
   const steps = ctx.plan?.steps || [];
   const blocked = elevationBlockReason(ctx);
   const evidence = ctx.evidence || {};
+  const reasons = risk.reasons || [];
+  const scopeLine = (row, full) => `<li><code>${esc(row.path)}</code> · mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)}${full ? ` ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}` : elevationPathFlag(row)}</li>`;
+  const oddFlags = `${ctx.flags?.outside_request ? '<span class="pill ai-bad">có path ngoài yêu cầu</span> ' : ''}${ctx.flags?.scope_changed_since_request ? '<span class="pill ai-bad">phạm vi đổi sau khi xin</span>' : ''}`;
   return `<div data-elevation-card="${r.id}" style="margin-top:8px;padding:10px 12px;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:8px">
     <div><b>Duyệt cái gì</b>
-      <ul style="margin:4px 0 8px;padding-left:18px">${scope.map(row => `<li><code>${esc(row.path)}</code> · mức ${esc(ELEVATION_LEVEL_LABEL[row.level] || row.level)} ${elevationPathTag(row)}${row.plan_tier ? ` <span class="meta">plan: ${esc(ELEVATION_LEVEL_LABEL[row.plan_tier] || row.plan_tier)}</span>` : ''}</li>`).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
-      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol style="margin:4px 0 8px;padding-left:18px">${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · <code>${esc(step.paths.join(', '))}</code>` : ''}${step.tier ? ` · mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}` : ''}</li>`).join('')}</ol>`
-    : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
+      <ul style="margin:4px 0 8px;padding-left:18px">${scope.slice(0, 3).map(row => scopeLine(row, false)).join('') || '<li class="meta">chưa có phạm vi</li>'}</ul>
+      ${scope.length > 3 ? `<div class="meta">và ${scope.length - 3} file khác (xem ở Chi tiết)</div>` : ''}
     </div>
     <div style="margin-top:6px"><b>Vì sao</b>
       <div style="font-size:12.5px;opacity:.9">${esc(ctx.elevation?.reason || 'worker không nêu lý do')}</div>
-      ${ctx.request?.excerpt ? `<div style="font-size:12px;opacity:.75;margin-top:4px;white-space:pre-wrap">“${esc(ctx.request.excerpt)}”</div>` : ''}
-      <div style="font-size:12px;margin-top:4px">${ctx.request?.title ? `Yêu cầu: ${esc(ctx.request.title)} · ` : ''}${ctx.flags?.outside_request ? '<span class="pill ai-bad">có path ngoài yêu cầu</span>' : '<span class="pill ai-ok">path khớp yêu cầu/plan</span>'}${ctx.flags?.scope_changed_since_request ? ' <span class="pill ai-bad">phạm vi đổi sau khi xin</span>' : ''}</div>
+      ${oddFlags ? `<div style="font-size:12px;margin-top:4px">${oddFlags}</div>` : ''}
     </div>
-    <div style="margin-top:6px"><b>Rủi ro</b> <span class="pill ${badge.tone}">${esc(badge.label)}</span> <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}${risk.source === 'cached' ? ' · đã lưu' : ''}</span>
+    <div style="margin-top:6px"><b>Rủi ro</b> <span class="pill ${badge.tone}">${esc(badge.label)}</span> <span class="meta">gợi ý: ${esc(ELEVATION_REC_LABEL[risk.recommendation] || risk.recommendation)}</span>
       ${risk.level === 'high' || ctx.flags?.self_scope ? `<div role="alert" style="margin-top:6px;padding:8px 10px;border-left:3px solid var(--bad,#ef4444);background:rgba(239,68,68,.08)"><b>Cảnh báo:</b> ${ctx.flags?.self_scope ? 'phạm vi chạm chính AI Board — không được cấp.' : 'rủi ro cao; đọc kỹ từng bước trước khi quyết định.'}</div>` : ''}
-      ${risk.reasons?.length ? `<ul style="margin:4px 0;padding-left:18px">${risk.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="meta">Chưa có lý do rủi ro.</div>'}
-      ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul style="margin:2px 0;padding-left:18px">${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${reasons.length ? `<ul style="margin:4px 0;padding-left:18px">${reasons.slice(0, 2).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     </div>
-    <div style="margin-top:6px;font-size:12px;opacity:.75"><b>Bằng chứng</b> · plan <code>${esc(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}</code>${evidence.revision_request != null ? ` · revision ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · revision ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="/admin-request.html?id=${r.id}" target="_top">mở trace</a></div>
+    <details style="margin-top:6px;font-size:12.5px"><summary>Chi tiết: phạm vi đầy đủ, kế hoạch, bằng chứng</summary>
+      <ul style="margin:4px 0 8px;padding-left:18px">${scope.map(row => scopeLine(row, true)).join('')}</ul>
+      ${steps.length ? `<div class="meta">Các bước kế hoạch:</div><ol style="margin:4px 0 8px;padding-left:18px">${steps.map(step => `<li>${esc(step.title)}${step.paths?.length ? ` · <code>${esc(step.paths.join(', '))}</code>` : ''}${step.tier ? ` · mức ${esc(ELEVATION_LEVEL_LABEL[step.tier] || step.tier)}` : ''}</li>`).join('')}</ol>`
+    : '<div class="meta">Worker không gửi kèm bước kế hoạch; chỉ có phạm vi path.</div>'}
+      ${ctx.request?.excerpt ? `<div style="opacity:.75;margin:4px 0;white-space:pre-wrap">Yêu cầu gốc: “${esc(ctx.request.excerpt)}”</div>` : ''}
+      ${reasons.length > 2 ? `<ul style="margin:4px 0;padding-left:18px">${reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${risk.questions?.length ? `<div class="meta">Cần hỏi người xin:</div><ul style="margin:2px 0;padding-left:18px">${risk.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <div style="opacity:.75"><b>Bằng chứng</b> · plan <code>${esc(String(evidence.plan_hash_request || ctx.plan?.plan_hash || '—').slice(0, 12))}</code>${evidence.revision_request != null ? ` · revision ${esc(evidence.revision_request)}` : evidence.revision_current != null ? ` · revision ${esc(evidence.revision_current)}` : ''} · xin lúc ${esc(fmt(evidence.requested_at))}${evidence.requested_by?.type ? ` bởi ${esc(evidence.requested_by.type)}${evidence.requested_by.id ? ` ${esc(evidence.requested_by.id)}` : ''}` : ''} · <a href="/admin-request.html?id=${r.id}" target="_top">mở trace</a></div>
+    </details>
     <div class="actions" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       <input data-elevation-reason="${r.id}" maxlength="1000" placeholder="Lý do duyệt (bắt buộc)" aria-label="Lý do duyệt yêu cầu #${r.id}"
         style="flex:1;min-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.16));background:var(--bg3,#16213d);color:inherit">
@@ -587,7 +604,6 @@ function elevationPanel(rows) {
     style="border:1px solid var(--border-strong,rgba(255,255,255,.2));border-radius:10px;padding:12px 14px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <b>Quyền chờ duyệt (${pending.length})</b>
-      <span style="font-size:12px;opacity:.7">AI Board xin chạm vùng bảo vệ/lõi. Xem chi tiết từng yêu cầu trước khi duyệt.</span>
       <div style="flex:1"></div>
       <input data-elevation-reason="all" maxlength="1000" placeholder="Lý do duyệt cả lô (bắt buộc)" aria-label="Lý do duyệt cả lô"
         style="min-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.16));background:var(--bg3,#16213d);color:inherit">
@@ -596,8 +612,8 @@ function elevationPanel(rows) {
     <ul style="margin:10px 0 0;padding-left:18px">
       ${pending.map(r => `<li data-elevation="${r.id}" style="margin:8px 0">
         <b>#${r.id}</b> ${esc(r.title)} · <span style="opacity:.7">${esc(r.student || '')}</span>
-        <div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
-        ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}
+        ${elevationCtx(r.id) ? '' : `<div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
+        ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}`}
         <div style="margin-top:6px;font-size:12px">${elevationRiskPill(r)}</div>
         ${elevationCard(r)}
         ${elevationCtx(r.id) ? '' : `<div class="actions" style="margin-top:6px">
@@ -696,15 +712,15 @@ function renderRequests() {
     </div>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
-        <th title="Vị trí trong 10 yêu cầu mới nhất · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
-        <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th title="Vị trí trong 10 yêu cầu mới nhất · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th>
+        <th>Người yêu cầu</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
       ${filtered.map((r, index) => `
         ${(() => {
           const ticket = ticketByRequest.get(r.id);
           const ticketSummary = ticket
-            ? `<span class="pill ${aiTone(ticket)}">#${ticket.id} · ${esc(ticket.status)}/${esc(ticket.phase)}</span><div style="font-size:11px;opacity:.75;max-width:260px">${esc(ticket.public_note || ticket.internal_reason || '')}</div>`
+            ? `<span class="pill ${aiTone(ticket)}" title="${esc(`#${ticket.id} · ${ticket.status}/${ticket.phase}${ticket.public_note ? ` · ${ticket.public_note}` : ''}`)}">${esc(aiLabel(ticket))}</span>`
             : '<span style="opacity:.45">legacy</span>';
           return `
         <tr data-rid="${r.id}">
@@ -715,13 +731,10 @@ function renderRequests() {
           <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${netPendingByRequest[r.id] ? ` <span class="pill ai-warn" title="Mục mạng đang chờ admin duyệt trong yêu cầu này">Chờ duyệt mạng: ${esc(netPendingByRequest[r.id])}</span>` : ''}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>
-          <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
-          <td>${esc(r.student)}</td>
-          <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')}</td>
+          <td>${esc(r.student)}<div style="font-size:11px;opacity:.65">${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')} · ${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</div></td>
           <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''}</td>
           <td>${ticketSummary}</td>
           <td>${ownerCell(ticket)}</td>
-          <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">Chi tiết</button>
@@ -778,7 +791,7 @@ function renderRequests() {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=elevation2`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=minimal-review1`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();

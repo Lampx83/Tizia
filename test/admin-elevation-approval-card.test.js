@@ -66,7 +66,7 @@ test('the request page repeats the card and keeps the same server endpoints', ()
   assert.match(detail, /data-action="elevate" data-decision="approve">Duyệt quyền</);
   assert.match(detail, /if \(approve && reason\.length < 3\)/);
   assert.match(detail, /CẢNH BÁO rủi ro cao/);
-  assert.match(detail, /href="#ticket-trace">vết đầy đủ<\/a>/);
+  assert.match(detail, /det\('elevation-more', 'Chi tiết/, 'plan steps, questions and evidence sit behind one fold');
   assert.match(detail, /post\(`\/api\/admin\/ai-board\/requests\/\$\{REQUEST_ID\}\/elevate`/);
   assert.match(detail, /await askConfirm\(\{[\s\S]{0,400}Duyệt quyền cho kế hoạch này\?/);
   assert.match(detail, /if \(!yes\) return;/);
@@ -74,9 +74,9 @@ test('the request page repeats the card and keeps the same server endpoints', ()
 
 test('both pages escape every model/worker string before rendering', () => {
   // Scope, reasons, questions, titles and excerpts are untrusted: each goes through esc()/code().
-  assert.match(dashboard, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
+  assert.match(dashboard, /reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
   assert.match(dashboard, /risk\.questions\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
   assert.match(dashboard, /esc\(ctx\.request\.excerpt\)/);
   assert.match(detail, /esc\(ctx\.request\.excerpt\)/);
-  assert.match(detail, /risk\.reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
+  assert.match(detail, /reasons\.map\(x => `<li>\$\{esc\(x\)\}<\/li>`\)/);
 });
