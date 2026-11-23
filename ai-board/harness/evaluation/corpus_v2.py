@@ -58,7 +58,7 @@ def request_text(case: dict) -> dict:
     return {"title": title, "verify": f"Trang {file} đúng yêu cầu: {what}.", "detail": f"Trên trang {file}: {what}."}
 
 
-def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set) -> list[dict]:
+def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set, counts: dict | None = None) -> list[dict]:
     names = sorted(n for n in pages if n not in exclude)
     found = {n: v1.scan(pages[n]) for n in names}
     held = set(rng.sample(names, max(1, round(0.3 * len(names)))))
@@ -66,9 +66,9 @@ def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set) -
     for kind, levels in v1.CELLS.items():
         sides = ("heldout",) if kind in HELDOUT_ONLY else ("dev", "heldout")
         for side in sides:
-            for level in (lv for lv in levels if lv in LEVELS):
+            for level in (lv for lv in levels if counts or lv in LEVELS):
                 files = set()
-                for _ in range(PER_CELL[side]):
+                for _ in range(3 if counts else PER_CELL[side]):
                     variant = ("size", "hide")[n_size % 2] if kind == "size_hide" else None
                     n_size += kind == "size_hide"
                     if kind == "new_page":
@@ -76,7 +76,9 @@ def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set) -
                     else:
                         left = {n: [c for c in v1.candidates(found[n], kind, variant) if (n, c["line"]) not in lines]
                                 for n in names if (n in held) == (side == "heldout") and v1.SIZE_OK[level](len(pages[n].encode("utf-8")))}
-                        pool = [n for n, cands in left.items() if cands]
+                        pool = [n for n, cands in left.items() if len(cands) >= (2 if level == 4 else 1)]
+                        if not pool and counts:
+                            break  # target counts: a cell with no page left just contributes fewer cases
                         if not pool:
                             raise RuntimeError(f"không có trang hợp {kind} mức {level} ở {side}")
                         file = rng.choice([n for n in pool if n not in files] or pool)
@@ -93,11 +95,33 @@ def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set) -
     return cases
 
 
-def plan(seed: int, pages: dict[str, str], base_sha: str = v1.PIN, exclude=()) -> list[dict]:
-    """Case tất định theo seed; cách chia trang không đủ hợp mọi ô thì thử cách chia kế."""
+def _trim(cases: list[dict], side: str, target: int, rng: random.Random) -> list[dict]:
+    """Keep `target` cases of one side, round-robin over (kind, level) cells so every cell stays represented."""
+    mine = [c for c in cases if c["split"] == side]
+    if target > len(mine):
+        raise CorpusV2Error(f"{side}: chỉ dựng được {len(mine)} case, cần {target}")
+    cells: dict = {}
+    for case in mine:
+        cells.setdefault((case["kind"], case["level"]), []).append(case)
+    order = sorted(cells)
+    rng.shuffle(order)
+    keep: list[dict] = []
+    while len(keep) < target:
+        for cell in order:
+            if cells[cell] and len(keep) < target:
+                keep.append(cells[cell].pop(0))
+    return keep
+
+
+def plan(seed: int, pages: dict[str, str], base_sha: str = v1.PIN, exclude=(), counts: dict | None = None) -> list[dict]:
+    """Case tất định theo seed; cách chia trang không đủ hợp mọi ô thì thử cách chia kế. counts={side: n} cắt về đúng n."""
     for attempt in range(50):
         try:
-            return _plan(MeaningRng(f"v2/{seed}/{attempt}"), pages, base_sha, set(exclude))
+            rng = MeaningRng(f"v2/{seed}/{attempt}")
+            cases = _plan(rng, pages, base_sha, set(exclude), counts)
+            if counts:
+                cases = [c for side in ("dev", "heldout") for c in _trim(cases, side, counts[side], rng)]
+            return cases
         except RuntimeError as error:
             failure = error
     raise CorpusV2Error(str(failure))
@@ -110,9 +134,9 @@ def load_exclude(path) -> set:
     return set(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def write(root, seed: int, pages: dict[str, str], base_sha: str = v1.PIN, exclude=()) -> dict:
+def write(root, seed: int, pages: dict[str, str], base_sha: str = v1.PIN, exclude=(), counts: dict | None = None) -> dict:
     """Ghi corpus v2 dưới <root>: dev ở corpus-v2/s<seed>/, held-out ở <VAULT>/corpus-v2/s<seed>/; trả manifest công khai. Raise nếu đã có bản khác hash."""
-    root, cases = Path(root), plan(seed, pages, base_sha, exclude)
+    root, cases = Path(root), plan(seed, pages, base_sha, exclude, counts)
     if shared := v1.page_overlap(cases):
         raise CorpusV2Error(f"trang xuất hiện ở cả dev và held-out: {shared}")
     dump = lambda obj: json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")  # noqa: E731
@@ -142,8 +166,12 @@ def main(argv=None) -> dict:
     ap.add_argument("--root", required=True)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--exclude-pages")
+    ap.add_argument("--dev", type=int, help="exact dev case count; with --heldout, every level of every kind is eligible")
+    ap.add_argument("--heldout", type=int)
     a = ap.parse_args(argv)
-    manifest = write(a.root, a.seed, v1.real_pages(a.source), exclude=load_exclude(a.exclude_pages) if a.exclude_pages else ())
+    counts = {"dev": a.dev, "heldout": a.heldout} if a.dev and a.heldout else None
+    manifest = write(a.root, a.seed, v1.real_pages(a.source), exclude=load_exclude(a.exclude_pages) if a.exclude_pages else (),
+                     counts=counts)
     print(f"corpus v2 seed {a.seed} hash {manifest['content_hash'][:12]}: {manifest['split']}")
     return manifest
 
