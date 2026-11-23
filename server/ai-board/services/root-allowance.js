@@ -44,9 +44,9 @@ export function hitRootGroup(allowance) {
 }
 
 const EXECUTE_PHASES = ['executing', 'reverifying', 'rolling_back'];
-/** Lượt lập plan và lượt thực hiện có ngân sách riêng cho model_calls/semantic_repairs. */
+/** Lượt lập plan và lượt thực hiện có ngân sách riêng cho model_calls/semantic_repairs/tokens. */
 export const bucketOf = root => (EXECUTE_PHASES.includes(root.phase) ? 'execute' : 'plan');
-const bucketed = ['model_calls', 'semantic_repairs'];
+const bucketed = ['model_calls', 'semantic_repairs', 'tokens'];
 
 /** Trần execute = base + per_step * số bước plan hiện hành, kẹp max; chưa có plan thì base. */
 export function scaledRootLimit(cap, steps) {
@@ -80,13 +80,16 @@ export async function readRootAllowance(db, root, bucket = 'execute') {
     const cap = kinds[r.kind];
     const spent = r.tokens_used ?? r.tokens_reserved;
     const isPlan = r.bucket === 'plan';
-    const add = (target, counted) => {
+    const inBucket = isPlan === (bucket === 'plan');
+    const add = (target, counted, tokens) => {
       if (counted) target[cap]++;
+      if (!tokens) return;
       target.tokens += spent;
       if (r.provider === 'api') target.metered_tokens += spent; // vllm/ollama are free: only paid api tokens are capped
     };
-    add(used, !bucketed.includes(cap) || isPlan === (bucket === 'plan'));
-    if (isPlan) add(planUsed, true);
+    // A reservation with no recorded phase still costs paid tokens: count it in whichever bucket is read.
+    add(used, !bucketed.includes(cap) || inBucket, inBucket || r.bucket == null);
+    if (isPlan) add(planUsed, true, true);
     if (r.kind !== 'model') continue;
     const p = byProvider[r.provider] ??= { model_calls: 0, tokens_in: null, tokens_out: null, wall_ms: null, gpu_ms: null,
       missing: { tokens_in: 0, tokens_out: 0, wall_ms: 0, gpu_ms: 0 } };

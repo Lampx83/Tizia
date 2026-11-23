@@ -107,7 +107,7 @@ test('admin trace exposes durable root allowance without exposing reservation cr
     const response = await api.getTrace(request.request_id, 9);
     assert.equal(response.status, 200);
     const trace = await response.json();
-    assert.equal(trace.root_work.used.tokens, 8192);
+    assert.equal(trace.root_work.plan.used.tokens, 8192, 'planning tokens are reported in the plan bucket');
     assert.equal(trace.root_work.unknown_model_attempts, 1);
     assert.doesNotMatch(JSON.stringify(trace.root_work), /lease_hash|lease_token/);
     assert.equal((await api.getTrace(request.request_id, 1)).status, 403);
