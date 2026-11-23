@@ -380,3 +380,11 @@ def test_reasoning_off_env_overrides_catalog_without_a_local_catalog_copy():
     router = ModelRouter({'AI_BOARD_REASONING_OFF': 'gate3_heavy, calibration'}, config)
     assert router.reasoning('gate3_heavy') is False and router.reasoning('calibration') is False
     assert router.reasoning('eval_judge') is True
+
+
+def test_api_verdict_sends_the_classifier_to_the_hosted_api():
+    settings = {'AI_BOARD_API_FALLBACK': '1', 'AI_BOARD_API_VERDICT': 'api', 'API_KEY': 'k',
+                'API_URL': 'https://api.example', 'API_MODEL': 'm', 'VLLM_URL': 'http://vllm'}
+    first = ModelRouter(settings, shipped_catalog()).first('classifier')
+    assert (first['provider'], first['model'], 'logprobs' in first['capabilities']) == ('api', 'm', True)
+    assert ModelRouter({**settings, 'AI_BOARD_API_VERDICT': 'vllm'}, shipped_catalog()).first('classifier')['provider'] == 'vllm'

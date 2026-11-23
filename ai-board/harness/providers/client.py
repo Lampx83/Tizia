@@ -245,8 +245,6 @@ class OllamaClient:
                 if extra.get('tool_choice'):
                     payload['tool_choice'] = extra['tool_choice']
             logprobs = bool(extra and extra.get('logprobs'))
-            if logprobs and hosted:
-                raise ValueError('logprobs classifier runs only on the local model')
             if logprobs:  # classifier: one token + top-N logprobs, thinking off (Ollama `think: false`)
                 payload.update(logprobs=True, top_logprobs=extra.get('top_logprobs', 20),
                                chat_template_kwargs={'enable_thinking': False})
