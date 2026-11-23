@@ -27,7 +27,8 @@
       "api-hosted-coder"
     ],
     "classifier": [
-      "vllm-qwen35-35b-classifier"
+      "vllm-qwen35-35b-classifier",
+      "api-hosted-classifier"
     ],
     "embed": [
       "ollama-qwen3-embedding-8b",
@@ -106,6 +107,15 @@
         "embedding"
       ],
       "embedding_space": "qwen3-embedding-8b-v1"
+    },
+    "api-hosted-classifier": {
+      "provider": "api",
+      "model": "set-by-API_MODEL",
+      "enabled": true,
+      "approved_roles": ["classifier"],
+      "capabilities": ["logprobs"],
+      "calibration_id": "qwen35-35b-a3b-int4-danger-stack-r1",
+      "_why": "Only under AI_BOARD_API_FALLBACK when the shared vLLM is saturated; same model family unquantised, calibration reused, not re-fitted"
     },
     "api-hosted-coder": {
       "provider": "api",
