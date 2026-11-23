@@ -199,3 +199,26 @@ def test_regex_literal_with_quote_does_not_hide_later_routes():
            "  res.json({});\n"
            "});\n")
     assert routes_for(src, [5]) == [("GET", "/api/a")]
+
+
+def test_route_probe_uses_session_and_counts_401_as_answered_with_flag(tmp_path, monkeypatch, crit):
+    seen = []
+    monkeypatch.setattr(functional, "_fetch", lambda method, url, token=None: seen.append((url, token)) or (401, b"{}"))
+    out = functional.run_route("http://x", edited(tmp_path), fixture=lambda stage: {"token": "tok"})
+    assert out["passed"] is True and seen == [("http://x/api/portal-apps/catalog", "tok")]
+
+
+def test_route_probe_still_blocks_404_and_5xx_with_flag(tmp_path, monkeypatch, crit):
+    s = edited(tmp_path)
+    for status in (404, 503):
+        monkeypatch.setattr(functional, "_fetch", lambda method, url, token=None, code=status: (code, b""))
+        assert functional.run_route("http://x", s, fixture=lambda stage: {"token": "t"})["passed"] is False
+
+
+def test_route_probe_unchanged_with_flag_off(tmp_path, monkeypatch):
+    from tests.test_gate_5_verify import server_only
+    reset_settings()
+    seen = []
+    monkeypatch.setattr(functional, "_fetch", lambda method, url: seen.append(url) or (401, b"{}"))
+    out = functional.run_route("http://x", server_only(tmp_path), fixture=lambda stage: {"token": "t"})
+    assert out["passed"] is False and "401" in out["reason"] and seen

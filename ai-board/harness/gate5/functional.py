@@ -760,9 +760,11 @@ def select_fallback(state, pages=()):
     return ROUTE_PROBE if _added_routes(state) else None
 
 
-def _fetch(method, url):
+def _fetch(method, url, token=None):
     """(status, body head) for one route; 4xx/5xx answered as status, network errors raised."""
     request = urllib.request.Request(url, method=method, data=None if method == 'GET' else b'')
+    if token:
+        request.add_unredirected_header('Cookie', 'tizia_sid=' + token)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             if urllib.parse.urlsplit(response.url).netloc != urllib.parse.urlsplit(url).netloc:
@@ -772,23 +774,32 @@ def _fetch(method, url):
         return error.code, error.read(500)
 
 
-def run_route(base, state):
-    """GET added/edited route must answer 2xx; a write route must not answer 404 or 5xx (a CSRF refusal is a valid answer)."""
+def _session_token(fixture):
+    try:
+        return fixture('session')['token'] if fixture else None
+    except Exception:  # noqa: BLE001 - no session: probe anonymously
+        return None
+
+
+def run_route(base, state, fixture=None):
+    """GET added/edited route must answer 2xx; a write route must not answer 404 or 5xx (a CSRF refusal is a valid answer). With critical_only_checks: probe as the disposable student, any non-404/5xx answer (401/403 included) counts for GET too."""
     unavailable = lambda note: {'probe_id': None, 'passed': False, 'reason': NO_ORACLE, 'note': note[:300]}
     routes = _added_routes(state)
     if not routes:
         return unavailable('no route in diff')
     observations, problems = {}, []
+    tolerant = tolerant_literals()
+    token = _session_token(fixture) if tolerant else None
     for method, path in routes:
         try:
-            status, body = _fetch(method, base + path)
+            status, body = _fetch(method, base + path, token) if token else _fetch(method, base + path)
         except OSError as error:
             return unavailable(f'route probe unavailable: {error}')
         except RuntimeError as error:
             return {'probe_id': ROUTE_PROBE, 'passed': False, 'reason': str(error)[:500], 'coverage': {'route_contract': True}}
         key = f'{method} {path}'
         observations[key] = f'HTTP {status}; body: {body.decode("utf-8", "replace")}'
-        answered = 200 <= status < 300 if method == 'GET' else status != 404 and status < 500
+        answered = status != 404 and status < 500 if tolerant or method != 'GET' else 200 <= status < 300
         if not answered:
             problems.append(f'Route mới không trả lời: {key} → HTTP {status}')
     return {'probe_id': ROUTE_PROBE, 'passed': not problems, 'reason': '; '.join(problems)[:500] or None,
@@ -815,7 +826,7 @@ def run(base, probe_id, fixture=None, state=None, pages=()):
     if probe_id == FALLBACK_TEXT_PROBE:
         return _fallback_text(base, state or {}, fixture, list(pages))
     if probe_id == ROUTE_PROBE:
-        return run_route(base, state or {})
+        return run_route(base, state or {}, fixture)
     if probe_id == STYLE_PROBE:
         from gate5 import style
         return style.run_style(base, state or {}, fixture, list(pages))

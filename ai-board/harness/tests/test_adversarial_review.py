@@ -93,3 +93,50 @@ def test_truncated_clean_review_fails_closed():
     big['full_diff'][0]['diff'] = PAY + '+' + 'x' * 20000 + '\n'
     out = run(Models({'verdict': 'pass', 'findings': []}), big)
     assert out['blocked'] is True and out['failure_class'] == 'critical'
+
+
+def _tol(monkeypatch, on):
+    from settings import reset_settings
+    monkeypatch.setenv('AI_BOARD_CRITICAL_ONLY_CHECKS', '1' if on else '0')
+    reset_settings()
+
+
+def test_oversize_is_advisory_with_flag_and_critical_without(monkeypatch):
+    big = state()
+    big['full_diff'][0]['diff'] = PAY + '+' + 'x' * 20000 + '\n'
+    _tol(monkeypatch, True)
+    out = run(Models({'verdict': 'pass', 'findings': []}), big)
+    assert out['blocked'] is False and out['advisory']
+    _tol(monkeypatch, False)
+    assert run(Models({'verdict': 'pass', 'findings': []}), big)['failure_class'] == 'critical'
+
+
+def test_test_files_do_not_count_toward_size_with_flag(monkeypatch):
+    _tol(monkeypatch, True)
+    st = state()
+    st['full_diff'].append({'file': 'test/a.test.js', 'diff': '+' + 'x' * 20000})
+    models = Models({'verdict': 'pass', 'findings': []})
+    out = run(models, st)
+    assert not out.get('advisory') and out['truncated'] is False and 'xxxx' not in models.calls[0]['prompt']
+
+
+def test_garbage_verdict_is_asked_again_then_advisory_with_flag(monkeypatch):
+    _tol(monkeypatch, True)
+    models = Models('not json', 'still not')
+    out = run(models)
+    assert out['blocked'] is False and out['advisory'] and len(models.calls) == 2
+    good = Models('not json', {'verdict': 'pass', 'findings': []})
+    assert run(good)['verdict'] == 'pass'
+    _tol(monkeypatch, False)
+    assert run(Models('not json'))['failure_class'] == 'critical'
+
+
+def test_tolerant_prompt_does_not_ask_for_rollback_and_names_additive_migrations(monkeypatch):
+    _tol(monkeypatch, True)
+    models = Models({'verdict': 'pass', 'findings': []})
+    run(models)
+    assert 'missing rollback' not in models.calls[0]['prompt'] and 'IF NOT EXISTS' in models.calls[0]['prompt']
+    _tol(monkeypatch, False)
+    models = Models({'verdict': 'pass', 'findings': []})
+    run(models)
+    assert 'missing rollback' in models.calls[0]['prompt']

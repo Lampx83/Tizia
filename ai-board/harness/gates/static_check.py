@@ -120,6 +120,20 @@ def _privileged(resolved: str, file_path: str) -> bool:
     return bool(resolved.endswith('db.js') or other_context)
 
 
+_TEST_DIR = re.compile(r"^tests?/")
+
+
+def _importable(code, test_path, planned_files, scratch_repo, base_read) -> frozenset:
+    """Imports of a test file that exist (base, plan or checkout) and are not protected or money paths."""
+    out = set()
+    for _, resolved in _resolved_imports(code, posixpath.dirname(_posix(test_path))):
+        names = [resolved + tail for tail in ("", ".js", "/index.js")]
+        found = any(n in planned_files or (Path(scratch_repo) / n).is_file() or (base_read is not None and base_read(n) is not None) for n in names)
+        if found and not any(path_policy.denied(n) or path_policy.refused(n) or n in guard.MONEY_PATHS for n in names):
+            out.add(resolved)
+    return frozenset(out)
+
+
 def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: bool = False,
                  allowed: frozenset = frozenset()) -> list[str]:
     """Trả list vi phạm (rỗng = sạch). Import tương đối ('./...'/'../...') được
@@ -381,6 +395,8 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
                     reason = f"'{candidate}': {'; '.join(hints)}"
                     return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
                             "issues": [*issues, reason], "failure_class": "ordinary"}
+            if functional.tolerant_literals() and _TEST_DIR.match(candidate):
+                plan_edits = plan_edits | _importable(code, candidate, planned_files, scratch_repo, base_read)
             bad_imports = lint_imports(code, candidate, base_code(candidate), privileged_ok=mounted, allowed=plan_edits)
             if mounted:
                 state["privileged_imports"] = sorted({*state.get("privileged_imports", ()),
@@ -762,6 +778,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     if not found and change["class"] == "one_way" and budget is not None and getattr(deps, "models", None) is not None:
         review = adversarial_review.run(state, deps, budget, db_path=db_path, proposal_id=proposal_id)
         out["adversarial_review"] = {k: review[k] for k in ("verdict", "findings", "truncated")}
+        if review.get("advisory"):
+            out["needs_careful_review"] = True
+            out["issues"] = [*out.get("issues", []), f"adversarial review: {review['advisory']}"]
         if review["blocked"] and review.get("failure_class") == "ordinary" and reviewer_fix.allowed(state):
             fixed = reviewer_fix.run(state, deps, budget, review["findings"], db_path=db_path, proposal_id=proposal_id)
             if fixed["applied"]:
