@@ -11,7 +11,7 @@ import urllib.error
 from typing import Callable
 
 from worker_client import CONTRACT, LIMITS, PLAN_GATES
-from worker_execution import CHECK_REVISE, _load_harness, _real_deps, node_span
+from worker_execution import ACCEPT_REVISE, CHECK_REVISE, _load_harness, _real_deps, node_span
 import path_policy  # noqa: E402
 from runtime import coverage
 from runtime.loops import objection_repeat  # noqa: E402
@@ -186,6 +186,20 @@ def revision_request(snapshot: dict) -> list[dict] | None:
         return None
     old = [item for item in old if isinstance(item, dict) and isinstance(item.get("check"), dict)] if isinstance(old, list) else []
     return old or None
+
+
+def acceptance_revision(snapshot: dict) -> str | None:
+    """Failed acceptance command plus the app's answer the last verdict carried; None without the marker."""
+    reason = str((snapshot.get("ticket") or {}).get("internal_reason") or "")
+    at = reason.find(ACCEPT_REVISE)
+    return reason[at + len(ACCEPT_REVISE):].strip()[:800] or None if at >= 0 else None
+
+
+def acceptance_note(failed: str) -> str:
+    return ("[ACCEPTANCE VẪN ĐỎ SAU MỘT LƯỢT SỬA CODE — chỉ một lần]\n"
+            f"{failed}\n"
+            "Đối chiếu tiêu chí với dữ liệu thật trong repo và câu trả lời của app ở trên. Nếu tiêu chí mâu thuẫn với "
+            "dữ liệu hoặc với chính yêu cầu thì viết lại lệnh acceptance cho đúng; nếu tiêu chí đúng thì giữ nguyên và sửa cách làm.")
 
 
 def revision_note(old: list[dict]) -> str:
@@ -483,6 +497,9 @@ class HarnessPlanner:
     def __call__(self, snapshot: dict, source=None) -> tuple[dict, int]:
         self.last_skill = self.last_session = self.last_approved = None
         replaced = revision_request(snapshot)
+        failed_acceptance = None if replaced else acceptance_revision(snapshot)
+        if failed_acceptance:
+            snapshot = {**snapshot, "plan_repair": "\n\n".join(filter(None, (snapshot.get("plan_repair"), acceptance_note(failed_acceptance))))}
         if replaced:
             snapshot = {**snapshot, "plan_repair": "\n\n".join(filter(None, (snapshot.get("plan_repair"), revision_note(replaced))))}
         request = self._request(snapshot)
@@ -579,6 +596,8 @@ class HarnessPlanner:
                               if state.get("approved_checks") else None)
         if replaced:
             stamp_revision(plan, replaced)
+        elif failed_acceptance and plan.get("steps"):
+            plan["steps"][0]["check_revision"] = {"reason": f"acceptance: {failed_acceptance}"[:500], "old": []}
         if state.get('grounding'):
             plan['grounding'] = state['grounding']
         if state.get('ledger'):

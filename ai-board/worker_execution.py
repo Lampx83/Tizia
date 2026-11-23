@@ -126,6 +126,8 @@ def repair_cap() -> int:
 
 # The planner finds this marker in the root's internal_reason (= verdict reason) on the replan lease.
 CHECK_REVISE = "check_suspect_revise:"
+# Same channel for a plan acceptance command that stayed red after a code repair: the planner may rewrite it once.
+ACCEPT_REVISE = "acceptance_revise:"
 _REVISE_JSON = 700  # verdict reason is cut at 1000 chars server-side, after the stop report prefix
 
 
@@ -756,6 +758,12 @@ class _Execution:
                     if cls["action"] not in window.tried:
                         window.tried.append(cls["action"])
                     window.reset()
+        if (cls["class"] == "acceptance_command" and self.repairs and get_settings().critical_only_checks
+                and not revision_of(self.plan)):
+            cls["action"] = repair_class.REPLAN
+            last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
+            self.kind, self.stop_note = "plan", f"{ACCEPT_REVISE} {str(last['reason'])[:_REVISE_JSON]}"
+            return False
         last["repair_class"], last["repair_action"] = cls["class"], cls["action"]
         progress.record(getattr(self.deps, "trace", None), node="repair_check",
                         failure_class=cls["class"], action=cls["action"])
