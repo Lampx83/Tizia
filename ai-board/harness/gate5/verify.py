@@ -871,7 +871,7 @@ def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None
                         try:
                             seen = command([*compose, "exec", "-T", *session_env, "tizia", "sh", "-lc", probe],
                                            timeout=30, log_output=False).stdout
-                            detail = f"{detail} | response: {' '.join(seen.split())[:500]}"
+                            detail = f"response: {' '.join(seen.split())[:500]} | {detail}"
                         except (subprocess.TimeoutExpired, RuntimeError):
                             pass
                     if not soft or functional.tolerant_literals():  # acceptance is the feature itself: critical even when other checks are soft
