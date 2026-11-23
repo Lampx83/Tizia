@@ -104,12 +104,12 @@
     },
     "_why": "All AI Board caps in one place (feature-folders ticket 02). Per-run caps scale with the plan's subtask count n: base + per_subtask * n, clamped to max. Numbers are starting points; retune from the stratified eval (ticket 12).",
     "per_run": {
-      "units": { "base": 120, "per_subtask": 150, "max": 2400, "_why": "GPU-s per run for execution only; a feature draft of 3-10 subtasks needs ~450-1600" },
-      "plan_units": { "max": 600, "_why": "GPU-s for planning (gates 1-2.5), apart from execution so a slow model cannot eat the subtask budget; a multi-file plan measured 200-330" },
-      "wall_clock_s": { "base": 300, "per_subtask": 360, "max": 3600, "_why": "each subtask may retry up to 4 times at 14B speed" },
+      "units": { "base": 240, "per_subtask": 300, "max": 4800, "_why": "GPU-s per run for execution only; a feature draft of 3-10 subtasks needs ~450-1600" },
+      "plan_units": { "max": 1200, "_why": "GPU-s for planning (gates 1-2.5), apart from execution so a slow model cannot eat the subtask budget; a multi-file plan measured 200-330" },
+      "wall_clock_s": { "base": 600, "per_subtask": 720, "max": 7200, "_why": "each subtask may retry up to 4 times at 14B speed" },
       "model_calls": { "base": 100, "per_subtask": 60, "max": 1000, "_why": "gate 1/2.5 calls + up to 4 attempts x (implement, repair) per subtask" }
     },
-    "local_wall_clock_s": { "base": 300, "max": 14400, "_why": "Provider vllm/ollama: run time cap = base + node_wall_clock_s x subtasks, clamped to max; time (not tokens) bounds local runs, each node is already capped by node_wall_clock_s" },
+    "local_wall_clock_s": { "base": 600, "max": 28800, "_why": "Provider vllm/ollama: run time cap = base + node_wall_clock_s x subtasks, clamped to max; time (not tokens) bounds local runs, each node is already capped by node_wall_clock_s" },
     "max_subtasks_per_run": 10,
     "loop": {
       "_why": "Tool-loop ceilings per subtask (runtime/tool_loop.py). AI_BOARD_LOOP_MODEL_CALLS / AI_BOARD_LOOP_TOOL_CALLS override for a measured run only.",
@@ -147,10 +147,10 @@
       "max_s": 300
     },
     "budget": {
-      "_why": "Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
-      "model_calls": 400, "plan_model_calls": 24, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 600,
-      "wall_clock_s": 900, "semantic_repairs": 24, "child_wall_clock_s": 300,
-      "node_wall_clock_s": 1200
+      "_why": "Time and GPU caps are doubled: a shared vLLM queue slows every call, and loop_guard (repeat state, near-identical repairs, stagnation) already ends real loops. Defaults of runtime/budget.py Budget (one run) and ChildBudget (one loop). BUDGET_MAX_<KEY> overrides for a measured run only. tokens count only for provider api (paid); vllm/ollama are bounded by time: node_wall_clock_s per graph node, wall_clock_s and units per run.",
+      "model_calls": 400, "plan_model_calls": 24, "tool_calls": 2000, "tokens": 200000, "retries": 3, "units": 1200,
+      "wall_clock_s": 1800, "semantic_repairs": 24, "child_wall_clock_s": 600,
+      "node_wall_clock_s": 2400
     },
     "loop_guard": {
       "_why": "Native loop control replaces fixed step caps: a repeated state hash, a node over its time budget, or consecutive near-identical repairs end the walk with a named reason. Counts of model calls/repairs/plan bucket are recorded and shown, and only act as the high safety caps in root_work/budget. repair_replan.max_repairs (12) bounds repair rounds well inside execution_graph.recursion_limit.",
@@ -258,7 +258,7 @@
       "thread_chars": 4000
     },
     "gpu_s_per_user_day": { "loose": 8000, "folder": 8000, "_why": "rolling 24h; over it the request waits, a running run is never cut" },
-    "gpu_s_per_worker_hour": { "value": 2700, "_why": "must exceed one max run (2400) so big tasks are not starved" },
+    "gpu_s_per_worker_hour": { "value": 5400, "_why": "must exceed one max run (4800) so big tasks are not starved" },
     "prompt_caps": {
       "_why": "Per-input prompt caps in tokens; chars = tokens x chars_per_token. Cut a model input only, never a security scan.",
       "chars_per_token": 4, "intake_detail_tokens": 500, "static_content_tokens": 875, "snippet_tokens": 375

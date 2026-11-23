@@ -4,82 +4,82 @@
     {
       "kind": "units",
       "n": 0,
-      "expected": 120
+      "expected": 240
     },
     {
       "kind": "units",
       "n": 1,
-      "expected": 270
+      "expected": 540
     },
     {
       "kind": "units",
       "n": 2,
-      "expected": 420
+      "expected": 840
     },
     {
       "kind": "units",
       "n": 3,
-      "expected": 570
+      "expected": 1140
     },
     {
       "kind": "units",
       "n": 5,
-      "expected": 870
+      "expected": 1740
     },
     {
       "kind": "units",
       "n": 10,
-      "expected": 1620
+      "expected": 3240
     },
     {
       "kind": "units",
       "n": 11,
-      "expected": 1620
+      "expected": 3240
     },
     {
       "kind": "units",
       "n": -2,
-      "expected": 120
+      "expected": 240
     },
     {
       "kind": "wall_clock_s",
       "n": 0,
-      "expected": 300
+      "expected": 600
     },
     {
       "kind": "wall_clock_s",
       "n": 1,
-      "expected": 660
+      "expected": 1320
     },
     {
       "kind": "wall_clock_s",
       "n": 2,
-      "expected": 1020
+      "expected": 2040
     },
     {
       "kind": "wall_clock_s",
       "n": 3,
-      "expected": 1380
+      "expected": 2760
     },
     {
       "kind": "wall_clock_s",
       "n": 5,
-      "expected": 2100
+      "expected": 4200
     },
     {
       "kind": "wall_clock_s",
       "n": 10,
-      "expected": 3600
+      "expected": 7200
     },
     {
       "kind": "wall_clock_s",
       "n": 11,
-      "expected": 3600
+      "expected": 7200
     },
     {
       "kind": "wall_clock_s",
       "n": -2,
-      "expected": 300
+      "expected": 600
     },
     {
       "kind": "model_calls",

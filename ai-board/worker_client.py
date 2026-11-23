@@ -89,7 +89,7 @@ def _with_body(error):
 
 def _plan_rejection(error) -> str | None:
     """Nội dung từ chối của server khi plan sai schema; None nếu không phải lỗi nội dung plan."""
-    if getattr(error, "code", None) not in (400, 409):
+    if getattr(error, "code", None) not in (400, 409, 422):  # PlanGuardrailError answers 422
         return None
     try:
         body = error.read().decode("utf-8", "replace")

@@ -52,7 +52,6 @@ class HttpCheckpoint:
     def __init__(self, client, ticket_id: int, lease: dict, run_scope: str, attempt: int = 0, keys: set | None = None):
         self.client, self.ticket_id, self.lease, self.run_scope, self.n = client, ticket_id, lease, run_scope, attempt
         self.keys = set() if keys is None else keys
-        self._pinned = False
         self.base = f"/api/ai-board/worker/tickets/{ticket_id}/checkpoint"
 
     def attempt(self, n: int) -> "HttpCheckpoint":
@@ -75,9 +74,8 @@ class HttpCheckpoint:
 
     def save(self, budget) -> None:
         store = self._ledger()
-        if not self._pinned:
-            store.save_pins({"kind": "worker_ledger"})
-            self._pinned = True
+        # Idempotent on the server; a purge (or another attempt object) may have dropped the row, and a ledger without it is a 409.
+        store.save_pins({"kind": "worker_ledger"})
         store.save_ledger(budget.snapshot())
 
     def _cursor(self) -> HttpSteps:

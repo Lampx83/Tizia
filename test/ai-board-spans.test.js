@@ -123,12 +123,12 @@ test('admin trace gives each run its wall-clock limit from the subtask count of 
     await t.db.d.run('UPDATE ai_runs SET plan_revision=1 WHERE id=?', [t.run.id]);
     let run = (await t.trace()).runs.find((r) => r.id === t.run.id);
     assert.equal(run.subtask_count, 3);
-    assert.equal(run.wall_clock_limit_s, 1380);
+    assert.equal(run.wall_clock_limit_s, 2760);
 
     await t.db.d.run('UPDATE ai_runs SET plan_revision=NULL WHERE id=?', [t.run.id]);
     run = (await t.trace()).runs.find((r) => r.id === t.run.id);
     assert.equal(run.subtask_count, 0);
-    assert.equal(run.wall_clock_limit_s, 300);
+    assert.equal(run.wall_clock_limit_s, 600);
   } finally { await t.close(); }
 });
 
@@ -146,17 +146,17 @@ test('a local-provider run reports the local wall-clock cap, an api run keeps th
 
     await call('call-vllm', 'vllm', 1);
     let run = (await t.trace()).runs.find((r) => r.id === t.run.id);
-    assert.equal(run.wall_clock_limit_s, 300 + 1200 * 3);
+    assert.equal(run.wall_clock_limit_s, 600 + 2400 * 3);
 
     await t.db.d.run("UPDATE ai_gate_traces SET evidence_json=? WHERE run_id=? AND internal_reason='call-vllm'",
       [JSON.stringify({ call_id: 'call-vllm', provider: 'api', gate: 1, metrics: { wall_ms: 1000 } }), t.run.id]);
     run = (await t.trace()).runs.find((r) => r.id === t.run.id);
-    assert.equal(run.wall_clock_limit_s, 300 + 360 * 3);
+    assert.equal(run.wall_clock_limit_s, 600 + 720 * 3);
 
     await t.db.d.run("UPDATE ai_gate_traces SET evidence_json=? WHERE run_id=? AND internal_reason='call-vllm'",
       [JSON.stringify({ call_id: 'call-vllm', gate: 1, metrics: { wall_ms: 1000 } }), t.run.id]);
     run = (await t.trace()).runs.find((r) => r.id === t.run.id);
-    assert.equal(run.wall_clock_limit_s, 300 + 360 * 3, 'no provider evidence keeps the shared cap');
+    assert.equal(run.wall_clock_limit_s, 600 + 720 * 3, 'no provider evidence keeps the shared cap');
   } finally { await t.close(); }
 });
 
