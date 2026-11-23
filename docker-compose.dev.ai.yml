@@ -100,7 +100,6 @@ services:
       AI_BOARD_WORKER_MODE: ${AI_BOARD_WORKER_MODE:-active}
       AI_BOARD_GATE25_ANSWERED: ${AI_BOARD_GATE25_ANSWERED:-1}
       AI_BOARD_FANOUT_MAX: ${AI_BOARD_FANOUT_MAX:-1}  # GPU dùng chung: một lượt model mỗi lúc
-      BUDGET_MAX_TOKENS: ${BUDGET_MAX_TOKENS:-1000000}
       AI_BOARD_REASONING_OFF: ${AI_BOARD_REASONING_OFF:-gate3_heavy}  # gate3_heavy hết ngân sách đầu ra vào suy luận nên trả rỗng
       AI_BOARD_GATE3_CONTEXT: ${AI_BOARD_GATE3_CONTEXT:-hybrid}
       AI_BOARD_GATE25_FIXES: ${AI_BOARD_GATE25_FIXES:-quotes,ellipsis,context,retry,truncated,tokens,shortquote,literal}
