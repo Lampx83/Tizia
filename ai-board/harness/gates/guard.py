@@ -18,6 +18,7 @@ import ast
 import base64
 import html
 import json
+import math
 import posixpath
 import re
 import unicodedata
@@ -312,6 +313,22 @@ _SECRET = [re.compile(p) for p in (
     r"\bxox[abprs]-[A-Za-z0-9-]{10,}",
     r"(?i)(?:api[_-]?key|secret|seckey|token|password|passwd)\w*\s*[:=]\s*['\"][^'\"\s]{8,}['\"]",
 )]
+_FAKE_WORDS = re.compile(r"(?i)test|fake|dummy|example|mock|sample|placeholder|changeme|xxx")
+
+
+def _entropy(text: str) -> float:
+    counts = [text.count(c) for c in set(text)]
+    return -sum(n / len(text) * math.log2(n / len(text)) for n in counts)
+
+
+def _fake_secret(line: str) -> bool:
+    """True when every secret-like match is only the generic key=value form with an obviously fake or low-entropy value."""
+    if any(p.search(line) for p in _SECRET[:-1]):
+        return False
+    values = re.findall(r"""[:=]\s*['"]([^'"\s]{8,})['"]""", line)
+    return bool(values) and all(_FAKE_WORDS.search(v) or _entropy(v) < 3.0 for v in values)
+
+
 _PII = [re.compile(p) for p in (
     r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
     r"(?<!\d)(?:\+84|0)(?:3|5|7|8|9)\d{8}(?!\d)",   # di động VN
@@ -510,7 +527,10 @@ def scan(diff_text: str, checkout: str | Path | None = None, *, allowed_contacts
             add("sovereignty_map", "high", f"{path}: bản đồ/lãnh thổ Việt Nam cần người duyệt")
         for number, line in enumerate(added, 1):
             if any(p.search(line) for p in _SECRET):
-                add("secret", "critical", f"{path}: dòng thêm trông như secret")
+                if is_test and getattr(get_settings(), "critical_only_checks", False) and _fake_secret(line):
+                    flag("secret", "medium", f"{path}: giá trị giống secret nhưng là fixture test")
+                else:
+                    add("secret", "critical", f"{path}: dòng thêm trông như secret")
             if is_test:
                 continue  # code test hợp lệ có eval/import; PII/nội dung chỉ xét file giao cho người dùng
             if _pii(line, allowed_contacts):

@@ -180,3 +180,32 @@ def test_same_origin_script_with_handler_or_inline_or_foreign_src_is_still_injec
     for line in ['<script src="/js/x.js" onload="a()"></script>', "<script>alert(1)</script>",
                  '<script src="//evil.example/x.js"></script>']:
         assert _injection(guard.scan(diff("public/a.html", added=[line]))), line
+
+
+def _tolerant(monkeypatch, on):
+    from settings import reset_settings
+    monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1" if on else "0")
+    reset_settings()
+
+
+def test_fake_token_fixture_in_test_is_advisory_with_flag(monkeypatch):
+    _tolerant(monkeypatch, True)
+    text = diff("test/x.test.js", added=["const h = { token: 'test-token-123456' };"], new=True)
+    out = guard.scan(text)
+    assert out["findings"] == [] and any(f["check"] == "secret" for f in out["flags"])
+
+
+def test_real_looking_secret_in_test_stays_critical_with_flag(monkeypatch):
+    _tolerant(monkeypatch, True)
+    for line in ["const t = { token: 'Zk9Qx7Lm2Vb8Nc4Rt6Yw' };", "const k = 'AKIAABCDEFGHIJKLMNOP';"]:
+        assert ("secret", "critical") in kinds(diff("test/x.test.js", added=[line], new=True)), line
+
+
+def test_fake_token_fixture_in_test_critical_with_flag_off(monkeypatch):
+    _tolerant(monkeypatch, False)
+    assert ("secret", "critical") in kinds(diff("test/x.test.js", added=["{ token: 'test-token-123456' }"], new=True))
+
+
+def test_fake_token_in_server_code_stays_critical_with_flag(monkeypatch):
+    _tolerant(monkeypatch, True)
+    assert ("secret", "critical") in kinds(diff("server/a.js", added=["{ token: 'test-token-123456' }"], new=True))

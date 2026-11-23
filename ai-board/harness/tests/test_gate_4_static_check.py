@@ -548,7 +548,7 @@ def test_test_may_import_a_server_file_the_plan_edits(tmp_path, monkeypatch):
     assert _test_import_run(tmp_path, monkeypatch, "../server/contexts/portal-apps/builtin-catalog.js")["blocked"] is False
 
 
-@pytest.mark.parametrize("flags", [("zone",), ("critical",), ()])
+@pytest.mark.parametrize("flags", [("zone",), ()])
 def test_plan_edited_import_stays_blocked_without_both_flags(tmp_path, monkeypatch, flags):
     out = _test_import_run(tmp_path, monkeypatch, "../server/contexts/portal-apps/builtin-catalog.js", flags)
     assert out["blocked"] is True and "import cấm" in out["reason"]
@@ -580,3 +580,37 @@ def test_existing_privileged_import_stays_critical_with_flag(tmp_path, monkeypat
     _write(tmp_path, "server/db.js", "export const db = 1;\n")
     out = _test_import_run(tmp_path, monkeypatch, "../server/db.js")
     assert out["failure_class"] == "critical" and "import cấm" in out["reason"]
+
+
+def _sibling_import(tmp_path, monkeypatch, spec, flag=True):
+    from settings import reset_settings
+    monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1" if flag else "0")
+    monkeypatch.setenv("AI_BOARD_REQUESTER_FULLSTACK_DB", "1")
+    monkeypatch.setenv("AI_BOARD_DB_CHECK", "1")
+    reset_settings()
+    plan = _plan([{"title": "t", "file": "server/contexts/portal-apps/index.js", "verify": "v", "size": "small"}])
+    for rel in ("server/contexts/portal-apps/index.js", "server/contexts/portal-apps/builtin-catalog.js",
+                "server/contexts/learning/index.js", "server/contexts/payment/index.js", "server/db.js"):
+        _write(tmp_path, rel, "export const x = 1;\n")
+    _write(tmp_path, "test/p.test.js", f"import {{ x }} from '{spec}';\n")
+    diffs = [{"title": "t", "file": "server/contexts/portal-apps/index.js", "test_file": "test/p.test.js", "diff": "+x\n"}]
+    try:
+        return static_check.run({"plan": plan, "diffs": diffs, "scratch_repo": str(tmp_path)})
+    finally:
+        reset_settings()
+
+
+@pytest.mark.parametrize("spec", ["../server/contexts/portal-apps/builtin-catalog.js", "../server/contexts/learning/index.js"])
+def test_test_may_import_any_existing_unprotected_server_file_with_flag(tmp_path, monkeypatch, spec):
+    assert _sibling_import(tmp_path, monkeypatch, spec)["blocked"] is False
+
+
+@pytest.mark.parametrize("spec", ["../server/db.js", "../server/contexts/payment/index.js"])
+def test_protected_and_money_imports_in_tests_stay_critical(tmp_path, monkeypatch, spec):
+    out = _sibling_import(tmp_path, monkeypatch, spec)
+    assert out["failure_class"] == "critical" and "import cấm" in out["reason"]
+
+
+def test_sibling_import_in_test_blocked_with_flag_off(tmp_path, monkeypatch):
+    out = _sibling_import(tmp_path, monkeypatch, "../server/contexts/learning/index.js", flag=False)
+    assert out["blocked"] is True and out["failure_class"] == "critical"
