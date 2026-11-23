@@ -51,7 +51,7 @@ const bucketed = ['model_calls', 'semantic_repairs', 'tokens'];
 /** Trần execute = base + per_step * số bước plan hiện hành, kẹp max; chưa có plan thì base. */
 export function scaledRootLimit(cap, steps) {
   const { per_step: step, max } = LIMITS.root_work_scaling[cap];
-  const count = Math.min(Math.max(Number(steps) || 0, 0), LIMITS.max_subtasks_per_run);
+  const count = Math.max(Number(steps) || 0, 0);
   return Math.min(LIMITS.root_work[cap] + step * count, max);
 }
 

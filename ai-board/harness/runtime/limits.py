@@ -238,7 +238,7 @@ def scaled_limit(kind: str, n: int) -> int:
     """Trần mỗi lượt theo số subtask n, cùng công thức với store-contract.js scaledLimit."""
     limits = _parsed()["limits"]
     spec = limits["per_run"][kind]
-    count = min(max(int(n or 0), 0), limits["max_subtasks_per_run"])
+    count = max(int(n or 0), 0)
     return min(spec["base"] + spec["per_subtask"] * count, spec["max"])
 
 
@@ -247,7 +247,7 @@ def run_wall_clock_s(n: int, *, local: bool) -> float:
     if not local:
         return float(scaled_limit("wall_clock_s", n))
     spec = _parsed()["limits"]["local_wall_clock_s"]
-    count = min(max(int(n or 0), 0), _parsed()["limits"]["max_subtasks_per_run"])
+    count = max(int(n or 0), 0)
     return float(min(spec["base"] + _parsed()["limits"]["budget"]["node_wall_clock_s"] * count, spec["max"]))
 
 
