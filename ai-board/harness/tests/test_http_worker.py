@@ -1038,7 +1038,7 @@ def test_authorized_plan_is_executed_without_replanning():
     assert 'resume-plan' in paths and 'plan' not in paths and 'verdict' in paths
     runs = [call[2] for call in transport.calls if call[1].endswith('/runs')]
     assert runs[0]['trigger'] == 'execute'
-    assert seen == {'plan': {'goal': 'approved'}, 'max_units': 200, 'policy_hash': POLICY['hash']}
+    assert seen == {'plan': {'goal': 'approved'}, 'max_units': 240, 'policy_hash': POLICY['hash']}
     assert out['status'] == 'planned' and out['tier'] == 'protected'
 
 def test_http_execution_missing_contract_never_calls_change_runner():
@@ -1971,6 +1971,7 @@ def test_plan_rejection_only_returns_schema_rejection_bodies():
     assert "runnable command" in _plan_rejection(err(400, b'{"error":"malformed_plan","message":"acceptance must be a runnable command"}'))
     assert _plan_rejection(err(400, b'{"error":"invalid_plan"}')) is None
     assert _plan_rejection(err(500, b'malformed_plan')) is None
+    assert "runnable command" in _plan_rejection(err(422, b'{"error":"malformed_plan","detail":"acceptance must be a runnable command"}'))
 
 
 def test_repaired_snapshot_keeps_the_hint_out_of_the_thread():
