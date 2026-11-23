@@ -80,3 +80,17 @@ def test_a_verify_test_path_no_subtask_creates_is_rejected_even_with_elevation()
     assert out["blocked"] is True
     assert out.get("outcome") is None
     assert "test/faq.test.js" in out["reason"]
+
+
+@pytest.mark.parametrize("acceptance, blocked", [
+    (["grep -q faq server/contexts/content/index.js"], True),
+    (["grep -q faq server/contexts/content/index.js", "curl -s localhost:8041/api/faq | grep -q items"], False),
+])
+def test_feature_acceptance_must_run_the_code_not_grep_its_source(monkeypatch, acceptance, blocked):
+    monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1")
+    plan = {**core_plan(), "acceptance": acceptance}
+    plan["subtasks"] = [{**plan["subtasks"][0], "layer": "backend"}]
+    request = {**REQUEST, "elevation": approved("server/contexts/content/index.js", "core")}
+    out = brainstorm.run(request, deps_with(plan), Budget(max_wall_clock_s=999))
+    assert ("chỉ grep mã nguồn" in str(out["reason"])) is blocked
+    assert out["blocked"] is blocked, out["reason"]
