@@ -497,6 +497,21 @@ def test_a_failing_feature_acceptance_blocks_the_verdict(tmp_path):
     assert "feature acceptance failed: npm test" in out["reason"]
 
 
+@pytest.mark.parametrize("critical_only, blocked", [(True, True), (False, False)])
+def test_soft_checks_keep_acceptance_critical_only_under_critical_only(tmp_path, monkeypatch, critical_only, blocked):
+    monkeypatch.setenv("AI_BOARD_SOFT_QUALITY_CHECKS", "1")
+    class Failing(FakeRunner):
+        def __call__(self, args, **kwargs):
+            if "exec" in args and "sh" in args and "-lc" in args:
+                self.calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 1, "", "acceptance failed")
+            return super().__call__(args, **kwargs)
+
+    out = verify.run({**state(checkout(tmp_path)), "acceptance": ["npm test"], "critical_only_checks": critical_only}, runner=Failing())
+
+    assert ("feature acceptance failed: npm test" in (out.get("reason") or "")) is blocked
+
+
 def test_a_described_acceptance_is_not_executed_as_a_shell_command(tmp_path):
     runner = FakeRunner()
     out = verify.run({**state(checkout(tmp_path)), "acceptance": ["Trang hiện bộ thẻ"]}, runner=runner)
