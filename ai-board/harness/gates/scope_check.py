@@ -20,6 +20,7 @@ from pathlib import Path
 
 import path_policy
 from runtime import levels, subtask_files
+from settings import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
 CAPABILITIES_JS = ROOT / "server" / "contexts" / "capabilities.js"
@@ -150,6 +151,8 @@ def check(plan: dict, names: dict[str, frozenset[str]] | None = None, catalog: d
         for file in files:
             if any(allowed(file, (catalog or {}).get(cap, {})) for cap in caps):
                 continue
+            if get_settings().critical_only_checks and re.match(r'tests?/', file):
+                continue  # a test file rides with its subject, as in gates 4 and 5.5
             if any(elevated(cap, file) for cap in caps if cap not in names['surface']):
                 continue
             return {'blocked': True, 'reason': f"file '{file}' ngoài surface catalog đã cấp"}

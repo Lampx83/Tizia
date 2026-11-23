@@ -205,3 +205,62 @@ def test_budget_factor_is_clamped(on, monkeypatch):
     assert subtask_files.budget_factor(big) == 2 * cap
     from runtime import tool_loop
     assert tool_loop.child_caps(big)["max_model_calls"] <= 2 * cap * limits.loop()["model_calls"]
+
+
+CATALOG = {"generated.context": {"allow": ["server/contexts/"], "deny": []}}
+REQUEST = {"domain": "it", "type": "feature"}
+
+
+def _canonical(verify, files):
+    from worker import HarnessPlanner
+    old = {"summary_vi": "g", "capabilities": ["generated.context"],
+           "subtasks": [{"title": "t", "file": "server/contexts/a/index.js", "verify": verify, "size": "small", "files": files}]}
+    return HarnessPlanner._canonical(REQUEST, old, None, CATALOG)
+
+
+def test_canonical_carries_extra_files_when_multi_file_on(on):
+    plan = _canonical("node --test test/a.test.js", ["server/contexts/a/x.js"])
+    assert plan["steps"][0]["allowed_scope"] == ["server/contexts/a/index.js", "server/contexts/a/x.js"]
+    assert plan["allowed_scope"] == plan["steps"][0]["allowed_scope"]
+
+
+def test_canonical_drops_extra_files_when_flag_off():
+    plan = _canonical("node --test test/a.test.js", ["server/contexts/a/x.js"])
+    assert plan["steps"][0]["allowed_scope"] == ["server/contexts/a/index.js"]
+
+
+def test_execution_plan_keeps_files_when_multi_file_on(on):
+    from worker_execution import _execution_plan
+    step = {"order": 1, "title": "t", "allowed_scope": ["a.js", "b.js"], "tests": ["node --test x"], "risk": "low"}
+    assert _execution_plan({"steps": [step]})["subtasks"][0]["files"] == ["b.js"]
+
+
+def test_execution_plan_drops_files_when_flag_off():
+    from worker_execution import _execution_plan
+    step = {"order": 1, "title": "t", "allowed_scope": ["a.js", "b.js"], "tests": ["node --test x"], "risk": "low"}
+    assert "files" not in _execution_plan({"steps": [step]})["subtasks"][0]
+
+
+def test_prose_verify_becomes_runnable_command_under_critical_only(monkeypatch):
+    monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1")
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    step = _canonical("Route trả 200 khi gọi", ["test/a.test.js"])["steps"][0]
+    assert step["tests"] == step["acceptance"] == ["node --test test/a.test.js"]
+    assert "Route trả 200" in step["description"]
+    step = _canonical("prose only", [])["steps"][0]
+    assert step["tests"] == ["node --check server/contexts/a/index.js"]
+
+
+def test_prose_verify_unchanged_when_critical_only_off():
+    step = _canonical("Route trả 200 khi gọi", [])["steps"][0]
+    assert step["tests"] == ["Route trả 200 khi gọi"]
+
+
+def test_scope_check_exempts_test_file_under_critical_only(monkeypatch):
+    from gates import scope_check
+    plan = {"capabilities": ["generated.context"], "subtasks": [{"file": "server/contexts/_ai-generated/a/index.js", "files": ["test/a.test.js"]}]}
+    cat = {"generated.context": {"tier": "surface", "allow": ["server/contexts/_ai-generated/"], "deny": []}}
+    monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
+    assert scope_check.run({"plan": plan, "catalog": cat})["blocked"]
+    monkeypatch.setenv("AI_BOARD_CRITICAL_ONLY_CHECKS", "1")
+    assert not scope_check.run({"plan": plan, "catalog": cat})["blocked"]
