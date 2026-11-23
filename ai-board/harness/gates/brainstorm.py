@@ -210,6 +210,18 @@ def is_runnable(text: str) -> bool:
     return bool(RUNNABLE.match(text) or (unified_verify() and READONLY_CHECK.match(text)))
 
 
+def source_only_acceptance(plan: dict) -> str | None:
+    """Fault when every acceptance of a feature plan only greps repo source; None when one runs the code."""
+    items = [str(item).strip() for item in plan.get("acceptance") or []]
+    if not items or not is_feature_plan(plan) or not all(READONLY_CHECK.match(item) for item in items):
+        return None
+    module = next((t["file"] for t in plan.get("subtasks") or [] if str(t.get("file", "")).endswith(".js")), "public/js/<module>.js")
+    # A grep of the file being edited passes as soon as the text is typed: it never proves the feature works.
+    return ("acceptance chỉ grep mã nguồn, không chạy tính năng: thêm ít nhất một lệnh gọi code thật, ví dụ "
+            f"node -e \"import('./{module}').then(m => {{ const r = m.<hàm>(<input thật>); if (<r sai>) process.exit(1) }})\" "
+            "hoặc curl -s localhost:8041/<api hoặc trang> | grep -q '<giá trị kỳ vọng>'")
+
+
 def prose_verify_ok() -> bool:
     """critical_only_checks: a verify that is not a command is advice for the coder, not a plan fault."""
     return bool(getattr(get_settings(), "critical_only_checks", False))
@@ -581,6 +593,8 @@ def run(request: dict, deps, budget, *, db_path=None, proposal_id: int | None = 
             grounding_paths.check_references(plan, source, commit, request)
             if broken := acceptance_structure.problems(plan, request):
                 raise ValueError(broken[0])
+            if hollow := source_only_acceptance(plan):
+                raise ValueError(hollow)
             judge(stage, True, ", ".join(task["file"] for task in plan["subtasks"]))
             stage = "renderer match"
             required = functional.expected_targets({'request_title': request.get('subject'), 'request_detail': request.get('body')})
