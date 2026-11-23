@@ -185,7 +185,7 @@ def test_in_worker_ships_payload_execs_with_env_and_copies_report_back(tmp_path)
     report = rg.replay_in_worker(1, 5, query=lambda sql: PAYLOAD_SQL, arm_env={"AI_BOARD_X": "0"}, arm="B0",
                                  out_dir=tmp_path / "out", docker=fake)
     cmd = next(c for c in fake.calls if c[0] == "exec" and "python" in c)
-    assert cmd[:3] == ["exec", "-w", rg.WORKER_HARNESS] and "AI_BOARD_X=0" in cmd
+    assert cmd[:5] == ["exec", "-u", rg.WORKER_USER, "-w", rg.WORKER_HARNESS] and "AI_BOARD_X=0" in cmd
     assert cmd[cmd.index("-m") + 1] == "evaluation.pipeline.replay_gate"
     assert fake.sent["gate"] == 5 and fake.sent["arm_env"] == {"AI_BOARD_X": "0"} and fake.sent["checkpoint"]["base_sha"] == "b"
     assert os.path.dirname(report["path"]) == str(tmp_path / "out") and os.path.exists(report["path"])

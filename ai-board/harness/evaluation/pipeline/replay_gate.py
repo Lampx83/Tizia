@@ -231,6 +231,10 @@ def _docker(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(["docker", *args], capture_output=True, timeout=timeout, env={**os.environ, "MSYS_NO_PATHCONV": "1"})
 
 
+# WHY: the worker entrypoint drops to this user; repo ownership and egress rules assume it
+WORKER_USER = "aiboard"
+
+
 def _err(done) -> str:
     return (done.stderr or b"").decode("utf-8", "replace").strip()[-1500:]  # WHY: the exception line is at the end of a traceback
 
@@ -257,7 +261,7 @@ def replay_in_worker(request_id: int, gate: int, *, query, arm_env: dict[str, st
         if done.returncode:
             raise ReplayError(f"docker cp payload into {worker}: {_err(done)}")
         env_args = [a for k, v in (arm_env or {}).items() for a in ("-e", f"{k}={v}")]
-        done = docker(["exec", "-w", WORKER_HARNESS, *env_args, worker, "python", "-m", "evaluation.pipeline.replay_gate",
+        done = docker(["exec", "-u", WORKER_USER, "-w", WORKER_HARNESS, *env_args, worker, "python", "-m", "evaluation.pipeline.replay_gate",
                        "--payload", remote], timeout=timeout)
         out = (done.stdout or b"").decode("utf-8", "replace")
         print(out, end="")
