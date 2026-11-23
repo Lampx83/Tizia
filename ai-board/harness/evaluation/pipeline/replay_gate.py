@@ -230,7 +230,7 @@ def _docker(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
 
 
 def _err(done) -> str:
-    return (done.stderr or b"").decode("utf-8", "replace").strip()[:400]
+    return (done.stderr or b"").decode("utf-8", "replace").strip()[-1500:]  # WHY: the exception line is at the end of a traceback
 
 
 def replay_in_worker(request_id: int, gate: int, *, query, arm_env: dict[str, str] | None = None, times: int = 1,
