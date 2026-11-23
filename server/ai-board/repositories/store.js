@@ -1721,7 +1721,9 @@ function resumeSummary(journal) {
 
     const rounds = root.auto_rounds + 1;
     const budget = root.cumulative_budget + input.budgetUsed;
-    if (rounds > 2 || input.budgetUsed > root.budget_limit) { // budget_limit là trần MỖI lượt, không phải cả ticket
+    // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới. Chi phí lập plan so với trần của chính plan này.
+    const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
+    if (rounds > 2 || input.budgetUsed > runLimit) { // trần MỖI lượt, không phải cả ticket
       const reason = rounds > 2 ? 'automatic_round_limit' : 'run_budget_exhausted';
       await db.run(`
         UPDATE ai_tickets SET status='waiting_admin', phase='budget_exhausted',
@@ -1755,8 +1757,6 @@ function resumeSummary(journal) {
       checked.policyHash, publicNote, internalReason, now]);
     // Approved elevation covering this plan's targets is the plan authorization (gate 3 does not wait for a manual one).
     await authorizeElevatedPlan(Number(ticketId), checked.planHash, revision, checked.tier, elevation, now);
-    // Trần lượt thực thi theo số bước của plan; không bao giờ hạ trần admin đã nới.
-    const runLimit = Math.max(root.budget_limit, scaledLimit('units', checked.plan.steps.length));
     await db.run(`
       UPDATE ai_tickets SET status=?, phase='ticketized', public_note=?, internal_reason=?,
         tier=?, plan_hash=?, plan_revision=?, auto_rounds=?, cumulative_budget=?, budget_limit=?, updated_at=?
