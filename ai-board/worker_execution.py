@@ -1283,7 +1283,7 @@ def harness_change_runner(checkout_source=None, tracer=None, progress=None) -> C
         budget = Budget.from_env()
         budget.max_units = max_units
         # Thời gian + số lần gọi model lớn theo số bước của plan (task lớn không chạm trần cố định 900 s / 40 lần).
-        if get_settings().tool_loop != "1":  # tool-loop: trần parent cố định từ BUDGET_MAX_*, không scale theo plan
+        if get_settings().tool_loop != "1":  # tool-loop: trần parent cố định từ contract limits.budget, không scale theo plan
             steps = len(plan.get("steps") or [])
             budget.max_wall_clock_s = run_wall_clock_s(steps, local=getattr(deps, "provider", "ollama") != "api")
             budget.max_model_calls = scaled_limit("model_calls", steps)
