@@ -146,6 +146,31 @@ def lint_imports(code: str, file_path: str, base_code: str = "", privileged_ok: 
     return violations
 
 
+def missing_imports(code: str, file_path: str, base_code: str, exists, locate) -> tuple[list[str], frozenset]:
+    """(repair hints, resolved paths) for new relative imports of files that do not exist. `exists(path)` probes the tree; `locate(name)` = known paths with that basename, for the did-you-mean."""
+    base = posixpath.dirname(_posix(file_path))
+    already = {resolved for _, resolved in _resolved_imports(base_code, base)}
+    hints, missing = [], set()
+    for spec, resolved in _resolved_imports(code, base):
+        if resolved in already or any(exists(resolved + tail) for tail in ("", ".js", "/index.js")):
+            continue
+        parts, match, known = resolved.split("/"), [], set(locate(posixpath.basename(resolved)))
+        for i in range(1, len(parts)):  # longest tail first so a wrong leading dir (test/server/...) is dropped
+            tail = "/".join(parts[i:])
+            match = [c for c in known if c == tail or c.endswith("/" + tail)]
+            if match:
+                break
+        if len(match) != 1 and _privileged(resolved, file_path):
+            continue  # an unlocated privileged target stays a boundary violation
+        missing.add(resolved)
+        if len(match) == 1:
+            fix = posixpath.relpath(match[0], base)
+            hints.append(f"import '{spec}' resolves to '{resolved}', which does not exist; did you mean '{fix if fix.startswith('.') else './' + fix}'?")
+        else:
+            hints.append(f"import '{spec}' resolves to '{resolved}': file not found")
+    return hints, frozenset(missing)
+
+
 _TEST_PATH = re.compile(r"\b((?:tests?)/[\w./-]+\.(?:js|mjs))")
 
 
@@ -344,6 +369,18 @@ def run(state: dict, *, check_size: bool = True, deps=None, budget=None, db_path
             # A generated test may import a server file the plan itself edits (critical_only_checks + fullstack zone).
             plan_edits = (frozenset(planned_files) if candidate == _posix(d.get("test_file") or "") and candidate != file_path
                           and functional.tolerant_literals() and path_policy.fullstack_on() else frozenset())
+            if functional.tolerant_literals():
+                def exists(rel, _root=Path(scratch_repo)):
+                    return rel in planned_files or (_root / rel).is_file() or (base_read is not None and base_read(rel) is not None)
+                def locate(name, _root=Path(scratch_repo)):
+                    named = {x for x in planned_files | {_posix(d["file"]) for d in diffs} if posixpath.basename(x) == name}
+                    return named | {q.relative_to(_root).as_posix() for q in _root.rglob(name) if "node_modules" not in q.parts}
+                hints, gone = missing_imports(code, candidate, base_code(candidate), exists, locate)
+                plan_edits = plan_edits | gone
+                if hints:
+                    reason = f"'{candidate}': {'; '.join(hints)}"
+                    return {"gate": 4, "blocked": True, "reason": reason, "needs_careful_review": True,
+                            "issues": [*issues, reason], "failure_class": "ordinary"}
             bad_imports = lint_imports(code, candidate, base_code(candidate), privileged_ok=mounted, allowed=plan_edits)
             if mounted:
                 state["privileged_imports"] = sorted({*state.get("privileged_imports", ()),

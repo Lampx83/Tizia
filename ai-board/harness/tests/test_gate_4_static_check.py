@@ -558,3 +558,25 @@ def test_plan_edited_import_stays_blocked_without_both_flags(tmp_path, monkeypat
 def test_other_privileged_test_imports_stay_blocked(tmp_path, monkeypatch, spec):
     out = _test_import_run(tmp_path, monkeypatch, spec)
     assert out["blocked"] is True and "import cấm" in out["reason"]
+
+
+def test_wrong_relative_test_import_is_repairable_with_exact_specifier(tmp_path, monkeypatch):
+    out = _test_import_run(tmp_path, monkeypatch, "./server/contexts/portal-apps/builtin-catalog.js")
+    assert out["blocked"] is True and out["failure_class"] == "ordinary"
+    assert "did you mean '../server/contexts/portal-apps/builtin-catalog.js'" in out["reason"]
+
+
+def test_missing_import_without_unique_match_is_repairable_file_not_found(tmp_path, monkeypatch):
+    out = _test_import_run(tmp_path, monkeypatch, "../server/nowhere.js", ("critical",))
+    assert out["failure_class"] == "ordinary" and "file not found" in out["reason"]
+
+
+def test_missing_import_check_is_off_without_critical_only(tmp_path, monkeypatch):
+    out = _test_import_run(tmp_path, monkeypatch, "./server/contexts/portal-apps/builtin-catalog.js", ("zone",))
+    assert out["failure_class"] == "critical" and "import cấm" in out["reason"]
+
+
+def test_existing_privileged_import_stays_critical_with_flag(tmp_path, monkeypatch):
+    _write(tmp_path, "server/db.js", "export const db = 1;\n")
+    out = _test_import_run(tmp_path, monkeypatch, "../server/db.js")
+    assert out["failure_class"] == "critical" and "import cấm" in out["reason"]
