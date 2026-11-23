@@ -861,7 +861,7 @@ def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None
                         stage = 'tooling'
                         raise RuntimeError(f"thiếu công cụ trong container: {tool} (acceptance: {item})") from exc
                     detail = (logs[-1][-400:] if logs else '').replace('\n', ' ')
-                    if not soft:
+                    if not soft or functional.tolerant_literals():  # acceptance is the feature itself: critical even when other checks are soft
                         raise RuntimeError(f"feature acceptance failed: {item} | {detail}") from exc
                     soft_misses.append(_soft_miss("acceptance", 1, f"{item} | {detail}"))
                     logs.append(f"Feature acceptance failed (soft miss): {item}")
