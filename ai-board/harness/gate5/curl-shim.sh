@@ -14,4 +14,6 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$url" ] || { echo "curl shim: no URL" >&2; exit 2; }
 case "$url" in http://*|https://*) ;; *) url="http://$url" ;; esac
+# busybox wget tries ::1 only for localhost; the app listens on IPv4 and curl would fall back.
+url=$(printf %s "$url" | sed -E 's#^(https?://)localhost([:/?]|$)#\1127.0.0.1\2#')
 exec wget -q -O "$out" "$url"
