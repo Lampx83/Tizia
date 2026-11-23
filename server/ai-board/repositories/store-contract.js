@@ -131,6 +131,7 @@ const MAX_BUDGET_EXTENSION = 200;
 // ponytail: fixed D0 ceilings from the hardening spec; make them admin config only if real tickets hit them.
 export const LIMITS = CONTRACT.limits;
 const MAX_BUDGET_LIMIT = LIMITS.per_run.units.max; // hard ceiling across all extensions of one root
+export const PLAN_UNITS_LIMIT = LIMITS.per_run.plan_units.max;
 
 const DAY_MS = 24 * 3600_000;
 // GPU-s người gửi r đã dùng từ mốc `?` (tổng budget_units các lần gọi model của mọi root của họ).

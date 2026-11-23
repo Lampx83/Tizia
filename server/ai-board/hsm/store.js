@@ -8,7 +8,8 @@ import { createPromptLabelStore } from '../repositories/prompt-labels.js';
 
 const fail=(code,status=409)=>{throw new WorkerContractError(code,status,code);};
 const view=row=>({...row,path:statePath(row.state),result:JSON.parse(row.result_json || 'null'),result_json:undefined});
-const parentRemaining=root=>Number(root.budget_limit)-Number(root.cumulative_budget);
+// cumulative_budget already holds this run's planning cost, which has its own ceiling.
+const parentRemaining=(root,run)=>Number(root.budget_limit)-Number(root.cumulative_budget)+(Number(JSON.parse(run?.evidence_json||'{}').plan_budget)||0);
 export function createHsmStore(store) {
   const db=store.db;
   const manifests=createToolManifestStore(db);
@@ -66,7 +67,7 @@ export function createHsmStore(store) {
       reason ||= version!==(row?.version || 0)?'hsm_stale_version':null;
       reason ||= !edge?'hsm_illegal_transition':null;
       if (input.event==='BEGIN') {
-        const remaining=parentRemaining(root);
+        const remaining=parentRemaining(root,run);
         reason ||= !Number.isFinite(remaining) || remaining<=0?'hsm_budget_exhausted':null;
       }
       if (!reason) {
@@ -113,7 +114,7 @@ export function createHsmStore(store) {
       if (input.tool_manifest!==undefined || LOOP_TOOLS.has(input.action)) await manifests.assertApproved(t,input.tool_manifest);
       if (input.check_registry!==undefined) await checkRegistries.assertApproved(t,input.check_registry);
       if (input.prompt_labels!==undefined) await promptLabels.assertCurrent(t,input.prompt_labels);
-      const remaining=parentRemaining(root);
+      const remaining=parentRemaining(root,run);
       if (!Number.isFinite(remaining) || remaining<=0) fail('action_budget_exhausted');
       // Mutating services still fence their own writes atomically.
       return {authorized:true,run_id:run.id,plan_hash:plan.plan_hash,plan_revision:plan.revision,parent_remaining:remaining};

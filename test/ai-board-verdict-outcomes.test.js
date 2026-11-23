@@ -319,18 +319,18 @@ test('an extension past the unit ceiling hands the root to a human', async () =>
 
 test('verdict budget is checked per run against the extended limit, not a fixed number', async () => {
   const { db, submit, ticket } = await plannedRoot();
-  await assert.rejects(async () => submit(passing({ budget_used: RUN - 40 + 1 })), (error) => error.code === 'run_budget_exhausted');
+  await assert.rejects(async () => submit(passing({ budget_used: RUN + 1 })), (error) => error.code === 'run_budget_exhausted');
   await db.prepare('UPDATE ai_tickets SET budget_limit=? WHERE id=?').run(RUN + 80, ticket.id);
   assert.equal((await submit(passing({ budget_used: RUN + 40 }), 'outcome-verdict-002')).outcome, 'ready_for_pr');
 });
 
-test('one run budget covers plan plus execution: the server adds the run\'s plan spend to the verdict', async () => {
+test('the run budget covers execution only: planning spend has its own ceiling', async () => {
   const { db, submit } = await plannedRoot(); // plan spent 40 in this run, limit RUN
-  await assert.rejects(async () => submit(passing({ budget_used: RUN - 40 + 1 })), (error) => error.code === 'run_budget_exhausted' && error.status === 409);
-  assert.equal((await submit(passing({ budget_used: RUN - 40 }), 'outcome-verdict-002')).outcome, 'ready_for_pr');
+  await assert.rejects(async () => submit(passing({ budget_used: RUN + 1 })), (error) => error.code === 'run_budget_exhausted' && error.status === 409);
+  assert.equal((await submit(passing({ budget_used: RUN }), 'outcome-verdict-002')).outcome, 'ready_for_pr');
   const evidence = JSON.parse((await db.prepare('SELECT evidence_json FROM ai_runs').get()).evidence_json);
   assert.equal(evidence.plan_budget, 40);
-  assert.equal(evidence.verdict.budget_used, RUN - 40, 'verdict budget stays execution-only');
+  assert.equal(evidence.verdict.budget_used, RUN, 'verdict budget stays execution-only');
 });
 
 test('candidate metadata is validated and only allowed on a passing verdict', async () => {

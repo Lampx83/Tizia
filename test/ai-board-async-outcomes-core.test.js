@@ -145,8 +145,8 @@ test('plans (surface, protected + authorize + resume, core, guardrail block, bud
     r.bigBudget = await store.submitPlan(big.id, { ...big.lease, runId: big.run.id, plan: planOf(), budgetUsed: 2400, idempotencyKey: 'plan-core-bb' });
     await newRequest(store, { tag: 'pb' });
     const pb = await claimAndRun(store, 'w-pb');
-    // 250 > default 200 but within the 1-step plan's own ceiling (120 + 150).
-    r.planBudget = await store.submitPlan(pb.id, { ...pb.lease, runId: pb.run.id, plan: planOf(), budgetUsed: 250, idempotencyKey: 'plan-core-pb' });
+    // 500 > the 1-step execution ceiling (120 + 150) but within the separate planning ceiling.
+    r.planBudget = await store.submitPlan(pb.id, { ...pb.lease, runId: pb.run.id, plan: planOf(), budgetUsed: 500, idempotencyKey: 'plan-core-pb' });
     r.queue = await store.listAdminQueue();
     return r;
   });
@@ -174,6 +174,6 @@ test('plans (surface, protected + authorize + resume, core, guardrail block, bud
   assert.equal(out.root_x4.phase, 'transient_blocked');
   assert.deepEqual(out.transientRoot, { status: 'queued', phase: 'authorized' }, 'transient block with retry enabled requeues the root');
   assert.equal(out.bigBudget.status, 'waiting_admin', 'plan over budget goes to admin');
-  assert.equal(out.planBudget.status, 'planned', 'planning cost is checked against the ceiling of the plan it produced');
+  assert.equal(out.planBudget.status, 'planned', 'planning cost has its own ceiling');
   assert.ok(out.queue.some((row) => row.phase === 'critical_violation'));
 });

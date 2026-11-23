@@ -10,7 +10,7 @@ import time
 import urllib.error
 from typing import Callable
 
-from worker_client import CONTRACT, DEFAULT_BUDGET_LIMIT, LIMITS, PLAN_GATES
+from worker_client import CONTRACT, LIMITS, PLAN_GATES
 from worker_execution import CHECK_REVISE, _load_harness, _real_deps, node_span
 import path_policy  # noqa: E402
 from runtime import coverage
@@ -505,9 +505,8 @@ class HarnessPlanner:
         # Model 35B chạy tuần tự: một lượt lập plan (gate 1 nhiều lần thử + 2.5) dễ vượt 900 s mặc định.
         budget.max_wall_clock_s = max(budget.max_wall_clock_s, 1800.0)
         ticket = snapshot.get("ticket") or {}
-        # Trần units mỗi lượt: plan của request mới chưa có steps nên budget_limit mặc định (200) quá thấp
-        # cho 10+ lời gọi model 35B; không thấp hơn trần units mặc định của contract.
-        budget.max_units = max(int(ticket.get("budget_limit") or DEFAULT_BUDGET_LIMIT), 600)
+        # Lập plan có trần units riêng (server so cùng số ở submitPlan); budget_limit chỉ cho phần thực thi.
+        budget.max_units = LIMITS["per_run"]["plan_units"]["max"]
         source = source or self.source  # folder: đỉnh nhánh chu kỳ thay cho checkout chung
         state = {'catalog': (snapshot.get('capability_policy') or {}).get('capabilities', {})}
         if request.get('elevation'):
