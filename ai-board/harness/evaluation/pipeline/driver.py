@@ -2182,6 +2182,18 @@ def cmd_run(args) -> int:
 LOCK_FILE = DATA / "driver.lock"
 
 
+def cmd_replay_gate(args) -> int:
+    from evaluation.pipeline import replay_gate
+    try:
+        replay_gate.replay(args.request, args.gate, query=lambda sql: replay_gate.ro_query(BOARD_PG, sql),
+                           source=Path(args.source), arm_env=arm_env(args.arm) if args.arm else None, arm=args.arm,
+                           times=args.times, out_dir=DATA / "replays")
+    except replay_gate.ReplayError as exc:
+        print(f"[replay] STOP: {exc}")
+        return 4
+    return 0
+
+
 def cmd_stop(_args) -> int:
     pid = driver_lock.stop(LOCK_FILE)
     print(f"[driver] stopped pid {pid}" if pid else "[driver] no live driver")
@@ -2286,6 +2298,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cases", default="", help="subset of plan.json cases; same syntax as plan --cases")
     p.set_defaults(func=cmd_run)
 
+    p = sub.add_parser("replay-gate", help="re-run one gate of a saved attempt from its journal checkpoint; board DB read-only")
+    p.add_argument("--request", type=int, required=True)
+    p.add_argument("--gate", type=int, choices=[3, 4, 5], required=True)
+    p.add_argument("--arm", default="", type=lambda t: _arm_name(t) if t else "")
+    p.add_argument("--times", type=int, default=1)
+    p.add_argument("--source", default=str(WORKTREE), help="git repo holding the attempt's base sha")
+    p.set_defaults(func=cmd_replay_gate)
+
     sub.add_parser("stop", help="terminate the live driver holding driver.lock").set_defaults(func=cmd_stop)
 
     p = sub.add_parser("seeds-clean", help="remove history seeds not referenced by plan.json or --keep")
@@ -2305,7 +2325,7 @@ def main(argv: list[str] | None = None) -> int:
     global PROBE_MANIFEST, ANSWER_CLARIFICATIONS
     ANSWER_CLARIFICATIONS = bool(getattr(args, "answer_clarifications", False))
     PROBE_MANIFEST = bool(getattr(args, "probe_manifest", False))
-    long_running = args.cmd in ("trial", "run") and not getattr(args, "dry_run", False)
+    long_running = args.cmd in ("trial", "run", "replay-gate") and not getattr(args, "dry_run", False)
     try:
         with driver_lock.guard(LOCK_FILE, args.cmd) if long_running else contextlib.nullcontext():
             return args.func(args)
