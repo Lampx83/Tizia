@@ -4,6 +4,13 @@ import pytest
 from runtime import subtask_files
 
 
+import sys
+from pathlib import Path
+
+AI_BOARD_DIR = Path(__file__).resolve().parents[2]  # WHY: worker_planner/worker_execution live in ai-board/, outside the harness root
+if str(AI_BOARD_DIR) not in sys.path:
+    sys.path.insert(0, str(AI_BOARD_DIR))
+
 @pytest.fixture
 def on(monkeypatch):
     monkeypatch.setenv("AI_BOARD_MULTI_FILE_SUBTASK", "1")
