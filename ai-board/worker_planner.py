@@ -315,6 +315,24 @@ def model_preflight(ollama, *, clock: Callable[[], float] = time.monotonic, ttl:
 FULLSTACK_CAPABILITY = "context.write"  # server catalog has it only when AI_BOARD_REQUESTER_FULLSTACK_DB is on
 
 
+# mirrors server policy.js RUNNABLE; the server rejects any other backend/multi-step test command
+_RUNNABLE = re.compile(r"^(node --test\b|node\s|npx\s|npm\s+(test|run)\b|curl\s|python[0-9.]*\s|pytest\b|grep\s|rg\s|bash\s|sh\s|docker compose\s|psql\s)")
+
+
+def _critical_only() -> bool:
+    return bool(getattr(get_settings(), "critical_only_checks", False))
+
+
+def _runnable_verify(verify: str, scope: list[str]) -> tuple[str, str]:
+    """(command, prose). Non-runnable verify -> node --test <test file> | node --check <js file>; prose kept apart."""
+    if not _critical_only() or _RUNNABLE.match(verify.strip()):
+        return verify, ""
+    test = next((path for path in scope if re.match(r"tests?/", path) and path.endswith(".js")), None)
+    js = next((path for path in scope if path.endswith(".js")), None)
+    command = f"node --test {test}" if test else f"node --check {js}" if js else None
+    return (command, verify) if command else (verify, "")
+
+
 class HarnessPlanner:
     """Runs existing gates 1, 2 and 2.5, then emits the server-owned D0 schema."""
 
@@ -366,8 +384,8 @@ class HarnessPlanner:
         settings = get_settings()
         from gates import data_kinds, two_level
         from runtime import subtask_files
-        two_level_on = two_level.enabled()
-        planned = _checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level_on else {}
+        two_level_on = two_level.enabled() or subtask_files.enabled()
+        planned = (_checks_by_file(old) if (settings.plan_checks and settings.red_check_classify) or two_level.enabled() else {})
         for index, subtask in enumerate(_merge_same_file(list(old.get("subtasks") or [])), start=1):
             file = posixpath.normpath(subtask["file"].replace("\\", "/"))
             capability = next((cap for cap in old_caps
@@ -392,13 +410,14 @@ class HarnessPlanner:
             depends_on = subtask.get("depends_on")
             if depends_on is None:
                 depends_on = [index - 1] if index > 1 else []
+            verify, prose = _runnable_verify(subtask["verify"], scope)
             steps.append({
                 "order": index,
                 "title": subtask["title"],
-                "description": subtask["title"],
+                "description": f"{subtask['title']} | {prose}" if prose else subtask["title"],
                 "allowed_scope": scope,
-                "acceptance": [subtask["verify"]],
-                "tests": [subtask["verify"]],
+                "acceptance": [verify],
+                "tests": [verify],
                 "capability": capability,
                 "risk": "medium" if subtask.get("size") == "large" else "low",
                 "non_goals": ["Không sửa file ngoài allowed_scope."],
@@ -414,7 +433,9 @@ class HarnessPlanner:
             "domain": request["domain"],
             "goal": old["summary_vi"],
             "allowed_scope": [path for step in steps for path in (step["allowed_scope"] if two_level_on else step["allowed_scope"][:1])],
-            "acceptance": list(dict.fromkeys(old.get("acceptance") or [item for step in steps for item in step["acceptance"]])),
+            "acceptance": list(dict.fromkeys(
+                [item for item in (old.get("acceptance") or []) if not _critical_only() or _RUNNABLE.match(str(item))]
+                or [item for step in steps for item in step["acceptance"]])),
             "tests": list(dict.fromkeys(item for step in steps for item in step["tests"])),
             "capabilities": capabilities,
             "risk": "high" if signals else "medium" if any(step["risk"] == "medium" for step in steps) else "low",
