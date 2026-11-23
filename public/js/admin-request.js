@@ -10,6 +10,7 @@ import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
 import { createPoll } from './poll.js';
+import { traceToOtlp, prettyJson } from './otlp.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -384,7 +385,7 @@ const WRITE_DECISION = { applied: 'Đã áp dụng: kết quả ghi có thật',
 const WRITE_STATUS = { unknown: ['warn', 'chưa rõ kết quả'], compensate: ['warn', 'đang chờ bù trừ'], intent: ['warn', 'đã định ghi, chưa có kết quả'],
   applied: ['ok', 'đã áp dụng'], void: ['idle', 'chưa áp dụng'] };
 const writeTag = (status) => tag(...(WRITE_STATUS[status] || ['idle', status]));
-const evidenceText = (value) => (value && typeof value === 'object' ? Object.entries(value).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n') : String(value ?? ''));
+const evidenceText = (value) => (value && typeof value === 'object' ? Object.entries(value).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v, null, 2)}`).join('\n') : String(value ?? ''));
 
 function reconcileForm(write, writes) {
   const f = ui.reconcile;
@@ -415,7 +416,7 @@ function renderWrites(t) {
   return `<section class="blk st-${open.length ? 'warn' : violation ? 'bad' : 'idle'}" id="unknown-writes" aria-label="Bước ghi chưa rõ">${head}
     ${open.map((w) => `<div class="write-row"><div class="line1"><b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}
         <span class="meta">công việc ${esc(w.child)} · mã ${esc(String(w.identity).slice(0, 8))}</span></div>
-      ${det(`write-${w.identity}:args`, 'Tham số của bước ghi', `<pre>${esc(w.args_preview)}</pre>`)}
+      ${det(`write-${w.identity}:args`, 'Tham số của bước ghi', `<pre>${esc(prettyJson(w.args_preview))}</pre>`)}
       ${ui.reconcile?.identity === w.identity ? reconcileForm(w, writes)
         : `<button type="button" class="btn" data-action="reconcile-open" data-identity="${esc(w.identity)}">Đối chiếu bước này</button>`}</div>`).join('')}
     ${resolved.length ? det('writes-resolved', `Đã đối chiếu (${resolved.length})`, resolved.map((w) => `<div class="write-row"><div class="line1">
@@ -781,7 +782,9 @@ function renderAiBoard(t, messages = []) {
       ${managedLine(root.managed)}
     </section>`;
   const events = minimalEvents(t.events || []);
-  const diagnostics = [renderRunnerTrace(t), renderStopReport(t), renderSoftMisses(t), renderRepairAgent(t)].join('');
+  const otlp = traceToOtlp(t);
+  const otlpBlock = otlp ? det('otlp', 'Trace chuẩn OpenTelemetry (OTLP/JSON)', `<pre class="mono">${esc(JSON.stringify(otlp, null, 2))}</pre>`, { cls: 'raw' }) : '';
+  const diagnostics = [renderRunnerTrace(t), renderStopReport(t), renderSoftMisses(t), renderRepairAgent(t), otlpBlock].join('');
   const needsLook = ['waiting_admin', 'human_owned'].includes(root.status) || Boolean(root.lost_worker);
   return `${summary}${det('technical', 'Chi tiết kỹ thuật: sơ đồ, nhật ký, ngân sách',
     `${diagnostics}${renderTicketGraph(t, ui.node, Date.now(), { summary: '', events, filter: ui.toolFilter })}`, { dopen: needsLook })}`;
