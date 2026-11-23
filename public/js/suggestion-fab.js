@@ -284,7 +284,21 @@ function bind(root) {
         : `<button type="button" class="sgf-attach-rm" data-rm-shot="1" title="Bỏ ảnh chụp">✕</button>`;
       const thumb = it.isImg && it.url ? `<img class="sgf-attach-thumb" src="${it.url}" alt="" />` : '';
       return `<div class="sgf-attach-it">${thumb}<span class="sgf-attach-nm">${escapeHtml(it.name)}${sz}</span>${rm}</div>`;
-    }).join('');
+    }).join('') + unreadNotice(items);
+  }
+  // The board reads attachments only with multimodal on, and then only images, PDF and DOCX.
+  let boardReads = false;
+  fetch('api/ai-board/capabilities', { credentials: 'same-origin' })
+    .then(r => (r.ok ? r.json() : {}))
+    .then(caps => { boardReads = !!caps.multimodal; renderAttachList(); })
+    .catch(() => {});
+  const READABLE = /\.(png|jpe?g|webp|gif|pdf|docx)$/i;
+  function unreadNotice(items) {
+    const unread = items.filter(it => !boardReads || (it.kind === 'file' && !READABLE.test(it.name || '')));
+    if (!unread.length) return '';
+    return `<div class="sgf-attach-note" role="status">Tính năng AI đọc tệp đính kèm đang được phát triển: AI chưa đọc ${
+      boardReads ? escapeHtml(unread.map(it => it.name).join(', ')) : 'các tệp này'
+    }. Tệp vẫn được gửi để Ban điều hành xem; hãy mô tả nội dung cần sửa trong phần chi tiết.</div>`;
   }
   // Thêm danh sách file (từ input / kéo-thả / dán). Gom mọi lỗi vào 1 thông báo.
   function addFiles(list) {
@@ -1488,6 +1502,7 @@ function injectStyles() {
     .sgf-file-row input[type="file"] { font-size: 13px; max-width: 100%; }
     .sgf-file-row input::file-selector-button { min-height: 44px; font: inherit; padding: 8px 12px; margin-right: 8px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; }
     .sgf-attach-hint { font-size: 11px; color: #64748b; padding: 0 2px; }
+    .sgf-attach-note { font-size: 12px; color: #92400e; background: #fef3c7; border-radius: 6px; padding: 6px 8px; margin-top: 4px; }
     .sgf-attach-hint b { color: #4338ca; font-weight: 700; }
     .sgf-attach.sgf-drag { border-color: #6366f1; border-style: solid; background: #eef2ff; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
     .sgf-attach.sgf-drag * { pointer-events: none; }
@@ -1622,6 +1637,7 @@ function injectStyles() {
       .sgf-attach-row b { color: #fef3c7; }
       .sgf-attach-hint { color: #94a3b8; }
       .sgf-attach-hint b { color: #c7d2fe; }
+      .sgf-attach-note { background: #422006; color: #fde68a; }
       .sgf-attach.sgf-drag { background: #312e81; border-color: #818cf8; }
       .sgf-attach-it { background: #312e81; border-color: #4338ca; color: #f1f5f9; }
       .sgf-attach-thumb { border-color: #4338ca; }
