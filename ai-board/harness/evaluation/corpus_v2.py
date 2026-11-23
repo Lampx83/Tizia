@@ -30,13 +30,19 @@ class CorpusV2Error(RuntimeError):
     """Corpus v2 không dựng/ghi được."""
 
 
+# Target-count corpora need more than SUBJECTS x PREDICATES (80) distinct sentences; v1.sentence loops until unused.
+WHENS = ("trong tuần này", "từ học kỳ mới", "vào sáng thứ hai", "theo lịch mới", "cho cả lớp", "ngay hôm nay", "đến cuối tháng",
+         "trong đợt này")
+
+
 class MeaningRng(random.Random):
     """Rng thay random.sample(WORDS, k) của v1 bằng cụm có nghĩa (câu 5 từ, tiêu đề 2-3 từ)."""
 
     def sample(self, population, k, **kw):
         if population is v1.WORDS and k in (2, 3, 5):
             if k == 5:
-                return f"{self.choice(SUBJECTS)} {self.choice(PREDICATES)}".split()
+                tail = f" {self.choice(WHENS)}" if getattr(self, "wide", False) else ""
+                return f"{self.choice(SUBJECTS)} {self.choice(PREDICATES)}{tail}".split()
             return self.choice(TITLES2 if k == 2 else TITLES3).split()
         return super().sample(population, k, **kw)
 
@@ -68,7 +74,7 @@ def _plan(rng: MeaningRng, pages: dict[str, str], base_sha: str, exclude: set, c
         for side in sides:
             for level in (lv for lv in levels if counts or lv in LEVELS):
                 files = set()
-                for _ in range(3 if counts else PER_CELL[side]):
+                for _ in range((1 if kind == "new_page" else 3) if counts else PER_CELL[side]):  # few free slugs for new pages
                     variant = ("size", "hide")[n_size % 2] if kind == "size_hide" else None
                     n_size += kind == "size_hide"
                     if kind == "new_page":
@@ -118,6 +124,7 @@ def plan(seed: int, pages: dict[str, str], base_sha: str = v1.PIN, exclude=(), c
     for attempt in range(50):
         try:
             rng = MeaningRng(f"v2/{seed}/{attempt}")
+            rng.wide = bool(counts)
             cases = _plan(rng, pages, base_sha, set(exclude), counts)
             if counts:
                 cases = [c for side in ("dev", "heldout") for c in _trim(cases, side, counts[side], rng)]
