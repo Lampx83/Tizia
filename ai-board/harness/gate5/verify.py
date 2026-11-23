@@ -837,12 +837,24 @@ def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None
                     # The offline guest's layer cache holds no curl layer; busybox wget is already in the image.
                     command([*compose, "cp", str(_CURL_SHIM), "tizia:/usr/local/bin/curl"])
                     command([*compose, "exec", "-T", "-u", "root", "tizia", "chmod", "755", "/usr/local/bin/curl"])
+            def fixture(stage):
+                if stage in ('seed', 'thread', 'session'):
+                    command([*compose, 'cp', str(Path(__file__).resolve().parents[1] / 'queue_fixture.mjs'), 'tizia:/app/verify-queue.mjs'])
+                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
+                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
+            session_env = []
+            if acceptance and (token := functional._session_token(fixture)):
+                # /api/* sits behind the auth gate; acceptance runs as this run's disposable student, like the route probe.
+                cookie = f"tizia_sid={token}"
+                command([*compose, "exec", "-T", "tizia", "sh", "-c",
+                         f"mkdir -p /tmp/acc-curl && printf 'cookie = \"%s\"\n' '{cookie}' > /tmp/acc-curl/.curlrc"], log_output=False)
+                session_env = ["-e", "CURL_HOME=/tmp/acc-curl", "-e", f"CURL_COOKIE={cookie}"]
             for item in acceptance:
                 for literal in unnormalized_literals(item):
                     logs.append(f"Acceptance literal not NFD-normalised (shell-expanded or apostrophe), byte match only: {literal}")
                 try:
                     with (_check_span(trace, "curl", _acceptance_target(item)) if "curl" in item else nullcontext()):
-                        command([*compose, "exec", "-T", "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
+                        command([*compose, "exec", "-T", *session_env, "tizia", "sh", "-lc", expand_nfd_literals(item)], timeout=120)
                 except (subprocess.TimeoutExpired, RuntimeError) as exc:
                     tool = missing_tool(getattr(exc, 'output', ''), getattr(exc, 'returncode', None), item)
                     if tool:
@@ -863,11 +875,6 @@ def _run(state: dict, deps=None, budget=None, *, checkout_dir: str | Path | None
                 smoke = command([_bash(), SMOKE_SCRIPT.as_posix()], env=env)
             smoke_ok = smoke.returncode == 0
 
-            def fixture(stage):
-                if stage in ('seed', 'thread', 'session'):
-                    command([*compose, 'cp', str(Path(__file__).resolve().parents[1] / 'queue_fixture.mjs'), 'tizia:/app/verify-queue.mjs'])
-                response = command([*compose, 'exec', '-T', 'tizia', 'node', '/app/verify-queue.mjs', stage], log_output=False, timeout=20)
-                return json.loads(response.stdout) if stage in ('seed', 'thread', 'session') else None
             for page in pages:
                 try:
                     with _check_span(trace, "curl", urlsplit(base + page).path) as attrs:

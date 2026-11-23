@@ -16,4 +16,5 @@ done
 case "$url" in http://*|https://*) ;; *) url="http://$url" ;; esac
 # busybox wget tries ::1 only for localhost; the app listens on IPv4 and curl would fall back.
 url=$(printf %s "$url" | sed -E 's#^(https?://)localhost([:/?]|$)#\1127.0.0.1\2#')
+[ -n "${CURL_COOKIE:-}" ] && exec wget -q --header "Cookie: $CURL_COOKIE" -O "$out" "$url"
 exec wget -q -O "$out" "$url"
