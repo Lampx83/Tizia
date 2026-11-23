@@ -1,5 +1,6 @@
 """Corpus v2 builder on synthetic pages: stratified by fix type, page-disjoint, meaningful text, own seed + hash."""
 import json
+from pathlib import Path
 from collections import defaultdict
 
 import pytest
@@ -96,3 +97,14 @@ def test_load_exclude_reads_page_list(tmp_path):
     f = tmp_path / "split.json"
     f.write_text(json.dumps(["public/a.html"]), encoding="utf-8")
     assert corpus_v2.load_exclude(f) == {"public/a.html"}
+
+
+def test_target_counts_give_exact_split_sizes_and_disjoint_pages():
+    from evaluation import eval_corpus as v1
+    pages = v1.real_pages(str(Path(__file__).resolve().parents[3]))
+    cases = corpus_v2.plan(7, pages, counts={"dev": 50, "heldout": 10})
+    dev = [c for c in cases if c["split"] == "dev"]
+    held = [c for c in cases if c["split"] == "heldout"]
+    assert (len(dev), len(held)) == (50, 10)
+    assert not {c["file"] for c in dev} & {c["file"] for c in held}
+    assert len({c["kind"] for c in dev}) >= 6
