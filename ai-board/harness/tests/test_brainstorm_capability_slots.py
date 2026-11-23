@@ -6,8 +6,8 @@ import pytest
 from gates import brainstorm
 from settings import reset_settings
 
-OFF_SHA = "2784330185f138084e5266abb0d9369ac134721e2b27e768097f078859f0e6b5"
-V2_SHA = "ef79e05eee8e75ab64321d3210427715ecca50d0f04ad52593bb2aeffbcebbb5"
+OFF_SHA = "2aceace92febf2c59dee18a8d8c25e16b13ef57617cdd39fd832546506078a01"
+V2_SHA = "07e80aed93496ec08055a0cd0e3fc318f0046dd8ff9639c2445162326a853dc3"
 
 
 def _prompt(monkeypatch, v2):

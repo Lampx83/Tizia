@@ -7,7 +7,7 @@ from runtime.budgets import meter
 from services import context
 
 OFF_SYSTEM_SHA = "46fbee4f4a3ba0dee07fedd6d9e2b1b2cdea841bd77018d16b1bd79e4f86c4aa"
-OFF_MANUAL_SHA = "983b2e880718082cfeeb0d9e790bc4cc405155c74322179841be0c52acf2f544"
+OFF_MANUAL_SHA = "c89a7e5b70d9688937a2f0b932feb1a6dd95b06d2b69a09b9b6e979b8796d236"
 REFACTOR = "Refactor before stacking"
 
 

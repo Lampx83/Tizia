@@ -15,6 +15,9 @@ Tizia: a simulation-based learning web app. Node ESM ("type": "module") + Expres
 - Do not add npm dependencies.
 - Lines added under public/ must NOT contain: "<script", an "on...=" attribute after whitespace (onclick=), "javascript:", "eval(", "new Function(", "document.write(", an email address, or a phone number. Bind events with addEventListener inside the existing module.
 
+## Names
+camelCase names, UPPER_SNAKE consts; server/contexts/<x>/ has attach<X>, route '/api/<x>/'. Grep names; server: give search_text a path.
+
 ## Forbidden areas
 server/db.js and the database: touch only when the admin has approved elevation for that exact file in the plan. server/index.js, ai-board/, server/ai-board/, package*.json, Dockerfile, docker-compose*, .env*, and auth/payment/admin code: always forbidden.
 
