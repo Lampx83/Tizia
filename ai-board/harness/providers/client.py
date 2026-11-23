@@ -54,7 +54,11 @@ def _socket_of(response):
     return getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
 
 
-def read_body(response, limit_s: float) -> bytes:
+# Hosted streams send a chunk every few seconds while generating; silence this long is a stalled channel, not a slow model.
+STREAM_IDLE_S = 90.0
+
+
+def read_body(response, limit_s: float, idle_s: float | None = None) -> bytes:
     """Đọc hết body trong trần `limit_s` giây THẬT. Timeout của socket chỉ chặn từng lần đọc, nên gateway giữ kết
     nối mà không gửi tiếp (hoặc trả nhỏ giọt) làm lần đọc không bao giờ hết hạn; ở đây mỗi khối chờ `select` theo
     hạn chung nên worker trả lỗi thay vì treo."""
@@ -69,10 +73,12 @@ def read_body(response, limit_s: float) -> bytes:
         if left <= 0:
             raise TimeoutError(f'model response not finished within {limit_s:.0f}s')
         try:
-            ready, _, _ = select.select([sock], [], [], left)
+            ready, _, _ = select.select([sock], [], [], left if idle_s is None else min(left, idle_s))
         except (OSError, ValueError):
             ready = [sock]  # socket đã đóng: để lần đọc dưới trả EOF/lỗi thật, không che mất nguyên nhân
         if not ready:
+            if idle_s is not None and deadline - time.monotonic() > 0:
+                raise TimeoutError(f'model stream sent nothing for {idle_s:.0f}s')
             raise TimeoutError(f'model response not finished within {limit_s:.0f}s')
         chunk = response.read(65536)
         if not chunk:
@@ -420,7 +426,8 @@ class OllamaClient:
                 timeout = self.remaining_s()  # Metadata and durable admission may have consumed the deadline.
                 send = urllib.request.build_opener(_NoRedirect()).open if self.protocol == 'vllm' else urllib.request.urlopen
                 with send(req, timeout=timeout) as resp:
-                    text = read_body(resp, timeout).decode("utf-8")
+                    idle = STREAM_IDLE_S if payload.get('stream') and self.route_label == 'api' else None
+                    text = read_body(resp, timeout, idle).decode("utf-8")
                     body = sse_completion(text) if payload.get('stream') else json.loads(text)
                     return body
             except urllib.error.HTTPError as error:

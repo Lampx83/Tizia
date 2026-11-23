@@ -59,3 +59,20 @@ def test_early_eof_is_not_a_timeout():
     finally:
         local.close()
         peer.close()
+
+
+def test_silent_stream_stops_at_the_idle_limit_not_the_full_deadline():
+    local, peer = socket.socketpair()
+    try:
+        peer.sendall(b'data: {}\n\n')
+        started = time.monotonic()
+        try:
+            read_body(Response(local), 30.0, idle_s=0.3)
+        except TimeoutError as error:
+            assert 'sent nothing' in str(error)
+        else:
+            raise AssertionError('a silent stream must stop at the idle limit')
+        assert time.monotonic() - started < 5
+    finally:
+        local.close()
+        peer.close()
