@@ -155,3 +155,61 @@ def test_driver_replay_error_exit_code(monkeypatch):
         raise rg.ReplayError("x")
     monkeypatch.setattr(rg, "replay", boom)
     assert driver.main(["replay-gate", "--request", "1", "--gate", "5"]) == 4
+
+
+class FakeDocker:
+    def __init__(self, running=True, exec_rc=0, exec_err=b""):
+        self.calls, self.running, self.exec_rc, self.exec_err, self.sent = [], running, exec_rc, exec_err, {}
+
+    def __call__(self, args, timeout=0):
+        self.calls.append(args)
+        rc, out, err = 0, b"", b""
+        if args[0] == "inspect":
+            out = b"true\n" if self.running else b"false\n"
+        elif args[0] == "exec" and "python" in args:
+            rc, err, out = self.exec_rc, self.exec_err, b"[replay] #1: PASSED\n"
+        elif args[0] == "cp" and args[2].startswith("aiboard-worker:"):
+            self.sent = json.loads(open(args[1], encoding="utf-8").read())
+        elif args[0] == "cp":
+            open(args[2], "w", encoding="utf-8").write(json.dumps({"request": 1, "gate": 5, "arm": "B0", "runs": [{"blocked": False}]}))
+        return types.SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+
+
+PAYLOAD_SQL = json.dumps({"root": {"id": 7, "plan_hash": "h"}, "plan": {"plan_json": "{}", "capability_policy_hash": "p"},
+                          "journal": [{"id": 1, "run_id": 1, "node": "gate_4", "outcome": "passed", "created_at": 1, "ledger": "{}",
+                                       "state_delta": json.dumps({"base_sha": "b", "produced": {"a": 1}})}]})
+
+
+def test_in_worker_ships_payload_execs_with_env_and_copies_report_back(tmp_path):
+    fake = FakeDocker()
+    report = rg.replay_in_worker(1, 5, query=lambda sql: PAYLOAD_SQL, arm_env={"AI_BOARD_X": "0"}, arm="B0",
+                                 out_dir=tmp_path / "out", docker=fake)
+    cmd = next(c for c in fake.calls if c[0] == "exec" and "python" in c)
+    assert cmd[:3] == ["exec", "-w", rg.WORKER_HARNESS] and "AI_BOARD_X=0" in cmd
+    assert cmd[cmd.index("-m") + 1] == "evaluation.pipeline.replay_gate"
+    assert fake.sent["gate"] == 5 and fake.sent["arm_env"] == {"AI_BOARD_X": "0"} and fake.sent["checkpoint"]["base_sha"] == "b"
+    assert os.path.dirname(report["path"]) == str(tmp_path / "out") and os.path.exists(report["path"])
+    assert any(c[:3] == ["exec", "aiboard-worker", "rm"] for c in fake.calls)
+
+
+def test_in_worker_refuses_when_worker_down(tmp_path):
+    fake = FakeDocker(running=False)
+    with pytest.raises(rg.ReplayError, match="not running"):
+        rg.replay_in_worker(1, 5, query=lambda sql: PAYLOAD_SQL, out_dir=tmp_path, docker=fake)
+    assert [c[0] for c in fake.calls] == ["inspect"]
+
+
+def test_in_worker_missing_module_says_rebuild(tmp_path):
+    fake = FakeDocker(exec_rc=1, exec_err=b"No module named evaluation.pipeline.replay_gate")
+    with pytest.raises(rg.ReplayError, match="rebuild the worker image"):
+        rg.replay_in_worker(1, 5, query=lambda sql: PAYLOAD_SQL, out_dir=tmp_path, docker=fake)
+
+
+def test_worker_main_runs_payload_and_writes_report(tmp_path, monkeypatch):
+    payload = {"request": 1, "gate": 5, "arm": "B0", "arm_env": {}, "times": 1, "data": {"plan": {}},
+               "checkpoint": {"run_id": 1, "base_sha": "b", "entries": []}}
+    p = tmp_path / "p.json"
+    p.write_text(json.dumps(payload))
+    monkeypatch.setattr(rg, "run_once", lambda *a, **k: {"blocked": False, "reason": None, "guest_switches": None, "pin_drift": []})
+    assert rg.main(["--payload", str(p)]) == 0
+    assert json.loads((tmp_path / "p.json.report.json").read_text())["runs"][0]["blocked"] is False

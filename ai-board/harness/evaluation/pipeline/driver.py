@@ -2184,9 +2184,14 @@ LOCK_FILE = DATA / "driver.lock"
 
 def cmd_replay_gate(args) -> int:
     from evaluation.pipeline import replay_gate
+    query = lambda sql: replay_gate.ro_query(BOARD_PG, sql)  # noqa: E731
+    env = arm_env(args.arm) if args.arm else None
     try:
-        replay_gate.replay(args.request, args.gate, query=lambda sql: replay_gate.ro_query(BOARD_PG, sql),
-                           source=Path(args.source), arm_env=arm_env(args.arm) if args.arm else None, arm=args.arm,
+        if args.gate == 5 or args.in_worker:
+            replay_gate.replay_in_worker(args.request, args.gate, query=query, arm_env=env, arm=args.arm,
+                                         times=args.times, out_dir=DATA / "replays", worker=args.worker)
+            return 0
+        replay_gate.replay(args.request, args.gate, query=query, source=Path(args.source), arm_env=env, arm=args.arm,
                            times=args.times, out_dir=DATA / "replays")
     except replay_gate.ReplayError as exc:
         print(f"[replay] STOP: {exc}")
@@ -2304,6 +2309,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--arm", default="", type=lambda t: _arm_name(t) if t else "")
     p.add_argument("--times", type=int, default=1)
     p.add_argument("--source", default=str(WORKTREE), help="git repo holding the attempt's base sha")
+    p.add_argument("--in-worker", action="store_true", help="replay inside the worker container; always on for gate 5 (sandbox runner only reachable there)")
+    p.add_argument("--worker", default="aiboard-worker")
     p.set_defaults(func=cmd_replay_gate)
 
     sub.add_parser("stop", help="terminate the live driver holding driver.lock").set_defaults(func=cmd_stop)
