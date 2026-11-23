@@ -1118,9 +1118,12 @@ def check_command(argv: list[str]) -> None:
         raise Forbidden(reason)
 
 
+_REASON_KINDS = ("error", "forbidden", "finish_rejected", "repeated", "scope_warning")
+
+
 def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, started_ms: int, cid: str | None = None, model_call=None,
                failure: tuple[str, str] | None = None, thought: str | None = None) -> None:
-    """Span `execute_tool <tool>` dưới span cổng đang mở; chỉ digest của observation, không nội dung.
+    """Span `execute_tool <tool>` dưới span cổng đang mở; chỉ digest của observation; lỗi/từ chối kèm lý do đã redact.
 
     Observation record (admin step view): tizia.step, tizia.child, gen_ai.tool.name, gen_ai.tool.call.id, tizia.model_call_id,
     tizia.tool.status (= tool_step.kind: ok|error|infra_error|forbidden|finish_ok|finish_rejected|repeated|scope_warning),
@@ -1135,6 +1138,8 @@ def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, s
         "tizia.tool.error_class": failure[0] if failure else None, "tizia.tool.error_kind": failure[1] if failure else None, "tizia.observation_digest": sha_of(observation or ""),
         "tizia.policy_denied": kind == 'forbidden', "tizia.tool_manifest": MANIFEST.hash,
         **({"tizia.thought": thought} if thought else {}),
+        # Harness-written rejection text is the only record of why a step failed once tool_step is not persisted.
+        **({"tizia.tool.reason": meter.redact(observation)[:600]} if kind in _REASON_KINDS and observation else {}),
     }, start_ms=started_ms, end_ms=int(time.time() * 1000), status="error" if kind in ("error", KIND_INFRA, "forbidden", "finish_rejected", "repeated") else "ok")
 
 
