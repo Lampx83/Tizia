@@ -138,6 +138,8 @@ def _arm_env(arm: str) -> dict[str, str]:
     if arm == "B1-tooldefs-fs":  # backend cases need the requester fullstack zone to get a grantable capability
         return {**arm_env("B1-tooldefs"), "AI_BOARD_REQUESTER_FULLSTACK_DB": "1", "AI_BOARD_DB_CHECK": "1",
                 "AI_BOARD_CRITICAL_ONLY_CHECKS": "1", "AI_BOARD_MULTI_FILE_SUBTASK": "1", "AI_BOARD_BUDGET_BY_FILE_COUNT": "1"}
+    if arm == "B1-tooldefs-fs-intent":  # locked arm plus the gate 4 intent reviewer
+        return {**arm_env("B1-tooldefs-fs"), "AI_BOARD_INTENT_REVIEW": "1"}
     if arm == "B1-tooldefs-fs-api":  # same arm on the hosted API when the shared vLLM is saturated
         return {**arm_env("B1-tooldefs-fs"), "AI_BOARD_API_FALLBACK": "1", "AI_BOARD_API_VERDICT": "api"}
     if arm == "B1":
@@ -158,7 +160,7 @@ def _arm_env(arm: str) -> dict[str, str]:
 
 def arm_table() -> dict[str, dict[str, str]]:
     """Every named arm and its env; written to the freeze manifest."""
-    names = ["A", "B", "B0", "B0-mf", "B0-m2fix", "B0-mf-m2fix", "B0-crit", "B1-tooldefs-fs", "B1", "B1-tooldefs", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
+    names = ["A", "B", "B0", "B0-mf", "B0-m2fix", "B0-mf-m2fix", "B0-crit", "B1-tooldefs-fs", "B1-tooldefs-fs-intent", "B1", "B1-tooldefs", *context_budget.ARM_FLAGS] + [f"{ARM_ABLATION_PREFIX}{k}" for k in NEW_FLAGS if k not in B1_OFF]
     return {name: arm_env(name) for name in names}
 
 # student owners beyond localtest/localadmin; created once, then reused
