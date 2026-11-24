@@ -6,6 +6,7 @@ Both flags default off; with them off every helper returns empty and nothing is 
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -97,6 +98,18 @@ def verdict_fields(env=None, window: "Window | None" = None) -> dict:
     return {"progress": sn, "strategy": window.strategy() if window is not None else None}
 
 
+def _by_file(diff: str) -> dict[str, str]:
+    """{path: its part of a git diff}; a diff without headers is one unnamed part."""
+    parts = re.split(r"^(?=diff --git )", diff, flags=re.M)
+    out = {}
+    for part in parts:
+        if not part.strip():
+            continue
+        head = part.splitlines()[0]
+        out[head.split(" b/", 1)[-1].strip() if head.startswith("diff --git ") else ""] = part
+    return out
+
+
 @dataclass
 class Window:
     """Sliding progress window: one vector per step, no model, no clock."""
@@ -141,12 +154,19 @@ class Window:
     def _stagnant(self, record: dict, diff: str) -> str | None:
         if record["state"] and sum(1 for item in self.steps if item["state"] == record["state"]) >= self.repeat_hash:
             return REASON_STATE_REPEAT
-        if len(self.diffs) >= 2 and self.diffs[-2] and diff and loop_guard.similarity(self.diffs[-2], diff, self.max_chars) > self.similarity:
+        if len(self.diffs) >= 2 and self.diffs[-2] and diff and self._same_per_file(self.diffs[-2], diff):
             return REASON_SIMILARITY
         recent = self.steps[-self.window:]
         if len(recent) >= self.window and not any(item["progress"] for item in recent):
             return REASON_NO_PROGRESS
         return None
+
+    def _same_per_file(self, before: str, after: str) -> bool:
+        """Near-identical in every file: a small real fix in one file of a large diff is not stagnation."""
+        old, new = _by_file(before), _by_file(after)
+        if old.keys() != new.keys():
+            return False
+        return all(loop_guard.similarity(old[path], new[path], self.max_chars) > self.similarity for path in new)
 
     def reset(self) -> None:
         """New window after a real change; tried strategies survive so they are not repeated."""

@@ -168,3 +168,28 @@ def test_a_resume_keeps_tried_strategies_and_starts_a_fresh_window(monkeypatch):
     assert run._prepare_resume()["resume_nodes"] == {"gate_3": "passed"}
     assert run._progress_window().tried == ["replan"]
     assert run._progress_window().steps == []
+
+
+
+def _two(path_a, a, path_b, b):
+    return f"diff --git a/{path_a} b/{path_a}\n{a}diff --git a/{path_b} b/{path_b}\n{b}"
+
+
+def test_small_fix_in_a_second_file_of_a_large_diff_keeps_going():
+    from runtime.loops.progress import Window
+    js = "".join(f"+line {i}\n" for i in range(400))
+    w = Window()
+    w.step(fails=3, gate=4, check="fail", diff=_two("a.js", js, "b.html", "+<div id=x></div>\n"), evidence=("e1",))
+    out = w.step(fails=3, gate=4, check="fail", evidence=("e2",),
+                 diff=_two("a.js", js, "b.html", "+<div id=x></div>\n+<script type=module>fill()</script>\n"))
+    assert not out["stagnant"], out
+
+
+def test_every_file_near_identical_still_stops():
+    from runtime.loops.progress import Window, REASON_SIMILARITY
+    js = "".join(f"+line {i}\n" for i in range(400))
+    html = "".join(f"+<p>{i}</p>\n" for i in range(200))
+    w = Window()
+    w.step(fails=3, gate=4, check="fail", diff=_two("a.js", js, "b.html", html), evidence=("e1",))
+    out = w.step(fails=3, gate=4, check="fail", diff=_two("a.js", js + "+x\n", "b.html", html), evidence=("e2",))
+    assert out["reason"] == REASON_SIMILARITY
