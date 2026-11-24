@@ -179,7 +179,11 @@ def missing_imports(code: str, file_path: str, base_code: str, exists, locate) -
         missing.add(resolved)
         if len(match) == 1:
             fix = posixpath.relpath(match[0], base)
-            hints.append(f"import '{spec}' resolves to '{resolved}', which does not exist; did you mean '{fix if fix.startswith('.') else './' + fix}'?")
+            fix = fix if fix.startswith('.') else './' + fix
+            if resolved.startswith('../'):  # above the repo root: the resolved path reads like the fix, so name the mistake
+                hints.append(f"import '{spec}' climbs above the repository root (too many '../'); from {base or 'the root'}/ write '{fix}'")
+            else:
+                hints.append(f"import '{spec}' resolves to '{resolved}', which does not exist; did you mean '{fix}'?")
         else:
             hints.append(f"import '{spec}' resolves to '{resolved}': file not found")
     return hints, frozenset(missing)
