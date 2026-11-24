@@ -3,6 +3,7 @@ Loop chỉ đề xuất nội dung — cổng 4/5 vẫn là nơi xác nhận. T�
 from __future__ import annotations
 
 import hashlib
+import difflib
 import json
 import posixpath
 import re
@@ -606,6 +607,7 @@ class Workspace:
             self._fresh()
             if self.constants is not None:
                 args = {**args, "edits": self._expand(args["edits"])}
+            before = self.content if path == self.file else self.extra_content[path]
             try:
                 edit_shape.check(args["edits"])
                 if path == self.file:
@@ -615,10 +617,11 @@ class Workspace:
             except ValueError as error:
                 raise ToolError(str(error) + self._candidates(args["edits"], str(error))) from None
             self.proofs.clear()
+            shown = _edited_region(before, self.content if path == self.file else self.extra_content[path])
             if self.checks:
                 receipt = self._check('light')
-                return json.dumps(receipt, ensure_ascii=False)
-            return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng"
+                return json.dumps({**receipt, 'edited': shown}, ensure_ascii=False)
+            return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng\n{shown}"
         if name == "write_test":
             self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
             self.proofs.clear()
@@ -791,6 +794,20 @@ def _fit(text: str, name: str) -> str:
     if name not in specs:
         return text[:ERROR_CHARS]
     return token_count.fit(text if name in ("read_file", expand_tool.NAME) else text[:specs[name].max_output_chars], _cap(name))  # read_file pages end in a hint a char cut would lose
+
+
+EDITED_LINES = 40
+
+
+def _edited_region(before: str, after: str, context: int = 2) -> str:
+    """Numbered lines around what the edit changed: the model must see its own insert to search it later."""
+    old, new = before.splitlines(), after.splitlines()
+    spans = [(j1, j2) for tag, _, _, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes() if tag != "equal"]
+    if not spans:
+        return "(file không đổi)"
+    start, end = max(spans[0][0] - context, 0), min(max(j2 for _, j2 in spans) + context, len(new))
+    end = min(end, start + EDITED_LINES)
+    return "Sau edit:\n" + "\n".join(f"L{n}| {new[n - 1]}" for n in range(start + 1, end + 1))
 
 
 def _read_window(content: str, start: int | None, end: int | None, tool: str = "read_file", ref: str = "", prefix: str = "L", reserve: int = 0, labels: list[int] | None = None) -> str:
