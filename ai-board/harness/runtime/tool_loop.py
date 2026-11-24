@@ -25,7 +25,7 @@ from services import edit_shape, file_context  # noqa: E402
 import tools  # noqa: E402
 from repositories import code_index
 import path_policy
-from gates import change_class, decision_ledger
+from gates import change_class, decision_ledger, static_check
 from verification import loop_checks, ui_copy
 from verification.sandbox import SandboxError
 from services import token_count
@@ -623,7 +623,10 @@ class Workspace:
                 return json.dumps({**receipt, 'edited': shown}, ensure_ascii=False)
             return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng\n{shown}"
         if name == "write_test":
-            self.test_file, self.test = self._check_scope(args["test_file"], test=True), args["test"]
+            test_file = self._check_scope(args["test_file"], test=True)
+            if hints := self._missing_imports(args["test"], test_file):
+                raise ToolError("test chưa được nhận: " + "; ".join(hints))
+            self.test_file, self.test = test_file, args["test"]
             self.proofs.clear()
             return "đã nhận test"
         self._fresh()
@@ -713,6 +716,19 @@ class Workspace:
             raise sandbox_tool.VMUnavailable(error.code, error.status) from None
         if self.vm_faults:
             raise self.vm_faults[0]
+
+    def _missing_imports(self, test: str, test_file: str) -> list[str]:
+        """Relative imports of the test that resolve to no file: caught here, not one gate later."""
+        if not hasattr(self, "_tree"):
+            try:
+                self._tree = set(code_index.git(self.source, 'ls-tree', '-r', '--name-only', self.sha).decode('utf-8').splitlines())
+            except Exception:  # unlistable tree: gate 4 still checks imports
+                self._tree = None
+        if self._tree is None:
+            return []
+        known = self._tree | {self.file, *self.extra_content, *self.prior}
+        return static_check.missing_imports(test, test_file, "", known.__contains__,
+                                            lambda name: [p for p in known if posixpath.basename(p) == name])[0]
 
     def _candidates(self, edits: list, message: str) -> str:
         """Khi search không khớp và không có dòng gần giống: liệt kê dòng thật chia sẻ nhiều từ nhất với search (model hay bịa chuỗi)."""
