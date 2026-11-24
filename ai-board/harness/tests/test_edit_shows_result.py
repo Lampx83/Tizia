@@ -29,3 +29,14 @@ def test_import_above_root_names_the_extra_dots():
     hints, _ = static_check.missing_imports("import { f } from '../../public/js/m.js';\n", "test/a.test.js", "",
                                             {"public/js/m.js"}.__contains__, lambda name: ["public/js/m.js"])
     assert "too many '../'" in hints[0] and "'../public/js/m.js'" in hints[0]
+
+
+def test_write_test_refuses_reading_client_module_as_text():
+    import pytest
+    from runtime import tool_loop
+    ws = tool_loop.Workspace.__new__(tool_loop.Workspace)
+    ws.file, ws.extra_content, ws.prior, ws._tree, ws.proofs = "public/js/m.js", {}, {}, {"public/js/m.js"}, {}
+    ws._check_scope = lambda path, test=False: path
+    with pytest.raises(tool_loop.ToolError, match="readFileSync"):
+        ws._run("write_test", {"test_file": "test/m.test.js",
+                               "test": "import { readFileSync } from 'node:fs';\nconst s = readFileSync('public/js/m.js', 'utf8');\n"})
