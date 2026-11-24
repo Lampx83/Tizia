@@ -103,8 +103,6 @@ class CheckSession:
         if self.lease.revoked:
             raise SandboxError('lease_revoked', 'check')
         files = self.source_files()
-        # earlier subtasks' drafts: this file's test imports what they added, read_file already shows them
-        files.update({'checkout/' + path: text.encode('utf-8') for path, (text, _) in (getattr(ws, 'prior', None) or {}).items()})
         files['checkout/' + ws.file] = ws.content.encode('utf-8')
         if ws.test_file:
             files['checkout/' + ws.test_file] = ws.test.encode('utf-8')

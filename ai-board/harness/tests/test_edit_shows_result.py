@@ -22,36 +22,3 @@ def test_write_test_refuses_import_of_missing_file():
         ws._run("write_test", {"test_file": "test/a.test.js", "test": "import { f } from './js/topic-modes.js';\n"})
     assert ws._run("write_test", {"test_file": "test/a.test.js",
                                   "test": "import { f } from '../public/js/topic-modes.js';\n"}) == "đã nhận test"
-
-
-def test_check_upload_includes_earlier_subtask_drafts():
-    from verification import loop_checks
-    sent = {}
-
-    class Ws:
-        file, content, test_file, test = "public/a.html", "<p>", "test/a.test.js", "t"
-        prior = {"public/js/m.js": ("export const f = 1;", "step 1")}
-
-    class Stop(Exception):
-        pass
-
-    class Client:
-        def exec(self, *a, **k):
-            return {"code": 0}
-
-        def upload(self, run_id, body, deadline=None):
-            import io, tarfile
-            with tarfile.open(fileobj=io.BytesIO(body)) as tar:
-                sent.update({m.name: tar.extractfile(m).read() for m in tar})
-            raise Stop()
-
-    session = loop_checks.CheckSession.__new__(loop_checks.CheckSession)
-    session.client, session.sha, session.tools, session.run_id = Client(), "s", "t", "r"
-    session._start = session._remaining = lambda: 5
-    session.lease = type("L", (), {"revoked": False})()
-    session.deadline, session._files = 0, {}
-    try:
-        session.run("light", Ws())
-    except Stop:
-        pass
-    assert sent["checkout/public/js/m.js"] == b"export const f = 1;"

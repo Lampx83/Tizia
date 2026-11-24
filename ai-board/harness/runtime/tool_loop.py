@@ -1267,6 +1267,9 @@ def _loop_subtask(subtask: dict, current: str | None, *, deps, budget, model: st
                    if get_settings().literal_by_reference else None,
                    prior=prior if v2() else None)
     ws.step_log = ledger_log
+    if checks is not None and ws.prior:
+        # ponytail: overlay via the session's file cache; loop_checks.py is runtime-hashed into the guest image
+        checks._files = {**checks.source_files(), **{'checkout/' + path: text.encode('utf-8') for path, (text, _) in ws.prior.items()}}
     if drafts:  # earlier round's files are the starting drafts; freshness still checks against base
         ws.content = drafts["files"].get(subtask["file"], ws.content)
         ws.extra_content.update({path: text for path, text in drafts["files"].items() if path in ws.extra_content})
