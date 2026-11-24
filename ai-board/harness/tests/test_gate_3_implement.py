@@ -351,7 +351,7 @@ def test_large_existing_file_is_shown_as_an_excerpt_and_edited_in_place(tmp_path
     assert "5002 dòng" in context and "flashcards.html" in context
     assert len(context) < 8000 < 60_000 < len(BIG_PAGE)  # over the whole-file limit: excerpt
     assert new_file_prompt.startswith(implement.build_prompt(plan["subtasks"][0]))  # new file: prefix only
-    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0], contract=subtask_contract.block(plan))
+    assert new_file_prompt == implement.build_prompt(plan["subtasks"][0], contract=subtask_contract.block(plan) + implement.request_block(state))
     written = _written(tmp_path, "public/flashcards.html")
     assert written == BIG_PAGE.replace('<footer id="chan-trang">', '<p>Tizia được cập nhật liên tục.</p>\n<footer id="chan-trang">')
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, capture_output=True, text=True,
