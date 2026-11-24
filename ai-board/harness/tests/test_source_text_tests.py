@@ -17,3 +17,7 @@ def test_import_or_html_read_or_non_test_file_is_fine():
     assert source_text_tests(_diff("test/a.test.js", "const m = await import('../public/js/a.js');")) == []
     assert source_text_tests(_diff("test/a.test.js", "readFileSync('public/hub.html', 'utf8')")) == []
     assert source_text_tests(_diff("public/js/a.js", "readFileSync('public/js/b.js')")) == []
+
+
+def test_server_module_read_is_left_to_other_gates():
+    assert source_text_tests(_diff("test/c.test.js", "readFileSync('server/contexts/portal-apps/index.js', 'utf8')")) == []

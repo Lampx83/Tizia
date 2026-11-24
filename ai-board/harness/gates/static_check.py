@@ -707,7 +707,8 @@ def source_text_tests(diff_text: str) -> list[str]:
         if not path or not guard._TEST_PATH.search(path):
             continue
         added = "\n".join(line[1:] for line in chunk.splitlines() if line.startswith("+") and not line.startswith("+++"))
-        for module in dict.fromkeys(m.group(1) for m in _READ_JS.finditer(added)):
+        # Client modules only: a server route needs the app to call, so reading it is often the only cheap check.
+        for module in dict.fromkeys(m.group(1) for m in _READ_JS.finditer(added) if m.group(1).lstrip("./").startswith("public/")):
             misses.append(f"{path}: test đọc {module} như chữ (readFileSync) rồi so chuỗi, nên xanh ngay khi chữ được gõ vào; "
                           f"import module đó và gọi hàm với input thật, assert kết quả")
     return misses
