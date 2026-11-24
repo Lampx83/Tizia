@@ -371,5 +371,5 @@
       "generated/*"
     ]
   },
-  "check_runtime_sha256": "388e5242415e22b18be7bfa4a543fd9de23d958dc19ba3762955c0a794c70d17"
+  "check_runtime_sha256": "736d94bc1d7849dcec538ac5b56614c70df0251acd6078ef48c7d77ef8be2871"
 }

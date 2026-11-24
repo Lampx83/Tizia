@@ -203,3 +203,36 @@ def test_resume_rechecks_proof_and_preserves_all_check_spending(repo, monkeypatc
     assert resumed.model_calls == before['model_calls']
     assert resumed.tool_calls > before['tool_calls']
     assert store.load()['ledger']['tool_calls'] == resumed.tool_calls
+
+
+class SeeingChecks(Checks):
+    """Real file assembly: records what the check VM would get."""
+    seen = []
+
+    def __init__(self, source, sha, budget, tools):
+        super().__init__(source, sha, budget, tools)
+        self.source, self._files = source, None
+        self.budget = budget
+
+    def source_files(self):
+        if self._files is None:
+            self._files = {'checkout/public/a.js': b'base'}
+        return dict(self._files)
+
+    def run(self, profile, ws):
+        SeeingChecks.seen.append(self.source_files())
+        return super().run(profile, ws)
+
+
+def test_checks_get_earlier_subtask_drafts(repo, monkeypatch):
+    source, sha = repo
+    monkeypatch.setenv('AI_BOARD_VERIFIED_LOOP', '1')
+    monkeypatch.setenv('AI_BOARD_TOOL_DEFS_V2', '1')
+    monkeypatch.setattr(loop_checks, 'CheckSession', SeeingChecks)
+    SeeingChecks.seen = []
+    provider = Script([action('edit_file', file='public/a.js', edits=[{'search': '1', 'replace': '3'}]),
+                       action('write_test', test_file='test/a.test.js', test='a public test'), action('finish')])
+    tool_loop.run_subtask({'title': 'Change a', 'file': 'public/a.js', 'verify': 'a is 3'}, 'export const a = 1;\n',
+                          deps=provider, budget=Budget(max_wall_clock_s=300), model='fake', source=source, sha=sha,
+                          check=lambda out: None, prior={'public/b.js': ('export const b = 9;\n', 'step 1')})
+    assert SeeingChecks.seen and SeeingChecks.seen[0]['checkout/public/b.js'] == b'export const b = 9;\n'
