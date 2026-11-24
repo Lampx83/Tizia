@@ -44,12 +44,17 @@ def _text(result: dict) -> str:
     return "\n".join([str(result.get("reason") or ""), evidence, issues])
 
 
+# A reviewer names the function, not its file: "getTopicSummary must return null".
+_DEFINES = re.compile(r"(?:function\s+|(?:const|let|var|class)\s+)([A-Za-z_$][\w$]{3,})")
+
+
 def involved_files(text: str, produced: dict[str, dict]) -> list[str]:
-    """Plan files whose source path, test path or basename appears in the failure text."""
+    """Plan files whose source path, test path, basename or a symbol they define appears in the failure text."""
     hits = []
     for file, entry in produced.items():
         names = {file, entry.get("test_file") or "", file.rsplit("/", 1)[-1]} - {""}
-        if any(name in text for name in names):
+        symbols = set(_DEFINES.findall(str(entry.get("code") or "")))
+        if any(name in text for name in names) or any(re.search(rf"(?<![\w$]){re.escape(sym)}(?![\w$])", text) for sym in symbols):
             hits.append(file)
     return hits
 
