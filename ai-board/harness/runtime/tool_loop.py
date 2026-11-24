@@ -468,6 +468,7 @@ class Workspace:
         except (SandboxError, OSError, ValueError) as error:
             raise Forbidden(f'verification unavailable: {error}') from None
         server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
+        receipt = self._drop_base_import_lint(profile, receipt)
         if profile == 'platform' and ui_copy.introduces_em_dash(self.file, self.base or '', self.content):
             receipt = {**receipt, 'passed': False, 'exit_code': 1,
                        'output': 'UI copy policy: new em dash in a changed UI literal; replace it with contextual punctuation.'}
@@ -485,6 +486,16 @@ class Workspace:
                 'tizia.tool_call_id': self.call_id or '', 'tizia.claim.verified': bool(receipt.get('passed') and receipt.get('exit_code') == 0),
                 'tizia.claim.log_excerpt': meter.redact(receipt.get('output', ''))[:280],
             }, start_ms=now, end_ms=now, status='ok' if receipt.get('passed') else 'error')
+        return receipt
+
+    def _drop_base_import_lint(self, profile: str, receipt: dict) -> dict:
+        """Guest lints imports without the base file: a violation the base already has is not this draft's."""
+        if profile not in ('light', 'platform') or receipt.get('passed') or receipt.get('exit_code') != 0 or not self.base:
+            return receipt
+        lines = [line for line in receipt.get('output', '').splitlines() if line.strip()]
+        known = set(static_check.lint_imports(self.base, self.file))
+        if lines and all(line in known for line in lines) and set(static_check.lint_imports(self.content, self.file)) <= known:
+            return {**receipt, 'passed': True, 'output': 'imports unchanged from base; syntax check passed'}
         return receipt
 
     def verified(self):
