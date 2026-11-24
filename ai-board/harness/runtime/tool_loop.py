@@ -1139,7 +1139,8 @@ def _tool_span(deps, name: str, step: int, child, kind: str, observation: str, s
         "tizia.policy_denied": kind == 'forbidden', "tizia.tool_manifest": MANIFEST.hash,
         **({"tizia.thought": thought} if thought else {}),
         # Harness-written rejection text is the only record of why a step failed once tool_step is not persisted.
-        **({"tizia.tool.reason": meter.redact(observation)[:600]} if kind in _REASON_KINDS and observation else {}),
+        # Server span attributes stop at 300 chars (services/spans.js MAX_TEXT); one longer value drops the whole batch.
+        **({"tizia.tool.reason": meter.redact(observation)[:300]} if kind in _REASON_KINDS and observation else {}),
     }, start_ms=started_ms, end_ms=int(time.time() * 1000), status="error" if kind in ("error", KIND_INFRA, "forbidden", "finish_rejected", "repeated") else "ok")
 
 
