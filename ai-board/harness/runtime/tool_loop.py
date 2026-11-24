@@ -626,6 +626,9 @@ class Workspace:
             test_file = self._check_scope(args["test_file"], test=True)
             if hints := self._missing_imports(args["test"], test_file):
                 raise ToolError("test chưa được nhận: " + "; ".join(hints))
+            as_diff = f"diff --git a/{test_file} b/{test_file}\n" + "".join(f"+{line}\n" for line in args["test"].splitlines())
+            if misses := static_check.source_text_tests(as_diff):  # gate 4 rejects the same test after a full repair round
+                raise ToolError("test chưa được nhận: " + "; ".join(misses))
             self.test_file, self.test = test_file, args["test"]
             self.proofs.clear()
             return "đã nhận test"
