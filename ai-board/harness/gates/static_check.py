@@ -695,6 +695,24 @@ def is_template(text: str) -> bool:
     return bool(_SLOT.search(text))
 
 
+# readFileSync('<x>.js') in a test: the assertion is on the code's text, so it passes once the text is typed.
+_READ_JS = re.compile(r"""readFileSync\(\s*(?:new URL\(\s*)?['"`]([^'"`]+\.(?:m?js|cjs))['"`]""")
+
+
+def source_text_tests(diff_text: str) -> list[str]:
+    """Added test files that read a JS module as text instead of importing and calling it."""
+    misses = []
+    for chunk in re.split(r"^(?=diff --git )", diff_text, flags=re.M):
+        path = chunk.splitlines()[0].split(" b/", 1)[-1].strip() if chunk.startswith("diff --git ") else ""
+        if not path or not guard._TEST_PATH.search(path):
+            continue
+        added = "\n".join(line[1:] for line in chunk.splitlines() if line.startswith("+") and not line.startswith("+++"))
+        for module in dict.fromkeys(m.group(1) for m in _READ_JS.finditer(added)):
+            misses.append(f"{path}: test đọc {module} như chữ (readFileSync) rồi so chuỗi, nên xanh ngay khi chữ được gõ vào; "
+                          f"import module đó và gọi hàm với input thật, assert kết quả")
+    return misses
+
+
 def literal_misses(state: dict, diff_text: str, checkout=None) -> list[str]:
     """Requester's literals the non-test diff does not carry verbatim, as repair reasons; [] when none pinned.
     checkout = candidate tree; text already in a changed file counts as a reference, not as text to add."""
@@ -759,6 +777,9 @@ def run_gate(state: dict, deps, budget, *, db_path=None, proposal_id: int | None
     out["checks"] = [*out["checks"], "request_literal"]
     found = [*found, *({"check": "request_literal", "failure_class": "ordinary", "detail": miss[:300]}
                        for miss in literal_misses(state, text, state.get("full_checkout")))]
+    out["checks"] = [*out["checks"], "test_reads_source"]
+    found = [*found, *({"check": "test_reads_source", "failure_class": "ordinary", "detail": miss[:300]}
+                       for miss in source_text_tests(text))]
     if state.get("catalog") is not None:
         # Catalog boundary is a pure diff check: stop here, before Gate 5 runs the code in Docker.
         out["checks"] = [*out["checks"], "catalog"]
