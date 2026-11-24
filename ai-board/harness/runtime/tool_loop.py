@@ -441,6 +441,8 @@ class Workspace:
             raise Forbidden(f"read policy denied: {path!r}")
         if path == self.file:
             return self.content
+        if self.test_file and path == _clean_path(self.test_file):
+            return self.test
         if path in self.extra_content:
             return self.extra_content[path]
         if path in self.prior:
