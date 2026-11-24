@@ -463,10 +463,17 @@ class Workspace:
         if charge:
             self.budget.spend('tool_calls')
         server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
-        try:
-            receipt = self.checks.run(profile, self)
-        except (SandboxError, OSError, ValueError) as error:
-            raise Forbidden(f'verification unavailable: {error}') from None
+        for attempt in (1, 2):
+            try:
+                receipt = self.checks.run(profile, self)
+                break
+            except SandboxError as error:
+                # a slow VM exec surfaces as a socket timeout; one retry, the next check rebuilds the checkout anyway
+                if attempt == 1 and getattr(error, 'code', None) == 'runner_unreachable':
+                    continue
+                raise Forbidden(f'verification unavailable: {error}') from None
+            except (OSError, ValueError) as error:
+                raise Forbidden(f'verification unavailable: {error}') from None
         server_hsm.authorize_action('run_check', tool_manifest=MANIFEST.hash)
         receipt = self._drop_base_import_lint(profile, receipt)
         if profile == 'platform' and ui_copy.introduces_em_dash(self.file, self.base or '', self.content):
