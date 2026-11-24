@@ -343,7 +343,8 @@ def _runnable_verify(verify: str, scope: list[str]) -> tuple[str, str]:
         return verify, ""
     test = next((path for path in scope if re.match(r"tests?/", path) and path.endswith(".js")), None)
     js = next((path for path in scope if path.endswith(".js")), None)
-    command = f"node --test {test}" if test else f"node --check {js}" if js else None
+    # No JS in scope (an HTML/CSS step): the server still needs a command; prose stays as guidance in the description.
+    command = f"node --test {test}" if test else f"node --check {js}" if js else f"sh -c 'test -s {scope[0]}'" if scope else None
     return (command, verify) if command else (verify, "")
 
 
