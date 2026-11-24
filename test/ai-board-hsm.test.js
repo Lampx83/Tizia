@@ -543,3 +543,14 @@ test('two real Python HttpWorkers racing for one authorized ticket: exactly one 
     assert.notEqual(ticket.status,'queued');
   } finally {await f.close();}
 });
+
+test('Gate4 attempt bound follows the repair cap of the contract, not a fixed 10',async()=>{
+  const f=await fixture();
+  try {
+    const hash=(await f.post('snapshot',{})).body.hsm_contract.hash;
+    const begin=(attempt)=>({run_id:f.run,attempt,contract_hash:hash,event:'BEGIN',expected_version:0,idempotency_key:`hsm-cap-${attempt}`});
+    assert.notEqual((await f.post('hsm',begin(13))).body.error,'hsm_invalid_event');
+    const over=await f.post('hsm',begin(14));
+    assert.equal(over.status,400);assert.equal(over.body.error,'hsm_invalid_event');
+  } finally { await f.close(); }
+});

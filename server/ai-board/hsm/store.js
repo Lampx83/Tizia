@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { WorkerContractError, IDEMPOTENCY_KEY } from '../repositories/store-contract.js';
+import { WorkerContractError, IDEMPOTENCY_KEY, CONTRACT as WORKER_CONTRACT } from '../repositories/store-contract.js';
 import { CONTRACT, CONTRACT_HASH, diagram, statePath, publicContract } from './contract.js';
 import { CAPABILITY_CATALOG } from '../security/policy.js';
 import { createToolManifestStore, LOOP_TOOLS } from '../repositories/tool-manifests.js';
@@ -33,9 +33,11 @@ export function createHsmStore(store) {
       if (!folder || folder.state==='archived' || folder.owner_user_id!==request.owner_user_id || folder.domain!==request.owner_domain) fail('scope_denied',403);
     }
   }
+  // One gate-4 attempt per repair round plus the first: the worker raises its cap to repair_replan.max_repairs.
+  const MAX_ATTEMPT=Math.max(WORKER_CONTRACT.max_repairs,Number(WORKER_CONTRACT.repair_replan?.max_repairs)||0)+1;
   async function transition(ticketId,input) {
     const attempt=Number(input.attempt),runId=Number(input.run_id),version=Number(input.expected_version);
-    if (!Number.isSafeInteger(attempt) || attempt<0 || attempt>10 || !Number.isSafeInteger(runId) || runId<1
+    if (!Number.isSafeInteger(attempt) || attempt<0 || attempt>MAX_ATTEMPT || !Number.isSafeInteger(runId) || runId<1
       || !Number.isSafeInteger(version) || version<0 || !IDEMPOTENCY_KEY.test(String(input.idempotency_key || ''))
       || !CONTRACT.transitions.some(edge=>edge.event===input.event)) fail('hsm_invalid_event',400);
     const result=input.event==='BEGIN'?null:input.result;
