@@ -22,3 +22,10 @@ def test_write_test_refuses_import_of_missing_file():
         ws._run("write_test", {"test_file": "test/a.test.js", "test": "import { f } from './js/topic-modes.js';\n"})
     assert ws._run("write_test", {"test_file": "test/a.test.js",
                                   "test": "import { f } from '../public/js/topic-modes.js';\n"}) == "đã nhận test"
+
+
+def test_import_above_root_names_the_extra_dots():
+    from gates import static_check
+    hints, _ = static_check.missing_imports("import { f } from '../../public/js/m.js';\n", "test/a.test.js", "",
+                                            {"public/js/m.js"}.__contains__, lambda name: ["public/js/m.js"])
+    assert "too many '../'" in hints[0] and "'../public/js/m.js'" in hints[0]
