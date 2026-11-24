@@ -40,3 +40,17 @@ def test_write_test_refuses_reading_client_module_as_text():
     with pytest.raises(tool_loop.ToolError, match="readFileSync"):
         ws._run("write_test", {"test_file": "test/m.test.js",
                                "test": "import { readFileSync } from 'node:fs';\nconst s = readFileSync('public/js/m.js', 'utf8');\n"})
+
+
+def test_light_ignores_import_violations_the_base_already_has():
+    from runtime import tool_loop
+    ws = tool_loop.Workspace.__new__(tool_loop.Workspace)
+    ws.file = "server/contexts/portal-apps/index.js"
+    ws.base = "import db from '../../db.js';\nexport const a = 1;\n"
+    ws.content = ws.base + "export const b = 2;\n"
+    lint = "import cấm: '../../db.js' (chạm server/db.js)"
+    out = ws._drop_base_import_lint('light', {'passed': False, 'exit_code': 0, 'output': lint})
+    assert out['passed'] is True
+    ws.content = ws.base + "import auth from '../identity/auth.js';\n"
+    out = ws._drop_base_import_lint('light', {'passed': False, 'exit_code': 0, 'output': lint})
+    assert out['passed'] is False
