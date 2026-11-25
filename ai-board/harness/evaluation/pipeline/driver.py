@@ -434,6 +434,7 @@ ATTACK_LEAKED = DATA / "attack-leaked.json"
 ATTACK_PREFIX = "attack:"
 VAGUE_CASES = DATA.parent / "ai-board-vague-cases" / "cases-vague-pilot.json"
 ANSWER_CLARIFICATIONS = False
+ADMIN_ASSIST = 0  # admin interventions allowed per trial; never for attack cases
 
 
 def load_attack_cases() -> list[dict]:
@@ -1064,6 +1065,26 @@ def trial_path(arm: str, case_id: str, repeat: int) -> Path:
     return TRIALS / f"{arm}-r{repeat}-{case_id.replace(':', '__')}.json"
 
 
+def admin_assist_action(admin, request_id: int, root_id: int, state: dict) -> str | None:
+    """One admin step for a stopped benign trial, chosen by the phase it stopped in; None when no admin lever fits."""
+    phase = str(state.get("phase") or "")
+    reason = "Bộ đo: yêu cầu hợp lệ do tác giả soạn, quản trị viên xem xét và cho chạy tiếp."
+    if phase == "plan_blocked" and state.get("status") == "waiting_authorization":
+        ok, res = admin.call("POST", f"/api/admin/ai-board/requests/{request_id}/elevate", {"decision": "approve", "reason": reason})
+        return f"elevate:{ok}"
+    if phase == "transient_blocked":
+        ok, res = admin.call("POST", f"/api/admin/ai-board/tickets/{root_id}/retry-transient", {})
+        return f"retry-transient:{ok}"
+    if phase in ("pre_pr_blocked", "root_allowance_exhausted"):
+        admin.call("POST", f"/api/admin/ai-board/tickets/{root_id}/extend-budget", {"amount": 100, "reason": reason + " Gia hạn ngân sách."})
+        ok, res = admin.call("POST", f"/api/admin/ai-board/requests/{request_id}/rerun-gate", {"gate": 3})
+        return f"rerun-gate-3:{ok}"
+    if phase in ("plan_blocked", "clarification_limit", "precheck_blocked"):
+        ok, res = admin.call("POST", f"/api/admin/ai-board/requests/{request_id}/rerun-gate", {"gate": 1})
+        return f"rerun-gate-1:{ok}"
+    return None
+
+
 def run_trial(arm: str, case_id: str, repeat: int, owner: str, max_wait: int = MAX_WAIT_S, keep: bool = False) -> dict:
     ensure_preflight(arm)
     arm_env(arm)
@@ -1181,6 +1202,7 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
           f"owner_gpu_s={start_usage:.0f} headroom={headroom:.0f}")
 
     authorised: list[str] = []
+    assisted: list[str] = []
     timeline: list[dict] = []
     last_settled = None
     last_state = {}
@@ -1218,6 +1240,15 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
         # Root-driven: a root that already returned a verdict, or that sits in a terminal phase, is done even
         # when a plan spawned child tickets that will never be claimed behind it.
         settled = status_txt not in ACTIVE_STATUS and (bool(state.get("last_outcome")) or phase in TERMINAL_PHASES)
+        if (settled and ADMIN_ASSIST and len(assisted) < ADMIN_ASSIST and not str(case_id).startswith("attack:")
+                and phase not in ("pre_pr_ready", "pre_pr_review")):
+            did = admin_assist_action(admin, request_id, root_id, state)
+            if did:
+                assisted.append(f"{phase}:{did}")
+                print(f"[trial]   admin-assist {phase} -> {did}")
+                last_settled = None
+                time.sleep(4)
+                continue
         signature = (status_txt, phase, int(state.get("runs") or 0))
         if settled and signature == last_settled:
             break
@@ -1257,7 +1288,7 @@ def _run_attempt(arm: str, case_id: str, repeat: int, attempt_no: int, owner: st
         "level": case.get("level"), "style": case.get("style"), "types": case.get("types"), "file": case.get("file"),
         **({"expect_refusal": True} if case.get("expect_refusal") else {}),
         "terminal": True, "timed_out": timed_out, "cancelled": cancelled,
-        "trial_wall_s": wall, "authorised": authorised,
+        "trial_wall_s": wall, "authorised": authorised, "admin_assist": assisted,
         "status": root.get("status"), "phase": root.get("phase"), "tier": root.get("tier"),
         "tier_at_start": last_state.get("tier"),
         "tickets": data.get("tickets"),
@@ -2315,6 +2346,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-wait", type=int, default=MAX_WAIT_S)
     p.add_argument("--answer-clarifications", action="store_true",
                    help="send X-AI-Board-Features: clarify and answer the board's questions as the owner (3 rounds)")
+    p.add_argument("--admin-assist", type=int, default=0,
+                   help="let the admin act on a stopped benign trial up to N times: grant elevation, retry transient stops, rerun the stopped stage")
     p.add_argument("--dry-run", action="store_true", help="print arm env and case list, do not touch the worker")
     p.set_defaults(func=cmd_trial)
 
@@ -2361,8 +2394,9 @@ def main(argv: list[str] | None = None) -> int:
     CONFIRM_ARM = args.confirm_arm
     if BACKEND == "http" and not BASE_URL:
         raise SystemExit("--backend http needs --base-url (explicit; env is not used for the base)")
-    global PROBE_MANIFEST, ANSWER_CLARIFICATIONS
+    global PROBE_MANIFEST, ANSWER_CLARIFICATIONS, ADMIN_ASSIST
     ANSWER_CLARIFICATIONS = bool(getattr(args, "answer_clarifications", False))
+    ADMIN_ASSIST = max(0, int(getattr(args, "admin_assist", 0) or 0))
     PROBE_MANIFEST = bool(getattr(args, "probe_manifest", False))
     long_running = args.cmd in ("trial", "run", "replay-gate") and not getattr(args, "dry_run", False)
     try:
