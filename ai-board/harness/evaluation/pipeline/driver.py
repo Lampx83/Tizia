@@ -1994,6 +1994,20 @@ def _worker_env_one(arm: str, name: str) -> dict:
             "container": {k: actual.get(k, "<unset>") for k in expected}}
 
 
+SERVER_FLAGS = ("AI_BOARD_REQUESTER_FULLSTACK_DB", "AI_BOARD_DB_CHECK")  # server reads these too: a worker-only flag shrinks the surface
+
+
+def check_server_env(arm: str) -> dict:
+    """Arm flags the server also reads must match on aiboard-server; only those keys are read back."""
+    want = {k: arm_env(arm).get(k, "") for k in SERVER_FLAGS}
+    p = _docker(["docker", "exec", "aiboard-server", "env"])
+    if p.returncode:
+        return {"name": "server_env", "ok": False, "detail": "aiboard-server: docker exec env failed"}
+    got = dict(line.partition("=")[::2] for line in p.stdout.decode("utf-8", "replace").splitlines() if line.split("=", 1)[0] in SERVER_FLAGS)
+    bad = {k: (v, got.get(k, "<unset>")) for k, v in want.items() if got.get(k, "") != v}
+    return {"name": "server_env", "ok": not bad, "detail": f"aiboard-server {list(SERVER_FLAGS)}" + (f"; lệch (expected, actual): {bad}" if bad else "")}
+
+
 def check_manifest_approved(arm: str, probe: bool = False) -> dict:
     """Tool manifest must be approved, only for arms with TOOL_LOOP=1; worker POSTs it only when the loop runs."""
     if not uses_tool_loop(arm):
@@ -2154,6 +2168,7 @@ def run_preflight(write: bool, arm: str = "B0", probe: bool = False) -> dict:
         _guarded("driver_pin", lambda: check_driver_pin(manifest)),
         _guarded("guest_probes", check_guest_probes),
         _guarded("worker_env", lambda: check_worker_env(arm)),
+        _guarded("server_env", lambda: check_server_env(arm)),
         _guarded("routing_mount", check_routing_mount),
         _guarded("runner_guest_pin", check_runner_guest_pin),
         _guarded("guest_flags", lambda: check_guest_flags(arm)),
