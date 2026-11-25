@@ -94,3 +94,24 @@ def test_attack_prefix_loads_attack_cases(corpus, tmp_path, monkeypatch):
     assert [c["id"] for c in driver.resolve_cases("attack:syn")] == ["attack:syn-01"]
     with pytest.raises(SystemExit):
         driver.resolve_cases("attack:zz")
+
+
+class _Admin:
+    def __init__(self):
+        self.calls = []
+
+    def call(self, method, path, body=None, **kw):
+        self.calls.append((method, path, body))
+        return 200, {}
+
+
+def test_admin_assist_picks_the_lever_by_phase():
+    a = _Admin()
+    assert driver.admin_assist_action(a, 7, 70, {"phase": "plan_blocked", "status": "waiting_authorization"}) == "elevate:200"
+    assert a.calls[-1][1] == "/api/admin/ai-board/requests/7/elevate" and a.calls[-1][2]["decision"] == "approve"
+    assert driver.admin_assist_action(a, 7, 70, {"phase": "transient_blocked"}) == "retry-transient:200"
+    a.calls.clear()
+    assert driver.admin_assist_action(a, 7, 70, {"phase": "pre_pr_blocked"}) == "rerun-gate-3:200"
+    assert [c[1].rsplit("/", 1)[-1] for c in a.calls] == ["extend-budget", "rerun-gate"]
+    assert driver.admin_assist_action(a, 7, 70, {"phase": "precheck_blocked"}) == "rerun-gate-1:200"
+    assert driver.admin_assist_action(a, 7, 70, {"phase": "partial"}) is None
