@@ -349,6 +349,12 @@ def test_each_blocking_finding_reaches_the_coder_as_its_own_line(on, fake_deps, 
     assert len(lines) == 3 and "khoảng trắng" not in out["reason"] and "Đoạn văn gộp" not in out["reason"]
 
 
+def test_a_multiline_finding_stays_one_line(on, fake_deps, checkout):
+    two_lines = {**TWO, "findings": [{**TWO["findings"][1], "evidence": "dòng một\ndòng hai"}]}
+    out, _ = gate(fake_deps, Models(two_lines), RIGHT, checkout)
+    assert out["reason"] == "intent_review: - public/topic.html: dòng một dòng hai | sửa: thêm script điền #topic-summary"
+
+
 def test_finding_lines_become_the_coders_repair_reason(on, fake_deps, checkout):
     ex = _execution()
     _blocked_round(ex, fake_deps, checkout, WRONG, reply=TWO)

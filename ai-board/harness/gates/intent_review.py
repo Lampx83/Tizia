@@ -254,7 +254,7 @@ def _scrub(text: str) -> str:
 def merged_brief(brief: str, misses: list[str], findings: list[dict] = ()) -> str:
     """One line per deterministic miss, then one per blocking finding (high first; the brief only when none), cut on a line boundary."""
     blocking = sorted((f for f in findings if f["severity"] in BLOCKING), key=lambda f: BLOCKING.index(f["severity"]))
-    parts = [m[:200] for m in misses] + [_scrub(f"- {f['file']}: {f['evidence']} | sửa: {f['fix']}") for f in blocking]
+    parts = [m[:200] for m in misses] + [_scrub(" ".join(f"- {f['file']}: {f['evidence']} | sửa: {f['fix']}".split())) for f in blocking]
     if not blocking and (brief := _scrub(brief)[:MAX_BRIEF_CHARS]):
         parts.append(brief)
     out = parts[0][:MAX_DETAIL_CHARS] if parts else ""
