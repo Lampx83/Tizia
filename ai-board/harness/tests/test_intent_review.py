@@ -254,7 +254,7 @@ def test_without_a_page_line_the_touched_product_files_are_shown_after_the_chang
 
 
 def test_prompt_states_the_judging_rules():
-    for rule in ("hết câu", "DẤU CÂU CUỐI", "THAY TOÀN BỘ", "SAU khi áp diff", "nhiều trang sản phẩm", "outside_request"):
+    for rule in ("CHỖ ĐIỀN GIÁ TRỊ", "in nguyên chữ N/M mới là lỗi", "hết câu", "DẤU CÂU CUỐI", "THAY TOÀN BỘ", "SAU khi áp diff", "nhiều trang sản phẩm", "outside_request"):
         assert rule in intent_review.PROMPT
 
 

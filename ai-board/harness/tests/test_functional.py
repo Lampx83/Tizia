@@ -390,3 +390,9 @@ def test_hex_color_quotes_are_not_visible_text_when_flag_on(color, selector_flag
 def test_hex_color_quote_kept_when_flag_off(monkeypatch):
     monkeypatch.setenv(SELECTOR_FLAG, '0')
     assert functional.text_expectation(ASK("Thêm '#16a34a' vào trang")) == {'present': ['#16a34a'], 'absent': []}
+
+
+def test_a_quote_with_a_value_slot_is_a_template_not_a_literal():
+    from gate5 import functional
+    ask = "Trang hiện phần tử id=child-count với nội dung \"Đang theo dõi N bé\" và nút \"Chọn phiên bản\"."
+    assert functional.text_expectation({"request_title": "", "request_detail": ask})["present"] == ["Chọn phiên bản"]
