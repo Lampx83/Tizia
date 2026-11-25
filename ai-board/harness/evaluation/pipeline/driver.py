@@ -565,7 +565,7 @@ def prepare_workspace(case: dict, arm: str, repeat: int) -> Path | None:
 TERMINAL_PHASES = {
     "pre_pr_ready", "pre_pr_review", "pre_pr_blocked", "budget_exhausted", "plan_unfit",
     "critical_violation", "root_allowance_exhausted", "precheck_blocked", "partial",
-    "requester_cancelled", "clarification_received", "invalidated",
+    "requester_cancelled", "clarification_received", "invalidated", "plan_blocked",
 }
 ACTIVE_STATUS = {"queued", "claimed", "running", "planning", "repairing"}
 GOAL_OUTCOMES = {"ready_for_pr", "needs_review"}
