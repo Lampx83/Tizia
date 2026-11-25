@@ -202,7 +202,16 @@ def anchor(state):
     return found.pop() if len(found) == 1 else None
 
 
+_PLACEHOLDER = re.compile(r"(?<!\w)[A-Z](?!\w)")
+
+
 def text_expectation(state):
+    """Quoted text the page must show / lose; a quote with a value slot (standalone N, M, X) is a template, not a literal."""
+    want = _text_expectation(state)
+    return {k: [t for t in v if not _PLACEHOLDER.search(t)] for k, v in want.items()}
+
+
+def _text_expectation(state):
     """Words the requester quoted (or wrote after 'thêm dòng …:') + what should happen to them: {'present': [...], 'absent': [...]}.
     Empty when the request does not pin the text down (no literal, no intent verb, add and remove at once)."""
     raw = _request_raw(state)

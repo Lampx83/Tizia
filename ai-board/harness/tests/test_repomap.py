@@ -229,3 +229,20 @@ def test_run_calls_check_file_path_for_every_subtask_before_generating(monkeypat
     assert calls == [st["file"] for st in plan["subtasks"]]
     for d, subtask in zip(out["diffs"], plan["subtasks"]):
         assert d["file"] == subtask["file"]
+
+
+def test_paths_named_in_the_request_come_first(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    _git(src, "init", "-q")
+    _git(src, "config", "user.email", "t@t")
+    _git(src, "config", "user.name", "t")
+    _commit(src, {
+        "server/contexts/engagement/parent.js": "export const dashboard = (rows) => rows.map((r) => ({ name: r.display_name, kids: r.children }));\n" * 20,
+        "server/contexts/ai-agent/ack.js": "export const ack = 'ok';",
+        "public/parent/dashboard.html": "<h1>Bảng theo dõi</h1>" + "<p>Phụ huynh xem tiến độ học của con</p>" * 20,
+        "public/tiny.html": "<p>con</p>",
+    })
+    ask = "Bảng của phụ huynh (public/parent/dashboard.html, gọi API trong server/contexts/engagement/parent.js) hiện số con."
+    assert _real_related(src, "HEAD", ask)[:2] == ["public/parent/dashboard.html", "server/contexts/engagement/parent.js"]
+    assert "public/missing.js" not in _real_related(src, "HEAD", ask + " Không sửa public/missing.js.")

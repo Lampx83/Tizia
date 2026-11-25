@@ -26,6 +26,9 @@ CODE_INTENT = re.compile(r"/(?:api|static|assets)\b|\b(?:route|router|endpoint|a
                          r"|backend|server|middleware|schema|test)\b|\bdu lieu\b")
 
 
+_NAMED = re.compile(r"[\w./-]+\.(?:js|mjs|cjs|ts|html|css|json|py|sql|sh)(?![\w.])")
+
+
 def _tokens(text: str) -> set[str]:
     return {w for w in re.split(r"[^a-z0-9]+", file_context.fold(text)) if len(w) >= file_context.WEIGHTS["min_term_len"]}
 
@@ -61,7 +64,8 @@ def related(source, sha: str, question: str, *, limit: int = file_context.WEIGHT
     code = code_index.repo_index(source, commit) if code_terms else {"files": {}, "words": {}}
     ui_ranked, code_ranked = _ranked(ui, terms), _ranked(code, code_terms)
     ranked = (code_ranked, ui_ranked) if intent else (ui_ranked, code_ranked)
-    out: list[str] = []
+    named = [path for path in _NAMED.findall(question) if path in ui["files"] or path in code["files"]]
+    out: list[str] = list(named)
     for seed in (p for pair in itertools.zip_longest(ranked[0][:SEEDS], ranked[1][:SEEDS]) for p in pair if p):
         index = ui if seed in ui["files"] else code
         out += [seed, *index["files"][seed]["imports"],

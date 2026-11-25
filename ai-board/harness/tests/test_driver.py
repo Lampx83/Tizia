@@ -363,3 +363,11 @@ def test_trial_flags_read_the_worker_env_and_fail_soft(monkeypatch):
     assert driver.trial_flags() is None
     monkeypatch.setattr(driver, "BACKEND", "http")
     assert driver.trial_flags() is None
+
+
+def test_server_missing_a_flag_the_arm_sets_is_red(monkeypatch):
+    _fake_env(monkeypatch, ["AI_BOARD_DB_CHECK=1", "SECRET=x"])
+    res = driver.check_server_env("B1-tooldefs-fs-intent-window")
+    assert not res["ok"] and "AI_BOARD_REQUESTER_FULLSTACK_DB" in res["detail"] and "SECRET" not in res["detail"]
+    _fake_env(monkeypatch, ["AI_BOARD_DB_CHECK=1", "AI_BOARD_REQUESTER_FULLSTACK_DB=1"])
+    assert driver.check_server_env("B1-tooldefs-fs-intent-window")["ok"]
