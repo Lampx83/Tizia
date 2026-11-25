@@ -826,7 +826,7 @@ class _Execution:
             spec, guard = progress_limits(), loop_limits()
             self.progress_window = progress.Window(
                 window=spec["window"], min_signals=spec["min_signals"], repeat_hash=spec["repeat_hash"],
-                similarity=spec["similarity"], max_chars=guard["similarity_max_chars"])
+                similarity=spec["similarity"], max_chars=guard["similarity_max_chars"], similar_pairs=loop_guard.repair_window(1))
         return self.progress_window
 
     def _progress_step(self, now: dict) -> dict:

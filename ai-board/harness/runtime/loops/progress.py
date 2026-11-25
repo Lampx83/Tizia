@@ -119,6 +119,7 @@ class Window:
     repeat_hash: int = 2
     similarity: float = 0.98
     max_chars: int = 20000
+    similar_pairs: int = 1
     tried: list[str] = field(default_factory=list)
     steps: list[dict] = field(default_factory=list)
     diffs: list[str] = field(default_factory=list)
@@ -154,7 +155,8 @@ class Window:
     def _stagnant(self, record: dict, diff: str) -> str | None:
         if record["state"] and sum(1 for item in self.steps if item["state"] == record["state"]) >= self.repeat_hash:
             return REASON_STATE_REPEAT
-        if len(self.diffs) >= 2 and self.diffs[-2] and diff and self._same_per_file(self.diffs[-2], diff):
+        pairs = range(len(self.diffs) - self.similar_pairs, len(self.diffs))
+        if pairs.start >= 1 and all(self.diffs[i - 1] and self.diffs[i] and self._same_per_file(self.diffs[i - 1], self.diffs[i]) for i in pairs):
             return REASON_SIMILARITY
         recent = self.steps[-self.window:]
         if len(recent) >= self.window and not any(item["progress"] for item in recent):

@@ -203,6 +203,20 @@ def test_same_wrong_diff_again_stops_by_no_progress_rounds(on, fake_deps, checko
     assert allowed == [True, True, False] and ex.stop_note.startswith("stuck: 2 consecutive repair rounds without progress")
 
 
+def _near(i):
+    return diff("public/other.html", '<a href="/tree.html">🌳 Cây Tri Thức</a>', '<a href="/tree.html">' + "Luyện kiểm sao điểm thẻ " * 40 + f"{i}</a>")
+
+
+@pytest.mark.parametrize("window, allowed", [("", [True, False]), ("2", [True, True, False])])
+def test_near_identical_repair_stops_after_the_window_on_the_progress_loop(on, fake_deps, checkout, monkeypatch, window, allowed):
+    from runtime.loops import progress
+    monkeypatch.setenv("AI_BOARD_PROGRESS_LOOP", "1")
+    monkeypatch.setenv(loop_guard.REPAIR_WINDOW_FLAG, window)
+    ex = _execution()
+    got = [ex._repair_allowed(_blocked_round(ex, fake_deps, checkout, _near(i))) for i in range(len(allowed))]
+    assert got == allowed and ex.halt["reason"] == progress.REASON_SIMILARITY
+
+
 def test_same_wrong_diff_again_stops_by_state_repeat(on, fake_deps, checkout):
     ex = _execution()
     spec = {"entries": {"go": "work"}, "recursion_limit": 50, "nodes": [{"id": "work"}, {"id": "check"}, {"id": "verdict", "end": True}],
