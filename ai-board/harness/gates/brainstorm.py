@@ -417,7 +417,7 @@ def check_files(plan: dict, source, sha: str | None, approved=None, role: str = 
         decision = levels.write_check(file, scope, plan_hash, role)
         if not decision["allow"]:
             if decision["level"] in (levels.SELF, levels.SURFACE):
-                raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason']}")
+                raise ValueError(f"file '{file}' nằm ngoài vùng được phép: {denied['reason'] or decision['reason']}")
             # Hoãn: path chưa có trong repo thì trả lỗi sửa được (model chọn lại) trước khi xin elevation.
             pending.append(file)
         elif decision["level"] != levels.SURFACE:

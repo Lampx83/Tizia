@@ -459,8 +459,13 @@ def _closest(text: str, search: str, filename: str | None = None) -> str:
     lines = _view_lines(text, filename)
     stripped = [line.strip() for line in lines]
     near = difflib.get_close_matches(first, [s for s in stripped if s], n=2, cutoff=0.75)
-    shown = [f"L{stripped.index(s) + 1}| {lines[stripped.index(s)][:300]}" for s in near]
-    return "\nDòng gần giống nhất trong file (chép nguyên văn từ đây):\n" + "\n".join(shown) if shown else ""
+    if not near:
+        return ""
+    # A search copied before the model's own earlier edit: show the whole current block, not only its first line.
+    at, size = stripped.index(near[0]), min(len(_LINE_NO.sub("", search).split("\n")) + 2, 40)
+    shown = [f"L{i + 1}| {lines[i][:300]}" for i in range(at, min(at + size, len(lines)))]
+    shown += [f"L{stripped.index(s) + 1}| {lines[stripped.index(s)][:300]}" for s in near[1:]]
+    return "\nDòng gần giống nhất trong file HIỆN TẠI, kèm các dòng sau nó (chép nguyên văn từ đây):\n" + "\n".join(shown)
 
 
 def _without_repeated_tail(text: str, search: str, replace: str) -> str:
