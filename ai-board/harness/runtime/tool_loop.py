@@ -642,14 +642,15 @@ class Workspace:
             return f"đã áp {len(args['edits'])} edit; file còn {len(self.content.splitlines())} dòng\n{shown}"
         if name == "write_test":
             test_file = self._check_scope(args["test_file"], test=True)
-            if hints := self._missing_imports(args["test"], test_file):
+            test, notes = self._repair_imports(args["test"], test_file)
+            if hints := self._missing_imports(test, test_file):
                 raise ToolError("test chưa được nhận: " + "; ".join(hints))
-            as_diff = f"diff --git a/{test_file} b/{test_file}\n" + "".join(f"+{line}\n" for line in args["test"].splitlines())
+            as_diff = f"diff --git a/{test_file} b/{test_file}\n" + "".join(f"+{line}\n" for line in test.splitlines())
             if misses := static_check.source_text_tests(as_diff):  # gate 4 rejects the same test after a full repair round
                 raise ToolError("test chưa được nhận: " + "; ".join(misses))
-            self.test_file, self.test = test_file, args["test"]
+            self.test_file, self.test = test_file, test
             self.proofs.clear()
-            return "đã nhận test"
+            return "đã nhận test" + (f"; đã sửa đường dẫn import: {'; '.join(notes)}" if notes else "")
         self._fresh()
         return ""
 
@@ -737,6 +738,36 @@ class Workspace:
             raise sandbox_tool.VMUnavailable(error.code, error.status) from None
         if self.vm_faults:
             raise self.vm_faults[0]
+
+    def _repair_imports(self, test: str, test_file: str) -> tuple[str, list[str]]:
+        """Relative imports that miss by a wrong '../' depth and have one unambiguous target are rewritten, the same fix the hint would ask for."""
+        if not hasattr(self, "_tree"):
+            try:
+                self._tree = set(code_index.git(self.source, 'ls-tree', '-r', '--name-only', self.sha).decode('utf-8').splitlines())
+            except Exception:  # unlistable tree: gate 4 still checks imports
+                self._tree = None
+        if self._tree is None:
+            return test, []
+        known = self._tree | {self.file, *self.extra_content, *self.prior}
+        base = posixpath.dirname(test_file)
+        notes = []
+        for spec, resolved in static_check._resolved_imports(test, base):
+            if any((resolved + tail) in known for tail in ("", ".js", "/index.js")):
+                continue
+            parts = resolved.split("/")
+            match = []
+            for i in range(1, len(parts)):  # longest tail first so a wrong leading dir is dropped
+                tail = "/".join(parts[i:])
+                match = [c for c in known if c == tail or c.endswith("/" + tail)]
+                if match:
+                    break
+            if len(match) != 1:
+                continue
+            fix = posixpath.relpath(match[0], base)
+            fix = fix if fix.startswith(".") else "./" + fix
+            test = test.replace(f"'{spec}'", f"'{fix}'").replace(f'"{spec}"', f'"{fix}"')
+            notes.append(f"'{spec}' thành '{fix}'")
+        return test, notes
 
     def _missing_imports(self, test: str, test_file: str) -> list[str]:
         """Relative imports of the test that resolve to no file: caught here, not one gate later."""
