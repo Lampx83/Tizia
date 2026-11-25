@@ -69,3 +69,15 @@ def test_owner_usage_sql_takes_unknown_hold_from_contract(monkeypatch):
     monkeypatch.setattr(driver, "UNKNOWN_HOLD_MS", 3000000)
     driver.owner_usage()
     assert "3000000" in seen[0] and "{unknown_ms}" not in seen[0]
+
+
+def test_singlebe_prefix_reads_its_own_root(corpus, tmp_path, monkeypatch):
+    root = tmp_path / "sbe"
+    (root / "cases" / "sb-01").mkdir(parents=True)
+    (root / "cases" / "sb-01" / "meta.json").write_text(json.dumps(meta("sb-01", "backend")), encoding="utf-8")
+    (root / "split.json").write_text(json.dumps({"version": 1, "manifest_sha256": "m", "cases": [
+        {"id": "sb-01", "group": "backend", "split": "dev", "sha256": "x"}]}), encoding="utf-8")
+    monkeypatch.setattr(driver, "SBE_ROOT", root)
+    cases = driver.resolve_cases("singlebe:all")
+    assert [c["id"] for c in cases] == ["singlebe:sb-01"]
+    assert cases[0]["multifile"]["corpus_dir"] == str(root / "cases" / "sb-01")

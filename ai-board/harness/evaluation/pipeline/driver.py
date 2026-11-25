@@ -88,6 +88,8 @@ MF_ROOT = DATA / "dev-multifile" / "tasks"
 MF_SCRATCH = DATA / "workspaces"
 MFC_PREFIX = "multifile:"
 MFC_ROOT = DATA / "dev-tizia-multifile"
+SBE_PREFIX = "singlebe:"
+SBE_ROOT = DATA / "dev-tizia-singlebe"
 ALLOW_HELDOUT = False
 MAX_WAIT_S = 2400
 ARM_ABLATION_PREFIX = "B1-minus-"
@@ -400,30 +402,31 @@ def _mfc():
     return mod
 
 
-def corpus_sealed_ids() -> set[str]:
+def corpus_sealed_ids(root: Path | None = None) -> set[str]:
     """Held-out ids from split.json; their case dirs are not opened unless ALLOW_HELDOUT."""
-    doc = json.loads((MFC_ROOT / "split.json").read_text(encoding="utf-8"))
+    doc = json.loads(((root or MFC_ROOT) / "split.json").read_text(encoding="utf-8"))
     return {e["id"] for e in doc["cases"] if e["split"] == "heldout"}
 
 
-def corpus_case(meta: dict) -> dict:
+def corpus_case(meta: dict, root: Path | None = None, prefix: str = MFC_PREFIX) -> dict:
     """Corpus meta.json -> driver case; oracle files are read from corpus_dir at run time."""
     meta = {k: v for k, v in meta.items() if k != "_dir"}
-    meta["corpus_dir"] = str(MFC_ROOT / "cases" / meta["id"])
-    return {"id": MFC_PREFIX + meta["id"], "title": meta["id"], "detail": meta["request_vi"],
+    meta["corpus_dir"] = str((root or MFC_ROOT) / "cases" / meta["id"])
+    return {"id": prefix + meta["id"], "title": meta["id"], "detail": meta["request_vi"],
             "level": None, "style": "multifile-corpus", "types": meta.get("kind"), "file": None, "multifile": meta}
 
 
-def resolve_corpus(want: str) -> list[dict]:
+def resolve_corpus(want: str, root: Path | None = None, prefix: str = MFC_PREFIX) -> list[dict]:
     """Corpus cases for 'all' or an id prefix; dev split only unless ALLOW_HELDOUT."""
-    sealed = corpus_sealed_ids()
-    metas = _mfc().load_cases(MFC_ROOT, skip=set() if ALLOW_HELDOUT else sealed)
+    root = root or MFC_ROOT
+    sealed = corpus_sealed_ids(root)
+    metas = _mfc().load_cases(root, skip=set() if ALLOW_HELDOUT else sealed)
     hits = [m for m in metas if want == "all" or m["id"] == want or m["id"].startswith(want)]
     if not hits:
         if want in sealed:
             raise SystemExit(f"held-out multifile case {want!r} needs --allow-heldout")
         raise SystemExit(f"no multifile corpus case matches {want!r}")
-    return [corpus_case(m) for m in hits]
+    return [corpus_case(m, root, prefix) for m in hits]
 
 
 VAGUE_CASES = DATA.parent / "ai-board-vague-cases" / "cases-vague-pilot.json"
@@ -454,6 +457,8 @@ def resolve_cases(spec: str) -> list[dict]:
             out.append(student_variant(token[:-len(STUDENT_SUFFIX)]))
         elif token.startswith(MFC_PREFIX):
             out.extend(resolve_corpus(token[len(MFC_PREFIX):]))
+        elif token.startswith(SBE_PREFIX):
+            out.extend(resolve_corpus(token[len(SBE_PREFIX):], SBE_ROOT, SBE_PREFIX))
         elif token.startswith(MF_PREFIX):
             want = token[len(MF_PREFIX):]
             names = sorted(p.name for p in MF_ROOT.iterdir() if p.is_dir()) if MF_ROOT.exists() else []
