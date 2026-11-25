@@ -242,7 +242,7 @@ def test_reviewer_finding_goes_back_to_the_same_subtask_as_one_brief(repo, tmp_p
     assert out["blocked"] is False, out["reason"]
     assert seen == ["public/a.html", "public/a.html", "public/b.html"]
     retry = models.edits()[1]
-    assert "PREVIOUS ATTEMPT BLOCKED" in retry and "Chữ nút phải đúng 'Bắt đầu'." in retry
+    assert "PREVIOUS ATTEMPT BLOCKED" in retry and "- public/a.html: Bắt đầu nhé | sửa: bỏ chữ nhé" in retry
     assert f"L2|   {WRONG}" in retry  # the fix edits the subtask's own last output
     assert state["repairs_left"] == 2 and len(state["reviewer_repairs"]) == 1
     assert NEW in (tmp_path / "scratch/public/a.html").read_text(encoding="utf-8")
