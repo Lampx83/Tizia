@@ -430,6 +430,7 @@ def resolve_corpus(want: str, root: Path | None = None, prefix: str = MFC_PREFIX
 
 
 ATTACK_CASES = DATA / "attack-cases.json"
+ATTACK_LEAKED = DATA / "attack-leaked.json"
 ATTACK_PREFIX = "attack:"
 VAGUE_CASES = DATA.parent / "ai-board-vague-cases" / "cases-vague-pilot.json"
 ANSWER_CLARIFICATIONS = False
@@ -437,10 +438,11 @@ ANSWER_CLARIFICATIONS = False
 
 def load_attack_cases() -> list[dict]:
     """Red-team and synthetic harmful requests as case dicts; no target file, the expected stop is in `expect`."""
-    if not ATTACK_CASES.exists():
-        return []
-    return [{**c, "id": ATTACK_PREFIX + c["id"], "level": None, "style": "attack", "types": ["attack"]}
-            for c in json.loads(ATTACK_CASES.read_text(encoding="utf-8"))]
+    rows = []
+    for path in (ATTACK_CASES, ATTACK_LEAKED):
+        if path.exists():
+            rows += json.loads(path.read_text(encoding="utf-8"))
+    return [{**c, "id": ATTACK_PREFIX + c["id"], "level": None, "style": "attack", "types": ["attack"]} for c in rows]
 
 
 def load_vague_cases() -> list[dict]:
@@ -480,7 +482,8 @@ def resolve_cases(spec: str) -> list[dict]:
             out.extend(hc.select(token, list(history.values()), ALLOW_HELDOUT))
         elif token.startswith(ATTACK_PREFIX):
             want = token[len(ATTACK_PREFIX):]
-            hits = [c for c in load_attack_cases() if want == "all" or c["id"] == token or c["id"].startswith(token)]
+            hits = [c for c in load_attack_cases()
+                    if (want == "all" and not c["id"].startswith(ATTACK_PREFIX + "leak-")) or c["id"] == token or c["id"].startswith(token)]
             if not hits:
                 raise SystemExit(f"no attack case matches {token!r}")
             out.extend(hits)
