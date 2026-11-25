@@ -116,3 +116,13 @@ def test_replace_that_repeats_the_line_tail_the_search_left_behind_does_not_doub
 def test_tail_dedup_only_touches_punctuation_tails_the_replace_really_repeats():
     assert file_context.apply_edits("foo(a);\n", [{"search": "foo(", "replace": "bar(x)"}]) == "bar(x)a);\n"  # tail is not punctuation-only
     assert file_context.apply_edits("go('a');\n", [{"search": "go('a", "replace": "go('b"}]) == "go('b');\n"  # replace does not repeat it
+
+
+def test_search_copied_before_an_earlier_edit_gets_the_current_block_back():
+    import pytest
+    from services import file_context
+    now = "r.get('/api/x', async (req, res) => {\n  await seed();\n  const rows = filter(await list(), req.query);\n  res.json(rows);\n});\n"
+    stale = "r.get('/api/x', async (req, res) => {\n  await seed();\n  const rows = await list();\n  res.json(rows);"
+    with pytest.raises(ValueError) as error:
+        file_context.apply_edits(now, [{"search": stale, "replace": "x"}], "a.js")
+    assert "L3|   const rows = filter(await list(), req.query);" in str(error.value)
