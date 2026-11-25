@@ -19,7 +19,7 @@ MAX_TOUCHED_FILES = 4
 MAX_TOUCHED_CHARS = 3000
 EXCERPT_RADIUS = 6
 MAX_BRIEF_CHARS = 500
-MAX_DETAIL_CHARS = 900
+MAX_DETAIL_CHARS = 980  # gate 4 reason is cut at 1000 with the "intent_review: " prefix
 NUM_PREDICT = 512
 CHECK = "intent_review"
 KINDS = ("wrong_target", "not_verbatim", "outside_request", "missing", "other")
@@ -251,12 +251,18 @@ def _scrub(text: str) -> str:
     return re.sub(r"timed out", "quá thời gian", repair_class._SCOPE.sub("ngoài yêu cầu", text), flags=re.I)
 
 
-def merged_brief(brief: str, misses: list[str]) -> str:
-    """Deterministic misses first (they survive a short cut), then the reviewer's scrubbed brief when it adds something."""
-    parts = [m[:200] for m in misses]
-    if brief := _scrub(brief)[:MAX_BRIEF_CHARS]:
+def merged_brief(brief: str, misses: list[str], findings: list[dict] = ()) -> str:
+    """One line per deterministic miss, then one per blocking finding (high first; the brief only when none), cut on a line boundary."""
+    blocking = sorted((f for f in findings if f["severity"] in BLOCKING), key=lambda f: BLOCKING.index(f["severity"]))
+    parts = [m[:200] for m in misses] + [_scrub(" ".join(f"- {f['file']}: {f['evidence']} | sửa: {f['fix']}".split())) for f in blocking]
+    if not blocking and (brief := _scrub(brief)[:MAX_BRIEF_CHARS]):
         parts.append(brief)
-    return " | ".join(parts)[:MAX_DETAIL_CHARS]
+    out = parts[0][:MAX_DETAIL_CHARS] if parts else ""
+    for part in parts[1:]:
+        if len(out) + 1 + len(part) > MAX_DETAIL_CHARS:
+            break
+        out += "\n" + part
+    return out
 
 
 def apply(state: dict, deps, budget, found: list[dict], checks: list[str], *, db_path=None, proposal_id=None) -> tuple[list[dict], dict | None]:
@@ -275,4 +281,4 @@ def apply(state: dict, deps, budget, found: list[dict], checks: list[str], *, db
         return [{"check": CHECK, "failure_class": result["failure_class"], "detail": result["reason"]}], summary
     if result["verdict"] == "pass" and not found:
         return [], summary
-    return [{"check": CHECK, "failure_class": "ordinary", "detail": merged_brief(result["brief"], misses)}], summary
+    return [{"check": CHECK, "failure_class": "ordinary", "detail": merged_brief(result["brief"], misses, result["findings"])}], summary

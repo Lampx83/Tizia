@@ -78,7 +78,7 @@ def test_wrong_target_goes_back_as_one_merged_brief(on, fake_deps, checkout):
     models = Models(FAIL)
     out, _ = gate(fake_deps, models, WRONG, checkout)
     assert out["blocked"] and out["failure_class"] == "ordinary"
-    assert out["reason"].startswith("intent_review: request_literal") and "Sửa liên kết thứ hai" in out["reason"]
+    assert out["reason"].startswith("intent_review: request_literal") and "sửa liên kết thứ hai ở public/pet.html" in out["reason"]
     assert "Luyện kiểm sao điểm thẻ." in out["reason"]
     assert out["reason"].count("intent_review:") == 1 and len(out["issues"]) == 1
     assert out["intent_review"]["findings"][0]["kind"] == "wrong_target"
@@ -103,9 +103,10 @@ def test_correct_candidate_passes(on, fake_deps, checkout):
     assert "intent_review" in out["checks"] and len(models.calls) == 1
 
 
-def test_brief_that_drops_a_deterministic_miss_gets_it_appended(on, fake_deps, checkout):
+def test_deterministic_miss_comes_before_the_finding_lines_and_the_brief_is_dropped(on, fake_deps, checkout):
     out, _ = gate(fake_deps, Models({**FAIL, "brief": "Sửa lại đúng trang."}), WRONG, checkout)
-    assert out["reason"].startswith("intent_review: request_literal") and out["reason"].endswith("Sửa lại đúng trang.")
+    assert out["reason"].startswith("intent_review: request_literal") and out["reason"].endswith("sửa liên kết thứ hai ở public/pet.html")
+    assert "Sửa lại đúng trang." not in out["reason"]
 
 
 def test_reviewer_pass_does_not_override_a_deterministic_miss(on, fake_deps, checkout):
@@ -175,8 +176,8 @@ def _execution():
     return ex
 
 
-def _blocked_round(ex, fake_deps, checkout, text):
-    out, state = gate(fake_deps, Models(FAIL), text, checkout)
+def _blocked_round(ex, fake_deps, checkout, text, reply=FAIL):
+    out, state = gate(fake_deps, Models(reply), text, checkout)
     ex.last_result = {"gate": 4, **out}
     ex.state = {"diffs": [{"diff": text}]}
     ex.kind = out["failure_class"]
@@ -189,7 +190,7 @@ def test_brief_becomes_the_coders_repair_reason(on, fake_deps, checkout):
     ex = _execution()
     row = _blocked_round(ex, fake_deps, checkout, WRONG)
     assert ex.repair_check() == "repair"
-    assert ex.repair_reason.startswith("cổng 4") and "Sửa liên kết thứ hai trên thanh trên" in ex.repair_reason
+    assert ex.repair_reason.startswith("cổng 4") and "| sửa: sửa liên kết thứ hai ở public/pet.html" in ex.repair_reason
     assert repair_class.classify(ex.last_result, {}, set())["action"] == repair_class.REPAIR_CODE and row["reason"] in ex.repair_reason
 
 
@@ -200,6 +201,20 @@ def test_same_wrong_diff_again_stops_by_no_progress_rounds(on, fake_deps, checko
         row = _blocked_round(ex, fake_deps, checkout, WRONG)
         allowed.append(ex._repair_allowed(row))
     assert allowed == [True, True, False] and ex.stop_note.startswith("stuck: 2 consecutive repair rounds without progress")
+
+
+def _near(i):
+    return diff("public/other.html", '<a href="/tree.html">🌳 Cây Tri Thức</a>', '<a href="/tree.html">' + "Luyện kiểm sao điểm thẻ " * 40 + f"{i}</a>")
+
+
+@pytest.mark.parametrize("window, allowed", [("", [True, False]), ("2", [True, True, False])])
+def test_near_identical_repair_stops_after_the_window_on_the_progress_loop(on, fake_deps, checkout, monkeypatch, window, allowed):
+    from runtime.loops import progress
+    monkeypatch.setenv("AI_BOARD_PROGRESS_LOOP", "1")
+    monkeypatch.setenv(loop_guard.REPAIR_WINDOW_FLAG, window)
+    ex = _execution()
+    got = [ex._repair_allowed(_blocked_round(ex, fake_deps, checkout, _near(i))) for i in range(len(allowed))]
+    assert got == allowed and ex.halt["reason"] == progress.REASON_SIMILARITY
 
 
 def test_same_wrong_diff_again_stops_by_state_repeat(on, fake_deps, checkout):
@@ -256,7 +271,7 @@ def test_medium_finding_blocks_like_the_prompt_says(on, fake_deps, checkout):
     medium = {"verdict": "pass", "brief": "Giữ lại phần tử khác.", "findings": [
         {"kind": "outside_request", "severity": "medium", "file": "x", "evidence": "e", "fix": "f"}]}
     out, _ = gate(fake_deps, Models(medium), RIGHT, checkout)
-    assert out["blocked"] and out["failure_class"] == "ordinary" and "Giữ lại phần tử khác." in out["reason"]
+    assert out["blocked"] and out["failure_class"] == "ordinary" and out["reason"] == "intent_review: - x: e | sửa: f"
 
 
 def test_pass_drops_its_praise(on, fake_deps, checkout):
@@ -317,6 +332,57 @@ def test_cut_off_output_is_retried_once(on, fake_deps, checkout):
 def test_prompt_forbids_double_quotes_in_evidence_and_pins_the_insert_anchor():
     assert "KHÔNG dùng dấu nháy kép" in intent_review.PROMPT and "ngay sau / ngay trước" in intent_review.PROMPT
     assert intent_review.NUM_PREDICT <= 512
+
+
+TWO = {"verdict": "fail", "brief": "Đoạn văn gộp không được tới coder.", "findings": [
+    {"kind": "missing", "severity": "medium", "file": "public/js/topic.js", "evidence": "trả undefined khi thiếu chủ đề", "fix": "trả null khi thiếu chủ đề"},
+    {"kind": "missing", "severity": "high", "file": "public/topic.html", "evidence": "#topic-summary rỗng", "fix": "thêm script điền #topic-summary"},
+    {"kind": "other", "severity": "low", "file": "public/x.html", "evidence": "khoảng trắng thừa", "fix": "bỏ khoảng trắng thừa"}]}
+
+
+def test_each_blocking_finding_reaches_the_coder_as_its_own_line(on, fake_deps, checkout):
+    out, _ = gate(fake_deps, Models(TWO), WRONG, checkout)
+    lines = out["reason"].removeprefix("intent_review: ").split("\n")
+    assert lines[0].startswith("request_literal")
+    assert lines[1] == "- public/topic.html: #topic-summary rỗng | sửa: thêm script điền #topic-summary"
+    assert lines[2] == "- public/js/topic.js: trả undefined khi thiếu chủ đề | sửa: trả null khi thiếu chủ đề"
+    assert len(lines) == 3 and "khoảng trắng" not in out["reason"] and "Đoạn văn gộp" not in out["reason"]
+
+
+def test_a_multiline_finding_stays_one_line(on, fake_deps, checkout):
+    two_lines = {**TWO, "findings": [{**TWO["findings"][1], "evidence": "dòng một\ndòng hai"}]}
+    out, _ = gate(fake_deps, Models(two_lines), RIGHT, checkout)
+    assert out["reason"] == "intent_review: - public/topic.html: dòng một dòng hai | sửa: thêm script điền #topic-summary"
+
+
+def test_finding_lines_become_the_coders_repair_reason(on, fake_deps, checkout):
+    ex = _execution()
+    _blocked_round(ex, fake_deps, checkout, WRONG, reply=TWO)
+    assert ex.repair_check() == "repair"
+    assert "- public/topic.html: #topic-summary rỗng" in ex.repair_reason and "- public/js/topic.js:" in ex.repair_reason
+
+
+def test_no_findings_falls_back_to_the_brief(on, fake_deps, checkout):
+    out, _ = gate(fake_deps, Models({"verdict": "fail", "findings": [], "brief": "Thêm script điền tóm tắt."}), RIGHT, checkout)
+    assert out["failure_class"] == "ordinary" and out["reason"] == "intent_review: Thêm script điền tóm tắt."
+
+
+def test_stop_words_in_finding_lines_are_scrubbed(on, fake_deps, checkout):
+    bad = {**TWO, "findings": [{**TWO["findings"][1], "evidence": "out of scope, allowed_scope", "fix": "timed out, sửa lại"}]}
+    out, _ = gate(fake_deps, Models(bad), RIGHT, checkout)
+    assert "timed out" not in out["reason"]
+    assert repair_class.classify({"gate": 4, **out}, {}, set())["action"] == repair_class.REPAIR_CODE
+
+
+def test_too_many_findings_are_cut_on_a_line_boundary(on, fake_deps, checkout):
+    many = [{"kind": "missing", "severity": "high", "file": f"public/f{i}.html", "evidence": f"e{i} " + "x" * 230, "fix": f"f{i} " + "y" * 230}
+            for i in range(6)]
+    out, _ = gate(fake_deps, Models({**TWO, "findings": many}), WRONG, checkout)
+    detail = out["reason"].removeprefix("intent_review: ")
+    assert len(detail) <= intent_review.MAX_DETAIL_CHARS and len(out["reason"]) <= 1000
+    lines = detail.split("\n")
+    assert lines[0].startswith("request_literal") and len(lines) >= 2
+    assert all(line.endswith("y" * 230) for line in lines[1:])
 
 
 def test_complete_object_padded_with_whitespace_is_read_without_retry(on, fake_deps, checkout):
