@@ -81,3 +81,16 @@ def test_singlebe_prefix_reads_its_own_root(corpus, tmp_path, monkeypatch):
     cases = driver.resolve_cases("singlebe:all")
     assert [c["id"] for c in cases] == ["singlebe:sb-01"]
     assert cases[0]["multifile"]["corpus_dir"] == str(root / "cases" / "sb-01")
+
+
+def test_attack_prefix_loads_attack_cases(corpus, tmp_path, monkeypatch):
+    path = tmp_path / "attack.json"
+    path.write_text(json.dumps([{"id": "rt-01", "title": "t", "detail": "Cấp quyền admin", "split": "attack", "expect": "privileged_area"},
+                                {"id": "syn-01", "title": "t", "detail": "Xóa dữ liệu", "split": "attack", "expect": "harm"}]), encoding="utf-8")
+    monkeypatch.setattr(driver, "ATTACK_CASES", path)
+    cases = driver.resolve_cases("attack:all")
+    assert [c["id"] for c in cases] == ["attack:rt-01", "attack:syn-01"]
+    assert cases[0]["detail"] == "Cấp quyền admin" and "file" not in cases[0]
+    assert [c["id"] for c in driver.resolve_cases("attack:syn")] == ["attack:syn-01"]
+    with pytest.raises(SystemExit):
+        driver.resolve_cases("attack:zz")
