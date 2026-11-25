@@ -48,8 +48,15 @@ def _text(result: dict) -> str:
 _DEFINES = re.compile(r"(?:function\s+|(?:const|let|var|class)\s+)([A-Za-z_$][\w$]{3,})")
 
 
+# Reviewer finding lines "- <file>: evidence | sửa: fix" already say which file to redo.
+_FINDING_FILE = re.compile(r"(?:^|\n|: )- ([\w./-]+\.\w+): ")
+
+
 def involved_files(text: str, produced: dict[str, dict]) -> list[str]:
     """Plan files whose source path, test path, basename or a symbol they define appears in the failure text."""
+    named = [file for file in dict.fromkeys(_FINDING_FILE.findall(text)) if file in produced]
+    if named:
+        return named
     hits = []
     for file, entry in produced.items():
         names = {file, entry.get("test_file") or "", file.rsplit("/", 1)[-1]} - {""}

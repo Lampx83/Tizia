@@ -13,3 +13,9 @@ def test_function_name_pulls_in_its_file():
 
 def test_substring_of_a_longer_name_does_not_count():
     assert involved_files("getTopicSummaryX broke in public/bao-che-hub.html", PRODUCED) == ["public/bao-che-hub.html"]
+
+
+def test_reviewer_finding_lines_pick_only_the_files_they_name():
+    lines = ("intent_review: - public/bao-che-hub.html: div rỗng, không gọi getTopicSummary | sửa: thêm script gọi getTopicSummary('bao-che')\n"
+             "- public/bao-che-hub.html: thiếu chữ tóm tắt | sửa: điền vào #topic-summary")
+    assert involved_files(lines, PRODUCED) == ["public/bao-che-hub.html"]
