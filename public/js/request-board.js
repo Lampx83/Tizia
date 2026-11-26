@@ -15,11 +15,11 @@ import { renderRequestThread } from './request-thread.js';
 import { boardIcon } from './ai-board-icons.js';
 
 const TYPE_META = {
-  game:   { icon: '🎮', label: 'Thêm trò chơi' },
-  theory: { icon: '📖', label: 'Thêm lý thuyết' },
-  lab:    { icon: '🧪', label: 'Cải thiện phòng thí nghiệm / thực hành' },
-  skill:  { icon: '🎯', label: 'Luyện kỹ năng' },
-  other:  { icon: '💡', label: 'Ý kiến khác' },
+  game:   { label: 'Thêm trò chơi' },
+  theory: { label: 'Thêm lý thuyết' },
+  lab:    { label: 'Cải thiện phòng thí nghiệm / thực hành' },
+  skill:  { label: 'Luyện kỹ năng' },
+  other:  { label: 'Ý kiến khác' },
 };
 const ACTIVE_STATUSES = new Set(['pending', 'reviewing']);
 const PROGRESS_POLL_MS = 5000;
@@ -38,24 +38,25 @@ async function paintProgress(el) {
 }
 
 function progressLine(p) {
-  const parts = [p.step ? `Step: ${p.step}` : null];
+  const parts = [p.step ? `Bước: ${p.step}` : null];
   if (p.gpu_waiting) {
     const at = p.gpu_waiting.retry_at
       ? new Date(p.gpu_waiting.retry_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
       : null;
     parts.push(at ? `Đang chờ GPU, sẽ tự chạy lại sau ${at}` : 'Đang chờ GPU, sẽ tự chạy lại');
   }
-  if (p.live && p.eta_ms != null) parts.push(`about ${Math.max(1, Math.round(p.eta_ms / 60000))} min left`);
-  if (p.budget) parts.push(`Budget: ${p.budget.used} / ${p.budget.limit}`);
-  if (p.stop_reason) parts.push(`Stopped: ${p.stop_reason}`);
+  if (p.live && p.eta_ms != null) parts.push(`còn khoảng ${Math.max(1, Math.round(p.eta_ms / 60000))} phút`);
+  if (p.budget) parts.push(`Ngân sách: ${p.budget.used} / ${p.budget.limit}`);
+  if (p.stop_reason) parts.push(`Đã dừng: ${p.stop_reason}`);
   return parts.filter(Boolean).join(' · ');
 }
 
 const STATUS_META = {
   pending:   { label: 'Chờ duyệt',   cls: 'pending' },
   reviewing: { label: 'Đang làm',    cls: 'reviewing' },
-  done:      { label: '✓ Hoàn thành', cls: 'done' },
+  done:      { label: 'Hoàn thành',  cls: 'done' },
   rejected:  { label: 'Từ chối',     cls: 'rejected' },
+  cancelled: { label: 'Đã hủy',      cls: 'rejected' },
 };
 
 const MAX_FILES = 3;
@@ -219,7 +220,6 @@ function renderList(host, items, reload) {
   }
   const me = getPlayerName() || '';
   host.innerHTML = items.map(it => {
-    const tm = TYPE_META[it.type] || TYPE_META.other;
     const sm = STATUS_META[it.status] || STATUS_META.pending;
     const mine = me && it.student === me;
     return `
@@ -380,7 +380,7 @@ function injectStylesOnce() {
     .rb-card, .rb-card * { box-sizing: border-box; }
     .rb-card ::selection { background: #fbbf24; color: #111a2e; }
     .rb-card .ai-board-icon { flex-shrink: 0; vertical-align: middle; }
-    .rb-card :is(button, input, select, textarea, a):focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+    .rb-card :is(button, input, select, textarea, a):focus-visible { outline: 3px solid var(--rb-accent); outline-offset: 3px; }
     .rb-card button:disabled { opacity: .65; cursor: wait; }
     .rb-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
     .rb-icon { color: var(--rb-accent); padding-top: 3px; }
@@ -460,6 +460,9 @@ function injectStylesOnce() {
     .rb-thread-toggle:hover { background: rgba(251,191,36,0.2); border-color: rgba(251,191,36,0.5); }
     .rb-thread { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
     .rb-thread[hidden] { display: none; }
+    .rb-thread .rt-board .rt-bubble { background: #0b1220; color: var(--rb-text); border-color: var(--rb-line); }
+    .rb-thread .rt-input { background: #0b1220; color: #f8fafc; border-color: #64748b; }
+    .rb-thread .rt-input::placeholder { color: var(--rb-muted); }
     @media (max-width: 540px) {
       .rb-card { padding: 20px 16px; }
       .rb-head { gap: 12px; }

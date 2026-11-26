@@ -13,6 +13,7 @@ import { renderTicketGraph, graphNodes } from './ai-board-graph.js?v=admin-step-
 import { fmt as clockFmt } from './ai-board-clock.js';
 import { askConfirm } from './confirm-dialog.js';
 import { createPoll } from './poll.js';
+import { traceToOtlp, prettyJson } from './otlp.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -21,7 +22,7 @@ const fmtNum = (n) => (n == null) ? 'chưa có' : Number(n).toLocaleString('vi-V
 const elapsed = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
   skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
-const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+const REQUEST_STATUS_LABEL = { pending: 'Chờ duyệt', reviewing: 'Đang làm', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 
 const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
@@ -30,6 +31,7 @@ const REQUEST_ID = Number(new URLSearchParams(location.search).get('id'));
 const ui = { confirm: null, step: 1, msg: '', flash: '', authorizeConfirm: null, open: {}, reconcile: null, node: null, toolFilter: { failure: '', tool: '' },
   net: { pending: [], approved: [] }, db: [] };
 let view = null;
+let loadedAt = null;
 
 async function api(path, options = {}) {
   const r = await fetch(path, { credentials:'same-origin', ...options, signal: options.signal ?? AbortSignal.timeout(10000) });
@@ -212,20 +214,16 @@ function renderPlan(p, root, children, trace) {
   const fileList = plan.allowed_scope || p.allowed_scope || [];
   const capList = plan.capabilities || p.capabilities || [];
   const requestTitle = view?.thread?.request?.title || '';
-  return `<section id="current-plan"><h2>Plan</h2>
+  return `<section id="current-plan"><h2>Kế hoạch chờ cho phép</h2>
     <div class="blk plan">
       <div class="plan-head"><b>${esc(plan.goal || '')}</b>${tag(approvalState, approval)}</div>
       <dl class="kv">
         ${plan.read_only_admin_verification ? '<dt>Kiểm tra trang admin</dt><dd>Chỉ quan sát giao diện. Không cấp quyền sửa vùng đặc quyền.</dd>' : ''}
-        <dt>Mức duyệt</dt><dd>${esc(TIER_TEXT[p.tier] || p.tier)}</dd>
         <dt>Rủi ro</dt><dd>${esc(RISK_TEXT[plan.risk || p.risk] || plan.risk || p.risk || 'chưa có')}</dd>
-        <dt>File được sửa</dt><dd>${(plan.allowed_scope || p.allowed_scope || []).map(code).join(', ') || 'chưa có'}</dd>
-        <dt>Quyền</dt><dd>${(plan.capabilities || p.capabilities || []).map(capText).join(', ') || 'chưa có'}</dd>
-        <dt>Bản kế hoạch</dt><dd>${esc(p.revision)}</dd>
+        <dt>File được sửa</dt><dd>${fileList.slice(0, 5).map(code).join(', ') || 'chưa có'}${fileList.length > 5 ? ` <span class="meta">và ${fileList.length - 5} file khác</span>` : ''}</dd>
       </dl>
       ${plan.grounding ? `<details><summary>Dẫn chứng code tại ${esc(plan.grounding.sha)}</summary>${plan.grounding.evidence.map(e => `<div class="blk"><b>${esc(e.target)}</b><pre>${esc(e.quote)}</pre><div>Trước: ${esc(e.before)}</div><div>Sau: ${esc(e.after)}</div><div>Kiểm chứng: ${esc(e.verify)}</div></div>`).join('')}</details>` : ''}
-      <div class="sub">Các bước</div>
-      <ol class="plan-steps">${steps.map(st => {
+      ${det('plan-steps', `Các bước (${steps.length + extra.length})`, `<ol class="plan-steps">${steps.map(st => {
         const [state, label] = stepState(mine.find(c => Number(c.order) === Number(st.order)), root, execution, st.order);
         return `<li id="plan-step-${esc(st.order)}" class="st-${state}"><div class="line1"><b>${esc(st.title)}</b>${tag(state, label)}</div>
           <div class="meta">Sửa ${(st.allowed_scope || []).map(code).join(', ')} · quyền ${capText(st.capability)} · rủi ro ${esc(RISK_TEXT[st.risk] || st.risk)}</div>
@@ -234,7 +232,7 @@ function renderPlan(p, root, children, trace) {
         const [state, label] = CHILD_STATE[c.status] || ['idle', c.status];
         return `<li class="st-${state}"><div class="line1"><b>${esc(c.title)}</b>${tag(state, label)}</div>
           <div class="meta">AI tự sửa thêm sau khi kiểm tra chưa đạt</div></li>`;
-      }).join('')}</ol>
+      }).join('')}</ol>`)}
       ${folderWait ? `<div class="confirm folder-wait" role="status"><div class="confirm-title">Chức năng này chưa được duyệt</div>
         <div class="meta">Duyệt chức năng một lần ở tab "Chức năng". Kế hoạch này sẽ tự được cho phép chạy.</div>
         <div class="row"><a class="btn ok" href="/admin.html#features" target="_top">Mở tab Chức năng</a></div></div>` : ''}
@@ -400,7 +398,7 @@ const WRITE_DECISION = { applied: 'Đã áp dụng: kết quả ghi có thật',
 const WRITE_STATUS = { unknown: ['warn', 'chưa rõ kết quả'], compensate: ['warn', 'đang chờ bù trừ'], intent: ['warn', 'đã định ghi, chưa có kết quả'],
   applied: ['ok', 'đã áp dụng'], void: ['idle', 'chưa áp dụng'] };
 const writeTag = (status) => tag(...(WRITE_STATUS[status] || ['idle', status]));
-const evidenceText = (value) => (value && typeof value === 'object' ? Object.entries(value).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n') : String(value ?? ''));
+const evidenceText = (value) => (value && typeof value === 'object' ? Object.entries(value).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v, null, 2)}`).join('\n') : String(value ?? ''));
 
 function reconcileForm(write, writes) {
   const f = ui.reconcile;
@@ -431,7 +429,7 @@ function renderWrites(t) {
   return `<section class="blk st-${open.length ? 'warn' : violation ? 'bad' : 'idle'}" id="unknown-writes" aria-label="Bước ghi chưa rõ">${head}
     ${open.map((w) => `<div class="write-row"><div class="line1"><b>Bước ${esc(w.step)} · ${esc(w.tool)}</b>${writeTag(w.status)}
         <span class="meta">công việc ${esc(w.child)} · mã ${esc(String(w.identity).slice(0, 8))}</span></div>
-      ${det(`write-${w.identity}:args`, 'Tham số của bước ghi', `<pre>${esc(w.args_preview)}</pre>`)}
+      ${det(`write-${w.identity}:args`, 'Tham số của bước ghi', `<pre>${esc(prettyJson(w.args_preview))}</pre>`)}
       ${ui.reconcile?.identity === w.identity ? reconcileForm(w, writes)
         : `<button type="button" class="btn" data-action="reconcile-open" data-identity="${esc(w.identity)}">Đối chiếu bước này</button>`}</div>`).join('')}
     ${resolved.length ? det('writes-resolved', `Đã đối chiếu (${resolved.length})`, resolved.map((w) => `<div class="write-row"><div class="line1">
@@ -535,19 +533,20 @@ function shotsOf(messages) {
   return withShots ? renderAtts(withShots.attachments.filter((a) => a?.kind === 'screenshot')) : '';
 }
 
-// Result box: what was asked, which files change, acceptance and subtasks.
+// Kết quả: mục tiêu, file đổi, ảnh chụp. Tiêu chí và việc con gập lại.
 function resultBox(t, messages = []) {
   const plan = t.plan?.plan;
   if (!plan) return '';
-  const files = (plan.allowed_scope || []).map((f) => code(f)).join(' ');
+  const all = plan.allowed_scope || [];
+  const files = all.slice(0, 4).map((f) => code(f)).join(' ') + (all.length > 4 ? ` <span class="meta">và ${all.length - 4} file khác</span>` : '');
   const subtasks = (t.children || []).map((c) => `<li>${esc(c.title)} <span class="meta">${esc(childStatus(c.status))}</span></li>`).join('');
   const row = (k, v) => (v ? `<div class="g-result-row"><span class="meta">${k}</span><span>${v}</span></div>` : '');
-  return `<div class="g-result"><div class="g-caption">Result</div>
+  const more = `${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}`;
+  return `<div class="g-result"><div class="g-caption">Kết quả</div>
     ${row('Mục tiêu', esc(plan.goal))}
     ${row('File thay đổi', files)}
-    ${row('Tiêu chí đạt', (plan.acceptance || []).map(esc).join('; '))}
-    ${subtasks ? row('Việc con', `<ul>${subtasks}</ul>`) : ''}
     ${row('Ảnh chụp', shotsOf(messages))}
+    ${more ? det('result-more', 'Tiêu chí đạt và việc con', more) : ''}
   </div>`;
 }
 
@@ -604,34 +603,35 @@ function elevationBlock(t) {
     <div class="meta">Duyệt hoặc từ chối ở tab Duyệt. <a href="/admin.html#approvals/elevation-${esc(REQUEST_ID)}" target="_top">Mở tab Duyệt</a></div></div>`;
 }
 
+// Hai tầng: tóm tắt (trạng thái, việc cần admin làm, kết quả) luôn hiện; phần còn lại gập trong "Chi tiết kỹ thuật".
 function renderAiBoard(t, messages = []) {
   const root = t.root;
   const [state, label] = ROOT_STATUS[root.status] || ['idle', root.status];
   const shownState = root.live ? 'run' : state;
-  const summary = `<div class="g-summary">
-      ${resultBox(t, messages)}
+  const settled = root.live || ['done', 'cancelled'].includes(root.status);
+  const summary = `<section class="blk g-summary" id="request-summary">
       <div class="line1">${tag(shownState, root.live ? 'Đang xử lý' : label)}<span>${esc(root.phase_label)}</span>${root.live ? '<span class="pulse" title="Worker đang giữ yêu cầu này"></span>' : ''}</div>
       ${root.public_note ? `<div>${esc(root.public_note)}</div>` : ''}
-      ${root.internal_reason ? reasonBlock(root.internal_reason) : ''}
+      ${root.internal_reason && !settled ? reasonBlock(root.internal_reason) : ''}
       ${root.lost_worker ? `<div class="meta warn">Worker mất kết nối khi đang giữ yêu cầu (${code(root.lost_worker.worker_id)}). Cần quản trị viên quyết định.</div>` : ''}
-      ${renderRunnerTrace(t)}
-      ${renderStopReport(t)}
-      ${renderSoftMisses(t)}
-      ${renderGateReview(t)}
-      ${renderRiskAndChecks(t)}
       ${renderDbStatus(ui.db)}
-      ${renderRepairAgent(t)}
-      ${traceLine(t.trace_ref)}
-      ${managedLine(root.managed)}
       ${renderWrites(t)}
       ${dataSteps(t)}
       ${renderLedger(t.plan?.plan?.ledger)}
       ${renderLedger(gate3Decisions(t.journal), { gate3: true })}
       ${elevationBlock(t)}
       ${root.status === 'waiting_authorization' ? renderPlan(t.plan, root, t.children || [], t) : ''}
-    </div>`;
+      ${resultBox(t, messages)}
+      ${traceLine(t.trace_ref)}
+      ${managedLine(root.managed)}
+    </section>`;
   const events = minimalEvents(t.events || []);
-  return renderTicketGraph(t, ui.node, Date.now(), { summary, events, filter: ui.toolFilter });
+  const otlp = traceToOtlp(t);
+  const otlpBlock = otlp ? det('otlp', 'Trace chuẩn OpenTelemetry (OTLP/JSON)', `<pre class="mono">${esc(JSON.stringify(otlp, null, 2))}</pre>`, { cls: 'raw' }) : '';
+  const diagnostics = [renderRunnerTrace(t), renderStopReport(t), renderSoftMisses(t), renderGateReview(t), renderRiskAndChecks(t), renderRepairAgent(t), otlpBlock].join('');
+  const needsLook = ['waiting_admin', 'human_owned'].includes(root.status) || Boolean(root.lost_worker);
+  return `${summary}${det('technical', 'Chi tiết kỹ thuật: sơ đồ, nhật ký, ngân sách',
+    `${diagnostics}${renderTicketGraph(t, ui.node, Date.now(), { summary: '', events, filter: ui.toolFilter })}`, { dopen: needsLook })}`;
 }
 
 // Last few user-facing events only; technical ones stay out of the page.
@@ -705,10 +705,16 @@ async function refresh() {
   ]);
   if (!thread.ok) {
     stopLiveTrace();
-    $('#app').innerHTML = `<p class="err">Không tải được yêu cầu #${REQUEST_ID} (${esc(thread.data?.error || thread.status)}).</p>`;
+    const msg = `Không tải được yêu cầu #${REQUEST_ID} (${thread.data?.error || thread.status}).`;
+    if (!view) { showLoadError(msg); return false; }
+    // Keep the loaded screen; a full fetch on the next poll clears the notice.
+    traceEtag = null;
+    ui.traceError = ui.flash = `${msg} Đang hiện dữ liệu tải lúc ${fmt(loadedAt)}.`;
+    render();
     return false;
   }
   ui.db = dbItems.ok ? (dbItems.data.items || []) : [];
+  loadedAt = Date.now();
   ui.net.pending = netPending.ok ? (netPending.data.items || []) : [];
   ui.net.approved = netApproved.ok ? (netApproved.data.items || []) : [];
   // 304: tiến trình không đổi, giữ nguyên view.trace (kể cả writes/rollout) và không hỏi lại.
@@ -824,11 +830,23 @@ if (window.top !== window) {
 
 installLightbox();
 
-(async () => {
+function showLoadError(text) {
+  $('#app').innerHTML = `<p class="err" role="alert">${esc(text)} <button type="button" class="btn" data-action="reload">Thử lại</button></p>`;
+}
+
+async function boot() {
   if (!REQUEST_ID) { $('#app').innerHTML = '<p class="err">Thiếu id yêu cầu.</p>'; return; }
   try { if (await refresh()) poll.arm(); }
-  catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<p class="err">Lỗi: ${esc(e.message)}</p>`; }
-})();
+  catch (e) { if (e.message !== 'login' && !view) showLoadError(`Lỗi: ${e.message}`); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#app [data-action="reload"]')) return;
+  $('#app').innerHTML = '<p class="meta" role="status">Đang tải yêu cầu…</p>';
+  boot();
+});
+
+boot();
 
 // Items on this request that wait for a decision in the Duyệt tab.
 function waitingHere(trace) {

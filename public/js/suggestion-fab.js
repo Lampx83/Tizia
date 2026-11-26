@@ -28,7 +28,7 @@ const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
   reviewing: { label: 'Đang làm',     cls: 'reviewing' },
   done:      { label: 'Hoàn thành', cls: 'done' },
-  rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
+  rejected:  { label: 'Từ chối',      cls: 'rejected' },
   cancelled: { label: 'Đã hủy',       cls: 'cancelled' },
 };
 

@@ -447,7 +447,7 @@ async function loadRequests() {
 // Loại = lựa chọn "Loại đề nghị" trong nút Góp ý (suggestion-fab.js) khi học sinh gửi.
 const REQUEST_TYPE_LABEL = { game: 'Trò chơi', theory: 'Lý thuyết / học liệu', lab: 'Thực hành / thí nghiệm',
   skill: 'Luyện kỹ năng', feature: 'Tính năng', other: 'Góp ý / báo lỗi', self: 'AI Board tự đề xuất' };
-const REQUEST_STATUS_LABEL = { pending: 'Chờ xử lý', reviewing: 'Đang xử lý', done: 'Hoàn thành',
+const REQUEST_STATUS_LABEL = { pending: 'Chờ duyệt', reviewing: 'Đang làm', done: 'Hoàn thành',
   rejected: 'Từ chối', cancelled: 'Đã hủy' };
 const ROLE_NAME = { admin: 'Quản trị', teacher: 'Giảng viên', student: 'Sinh viên', pupil: 'Học sinh', parent: 'Phụ huynh' };
 // Nút Góp ý chèn dòng đầu "[Trang: …] /đường-dẫn" làm ngữ cảnh; cột nội dung chỉ hiện lời người yêu cầu.
@@ -459,6 +459,9 @@ function aiTone(t) {
   if (/waiting|human_owned/.test(t.status || '') || t.phase === 'pre_pr_review') return 'ai-warn';
   return '';
 }
+const AI_STATUS_LABEL = { queued: 'Chờ worker', running: 'Đang xử lý', planned: 'Đã có kế hoạch', waiting_authorization: 'Chờ admin cho phép',
+  waiting_admin: 'Chờ admin', waiting: 'Chờ xem xét', human_owned: 'Chuyển cho người làm', cancelled: 'Đã dừng', done: 'Xong', failed: 'Lỗi' };
+const aiLabel = (t) => (t.phase === 'pre_pr_ready' ? 'Đã qua kiểm tra' : AI_STATUS_LABEL[t.status] || t.status);
 // Dòng phụ dưới tiêu đề: nhánh · commit ngắn · PR (chỉ API admin có trace_ref). Bấm để copy.
 function traceSub(ref) {
   if (!ref?.branch && !ref?.head_sha) return '';
@@ -491,8 +494,12 @@ const ELEVATION_RISK = {
 const ELEVATION_REC_LABEL = { approve: 'có thể duyệt', review: 'cần xem thêm', reject: 'không nên duyệt' };
 const ELEVATION_REASON = { approve: 'Quản trị viên duyệt quyền chạm phần bảo vệ/lõi qua tab Góp ý.',
   reject: 'Quản trị viên không cấp quyền chạm phần bảo vệ/lõi.' };
-const elevationScopeText = (r) => (r.elevation_scope || [])
-  .map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`).join('<br>') || '-';
+const elevationScopeText = (r) => {
+  const items = r.elevation_scope || [];
+  const lines = items.slice(0, 3).map(item => `${esc(item.path)} · mức ${esc(ELEVATION_LEVEL_LABEL[item.level] || item.level)}`);
+  if (items.length > 3) lines.push(`và ${items.length - 3} file khác`);
+  return lines.join('<br>') || '-';
+};
 
 // Ngữ cảnh duyệt đã tải (rid → {data|error|loading}) và lý do admin đã gõ, sống qua các lần vẽ lại.
 const elevationContexts = new Map();
@@ -541,6 +548,8 @@ const elevationPathTag = (row) => (row.named_in_request
   : row.in_plan
     ? '<span class="pill ai-warn">chỉ có trong kế hoạch</span>'
     : '<span class="pill ai-bad">không có trong yêu cầu/plan</span>');
+
+const elevationPathFlag = (row) => (!row.named_in_request && !row.in_plan ? ' <span class="pill ai-bad">ngoài yêu cầu/plan</span>' : '');
 
 // Nhãn rủi ro ở dòng danh sách: cùng màu với thẻ để admin quét nhanh trước khi mở.
 const elevationRiskPill = (r) => {
@@ -610,7 +619,6 @@ function elevationPanel(rows) {
     style="border:1px solid var(--border-strong,rgba(255,255,255,.2));border-radius:10px;padding:12px 14px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <b>Quyền chờ duyệt (${pending.length})</b>
-      <span style="font-size:12px;opacity:.7">AI Board xin chạm vùng bảo vệ/lõi. Xem chi tiết từng yêu cầu trước khi duyệt.</span>
       <div style="flex:1"></div>
       <input data-elevation-reason="all" maxlength="1000" placeholder="Lý do duyệt cả lô (bắt buộc)" aria-label="Lý do duyệt cả lô"
         style="min-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.16));background:var(--bg3,#16213d);color:inherit">
@@ -619,8 +627,8 @@ function elevationPanel(rows) {
     <ul style="margin:10px 0 0;padding-left:18px">
       ${pending.map(r => `<li id="elevation-${r.id}" data-elevation="${r.id}" style="margin:8px 0">
         <b>#${r.id}</b> ${esc(r.title)} · <span style="opacity:.7">${esc(r.student || '')}</span>
-        <div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
-        ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}
+        ${elevationCtx(r.id) ? '' : `<div style="font-size:12px;opacity:.85">${elevationScopeText(r)}</div>
+        ${r.elevation_reason ? `<div style="font-size:12px;opacity:.7">${esc(r.elevation_reason)}</div>` : ''}`}
         <div style="margin-top:6px;font-size:12px">${elevationRiskPill(r)}</div>
         ${elevationCard(r)}
         ${elevationCtx(r.id) ? '' : `<div class="actions" style="margin-top:6px">
@@ -849,15 +857,15 @@ function renderRequests() {
     </div>
     <div class="request-table-scroll" role="region" aria-label="Danh sách yêu cầu" tabindex="0"><table>
       <thead><tr>
-        <th title="Vị trí trong danh sách (mới nhất trước) · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th><th>Loại</th>
-        <th>Người yêu cầu</th><th>Vai trò</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Vote</th><th>Tạo lúc</th><th></th>
+        <th title="Vị trí trong danh sách (mới nhất trước) · ID trong DB">#</th><th>Trường</th><th>Tiêu đề</th><th>Nội dung yêu cầu</th>
+        <th>Người yêu cầu</th><th>Trạng thái</th><th>AI Board</th><th>Phụ trách</th><th>Tạo lúc</th><th></th>
       </tr></thead>
       <tbody>
       ${filtered.map((r, index) => `
         ${(() => {
           const ticket = ticketByRequest.get(r.id);
           const ticketSummary = ticket
-            ? `<span class="pill ${aiTone(ticket)}">#${ticket.id} · ${esc(ticket.status)}/${esc(ticket.phase)}</span><div style="font-size:11px;opacity:.75;max-width:260px">${esc(ticket.public_note || ticket.internal_reason || '')}</div>`
+            ? `<span class="pill ${aiTone(ticket)}" title="${esc(`#${ticket.id} · ${ticket.status}/${ticket.phase}${ticket.public_note ? ` · ${ticket.public_note}` : ''}`)}">${esc(aiLabel(ticket))}</span>`
             : '<span style="opacity:.45">legacy</span>';
           return `
         <tr data-rid="${r.id}">
@@ -868,13 +876,10 @@ function renderRequests() {
           <td><span class="pill">${r.type === 'self' ? '-' : esc(r.domain)}</span></td>
           <td style="max-width:260px">${esc(r.title)}${netPendingByRequest[r.id] ? ` <span class="pill ai-warn" title="Mục mạng đang chờ admin duyệt trong yêu cầu này">Chờ duyệt mạng: ${esc(netPendingByRequest[r.id])}</span>` : ''}${traceSub(ticket?.trace_ref)}</td>
           <td><div class="req-detail" title="${esc(r.detail || '')}">${esc(requestBody(r.detail) || '-')}</div></td>
-          <td title="${esc(r.type)}">${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</td>
-          <td>${esc(r.student)}</td>
-          <td>${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')}</td>
+          <td>${esc(r.student)}<div style="font-size:11px;opacity:.65">${esc(ROLE_NAME[r.requester_role] || r.requester_role || '-')} · ${esc(REQUEST_TYPE_LABEL[r.type] || r.type)}</div></td>
           <td><span class="pill st-${esc(r.status)}">${esc(REQUEST_STATUS_LABEL[r.status] || r.status)}</span>${r.execution_mode === 'queue' ? ' <span class="pill" title="Xếp hàng xử lý tay, không qua worker vLLM">Hàng đợi (Claude Code)</span>' : ''}</td>
           <td>${ticketSummary}</td>
           <td>${ownerCell(ticket)}</td>
-          <td>${r.votes}</td>
           <td style="font-size:12px;opacity:.7">${fmt(r.created_at)}</td>
           <td class="actions" style="white-space:nowrap">
             <button class="btn" data-act="detail" data-rid="${r.id}" title="Xem chi tiết">Chi tiết</button>
@@ -958,7 +963,7 @@ function wireActs(host) {
 // Chi tiết yêu cầu trong cửa sổ con (dialog + iframe) ngay trên trang admin; Esc hoặc "Đóng" để thoát.
 function openRequestDialog(id) {
   const dlg = $('#req-dialog');
-  const url = `/admin-request.html?id=${id}&v=escalation1`; // v: đổi khi trang con đổi (HTML cache 5 phút)
+  const url = `/admin-request.html?id=${id}&v=escotlp1`; // v: đổi khi trang con đổi (HTML cache 5 phút)
   $('#req-dialog-title').textContent = `Yêu cầu #${id}`;
   $('#req-dialog-frame').src = url;
   if (!dlg.open) dlg.showModal();

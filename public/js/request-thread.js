@@ -17,10 +17,10 @@ import { fmt } from './ai-board-clock.js';
 
 const STATUS = {
   pending:   { label: 'Chờ duyệt',    cls: 'pending' },
-  reviewing: { label: 'Đang trao đổi', cls: 'reviewing' },
+  reviewing: { label: 'Đang làm',    cls: 'reviewing' },
   done:      { label: 'Hoàn thành',  cls: 'done' },
-  rejected:  { label: 'Chưa thực hiện', cls: 'rejected' },
-  cancelled: { label: 'Đã dừng', cls: 'rejected' },
+  rejected:  { label: 'Từ chối',     cls: 'rejected' },
+  cancelled: { label: 'Đã hủy',      cls: 'rejected' },
 };
 
 const fmtTime = (t) => {
@@ -182,7 +182,7 @@ function injectStylesOnce() {
   const css = `
     .rt-root { display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
     .rt-root, .rt-root * { box-sizing: border-box; }
-    .rt-root :is(button, textarea, a):focus-visible { outline: 3px solid #818cf8; outline-offset: 3px; }
+    .rt-root :is(button, textarea, a):focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
     .rt-loading { font-size: 13px; padding: 16px 0; text-align: center; }
     .rt-head { display: flex; align-items: center; gap: 8px; }
     .rt-status { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; }
@@ -196,7 +196,7 @@ function injectStylesOnce() {
     .rt-msg.rt-right { justify-content: flex-end; }
     .rt-msg.rt-left  { justify-content: flex-start; }
     .rt-bubble { max-width: 82%; border-radius: 12px; padding: 8px 11px; line-height: 1.45; }
-    .rt-student .rt-bubble { background: #4f46e5; color: #fff; border-bottom-right-radius: 4px; }
+    .rt-student .rt-bubble { background: #fbbf24; color: #1f1147; border-bottom-right-radius: 4px; }
     .rt-board   .rt-bubble { background: #f1f5f9; color: #1f2937; border-bottom-left-radius: 4px; border: 1px solid #e2e8f0; }
     .rt-who { font-size: 11px; font-weight: 800; opacity: .85; margin-bottom: 3px; }
     .rt-body { font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -206,14 +206,14 @@ function injectStylesOnce() {
     .rt-att-thumb img { display: block; max-width: 110px; max-height: 84px; object-fit: cover; }
     .rt-att-file { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; text-decoration: none;
       color: inherit; background: rgba(0,0,0,.08); padding: 3px 8px; border-radius: 6px; }
-    .rt-student .rt-att-file { background: rgba(255,255,255,.2); color: #fff; }
+    .rt-student .rt-att-file { background: rgba(0,0,0,.1); color: inherit; }
     .rt-composer { display: flex; flex-direction: column; gap: 6px; }
     .rt-reopen-note { font-size: 13px; background: rgba(245,158,11,.12); padding: 8px 10px; border-radius: 8px; }
     .rt-reopen-note b { font-weight: 800; }
     .rt-input { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 9px;
-      border: 1px solid #94a3b8; background: #fff; color: #1f2937; font: inherit; resize: vertical; min-height: 64px; caret-color: #4f46e5; }
+      border: 1px solid #94a3b8; background: #fff; color: #1f2937; font: inherit; resize: vertical; min-height: 64px; }
     .rt-input::placeholder { color: #64748b; opacity: 1; }
-    .rt-input:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
+    .rt-input:focus { outline: 2px solid currentColor; border-color: currentColor; }
     .rt-composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
     .rt-cmsg { font-size: 13px; margin-right: auto; }
     .rt-send { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 700;
