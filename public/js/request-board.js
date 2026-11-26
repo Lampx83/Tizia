@@ -236,7 +236,7 @@ function renderList(host, items, reload) {
           <div class="rb-item-meta">
             <span class="rb-status ${sm.cls}">${sm.label}</span>
             ${it.phase === 'partial' ? `<span class="rb-status rb-partial">Hoàn thành một phần</span>` : ''}
-            ${it.can_continue ? `<button type="button" class="rb-continue" data-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+            ${it.can_continue ? `<button type="button" class="rb-continue" data-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Chạy tiếp</button>` : ''}
             ${it.can_edit ? `<button type="button" class="rb-continue" data-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
             ${it.execution_mode === 'queue' ? '<span class="rb-status rb-mode-queue">Hàng đợi Claude Code</span>' : ''}
             <span class="rb-by">${escapeHtml(it.student)}</span>
@@ -273,14 +273,14 @@ function renderList(host, items, reload) {
     btn.addEventListener('click', () => toggleThread(host, btn.dataset.thread, me, reload));
   });
 
-  // "Tiếp tục": chỉ admin thấy (server quyết định can_continue); chạy nốt plan đã duyệt từ checkpoint.
+  // "Chạy tiếp": chỉ admin thấy (server quyết định can_continue); chạy nốt plan đã duyệt từ checkpoint.
   host.querySelectorAll('[data-continue]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       const msg = host.closest('.rb-card')?.querySelector('#rb-msg');
       try {
         const { token } = await fetch('api/csrf', { credentials: 'same-origin' }).then((r) => r.json());
-        const r = await fetch(`api/requests/${btn.dataset.continue}/continue`, {
+        const r = await fetch(`api/admin/ai-board/requests/${btn.dataset.continue}/resume`, {
           method: 'POST', headers: { 'content-type': 'application/json', 'X-CSRF-Token': token }, body: '{}',
         });
         const body = await r.json().catch(() => ({}));

@@ -2493,6 +2493,7 @@ function resumeSummary(journal) {
     root.rerun_reason = rerun.reason;
     root.rerun_warning = rerun.warning || null; // non-blocking: same objection and same pins as the attempt before
     root.rerun_node = rerun.node || null; // the node a re-run starts at: the last saved checkpoint
+    root.can_resume = !root.lease_owner && (root.phase === 'partial' || root.rerun_allowed);
     root.gpu_waiting = root.status === 'queued' ? await gpuStatus() : null; // queued work waits for the model to load
     // Admin sees the budget that is actually at its cap: execute first, else the plan-phase one.
     let allowance = await readRootAllowance(db, root.id);

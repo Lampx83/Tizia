@@ -195,3 +195,29 @@ test('route: only an admin continues a partial request; the owner is refused and
     assert.equal((await f.call('GET', `/api/requests/${created.request_id}/progress`, { user: 1 })).body.can_continue, false);
   } finally { f.close(); }
 });
+
+test('route: one resume endpoint continues a partial request and refuses a request that is not stopped', async () => {
+  const f = await httpFixture();
+  try {
+    const created = await f.store.createRequestWithRoot({
+      ownerUserId: 1, ownerDomain: 'pharmacy', ownerDisplayName: 'Lan',
+      idempotencyKey: 'pr-http-resume', title: 'Thêm bộ thẻ', detail: 'fixture',
+    });
+    const url = `/api/admin/ai-board/requests/${created.request_id}/resume`;
+    assert.equal((await f.call('POST', url, { user: 9, body: {} })).status, 409);  // queued, chưa dừng
+    const ticket = await f.store.claimNext({ workerId: 'w1', version: 'test', mode: 'active', intent: 'plan' });
+    const lease = { workerId: 'w1', leaseToken: ticket.lease_token };
+    const run = await f.store.createRun(ticket.id, { ...lease, trigger: 'plan', idempotencyKey: 'pr-http-resume-run' });
+    await f.store.submitPlan(ticket.id, {
+      ...lease, runId: run.id, budgetUsed: 40, idempotencyKey: 'pr-http-resume-plan', plan: planBody(),
+    });
+    await f.store.submitPrePrVerdict(ticket.id, {
+      ...lease, runId: run.id, verdict: partialVerdict(), idempotencyKey: 'pr-http-resume-verdict', now: Date.now(),
+    });
+    assert.equal((await f.call('POST', url, { user: 1, body: {} })).status, 403);  // người gửi
+    const done = await f.call('POST', url, { user: 9, body: {} });
+    assert.equal(done.status, 200);
+    assert.equal(done.body.flow, 'continue_partial');
+    assert.equal(done.body.phase, 'authorized');
+  } finally { f.close(); }
+});

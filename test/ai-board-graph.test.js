@@ -164,25 +164,19 @@ test('an edge into a running node flows only from a finished source; passed edge
   assert.doesNotMatch(html, /class="g-edge flow[^"]*" d="[^"]*" data-edge="reverify_open>gate_4"/);
 });
 
-const runButton = (html) => html.match(/<button[^>]*rerun-node[^>]*>/)?.[0] || '';
-
-test('run again: enabled when the server allows the stage, for a failed or finished node', () => {
+test('node detail has no per-node run button; it explains what Chạy tiếp will do', () => {
   const plan = renderTicketGraph(failed(), 'gate_2');
-  assert.match(plan, /data-action="rerun-node" data-node="gate_2"/);
-  assert.doesNotMatch(runButton(plan), /disabled/);
-  assert.match(plan, />Run again</);
-  assert.doesNotMatch(runButton(renderTicketGraph(failed(), 'gate_1')), /disabled/);
+  assert.doesNotMatch(plan, /rerun-node|<button[^>]*>Run again/);
+  assert.match(plan, /Chạy tiếp plans again from step 1/);
 });
 
-test('run again: disabled with the server reason when another stage or a live lease blocks it', () => {
+test('node detail shows the server reason when another stage or a live lease blocks it', () => {
   const exec = failed();
   exec.root.rerun_stage = 'execute';
   exec.root.rerun_allowed = true;
-  assert.match(runButton(renderTicketGraph(exec, 'gate_2')), /disabled/);
   assert.match(renderTicketGraph(exec, 'gate_2'), /This step is in the other stage/);
   const leased = { ...failed(), root: root({ status: 'blocked', rerun_stage: null, rerun_allowed: false,
     rerun_reason: 'A worker is running this request now. Wait until it stops.' }) };
-  assert.match(runButton(renderTicketGraph(leased, 'gate_2')), /disabled/);
   assert.match(renderTicketGraph(leased, 'gate_2'), /A worker is running this request now/);
 });
 
@@ -194,7 +188,7 @@ test('a GPU wait shows as a note, not an error', () => {
   assert.match(page, /retries by itself after 17:30/); // 10:30 UTC = 17:30 Vietnam time
 });
 
-test('run again: only the node with the saved checkpoint keeps the button', () => {
+test('node detail names the saved checkpoint Chạy tiếp starts from', () => {
   const exec = {
     root: root({ status: 'blocked', rerun_stage: 'execute', rerun_allowed: true, rerun_node: 'gate_5' }),
     graph,
@@ -202,15 +196,11 @@ test('run again: only the node with the saved checkpoint keeps the button', () =
       gate(33, 5, 'blocked', 12, { public_reason: 'The app fails to start.' })])],
     events: [],
   };
-  const g5 = renderTicketGraph(exec, 'gate_5');
-  assert.doesNotMatch(runButton(g5), /disabled/);
-  assert.match(g5, /checkpoint saved at step 5/);
-  const g3 = renderTicketGraph(exec, 'gate_3');
-  assert.match(runButton(g3), /disabled/);
-  assert.match(g3, /Run again starts at step 5: that is the last saved checkpoint\./);
+  assert.match(renderTicketGraph(exec, 'gate_5'), /checkpoint saved at step 5/);
+  assert.match(renderTicketGraph(exec, 'gate_3'), /Chạy tiếp starts at step 5: that is the last saved checkpoint\./);
 });
 
-test('run again: the repeat-objection warning shows above the enabled button only', () => {
+test('node detail: the repeat-objection warning shows only while a rerun is allowed', () => {
   const warn = failed();
   warn.root.rerun_warning = 'Two attempts already stopped at step 2.5 for the same reason "plan_ungrounded".';
   const page = renderTicketGraph(warn, 'gate_2');
@@ -220,14 +210,12 @@ test('run again: the repeat-objection warning shows above the enabled button onl
   blocked.root.rerun_allowed = false;
   blocked.root.rerun_stage = null;
   blocked.root.rerun_reason = 'The request is not stopped at a step that can run again.';
-  blocked.root.rerun_warning = 'should not render while the button is disabled';
+  blocked.root.rerun_warning = 'should not render while a rerun is not allowed';
   assert.doesNotMatch(renderTicketGraph(blocked, 'gate_2'), /class="meta g-warn"/);
 });
 
-test('run again: a running node is disabled; reason text from the server is escaped', () => {
-  const html = renderTicketGraph(running(), 'gate_4');
-  assert.match(runButton(html), /disabled/);
-  assert.match(html, /This step is running now./);
+test('node detail: a running node says so; reason text from the server is escaped', () => {
+  assert.match(renderTicketGraph(running(), 'gate_4'), /This step is running now./);
   const hostile = failed();
   hostile.root.rerun_allowed = false;
   hostile.root.rerun_stage = null;

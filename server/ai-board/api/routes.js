@@ -535,6 +535,26 @@ export function attachAiBoardRequestRoutes(router, {
       throw error;
     }
   });
+  // One admin "Chạy tiếp" button: the server picks continue-partial, retry-transient or a stage rerun from the stop phase.
+  route.post('/api/admin/ai-board/requests/:id/resume', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
+    try {
+      const repo = createPartialResumeRepository(store.db);
+      const row = await repo.rootForRequest(Number(req.params.id));
+      if (!row) throw new WorkerContractError('request not found', 404, 'request_not_found');
+      if (row.phase === 'partial') {
+        return res.json({ ...(await aux.continuePartialRequest(repo, req.params.id, null)), flow: 'continue_partial' });
+      }
+      if (row.phase === 'transient_blocked') {
+        const result = await aux.retryTransientTicket(createTransientRetryRepository(store.db), row.root_id);
+        await store.recordAdminAction({ ticketId: row.root_id }, req.user.id, 'retry_transient');
+        return res.json({ ...result, flow: 'retry_transient' });
+      }
+      const allowed = await store.rerunState(await store.queryGet('SELECT * FROM ai_tickets WHERE id=?', [row.root_id]));
+      if (!allowed.stage) throw new WorkerContractError(allowed.reason || 'This request cannot run again now.', 409, 'not_rerunnable');
+      const result = await store.rerunGate(req.params.id, allowed.stage === 'plan' ? 1 : 3, req.user.id);
+      res.json({ ...result, flow: allowed.stage === 'plan' ? 'replan' : 'rerun_execute' });
+    } catch (error) { folderError(res, error); }
+  });
   route.post('/api/admin/ai-board/requests/:id/rerun-gate', requireAuth, requireAdmin, requireStrictCsrf, async (req, res) => {
     try { res.json(await store.rerunGate(req.params.id, req.body?.gate, req.user.id)); }
     catch (error) { folderError(res, error); }
