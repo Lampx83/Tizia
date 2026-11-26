@@ -358,7 +358,9 @@ function renderConfirm(request, candidate) {
     ${ui.step === 1 ? `<ul>${consequences.map(c => `<li>${c}</li>`).join('')}</ul>
       <div class="row"><button class="btn danger" data-action="confirm-next">Tôi hiểu, tiếp tục</button>
         <button class="btn" data-action="confirm-close">Thôi</button></div>`
-    : `<label for="confirm-input">Gõ <b>#${esc(request.id)}</b> để xác nhận ${verb.toLowerCase()}</label>
+    : `${rollback ? '' : `<label for="confirm-msg">Lời nhắn cho người gửi (ít nhất 4 ký tự)</label>
+      <textarea id="confirm-msg" rows="3">${esc(ui.cancelMsg || '')}</textarea>`}
+      <label for="confirm-input">Gõ <b>#${esc(request.id)}</b> để xác nhận ${verb.toLowerCase()}</label>
       <div class="row"><input id="confirm-input" autocomplete="off" spellcheck="false" placeholder="#${esc(request.id)}">
         <button class="btn danger" id="confirm-go" data-action="confirm-go" disabled>${verb}</button>
         <button class="btn" data-action="confirm-close">Thôi</button></div>
@@ -377,8 +379,13 @@ async function submitConfirm(btn) {
       const r = await post(`/api/admin/ai-board/requests/${REQUEST_ID}/rollback`, { confirm: typed });
       ui.flash = r.duplicate ? 'Yêu cầu hoàn tác đã được gửi trước đó.' : 'Đã gửi yêu cầu hoàn tác. Worker sẽ nhận ở lượt tới.';
     } else {
-      await post(`/api/requests/${REQUEST_ID}/status`, { status: 'rejected', note: 'Quản trị viên đã hủy yêu cầu.', confirm: typed });
-      ui.flash = 'Đã hủy yêu cầu.';
+      const message = ($('#confirm-msg')?.value || '').trim();
+      if (message.length < 4) { ui.msg = 'Lời nhắn quá ngắn (ít nhất 4 ký tự).'; btn.disabled = false; return render(); }
+      // Same close as the dashboard: /reply notifies the sender, /status cancels the root, lease and alerts.
+      const reply = await post(`/api/admin/requests/${REQUEST_ID}/reply`, { status: 'rejected', message });
+      await post(`/api/requests/${REQUEST_ID}/status`, { status: 'rejected', note: message, confirm: typed });
+      ui.cancelMsg = '';
+      ui.flash = reply?.notified ? 'Đã hủy yêu cầu và gửi lời nhắn cho người gửi.' : 'Đã hủy yêu cầu.';
     }
     ui.confirm = null;
     ui.msg = '';
@@ -798,6 +805,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const field = e.target.dataset?.rf;
   if (field && ui.reconcile) ui.reconcile[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  if (e.target.id === 'confirm-msg') ui.cancelMsg = e.target.value;
   if (e.target.id === 'confirm-input') $('#confirm-go').disabled = !confirmed();
 });
 document.addEventListener('keydown', e => {
