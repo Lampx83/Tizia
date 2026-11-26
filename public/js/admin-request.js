@@ -301,17 +301,14 @@ function renderActions(request, trace) {
   const canRollback = root?.can_rollback;
   // Đã có thay đổi (candidate) → chỉ hoàn tác; chưa làm hoặc đang làm → chỉ hủy.
   const canCancel = !candidate && !['rejected', 'cancelled', 'done'].includes(request.status);
-  const canRetryTransient = root?.phase === 'transient_blocked';
-  const canContinuePartial = root?.phase === 'partial';
+  const canResume = !!root?.can_resume;
   const hit = root?.phase === 'root_allowance_exhausted' ? root.allowance?.hit : null;
-  if (!canRollback && !canCancel && !canRetryTransient && !canContinuePartial && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
+  if (!canRollback && !canCancel && !canResume && !hit) return `<div class="flash" role="status" tabindex="-1">${ui.flash ? esc(ui.flash) : ''}</div>`;
   const busy = root?.live;
   return `<div class="actions">
       ${hit ? `<p class="meta">Đã hết hạn mức ${esc(GROUP_LABEL[hit.group])} của yêu cầu: dùng ${fmtNum(hit.used)} / ${fmtNum(hit.limit)}. Đây không phải lỗi hạ tầng. Hạn mức nằm trong contract.json. Đổi xong phải triển khai lại rồi bấm Chạy lại.</p>` : ''}
-      ${canContinuePartial ? `<button class="btn ok" data-action="continue-partial" data-request="${esc(request.id)}"
-        title="Kế hoạch đã xong một phần. Chạy nốt phần còn lại từ chỗ đã dừng. Không lập kế hoạch mới.">Tiếp tục phần còn lại</button>` : ''}
-      ${canRetryTransient ? `<button class="btn ok" data-action="retry-transient" data-root="${esc(root.id)}"
-        title="Lỗi hạ tầng tạm thời (GPU dùng chung). Chạy lại khi GPU rảnh.">Chạy lại ngay</button>` : ''}
+      ${canResume ? `<button class="btn ok" data-action="resume" data-request="${esc(request.id)}"
+        title="${esc(resumeHint(root))}">Chạy tiếp</button>` : ''}
       ${canRollback ? `<button class="btn danger-outline" data-action="rollback" ${busy ? 'disabled' : ''}
         title="${busy ? 'AI Board đang xử lý; chờ lượt này xong.' : 'Gỡ thay đổi AI Board đã làm cho yêu cầu này'}">Hoàn tác thay đổi</button>` : ''}
       ${canCancel ? '<button class="btn danger-outline" data-action="cancel">Hủy yêu cầu</button>' : ''}
@@ -323,16 +320,23 @@ function renderActions(request, trace) {
 const GROUP_LABEL = { model_calls: 'số lần gọi model', tool_calls: 'số lần gọi công cụ', tokens: 'token',
   semantic_repairs: 'số lần tự sửa theo ngữ nghĩa', quality_switches: 'số lần đổi sang model chất lượng' };
 
-async function retryTransient(btn) {
+const resumeHint = (root) => root.phase === 'partial' ? 'Kế hoạch đã xong một phần: chạy nốt phần còn lại, không lập kế hoạch mới.'
+  : root.phase === 'transient_blocked' ? 'Lỗi hạ tầng tạm thời: chạy lại khi GPU rảnh.'
+  : root.rerun_stage === 'plan' ? 'Lập lại kế hoạch từ bước 1.'
+  : root.rerun_node ? `Chạy lại từ checkpoint ở bước ${String(root.rerun_node).slice(5).replace('_', '.')}.`
+  : 'Chạy lại các bước kiểm tra từ bước 3.';
+
+async function resumeRequest(btn) {
   btn.disabled = true;
   try {
-    await post(`/api/admin/ai-board/tickets/${encodeURIComponent(btn.dataset.root)}/retry-transient`, {});
+    await post(`/api/admin/ai-board/requests/${encodeURIComponent(btn.dataset.request)}/resume`, {});
     ui.flash = 'Đã đưa yêu cầu về hàng đợi. Worker sẽ nhận ở lượt tới.';
   } catch (e) {
-    ui.flash = `Không chạy lại được: ${errText(e)}`;
+    ui.flash = `Không chạy tiếp được: ${errText(e)}`;
     btn.disabled = false;
   }
   await refresh();
+  poll.arm();
 }
 
 function renderConfirm(request, candidate) {
@@ -782,28 +786,11 @@ document.addEventListener('click', e => {
   else if (action === 'authorize-close') { ui.authorizeConfirm = null; ui.focus = '[data-action="authorize-ask"]'; }
   else if (action === 'authorize-go') return authorizePlan(btn);
   else if (action === 'ack-data') return ackDataStep(btn);
-  else if (action === 'retry-transient') return retryTransient(btn);
-  else if (action === 'continue-partial') {
-    btn.disabled = true;
-    post(`/api/requests/${encodeURIComponent(btn.dataset.request)}/continue`, {})
-      .then(() => { ui.flash = 'Đã xếp hàng chạy nốt phần còn lại; worker sẽ nhận ở lượt tới.'; })
-      .catch(e => { ui.flash = `Không tiếp tục được: ${errText(e)}`; btn.disabled = false; })
-      .finally(async () => { await refresh(); poll.arm(); });
-    return;
-  } else if (action === 'rollout') return rolloutDo(btn);
+  else if (action === 'resume') return resumeRequest(btn);
+  else if (action === 'rollout') return rolloutDo(btn);
   else if (action === 'reconcile-open') ui.reconcile = { identity: btn.dataset.identity, decision: 'applied', reason: '', evidence: '', resume: true, msg: '' };
   else if (action === 'reconcile-close') ui.reconcile = null;
   else if (action === 'reconcile-go') return submitReconcile(btn);
-  else if (action === 'rerun-node') {
-    askConfirm({ title: 'Chạy lại bước này?', message: 'Lần chạy hỏng trước đó vẫn được giữ trong lịch sử.', ok: 'Chạy lại bước này' }).then((yes) => {
-      if (!yes) return;
-      btn.disabled = true;
-      post(`/api/admin/ai-board/requests/${REQUEST_ID}/nodes/${encodeURIComponent(btn.dataset.node)}/rerun`, {})
-        .then((r) => { ui.flash = `Đã chạy lại bước này. ${r.note}`; })
-        .catch(e => { ui.flash = `Không chạy lại được: ${errText(e)}`; }).finally(async () => { await refresh(); poll.arm(); });
-    });
-    return;
-  }
   render();
   if (action === 'confirm-next') $('#confirm-input')?.focus();
   else if (ui.focus) { $(ui.focus)?.focus(); ui.focus = null; }

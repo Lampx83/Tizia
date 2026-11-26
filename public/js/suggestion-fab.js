@@ -1153,12 +1153,12 @@ function bind(root) {
           btn.textContent = e2.message && e2.error === 'too_many_pending' ? e2.message : 'Chưa thử lại được, thử sau nhé.';
         });
       });
-      // "Tiếp tục": đã xong một phần plan → chạy nốt từ checkpoint (không lập plan mới).
+      // "Chạy tiếp": đã xong một phần plan → chạy nốt từ checkpoint (không lập plan mới).
       inbox.querySelectorAll('[data-req-continue]').forEach(btn => {
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           btn.textContent = 'Đang gửi…';
-          const r = await fetch(`api/requests/${encodeURIComponent(btn.dataset.reqContinue)}/continue`, {
+          const r = await fetch(`api/admin/ai-board/requests/${encodeURIComponent(btn.dataset.reqContinue)}/resume`, {
             method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': await csrfToken().catch(() => '') },
           }).catch(() => null);
           if (r?.ok) { loadInbox(); return; }
@@ -1166,7 +1166,7 @@ function bind(root) {
           btn.textContent = e2.message || 'Chưa tiếp tục được, thử sau nhé.';
         });
       });
-      // "Sửa yêu cầu": người gửi dừng rồi sửa nội dung và gửi lại; "Tiếp tục" (resume) là của admin.
+      // "Sửa yêu cầu": người gửi dừng rồi sửa nội dung và gửi lại; "Chạy tiếp" (resume) là của admin.
       inbox.querySelectorAll('[data-req-edit]').forEach(btn => {
         btn.addEventListener('click', () => {
           const item = btn.closest('[data-item]');
@@ -1268,7 +1268,7 @@ export function renderItem(it, me = '') {
           ${mine ? 'Trao đổi với Ban điều hành' : 'Xem trao đổi'}
         </button>`}
         ${mine && it.can_continue
-          ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Tiếp tục</button>` : ''}
+          ? `<button type="button" class="sgf-it-thread-btn" data-req-continue="${it.id}" title="Chạy nốt phần còn lại của kế hoạch đã duyệt">Chạy tiếp</button>` : ''}
         ${mine && it.can_edit
           ? `<button type="button" class="sgf-it-thread-btn" data-req-edit="${it.id}" data-title="${escapeHtml(it.title)}" data-detail="${escapeHtml(it.detail || '')}" title="Dừng lại, sửa nội dung rồi gửi lại yêu cầu">Sửa yêu cầu</button>` : ''}
         ${mine && it.retry === 'retry'
