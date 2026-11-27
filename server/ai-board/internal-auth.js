@@ -8,6 +8,8 @@ export const HEADERS = {
   domain: 'x-ai-user-domain',
   timestamp: 'x-ai-timestamp',
   signature: 'x-ai-signature',
+  // Set only by the web proxy after its own strict CSRF check; never trusted from the browser.
+  csrf: 'x-ai-csrf-verified',
 };
 
 const WINDOW_MS = 60_000;

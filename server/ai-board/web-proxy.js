@@ -1,6 +1,7 @@
 // Web -> aiboard-server proxy: stream the call and sign the caller identity with the shared HMAC secret.
 import http from 'node:http';
-import { signInternalHeaders } from './internal-auth.js';
+import { HEADERS, signInternalHeaders } from './internal-auth.js';
+import { strictCsrfOk } from '../contexts/security/index.js';
 
 const PATHS = ['/api/ai-board', '/api/admin/ai-board', '/api/requests', '/api/ai-decisions', '/uploads/requests'];
 // Worker endpoints keep the worker key and must talk to aiboard-server directly, never through a user session.
@@ -22,8 +23,11 @@ export function attachAiBoardProxy(app, { target, secret, timeoutMs = 30_000 }) 
   if (!target || !secret) throw new Error('AI_BOARD_SERVER_URL and AI_BOARD_INTERNAL_SECRET are required for the proxy');
   const upstream = new URL(target);
   const forward = (req, res, headers) => {
+    const out = { ...req.headers, host: upstream.host, 'content-type': req.headers['content-type'] || 'application/json', ...headers };
+    delete out[HEADERS.csrf];
+    if (strictCsrfOk(req)) out[HEADERS.csrf] = '1';
     const proxied = http.request({ host: upstream.hostname, port: upstream.port || 80, method: req.method,
-      path: req.originalUrl, headers: { ...req.headers, host: upstream.host, 'content-type': req.headers['content-type'] || 'application/json', ...headers } }, (reply) => {
+      path: req.originalUrl, headers: out }, (reply) => {
       res.writeHead(reply.statusCode || 502, reply.headers);
       reply.pipe(res);
     });
