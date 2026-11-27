@@ -110,3 +110,25 @@ test('uploaded files are read through the proxy without a session, unsigned', as
     assert.equal(up.seen[0].headers[HEADERS.signature], undefined);
   } finally { await server.close(); await up.close(); }
 });
+
+test('board learns a strict CSRF pass only from the proxy check, never from the browser', async () => {
+  const { csrf } = await import('../server/contexts/security/index.js');
+  const up = await upstream();
+  const app = web(up.base);
+  app.use(csrf);
+  app.get('/api/csrf', (req, res) => res.json({ token: req.csrfToken }));
+  const server = await serve(app);
+  const admin = (headers) => fetch(`${server.base}/api/admin/ai-board/plans/1/approve`, {
+    method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' });
+  try {
+    const issued = await fetch(`${server.base}/api/csrf`);
+    const { token } = await issued.json();
+    const cookie = `tizia_csrf=${token}`;
+    await admin({ [HEADERS.csrf]: '1' });
+    assert.equal(up.seen.at(-1).headers[HEADERS.csrf], undefined);
+    await admin({ cookie, 'x-csrf-token': `${token.split('.')[0]}.0000000000000000` });
+    assert.equal(up.seen.at(-1).headers[HEADERS.csrf], undefined);
+    await admin({ cookie, 'x-csrf-token': token });
+    assert.equal(up.seen.at(-1).headers[HEADERS.csrf], '1');
+  } finally { await server.close(); await up.close(); }
+});

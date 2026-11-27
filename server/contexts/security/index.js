@@ -124,9 +124,14 @@ export function csrf(req, res, next) {
 }
 
 /** Route nhạy cảm không được phụ thuộc CSRF_ENFORCE log-only. */
-export function requireStrictCsrf(req, res, next) {
+/** Header/body CSRF token is signed and equals the tizia_csrf cookie. */
+export function strictCsrfOk(req) {
   const sent = req.headers['x-csrf-token'] || req.body?._csrf;
-  if (!req.csrfToken || !validToken(sent) || sent !== req.csrfToken) {
+  return validToken(sent) && sent === getCookie(req, CSRF_COOKIE);
+}
+
+export function requireStrictCsrf(req, res, next) {
+  if (!req.csrfToken || !strictCsrfOk(req)) {
     return res.status(403).json({ error: 'csrf_failed', message: 'Thiếu/sai CSRF token.' });
   }
   next();

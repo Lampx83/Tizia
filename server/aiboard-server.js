@@ -60,6 +60,8 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   const requireAdmin = (req, res, next) => (req.user?.role === 'admin'
     ? next() : res.status(403).json({ error: 'forbidden' }));
   const pass = (_req, _res, next) => next();
+  const requireStrictCsrf = (req, res, next) => (req.headers[HEADERS.csrf] === '1'
+    ? next() : res.status(403).json({ error: 'csrf_failed', message: 'Thiếu/sai CSRF token.' }));
   // Same rule as the web requireEnrolled: admins pass, others need a signed enrolled domain.
   const requireEnrolled = (req, res, next) => (req.user?.role === 'admin' || req.user?.enrolled_domain
     ? next() : res.status(403).json({ error: 'enrollment_required', needEnroll: true }));
@@ -68,12 +70,12 @@ export async function createAiBoardServer({ env = process['env'], dbHandle = nul
   attachRequestUpload(app, { dir: uploadsDir, requireAuth, requireEnrolled });
   app.use(express.json({ limit: '2mb' }));
 
-  attachAiBoardIntake(app, { db: handle.d, store: services.store, requireAuth, requireStrictCsrf: pass,
+  attachAiBoardIntake(app, { db: handle.d, store: services.store, requireAuth, requireStrictCsrf,
     quotaGate: pass, generate });
   // Before the request routes: the real decision trail shadows their empty placeholder.
   attachHumanDecisions(app, { db: handle.d, requireAuth, requireAdmin });
   attachAiBoardRequestRoutes(app, { store: services.store, aux: services.aux, db: handle.d,
-    requireAuth, requireEnrolled: pass, requireAdmin, requireStrictCsrf: pass, classifyRequest });
+    requireAuth, requireEnrolled: pass, requireAdmin, requireStrictCsrf, classifyRequest });
   attachRequesterThread(app, { requests: services.requests, store: services.store, db: handle.d, requireAuth });
   attachAiBoardWorkerRoutes(app, { store: services.store, aux: services.aux, env, uploadsDir, shotBackend });
   attachRequestUploadStatic(app, { dir: uploadsDir, shotBackend });
