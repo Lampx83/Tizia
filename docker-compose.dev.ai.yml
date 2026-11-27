@@ -11,7 +11,7 @@
 # Chỉ aiboard-server/seaweedfs/sandbox nối với nhau qua boardnet, sandbox-api; không có cổng publish mặc định.
 # Bí mật đưa bằng env của stack (Portainer), không đặt trong repo: POSTGRES_USER/PASSWORD/DB, AI_BOARD_INTERNAL_SECRET,
 # AI_BOARD_KEY, AI_BOARD_WORKER_KEY, VLLM_URL/OLLAMA_URL + SECKEY, AI_BOARD_SHOTS_S3_*, SEAWEED_UI_PASSWORD,
-# SANDBOX_RUNNER_TOKEN, ONLINE_RUNNER_TOKEN.
+# ONLINE_RUNNER_TOKEN. Token runner Gate 5 do runner-token-init sinh vào volume; guest do guest-builder dựng và ghim lúc chạy.
 services:
   aiboard-server:
     extends: { file: docker-compose.yml, service: tizia }
@@ -24,6 +24,7 @@ services:
     command: ["node", "server/aiboard-server.js"]  # entry board-only: migration + intake/request/worker routes trên DB riêng
     depends_on: !override  # không kế thừa depends_on của service web
       aiboard-postgres: { condition: service_healthy }
+      runner-token-init: { condition: service_completed_successfully }
     environment:
       NODE_ENV: development
       PORT: 8081
@@ -38,9 +39,9 @@ services:
       AI_BOARD_MODEL_ROUTING: ${AI_BOARD_MODEL_ROUTING:-true}  # false/trống = /ollama/api/generate fallback → gateway 404
       AI_BOARD_CLASSIFIER_MODEL: ${AI_BOARD_CLASSIFIER_MODEL:-}
     ports: !override []
-    volumes: !override  # base mount token bị bỏ; token qua secret
+    volumes: !override
       - pharmacysim-data:/data
-    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
+      - runner-token:/run/secrets:ro
     networks: !override
       boardnet: {}
       tizia-bridge:
@@ -89,11 +90,12 @@ services:
     depends_on: !override  # worker gọi entry board và sandbox; base depends_on (tizia) không áp dụng
       aiboard-server: { condition: service_healthy }
       sandbox-runner: { condition: service_healthy }
+      runner-token-init: { condition: service_completed_successfully }
     networks: !override [boardnet, sandbox-api]
-    volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
+    volumes: !override
       - ai-board-repo:/repo
       - ai-board-memory:/opt/ai-board/ai-board/memory
-    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
+      - runner-token:/run/secrets:ro
     environment:
       AI_BOARD_SERVER_URL: http://aiboard-server:8081
       # Mặc định demo/dev cho vLLM dùng chung; ghi đè bằng env của stack/Portainer.
@@ -130,6 +132,7 @@ services:
     volumes: !override
       - ai-board-repo-2:/repo
       - ai-board-memory-2:/opt/ai-board/ai-board/memory
+      - runner-token:/run/secrets:ro
 
   ai-board-worker-3:
     extends: { service: ai-board-worker }
@@ -139,11 +142,41 @@ services:
     volumes: !override
       - ai-board-repo-3:/repo
       - ai-board-memory-3:/opt/ai-board/ai-board/memory
+      - runner-token:/run/secrets:ro
 
   image-registry:
     extends: { file: docker-compose.yml, service: image-registry }
     container_name: aiboard-registry
     networks: !override [boardnet]
+
+  # Sinh token runner một lần vào volume runner-token.
+  runner-token-init:
+    extends: { file: docker-compose.yml, service: runner-token-init }
+    image: tizia-sandbox-runner:dev
+    container_name: aiboard-runner-token-init
+
+  # Dựng guest Gate 5, đẩy vào image-registry và ghi policy có digest vừa đẩy vào volume sandbox-guest-policy (file trong repo không bị sửa).
+  # Cần docker.sock của host để build/push: quyền tương đương root trên host, nên chỉ service một lần này mount nó.
+  # GUEST_BUILD=pinned: bỏ qua build, dùng nguyên digest ghim trong file policy của repo. Warm cache: đặt docker-data.tar.gz vào volume sandbox-guest-warm.
+  guest-builder:
+    image: docker:27-cli
+    container_name: aiboard-guest-builder
+    profiles: [ai-board]
+    restart: "no"
+    depends_on:
+      image-registry: { condition: service_healthy }
+    command: ["sh", "/src/ai-board/sandbox-runner/bootstrap/guest-builder.sh"]
+    environment:
+      RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}
+      GUEST_BUILD: ${GUEST_BUILD:-auto}
+      GUEST_PUSH_REGISTRY: ${GUEST_PUSH_REGISTRY:-localhost:5000}
+    network_mode: none
+    logging: *logging
+    volumes:
+      - .:/src:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-guest-policy:/out
+      - sandbox-guest-warm:/warm:ro
 
   sandbox-runner:
     extends: { file: docker-compose.yml, service: sandbox-runner }
@@ -153,13 +186,15 @@ services:
     mem_limit: ${RUNNER_MEM:-3g}
     environment:
       RESOURCE_PROFILE: ${RESOURCE_PROFILE:-dev}
-      SANDBOX_POLICY_FILE: /etc/sandbox/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml
+      SANDBOX_POLICY_FILE: /etc/sandbox/generated/sandbox-policy.yaml
+    depends_on: !override
+      runner-token-init: { condition: service_completed_successfully }
+      guest-builder: { condition: service_completed_successfully }
     networks: !override [boardnet, sandbox-api]
-    volumes: !override  # token đi bằng secret, không bind-mount file ngoài repo
+    volumes: !override
       - sandbox-runner-state:/home/node/.microsandbox
-      # WHY: the baked copy in the image would keep the old guest pin after a repin
-      - ./ai-board/sandbox-runner/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml:/etc/sandbox/sandbox-policy.${RESOURCE_PROFILE:-dev}.yaml:ro
-    secrets: [{ source: sandbox_runner_token, target: sandbox-runner-token }]
+      - runner-token:/run/secrets:ro
+      - sandbox-guest-policy:/etc/sandbox/generated:ro
 
   # Runner microVM không mạng cho backend sinh tự động của chức năng online. Web gọi http://online-runner:8090 qua tizia-bridge.
   # Cần /dev/kvm và ONLINE_RUNNER_TOKEN (cùng giá trị với stack web). Web khác host: relay chưa mở cổng 8090.
@@ -170,12 +205,10 @@ services:
     image: tizia-sandbox-runner:dev
     profiles: [ai-board]
     restart: on-failure
-    user: node
     devices:
       - /dev/kvm
-    group_add:
-      - "${KVM_GID:-109}"
     cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]  # entrypoint đọc gid của /dev/kvm rồi hạ xuống user node
     security_opt:
       - no-new-privileges:true
     cpus: 1
@@ -235,8 +268,6 @@ services:
     logging: *logging
 
 secrets:
-  sandbox_runner_token:
-    environment: SANDBOX_RUNNER_TOKEN  # chuỗi ngẫu nhiên dài; đặt trong env của stack
   online_runner_token:
     environment: ONLINE_RUNNER_TOKEN  # khác SANDBOX_RUNNER_TOKEN; cùng giá trị trong env của stack web
 
@@ -270,5 +301,11 @@ volumes:
     name: tizia_online-runner-state
   sandbox-registry:
     name: tizia_sandbox-registry
+  runner-token:
+    name: tizia_runner-token
+  sandbox-guest-policy:
+    name: tizia_sandbox-guest-policy
+  sandbox-guest-warm:
+    name: tizia_sandbox-guest-warm
   seaweedfs-data:
     name: tizia_seaweedfs-data
